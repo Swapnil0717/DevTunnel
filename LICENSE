@@ -1,0 +1,52 @@
+DevTunnel Source-Available License
+Copyright (c) 2026 [Your Name / Company Name]. All Rights Reserved.
+
+1. GRANT OF ACCESS (NOT A LICENSE TO USE)
+This repository and its contents (the "Software") are made publicly
+viewable on GitHub solely to allow review of the source code and to
+enable community contributions in accordance with the project's
+CONTRIBUTING.md and Contributor License Agreement (CLA). No rights
+are granted to use, copy, modify, merge, publish, distribute,
+sublicense, host, or sell copies of the Software, in whole or in
+part, except as explicitly stated in this License.
+
+2. NO PERSONAL OR COMMERCIAL USE
+Except as permitted under Section 3 (Contributions), you may NOT:
+   a. Use the Software for personal projects;
+   b. Use the Software for commercial purposes;
+   c. Deploy, host, or operate the Software or any derivative of it,
+      whether for internal use or as a product or service offered
+      to others;
+   d. Copy, fork (beyond GitHub's standard contribution workflow),
+      or redistribute the Software or substantial portions of it.
+
+3. CONTRIBUTIONS
+You may submit contributions (e.g., pull requests, patches, issues)
+to this repository. By submitting a contribution, you agree to the
+terms of the project's Contributor License Agreement (CLA.md), which
+assigns/licenses your contribution to the copyright holder for
+inclusion in the Software under this License.
+
+4. NO WARRANTY
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM,
+OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+5. ENFORCEMENT
+Unauthorized use, reproduction, or distribution of the Software is a
+violation of this License and applicable copyright law, and may
+result in legal action.
+
+6. CONTACT
+For licensing inquiries, commercial use requests, or permissions
+beyond the scope of this License, contact: [your email/contact here]
+
+---
+This is a source-available license, not an Open Source Initiative
+(OSI) approved license. This document is provided as a starting
+point and has not been reviewed by a lawyer. Consult a qualified
+attorney before relying on it for legal protection.
