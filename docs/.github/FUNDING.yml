@@ -1,0 +1,17 @@
+# These are supported funding model platforms
+
+github: []               # Replace [] with ["your-github-username"] to enable GitHub Sponsors
+patreon:                 # your-patreon-username
+open_collective:         # your-open-collective-name
+ko_fi:                   # your-ko-fi-username
+tidelift:                # e.g. npm/your-package-name
+community_bridge:        # your-community-bridge-project-name
+liberapay:                # your-liberapay-username
+issuehunt:                # your-issuehunt-username
+otechie:                  # your-otechie-username
+lfx_crowdfunding:         # your-lfx-crowdfunding-project-name
+custom:                   # ["https://yourcustomdonationlink.com"]
+
+# Note: This file is optional. Fill in only the platforms you actually use —
+# leave the rest blank or remove the lines. Once at least one value is set,
+# a "Sponsor" button will appear on the repository page.
