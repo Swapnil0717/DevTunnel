@@ -1,6 +1,6 @@
 # DevTunnel Contributor License Agreement (CLA)
 
-Thank you for your interest in contributing to DevTunnel ("the Project"), owned and maintained by [Your Name / Company Name] ("the Owner").
+Thank you for your interest in contributing to DevTunnel ("the Project"), owned and maintained by Devtunnel.
 
 This Contributor License Agreement ("Agreement") clarifies the terms under which contributions are made. By submitting a pull request, patch, or any other content to this repository, you ("the Contributor") agree to the following terms.
 
