@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import { cookies } from "next/headers";
 import { AppHeader } from "@/components/layout/app-header";
-import { API_BASE_URL } from "@/lib/config";
 import { buildMetadata } from "@/lib/seo";
+import { getServerUser } from "@/lib/auth/get-server-user";
 import type { AuthUser } from "@/lib/auth/types";
 
 export const metadata: Metadata = buildMetadata({
@@ -17,19 +16,6 @@ export const metadata: Metadata = buildMetadata({
 // this page renders, so it's safe to fetch the user again here (server
 // side, same as the layout) purely to render profile fields — no client
 // loading flash, and no private fields beyond what AuthUser exposes.
-async function getUser(): Promise<AuthUser | null> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/auth/me`, {
-      headers: { cookie: cookies().toString() },
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { user?: AuthUser } | AuthUser;
-    return "user" in data ? (data.user ?? null) : data;
-  } catch {
-    return null;
-  }
-}
 
 const ROLE_LABEL: Record<AuthUser["role"], string> = {
   CONTRIBUTOR: "Contributor",
@@ -38,7 +24,7 @@ const ROLE_LABEL: Record<AuthUser["role"], string> = {
 };
 
 export default async function ProfilePage() {
-  const user = await getUser();
+  const user = await getServerUser();
 
   return (
     <>

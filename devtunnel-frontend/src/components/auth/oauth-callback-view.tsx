@@ -7,9 +7,16 @@ import { StatusDot } from "@/components/ui/status-dot";
 
 const DEFAULT_DESTINATION = "/dashboard";
 
+/** How long the "signed in" confirmation stays visible before redirecting.
+ * Long enough to read, short enough not to feel like a stall. */
+const SUCCESS_DISPLAY_MS = 700;
+
+type CallbackPhase = "verifying" | "success" | "error";
+
 /**
  * Handles the return leg of the GitHub OAuth flow (devtunnel_workflow.txt,
- * Module C1 — Authentication: "GitHub OAuth callback").
+ * Module C1 — Authentication: "GitHub OAuth callback";
+ * 2_devtunnel_auth_callback_states.html).
  *
  * Assumption (documented since the backend isn't part of this deliverable):
  * GitHub's OAuth callback URL is registered to the *backend's*
@@ -22,39 +29,51 @@ const DEFAULT_DESTINATION = "/dashboard";
  *   - `?status=error&reason=<human-readable-reason>`
  *
  * This page never sees, stores, or forwards the GitHub `code` itself.
+ *
+ * Renders one of three real, mutually exclusive states — never a static
+ * showcase of all of them at once (rule 23): `verifying` while
+ * `GET /auth/me` confirms the new session, `success` briefly once it's
+ * confirmed, and `error` when the backend reports the sign-in failed.
  */
 export function OAuthCallbackView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { refreshUser } = useAuth();
 
-  const status = searchParams.get("status");
+  const urlStatus = searchParams.get("status");
   const reason = searchParams.get("reason");
   const next = searchParams.get("next") || DEFAULT_DESTINATION;
 
-  const [hasError] = useState(status === "error");
+  const [phase, setPhase] = useState<CallbackPhase>(
+    urlStatus === "error" ? "error" : "verifying",
+  );
 
   useEffect(() => {
-    if (status === "error") return;
+    if (urlStatus === "error") return;
 
     let isCancelled = false;
+    let redirectTimer: ReturnType<typeof setTimeout>;
 
     async function completeSignIn() {
       await refreshUser();
-      if (!isCancelled) {
-        router.replace(next);
-      }
+      if (isCancelled) return;
+
+      setPhase("success");
+      redirectTimer = setTimeout(() => {
+        if (!isCancelled) router.replace(next);
+      }, SUCCESS_DISPLAY_MS);
     }
 
     void completeSignIn();
 
     return () => {
       isCancelled = true;
+      clearTimeout(redirectTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [urlStatus]);
 
-  if (hasError) {
+  if (phase === "error") {
     return (
       <div
         role="alert"
@@ -76,6 +95,28 @@ export function OAuthCallbackView() {
         >
           Back to sign in
         </a>
+      </div>
+    );
+  }
+
+  if (phase === "success") {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="w-full max-w-[360px] rounded-[10px] border border-status-success-border bg-status-success-bg px-6 py-7 text-center"
+      >
+        <div className="mb-3 flex items-center justify-center gap-1.5">
+          <StatusDot color="#1D9E75" />
+          <span className="font-mono text-[11px] text-status-success-label">signed in</span>
+        </div>
+        <h1 className="m-0 mb-2 text-[15px] font-medium text-text">You&apos;re signed in</h1>
+        <p className="m-0 mb-4 text-[13px] leading-[1.5] text-status-success-text">
+          Redirecting you now…
+        </p>
+        <div className="h-[2px] overflow-hidden rounded-full bg-status-success-border">
+          <div className="h-full w-full bg-accent" />
+        </div>
       </div>
     );
   }

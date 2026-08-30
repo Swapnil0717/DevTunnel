@@ -5,7 +5,7 @@ import { AUTH_FLAG_COOKIE } from "@/lib/auth/session";
  * Routes that require a signed-in user. Anything under these paths bounces
  * to /login (with a `next` param) when the `dt_auth` flag cookie is absent.
  */
-const PROTECTED_PREFIXES = ["/dashboard", "/profile"];
+const PROTECTED_PREFIXES = ["/dashboard", "/profile", "/onboarding"];
 
 /**
  * Routes that only make sense for a signed-out visitor. An already-signed-in
@@ -36,5 +36,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/profile/:path*", "/login"],
+  matcher: ["/dashboard/:path*", "/profile/:path*", "/onboarding/:path*", "/login"],
 };

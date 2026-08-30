@@ -12,6 +12,30 @@ export class AuthApiError extends Error {
 }
 
 /**
+ * Normalizes `GET /auth/me`'s response body, which the backend may send
+ * either as `{ user: AuthUser }` or as a bare `AuthUser` object.
+ *
+ * Deliberately uses an explicit cast per branch instead of
+ * `"user" in payload ? payload.user : payload` control-flow narrowing:
+ * TypeScript can't safely narrow `AuthUser` out of the `else` branch here,
+ * because interfaces are structurally open — a real `AuthUser` object
+ * could still incidentally carry an extra `user` property, so the
+ * compiler correctly refuses to assume it can't
+ * (this is what produced "Type '{ user?: AuthUser }' is missing ..." at
+ * every call site that inlined this check).
+ *
+ * Shared by `fetchCurrentUser` (browser, `credentials: "include"`) and
+ * `lib/auth/get-server-user.ts` (server components, forwarded cookies) so
+ * this parsing — and this fix — lives in exactly one place.
+ */
+export function parseAuthMeResponse(payload: unknown): AuthUser | null {
+  if (payload && typeof payload === "object" && "user" in payload) {
+    return (payload as { user?: AuthUser }).user ?? null;
+  }
+  return (payload as AuthUser | null) ?? null;
+}
+
+/**
  * `GET /auth/me` (devtunnel_workflow.txt, Module C1 — Authentication).
  *
  * Returns the authenticated user, or `null` when there is no valid session
@@ -35,8 +59,7 @@ export async function fetchCurrentUser(
     throw new AuthApiError(`Failed to load the current user (${res.status})`, res.status);
   }
 
-  const data = (await res.json()) as { user?: AuthUser } | AuthUser;
-  return "user" in data ? (data.user ?? null) : data;
+  return parseAuthMeResponse(await res.json());
 }
 
 /**
