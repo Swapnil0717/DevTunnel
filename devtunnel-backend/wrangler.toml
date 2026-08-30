@@ -28,15 +28,15 @@ ENVIRONMENT = "production"
 
 # Public URL of this backend once deployed (must match the GitHub OAuth
 # App's "Authorization callback URL" exactly, including path).
-GITHUB_CALLBACK_URL = "https://api.devtunnel.tech/auth/callback"
+GITHUB_CALLBACK_URL = "http://localhost:4000/auth/callback"
 
 # Canonical URL of the Next.js frontend (devtunnel-frontend). Used to build
 # the post-login/post-error redirect target and as the default CORS origin.
-FRONTEND_URL = "https://devtunnel.tech"
+FRONTEND_URL = "http://localhost:3000"
 
 # Comma-separated allowlist of origins permitted to call this API with
 # credentials (Backend_Development_Rules.txt rules 45–46). No wildcards.
-ALLOWED_ORIGINS = "https://devtunnel.tech,https://www.devtunnel.tech"
+ALLOWED_ORIGINS = "http://localhost:3000"
 
 # Shared apex domain for the dt_session / dt_auth cookies so both
 # api.devtunnel.tech (this Worker) and devtunnel.tech (the frontend, which
