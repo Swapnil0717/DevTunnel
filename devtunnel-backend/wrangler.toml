@@ -45,7 +45,7 @@ ALLOWED_ORIGINS = "https://devtunnel.tech,https://www.devtunnel.tech"
 COOKIE_DOMAIN = "devtunnel.tech"
 
 # Public Supabase project URL — not a secret, safe as a var.
-SUPABASE_URL = "sb_publishable_PuSsvLMBk0CsG_awgL6Dow_mHTuHVEx"
+SUPABASE_URL = "https://bdxnvouuyfjryuncxkfx.supabase.co"
 
 # Postgres schema this backend owns inside the shared Supabase project (see
 # sql/README.md — this keeps auth tables isolated from your wishlist app's
