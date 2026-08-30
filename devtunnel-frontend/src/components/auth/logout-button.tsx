@@ -1,22 +1,27 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useAuth } from "@/context/auth-context";
+import { useAuth } from "@/lib/auth/use-auth";
 
-interface LogoutButtonProps {
-  className?: string;
-}
-
-/** Checklist: "Create logout functionality". */
-export function LogoutButton({ className }: LogoutButtonProps) {
+/**
+ * Calls `POST /auth/logout` (via `useAuth().logout`) and returns the user
+ * to the sign-in screen. Devtunnel_workflow.txt task: "Create logout
+ * functionality".
+ */
+export function LogoutButton({ className = "" }: { className?: string }) {
   const { logout } = useAuth();
+  const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  async function handleClick() {
+  async function handleLogout() {
     setIsLoggingOut(true);
     try {
       await logout();
-    } finally {
+      router.push("/login");
+    } catch {
+      // If the request fails, let the person try again rather than
+      // stranding them on a broken button.
       setIsLoggingOut(false);
     }
   }
@@ -24,13 +29,9 @@ export function LogoutButton({ className }: LogoutButtonProps) {
   return (
     <button
       type="button"
-      onClick={handleClick}
+      onClick={handleLogout}
       disabled={isLoggingOut}
-      aria-busy={isLoggingOut}
-      className={
-        className ??
-        "rounded-chip border border-border px-3 py-1.5 text-[13px] font-medium text-ink-secondary transition-colors hover:border-ink-disabled hover:text-ink-primary disabled:cursor-not-allowed disabled:opacity-60"
-      }
+      className={`rounded-md border border-border bg-surface px-3.5 py-2 text-[13px] font-medium text-text transition-colors hover:bg-surface-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
     >
       {isLoggingOut ? "Signing out…" : "Sign out"}
     </button>

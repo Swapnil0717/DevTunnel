@@ -1,15 +1,14 @@
 import type { MetadataRoute } from "next";
-import { SITE_URL } from "@/lib/constants";
+import { SITE_URL } from "@/lib/config";
 
-// Rule 29: sitemap includes only canonical, public, indexable URLs — no
-// admin, private, auth, duplicate, or redirect URLs. As public route
-// modules (docs, projects, developers) are added, generate their entries
-// here from real published data rather than hardcoding — see rule 48.
+// Only the truly public pages built in this pass belong here. As public
+// content (docs, projects, developer profiles, ...) is added, it should
+// register itself here too — never the private auth/app-shell routes.
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
       url: SITE_URL,
-      changeFrequency: "weekly",
+      changeFrequency: "monthly",
       priority: 1,
     },
   ];

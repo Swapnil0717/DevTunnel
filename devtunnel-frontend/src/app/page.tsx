@@ -1,36 +1,33 @@
-import type { Metadata } from "next";
 import Link from "next/link";
-import { SITE_URL } from "@/lib/constants";
+import type { Metadata } from "next";
+import { Logo } from "@/components/layout/logo";
+import { buildMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "DevTunnel — Build real software with real developers",
+export const metadata: Metadata = buildMetadata({
+  title: "DevTunnel — Build open source, together",
   description:
-    "Discover open source projects on DevTunnel, backed by GitHub-integrated developer infrastructure.",
-  alternates: {
-    canonical: SITE_URL,
-  },
-};
+    "DevTunnel connects contributors with open source projects to build, and helps maintainers organize tasks, roles, and pull requests.",
+  path: "/",
+});
 
 export default function HomePage() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 py-24 text-center">
-      <span className="mb-6 inline-flex items-center gap-1.5 font-mono text-xs text-ink-muted">
-        <span className="h-1.5 w-1.5 rounded-full bg-status-brand" aria-hidden="true" />
-        contributor network
-      </span>
-      <h1 className="mb-4 text-3xl font-medium tracking-tight text-ink-primary">
-        Build real software with real developers.
-      </h1>
-      <p className="mb-10 max-w-xl text-sm leading-relaxed text-ink-muted">
-        DevTunnel connects contributors and maintainers around real, active GitHub
-        projects — open source projects with a shared task workflow and
-        integrated developer infrastructure.
-      </p>
+    <main className="flex min-h-screen flex-col items-center justify-center gap-8 px-6 py-24 text-center">
+      <Logo />
+      <div className="max-w-[520px]">
+        <h1 className="m-0 mb-3 text-2xl font-medium tracking-[-0.02em] text-text">
+          Build open source, together
+        </h1>
+        <p className="m-0 text-[15px] leading-[1.6] text-text-muted">
+          DevTunnel connects contributors with open source projects to build,
+          and helps maintainers organize tasks, roles, and pull requests.
+        </p>
+      </div>
       <Link
         href="/login"
-        className="inline-flex h-[38px] items-center justify-center rounded-chip bg-ink-primary px-5 text-[13px] font-medium text-surface-0 transition-opacity hover:opacity-90"
+        className="inline-flex items-center justify-center rounded-md bg-text px-5 py-2.5 text-[13px] font-medium text-bg transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
-        Sign in to get started
+        Sign in with GitHub
       </Link>
     </main>
   );

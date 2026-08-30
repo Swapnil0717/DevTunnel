@@ -1,18 +1,18 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Public, open-source project pages will eventually be prerendered/SSG'd
+  // (see Frontend_Development_Rules.txt, rule 27). The auth module built in
+  // this pass is intentionally private/app-shell, so no special export mode
+  // is forced here — routes decide their own rendering strategy.
   images: {
-    // Contributor avatars come from GitHub — see AuthUser.avatarUrl.
     remotePatterns: [
-      { protocol: "https", hostname: "avatars.githubusercontent.com" },
+      // GitHub avatars, used for the authenticated user's profile photo.
+      {
+        protocol: "https",
+        hostname: "avatars.githubusercontent.com",
+      },
     ],
-  },
-  // Public, non-secret runtime values only. Never place OAuth client
-  // secrets, signing keys, or API keys prefixed with NEXT_PUBLIC_ here —
-  // anything exposed to the browser is not secret (see rule 19).
-  env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
   },
 };
 

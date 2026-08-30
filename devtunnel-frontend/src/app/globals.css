@@ -2,29 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-}
+@layer base {
+  :root {
+    --font-sans: var(--font-inter);
+    --font-mono: var(--font-jetbrains-mono);
+  }
 
-body {
-  background-color: #0a0a0a;
-  color: #f2f2f2;
-}
+  * {
+    box-sizing: border-box;
+  }
 
-/* Rule 35: visible keyboard focus, always — never suppressed for aesthetics. */
-:focus-visible {
-  outline: 2px solid #1d9e75;
-  outline-offset: 2px;
-}
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
+  body {
+    background-color: #0a0a0a;
+    color: #f2f2f2;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Visible keyboard focus everywhere, including for people navigating
+     without a mouse (Frontend_Development_Rules.txt rule 35). */
+  :focus-visible {
+    outline: 2px solid #1d9e75;
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }

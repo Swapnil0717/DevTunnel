@@ -1,33 +1,49 @@
 import type { Metadata } from "next";
-import { AuthProvider } from "@/context/auth-context";
-import { SITE_NAME, SITE_URL } from "@/lib/constants";
+import { Inter, JetBrains_Mono } from "next/font/google";
+import { AuthProvider } from "@/lib/auth/auth-provider";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/config";
 import "./globals.css";
 
-// Centralized SEO defaults (rule 51 — "Keep SEO Logic Centralized").
-// Individual pages override `title`/`description`/`alternates.canonical`
-// as needed; everything else here applies site-wide.
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: `${SITE_NAME} — Build real software with real developers`,
+    default: SITE_NAME,
     template: `%s | ${SITE_NAME}`,
   },
-  description:
-    "DevTunnel is a software project network where developers discover, join, and contribute to real projects, backed by integrated developer infrastructure.",
+  description: SITE_DESCRIPTION,
+  icons: {
+    icon: "/logo.png",
+  },
   openGraph: {
     siteName: SITE_NAME,
     type: "website",
-    url: SITE_URL,
-  },
-  twitter: {
-    card: "summary_large_image",
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="en">
-      <body className="font-sans antialiased">
+    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+      <body>
+        {/* Mounted once for the whole app so any page can read sign-in
+            state (devtunnel_workflow.txt task: "Create authentication
+            state" / "Create user profile state"). Route-level protection
+            still happens server-side — see (protected)/layout.tsx. */}
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
