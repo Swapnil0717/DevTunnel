@@ -1,0 +1,77 @@
+name = "devtunnel-backend"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# ---------------------------------------------------------------------------
+# KV namespace used for fixed-window rate limiting on sensitive auth routes
+# (Backend_Development_Rules.txt rule 43). Create it once with:
+#
+#   npx wrangler kv namespace create RATE_LIMIT_KV
+#   npx wrangler kv namespace create RATE_LIMIT_KV --preview
+#
+# then paste the returned ids below.
+# ---------------------------------------------------------------------------
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+preview_id = "REPLACE_WITH_KV_PREVIEW_NAMESPACE_ID"
+
+# ---------------------------------------------------------------------------
+# Non-secret configuration. Safe to commit — none of these values are
+# credentials (Backend_Development_Rules.txt rule 7). Secrets (GitHub client
+# secret, Supabase service role key, session signing key) are NEVER put here
+# — see README.md "Secrets" section for `wrangler secret put` commands.
+# ---------------------------------------------------------------------------
+[vars]
+ENVIRONMENT = "production"
+
+# Public URL of this backend once deployed (must match the GitHub OAuth
+# App's "Authorization callback URL" exactly, including path).
+GITHUB_CALLBACK_URL = "https://api.devtunnel.tech/auth/callback"
+
+# Canonical URL of the Next.js frontend (devtunnel-frontend). Used to build
+# the post-login/post-error redirect target and as the default CORS origin.
+FRONTEND_URL = "https://devtunnel.tech"
+
+# Comma-separated allowlist of origins permitted to call this API with
+# credentials (Backend_Development_Rules.txt rules 45–46). No wildcards.
+ALLOWED_ORIGINS = "https://devtunnel.tech,https://www.devtunnel.tech"
+
+# Shared apex domain for the dt_session / dt_auth cookies so both
+# api.devtunnel.tech (this Worker) and devtunnel.tech (the frontend, which
+# reads dt_auth from Edge middleware) can see them. Leave unset for local
+# development against localhost.
+COOKIE_DOMAIN = "devtunnel.tech"
+
+# Public Supabase project URL — not a secret, safe as a var.
+SUPABASE_URL = "sb_publishable_PuSsvLMBk0CsG_awgL6Dow_mHTuHVEx"
+
+# Postgres schema this backend owns inside the shared Supabase project (see
+# sql/README.md — this keeps auth tables isolated from your wishlist app's
+# tables in `public`).
+SUPABASE_DB_SCHEMA = "devtunnel"
+
+# GitHub App client id (public, not secret) — DevTunnel.tech, App ID 4767532.
+GITHUB_CLIENT_ID = "Iv23liqdlxwKp3dunpZN"
+
+# How long a session stays valid before the user must sign in again.
+SESSION_TTL_DAYS = "30"
+
+# ---------------------------------------------------------------------------
+# Per-environment overrides. Deploy with `wrangler deploy --env staging`.
+# ---------------------------------------------------------------------------
+[env.staging.vars]
+ENVIRONMENT = "staging"
+GITHUB_CALLBACK_URL = "https://api-staging.devtunnel.tech/auth/callback"
+FRONTEND_URL = "https://staging.devtunnel.tech"
+ALLOWED_ORIGINS = "https://staging.devtunnel.tech"
+COOKIE_DOMAIN = "devtunnel.tech"
+SUPABASE_URL = "https://bdxnvouuyfjryuncxkfx.supabase.co"
+SUPABASE_DB_SCHEMA = "devtunnel"
+GITHUB_CLIENT_ID = "Iv23liqdlxwKp3dunpZN" # same GitHub App as production for now; split later if needed
+SESSION_TTL_DAYS = "30"
+
+[[env.staging.kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "REPLACE_WITH_STAGING_KV_NAMESPACE_ID"

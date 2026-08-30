@@ -1,0 +1,7 @@
+# Copy this file to `.dev.vars` (already gitignored) for local `wrangler dev`.
+# Never commit the real values. In production these are set with
+# `wrangler secret put <NAME>` instead — see README.md.
+
+GITHUB_CLIENT_SECRET=your_github_oauth_app_client_secret
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+SESSION_HMAC_SECRET=a_long_random_string_used_to_sign_the_oauth_state_cookie

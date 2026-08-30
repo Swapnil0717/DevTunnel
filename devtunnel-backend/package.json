@@ -1,0 +1,23 @@
+{
+  "name": "devtunnel-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DevTunnel backend API (Module C1 — Authentication) running on Cloudflare Workers, backed by Supabase Postgres and GitHub OAuth.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "tail": "wrangler tail"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.47.10",
+    "hono": "^4.6.14",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241218.0",
+    "typescript": "^5.7.2",
+    "wrangler": "^3.99.0"
+  }
+}
