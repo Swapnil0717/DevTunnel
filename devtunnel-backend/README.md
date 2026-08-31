@@ -107,6 +107,8 @@ dashboard as described in step 2 above.
 
 ## Verifying it works
 
+   npx wrangler dev --port 4000
+
 ```bash
 curl -i https://api.devtunnel.tech/health
 # {"status":"ok"}
