@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-const STATUS_STYLES: Record
+const STATUS_STYLES: Record<
   "TODO" | "IN_PROGRESS" | "IN_REVIEW",
   { label: string; className: string }
 > = {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "./logo";
-import { LogoutButton } from "./logout-button";
+import { LogoutButton } from "../auth/logout-button";
 import { useAuth } from "@/lib/auth/use-auth";
 
 const NAV_LINKS = [
