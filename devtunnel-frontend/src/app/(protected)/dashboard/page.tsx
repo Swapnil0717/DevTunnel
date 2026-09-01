@@ -1,26 +1,7 @@
-import type { Metadata } from "next";
-import { AppHeader } from "@/components/layout/app-header";
-import { buildMetadata } from "@/lib/seo";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = buildMetadata({
-  title: "Dashboard",
-  description: "Your DevTunnel contributor dashboard.",
-  path: "/dashboard",
-  noIndex: true,
-});
-
+// Contributor home now lives at /home. Keep this route resolving
+// instead of 404ing for anyone with the old URL bookmarked.
 export default function DashboardPage() {
-  return (
-    <>
-      <AppHeader />
-      <main className="px-6 py-12">
-        <h1 className="m-0 mb-2 text-xl font-medium text-text">Dashboard</h1>
-        <p className="m-0 max-w-[520px] text-[14px] leading-[1.6] text-text-muted">
-          You&apos;re signed in. Project discovery, task management, and pull
-          request tracking will land here in a later pass — this module
-          covers authentication only.
-        </p>
-      </main>
-    </>
-  );
+  redirect("/home");
 }
