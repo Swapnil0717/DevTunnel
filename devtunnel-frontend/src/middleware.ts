@@ -12,15 +12,6 @@ import { AUTH_FLAG_COOKIE } from "@/lib/auth/session";
  */
 const PROTECTED_PREFIXES = ["/dashboard", "/home", "/profile", "/onboarding"];
 
-/**
- * Routes that only make sense for a signed-out visitor. An already-signed-in
- * user hitting /login is sent straight to /home — the real contributor
- * landing page — instead of seeing the sign-in screen again. Not /dashboard:
- * that route has no real content of its own, it only exists as a redirect
- * shim for old bookmarked links (see (protected)/dashboard/page.tsx).
- */
-const SIGNED_OUT_ONLY_ROUTES = ["/login"];
-
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasAuthFlag = request.cookies.has(AUTH_FLAG_COOKIE);
@@ -35,11 +26,14 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (SIGNED_OUT_ONLY_ROUTES.includes(pathname) && hasAuthFlag) {
-    return NextResponse.redirect(new URL("/home", request.url));
-  }
-
-  return NextResponse.next();
+  // Forwarded so (protected)/layout.tsx — a server component with no
+  // direct access to the current path — can tell whether the request is
+  // already headed to /onboarding and skip its own onboarding redirect
+  // there (avoids a redirect loop). Non-sensitive: just the path already
+  // visible in the URL.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", pathname);
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {
@@ -48,6 +42,5 @@ export const config = {
     "/home/:path*",
     "/profile/:path*",
     "/onboarding/:path*",
-    "/login",
   ],
 };

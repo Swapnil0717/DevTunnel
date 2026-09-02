@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { buildMetadata } from "@/lib/seo";
 import { getServerUser } from "@/lib/auth/get-server-user";
-import { needsOnboarding, ONBOARDING_DONE_COOKIE } from "@/lib/onboarding/needs-onboarding";
+import { needsOnboarding } from "@/lib/onboarding/needs-onboarding";
 import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
 
 export const metadata: Metadata = buildMetadata({
@@ -28,10 +27,11 @@ export const metadata: Metadata = buildMetadata({
  * person straight to /home (see the `needsOnboarding` check below).
  *
  * Reached via components/auth/oauth-callback-view.tsx (which sends a
- * first-time sign-in here) or by (protected)/home/page.tsx's own
- * first-sign-in check bouncing someone back here — see
- * lib/onboarding/needs-onboarding.ts for how "first-time" is determined
- * without any new backend work.
+ * first-time sign-in here) or by (protected)/home/page.tsx's own guard
+ * bouncing an not-yet-onboarded user back here — see
+ * lib/onboarding/needs-onboarding.ts, which reads the real
+ * `onboardingCompleted` flag from the backend rather than guessing from
+ * timestamps.
  */
 export default async function OnboardingPage() {
   const user = await getServerUser();
@@ -40,12 +40,9 @@ export default async function OnboardingPage() {
     redirect("/login");
   }
 
-  // Someone who already went through onboarding this sign-in (the
-  // ONBOARDING_DONE_COOKIE check — see needs-onboarding.ts) or who was
-  // never a first-time sign-in at all (the timestamp check) hitting this
-  // URL directly goes straight to /home instead of redoing it.
-  const alreadyOnboarded = cookies().has(ONBOARDING_DONE_COOKIE);
-  if (alreadyOnboarded || !needsOnboarding(user)) {
+  // Someone who's already finished onboarding hitting this URL directly
+  // goes straight to /home instead of redoing it.
+  if (!needsOnboarding(user)) {
     redirect("/home");
   }
 

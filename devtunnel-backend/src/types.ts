@@ -3,7 +3,7 @@
  *
  * Non-secret values are declared in wrangler.toml `[vars]`. Secrets
  * (marked below) are never put in wrangler.toml — they're set with
- * `wrangler secret put <n>` in production and `.dev.vars` locally
+ * `wrangler secret put <name>` in production and `.dev.vars` locally
  * (Backend_Development_Rules.txt rules 6–7).
  */
  export interface Env {
@@ -40,7 +40,13 @@ export type UserRole = "CONTRIBUTOR" | "MAINTAINER" | "ADMIN";
  * onboarding" screen). Mirror the identically-named types in
  * devtunnel-frontend/src/lib/onboarding/types.ts exactly.
  */
-export type DeveloperRole = "FRONTEND" | "BACKEND" | "FULL_STACK";
+export type DeveloperRole =
+  | "FRONTEND"
+  | "BACKEND"
+  | "FULL_STACK"
+  | "DOCUMENTATION"
+  | "TESTING"
+  | "DEVOPS";
 export type ExperienceLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
 export type ContributorIntent = "START_PROJECT" | "FIND_PROJECT";
 
