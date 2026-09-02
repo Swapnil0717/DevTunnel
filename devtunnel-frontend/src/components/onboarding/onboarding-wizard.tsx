@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth/use-auth";
 import type { AuthUser } from "@/lib/auth/types";
 import { OnboardingApiError, submitOnboarding } from "@/lib/onboarding/api";
 import { EMPTY_ONBOARDING_DATA, type OnboardingData } from "@/lib/onboarding/types";
+import { ONBOARDING_DONE_COOKIE } from "@/lib/onboarding/needs-onboarding";
 import { StepIndicator } from "./step-indicator";
 import { WelcomeStep } from "./steps/welcome-step";
 import { ProfileStep } from "./steps/profile-step";
@@ -14,7 +15,17 @@ import { IntentStep } from "./steps/intent-step";
 import { ReviewStep } from "./steps/review-step";
 
 const TOTAL_STEPS = 4;
-const DEFAULT_DESTINATION = "/dashboard";
+const DEFAULT_DESTINATION = "/home";
+
+/**
+ * Lifetime of `ONBOARDING_DONE_COOKIE` (needs-onboarding.ts) once this
+ * wizard finishes. Only needs to outlive the current sign-in session —
+ * the next real sign-in already reads as "doesn't need onboarding" via
+ * the `lastLoginAt`/`createdAt` timestamp check on its own — but a full
+ * day of headroom avoids relying on that alone for a person who leaves
+ * the tab open for a while after finishing.
+ */
+const ONBOARDING_DONE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24;
 
 interface OnboardingWizardProps {
   user: AuthUser;
@@ -24,12 +35,13 @@ interface OnboardingWizardProps {
  * User onboarding flow (devtunnel_workflow.txt, Module C1 — Authentication:
  * "User onboarding" screen).
  *
- * Assumption (documented since the backend isn't part of this deliverable):
- * this is reached when the backend's OAuth callback redirect includes
- * `next=/onboarding` for a first-time user — see
- * components/auth/oauth-callback-view.tsx, where that `next` value is
- * already entirely backend-controlled. No extra "is this a new user?"
- * detection lives here.
+ * Reached either because the backend's OAuth callback redirect included
+ * `next=/onboarding`, or because OAuthCallbackView / (protected)/home's
+ * own first-sign-in check (lib/onboarding/needs-onboarding.ts) sent the
+ * person here — see those files for how "is this a new user?" is
+ * determined on the frontend without any new backend work. Finishing here
+ * always continues on to /home, same as anyone who never needed
+ * onboarding in the first place.
  */
 export function OnboardingWizard({ user }: OnboardingWizardProps) {
   const router = useRouter();
@@ -58,6 +70,10 @@ export function OnboardingWizard({ user }: OnboardingWizardProps) {
     setSubmitError(null);
     try {
       await submitOnboarding(data);
+      // Non-sensitive flag cookie, same shape as AUTH_FLAG_COOKIE — see
+      // ONBOARDING_DONE_COOKIE's docs in lib/onboarding/needs-onboarding.ts
+      // for why this is needed on top of the timestamp check.
+      document.cookie = `${ONBOARDING_DONE_COOKIE}=1; path=/; max-age=${ONBOARDING_DONE_COOKIE_MAX_AGE_SECONDS}; samesite=lax`;
       await refreshUser();
       router.push(DEFAULT_DESTINATION);
     } catch (error) {

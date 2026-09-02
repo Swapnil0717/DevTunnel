@@ -4,8 +4,13 @@ import { AUTH_FLAG_COOKIE } from "@/lib/auth/session";
 /**
  * Routes that require a signed-in user. Anything under these paths bounces
  * to /login (with a `next` param) when the `dt_auth` flag cookie is absent.
+ *
+ * `/home` is the real contributor landing page in the sign-in → onboarding
+ * → home flow (devtunnel_workflow.txt, Module C1); `/dashboard` stays
+ * listed too since (protected)/dashboard/page.tsx still redirects old
+ * bookmarked links there.
  */
-const PROTECTED_PREFIXES = ["/dashboard", "/profile", "/onboarding"];
+const PROTECTED_PREFIXES = ["/dashboard", "/home", "/profile", "/onboarding"];
 
 /**
  * Routes that only make sense for a signed-out visitor. An already-signed-in
@@ -36,5 +41,11 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/profile/:path*", "/onboarding/:path*", "/login"],
+  matcher: [
+    "/dashboard/:path*",
+    "/home/:path*",
+    "/profile/:path*",
+    "/onboarding/:path*",
+    "/login",
+  ],
 };

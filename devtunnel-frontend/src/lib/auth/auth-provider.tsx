@@ -15,8 +15,14 @@ export interface AuthContextValue {
   /** The signed-in user's profile, or `null` when signed out. */
   user: AuthUser | null;
   status: AuthStatus;
-  /** Re-fetches `GET /auth/me` and updates local state. */
-  refreshUser: () => Promise<void>;
+  /**
+   * Re-fetches `GET /auth/me`, updates local state, and returns the fresh
+   * user (or `null` when signed out) so callers that need to make an
+   * immediate routing decision — e.g. OAuthCallbackView deciding whether
+   * this is a first-time sign-in — don't have to wait for a re-render to
+   * read it back out of context.
+   */
+  refreshUser: () => Promise<AuthUser | null>;
   /** Calls `POST /auth/logout` and clears local state. */
   logout: () => Promise<void>;
 }
@@ -54,11 +60,13 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
       const current = await fetchCurrentUser();
       setUser(current);
       setStatus(current ? "authenticated" : "unauthenticated");
+      return current;
     } catch {
       // A failed /auth/me call (network error, backend down, ...) is treated
       // as "signed out" for UI purposes rather than surfacing a crash.
       setUser(null);
       setStatus("unauthenticated");
+      return null;
     }
   }, []);
 
