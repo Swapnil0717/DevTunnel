@@ -5,8 +5,13 @@
 
 do $$
 begin
+  -- Matches the Role & Prerequisite Module's full "Choose Your Role" list
+  -- (devtunnel_workflow.txt, Module 7): Frontend / Backend / Full Stack /
+  -- Documentation / Testing / DevOps.
   if not exists (select 1 from pg_type where typname = 'developer_role' and typnamespace = 'devtunnel'::regnamespace) then
-    create type devtunnel.developer_role as enum ('FRONTEND', 'BACKEND', 'FULL_STACK');
+    create type devtunnel.developer_role as enum (
+      'FRONTEND', 'BACKEND', 'FULL_STACK', 'DOCUMENTATION', 'TESTING', 'DEVOPS'
+    );
   end if;
   if not exists (select 1 from pg_type where typname = 'experience_level' and typnamespace = 'devtunnel'::regnamespace) then
     create type devtunnel.experience_level as enum ('BEGINNER', 'INTERMEDIATE', 'ADVANCED');
@@ -15,6 +20,16 @@ begin
     create type devtunnel.contributor_intent as enum ('START_PROJECT', 'FIND_PROJECT');
   end if;
 end $$;
+
+-- If this migration already ran against an older version of this file
+-- (developer_role with only FRONTEND/BACKEND/FULL_STACK), add the roles
+-- that were introduced later. ALTER TYPE ... ADD VALUE cannot run inside
+-- the DO block above (it can't run in the same transaction as other
+-- schema changes on that type), so these are separate, idempotent
+-- statements.
+alter type devtunnel.developer_role add value if not exists 'DOCUMENTATION';
+alter type devtunnel.developer_role add value if not exists 'TESTING';
+alter type devtunnel.developer_role add value if not exists 'DEVOPS';
 
 alter table devtunnel.users
   add column if not exists skills               text[] not null default '{}',

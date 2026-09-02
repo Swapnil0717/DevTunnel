@@ -93,8 +93,8 @@ export function OnboardingWizard({ user }: OnboardingWizardProps) {
     !(step === 3 && !data.intent);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-[720px] flex-col gap-8 px-6 py-10">
-      <div className="flex items-center justify-between">
+    <main className="mx-auto flex min-h-screen max-w-[720px] flex-col gap-6 px-4 py-6 sm:gap-8 sm:px-6 sm:py-10">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <Logo />
         <StepIndicator currentStep={step} totalSteps={TOTAL_STEPS} />
       </div>

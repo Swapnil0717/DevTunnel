@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type KeyboardEvent } from "react";
+import { useId, useState, type KeyboardEvent, type ReactNode } from "react";
 
 type TagVariant = "skill" | "tech" | "interest";
 
@@ -16,6 +16,8 @@ interface TagInputProps {
   values: string[];
   onChange: (next: string[]) => void;
   placeholder?: string;
+  /** Optional per-value leading icon — used to show a technology's logo. */
+  renderIcon?: (value: string) => ReactNode;
 }
 
 /**
@@ -29,7 +31,14 @@ interface TagInputProps {
  * need proper labels; rule 37: don't replace real controls with bare
  * `<div onClick>`s).
  */
-export function TagInput({ label, variant, values, onChange, placeholder }: TagInputProps) {
+export function TagInput({
+  label,
+  variant,
+  values,
+  onChange,
+  placeholder,
+  renderIcon,
+}: TagInputProps) {
   const inputId = useId();
   const [draft, setDraft] = useState("");
 
@@ -65,6 +74,7 @@ export function TagInput({ label, variant, values, onChange, placeholder }: TagI
             key={value}
             className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11.5px] ${VARIANT_CLASSES[variant]}`}
           >
+            {renderIcon?.(value)}
             {value}
             <button
               type="button"

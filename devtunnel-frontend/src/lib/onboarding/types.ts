@@ -11,51 +11,81 @@
  * does not assume those columns already exist server-side — see
  * lib/onboarding/api.ts for how submission is handled in the meantime.
  */
- export type DeveloperRole = "FRONTEND" | "BACKEND" | "FULL_STACK";
-
- export type ExperienceLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
- 
  /**
-  * Mirrors the two contributor entry points from the Contributor Home
-  * Module (devtunnel_workflow.txt, Module 3: "Start an Open Source
-  * Project" / "Find an Open Source Project").
+  * Matches the roles a contributor can pick from in the Role &
+  * Prerequisite Module (devtunnel_workflow.txt, Module 7 — "Choose Your
+  * Role": Frontend Developer / Backend Developer / Full Stack Developer /
+  * Documentation / Testing / DevOps). Kept in sync with
+  * devtunnel-backend/sql/002_add_onboarding_fields.sql's
+  * `devtunnel.developer_role` enum.
   */
- export type ContributorIntent = "START_PROJECT" | "FIND_PROJECT";
- 
- export interface OnboardingData {
-   bio: string;
-   skills: string[];
-   technologies: string[];
-   developerRole: DeveloperRole | null;
-   experienceLevel: ExperienceLevel | null;
-   interests: string[];
-   intent: ContributorIntent | null;
- }
- 
- export const EMPTY_ONBOARDING_DATA: OnboardingData = {
-   bio: "",
-   skills: [],
-   technologies: [],
-   developerRole: null,
-   experienceLevel: null,
-   interests: [],
-   intent: null,
- };
- 
- export const DEVELOPER_ROLE_LABEL: Record<DeveloperRole, string> = {
-   FRONTEND: "Frontend developer",
-   BACKEND: "Backend developer",
-   FULL_STACK: "Full stack developer",
- };
- 
- export const EXPERIENCE_LEVEL_LABEL: Record<ExperienceLevel, string> = {
-   BEGINNER: "Beginner",
-   INTERMEDIATE: "Intermediate",
-   ADVANCED: "Advanced",
- };
- 
- export const CONTRIBUTOR_INTENT_LABEL: Record<ContributorIntent, string> = {
-   START_PROJECT: "Start an open source project",
-   FIND_PROJECT: "Find an open source project",
- };
- 
+  export type DeveloperRole =
+  | "FRONTEND"
+  | "BACKEND"
+  | "FULL_STACK"
+  | "DOCUMENTATION"
+  | "TESTING"
+  | "DEVOPS";
+
+export type ExperienceLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
+
+/**
+ * Mirrors the two contributor entry points from the Contributor Home
+ * Module (devtunnel_workflow.txt, Module 3: "Start an Open Source
+ * Project" / "Find an Open Source Project").
+ */
+export type ContributorIntent = "START_PROJECT" | "FIND_PROJECT";
+
+export interface OnboardingData {
+  bio: string;
+  skills: string[];
+  technologies: string[];
+  developerRole: DeveloperRole | null;
+  experienceLevel: ExperienceLevel | null;
+  interests: string[];
+  intent: ContributorIntent | null;
+}
+
+export const EMPTY_ONBOARDING_DATA: OnboardingData = {
+  bio: "",
+  skills: [],
+  technologies: [],
+  developerRole: null,
+  experienceLevel: null,
+  interests: [],
+  intent: null,
+};
+
+export const DEVELOPER_ROLE_LABEL: Record<DeveloperRole, string> = {
+  FRONTEND: "Frontend developer",
+  BACKEND: "Backend developer",
+  FULL_STACK: "Full stack developer",
+  DOCUMENTATION: "Documentation",
+  TESTING: "Testing",
+  DEVOPS: "DevOps",
+};
+
+/**
+ * Short, generic description of each role's day-to-day work — not
+ * specific to any project (Frontend_Development_Rules.txt rule 58: never
+ * invent project-specific facts).
+ */
+export const DEVELOPER_ROLE_DESCRIPTION: Record<DeveloperRole, string> = {
+  FRONTEND: "Build and improve user interfaces.",
+  BACKEND: "Build APIs, services, and data layers.",
+  FULL_STACK: "Work across both frontend and backend.",
+  DOCUMENTATION: "Write and improve project docs and guides.",
+  TESTING: "Write tests and help verify releases.",
+  DEVOPS: "Manage CI/CD, infrastructure, and deploys.",
+};
+
+export const EXPERIENCE_LEVEL_LABEL: Record<ExperienceLevel, string> = {
+  BEGINNER: "Beginner",
+  INTERMEDIATE: "Intermediate",
+  ADVANCED: "Advanced",
+};
+
+export const CONTRIBUTOR_INTENT_LABEL: Record<ContributorIntent, string> = {
+  START_PROJECT: "Start an open source project",
+  FIND_PROJECT: "Find an open source project",
+};
