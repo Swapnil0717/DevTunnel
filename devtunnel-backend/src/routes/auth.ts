@@ -35,9 +35,14 @@ export const auth = new Hono<{ Bindings: Env; Variables: Variables }>();
  * ends up after auth). Must be an internal, absolute-from-root path —
  * anything else (protocol-relative `//evil.com`, absolute URLs, bare
  * strings) is rejected in favor of the default.
+ *
+ * Defaults to `/home` — the real contributor landing page
+ * (devtunnel_workflow.txt Module C1: sign-in → onboarding → home) — not
+ * `/dashboard`, which has no content of its own and exists only as a
+ * bookmark-compatibility redirect on the frontend.
  */
 function sanitizeNextPath(next: string | undefined | null): string {
-  const fallback = "/dashboard";
+  const fallback = "/home";
   if (!next) return fallback;
   if (!next.startsWith("/")) return fallback;
   if (next.startsWith("//")) return fallback;
@@ -84,7 +89,7 @@ auth.post("/github", async (c) => {
     return errorResponse(c, 429, "rate_limited", "Too many sign-in attempts. Try again shortly.");
   }
 
-  let next = "/dashboard";
+  let next = "/home";
   try {
     const body = await c.req.parseBody();
     next = sanitizeNextPath(typeof body.next === "string" ? body.next : undefined);
@@ -107,6 +112,8 @@ auth.post("/github", async (c) => {
  * devtunnel-frontend/src/lib/auth/api.ts). On completion, redirects to the
  * frontend's `/auth/callback?status=success&next=...` or
  * `?status=error&reason=...`, matching what OAuthCallbackView expects.
+ * Note that `OAuthCallbackView` itself still overrides this `next` to
+ * `/onboarding` for a first-time sign-in — see that component.
  */
 auth.get("/callback", async (c) => {
   const env = getEnv(c.env);

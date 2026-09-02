@@ -4,8 +4,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/use-auth";
 import { StatusDot } from "@/components/ui/status-dot";
+import { needsOnboarding } from "@/lib/onboarding/needs-onboarding";
 
-const DEFAULT_DESTINATION = "/dashboard";
+const DEFAULT_DESTINATION = "/home";
 
 /** How long the "signed in" confirmation stays visible before redirecting.
  * Long enough to read, short enough not to feel like a stall. */
@@ -15,7 +16,7 @@ type CallbackPhase = "verifying" | "success" | "error";
 
 /**
  * Handles the return leg of the GitHub OAuth flow (devtunnel_workflow.txt,
- * Module C1 — Authentication: "GitHub OAuth callback";
+ * Module C1 - Authentication: "GitHub OAuth callback";
  * 2_devtunnel_auth_callback_states.html).
  *
  * Assumption (documented since the backend isn't part of this deliverable):
@@ -23,14 +24,22 @@ type CallbackPhase = "verifying" | "success" | "error";
  * `GET /auth/callback`, because exchanging the authorization code for a
  * token requires the OAuth client secret, which must never live in
  * frontend code (rule 19). The backend performs that exchange, starts the
- * session, and redirects the browser here — to this frontend route — with
+ * session, and redirects the browser here - to this frontend route - with
  * either:
  *   - `?status=success&next=/some/path`, or
  *   - `?status=error&reason=<human-readable-reason>`
  *
  * This page never sees, stores, or forwards the GitHub `code` itself.
  *
- * Renders one of three real, mutually exclusive states — never a static
+ * Sign-in -> onboarding -> home routing (devtunnel_workflow.txt, Module C1):
+ * once the session is confirmed via `refreshUser()`, a first-time sign-in
+ * (`needsOnboarding(freshUser)`) always goes to `/onboarding` regardless of
+ * `next` - `next` only matters for someone who's already onboarded (e.g. a
+ * deep link that bounced them to /login first). Everyone else lands on
+ * `/home`, never `/dashboard` (dashboard has no real content yet - it's
+ * kept only as a redirect shim for old bookmarked links).
+ *
+ * Renders one of three real, mutually exclusive states - never a static
  * showcase of all of them at once (rule 23): `verifying` while
  * `GET /auth/me` confirms the new session, `success` briefly once it's
  * confirmed, and `error` when the backend reports the sign-in failed.
@@ -55,12 +64,15 @@ export function OAuthCallbackView() {
     let redirectTimer: ReturnType<typeof setTimeout>;
 
     async function completeSignIn() {
-      await refreshUser();
+      const freshUser = await refreshUser();
       if (isCancelled) return;
+
+      const destination =
+        freshUser && needsOnboarding(freshUser) ? "/onboarding" : next;
 
       setPhase("success");
       redirectTimer = setTimeout(() => {
-        if (!isCancelled) router.replace(next);
+        if (!isCancelled) router.replace(destination);
       }, SUCCESS_DISPLAY_MS);
     }
 
@@ -112,7 +124,7 @@ export function OAuthCallbackView() {
         </div>
         <h1 className="m-0 mb-2 text-[15px] font-medium text-text">You&apos;re signed in</h1>
         <p className="m-0 mb-4 text-[13px] leading-[1.5] text-status-success-text">
-          Redirecting you now…
+          Redirecting you now...
         </p>
         <div className="h-[2px] overflow-hidden rounded-full bg-status-success-border">
           <div className="h-full w-full bg-accent" />

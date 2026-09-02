@@ -14,8 +14,10 @@ const PROTECTED_PREFIXES = ["/dashboard", "/home", "/profile", "/onboarding"];
 
 /**
  * Routes that only make sense for a signed-out visitor. An already-signed-in
- * user hitting /login is sent straight to their dashboard instead of seeing
- * the sign-in screen again.
+ * user hitting /login is sent straight to /home — the real contributor
+ * landing page — instead of seeing the sign-in screen again. Not /dashboard:
+ * that route has no real content of its own, it only exists as a redirect
+ * shim for old bookmarked links (see (protected)/dashboard/page.tsx).
  */
 const SIGNED_OUT_ONLY_ROUTES = ["/login"];
 
@@ -34,7 +36,7 @@ export function middleware(request: NextRequest) {
   }
 
   if (SIGNED_OUT_ONLY_ROUTES.includes(pathname) && hasAuthFlag) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL("/home", request.url));
   }
 
   return NextResponse.next();
