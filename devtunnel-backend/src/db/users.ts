@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AuthUser, UserRow } from "../types";
+import type { AuthUser, OnboardingData, UserRow } from "../types";
 import type { GitHubIdentity } from "../lib/github";
 import { randomToken } from "../lib/crypto";
 import { logger } from "../lib/logger";
@@ -23,6 +23,7 @@ export function toAuthUser(row: UserRow): AuthUser {
     role: row.role,
     createdAt: row.created_at,
     lastLoginAt: row.last_login_at,
+    onboardingCompleted: row.onboarding_completed,
   };
 }
 
@@ -94,4 +95,40 @@ export async function findUserById(
 
   if (error) throw new Error(`Failed to load user: ${error.message}`);
   return data;
+}
+
+/**
+ * Persists the onboarding wizard's answers (devtunnel_workflow.txt Module
+ * C1 "User onboarding" screen) and marks the account onboarded. Only ever
+ * called for the currently-authenticated user's own id — see
+ * routes/auth.ts, where `userId` comes from `requireAuth`, never from the
+ * request body (rule 12: authorization must be explicit and separate from
+ * authentication).
+ */
+export async function completeOnboarding(
+  supabase: SupabaseClient,
+  userId: string,
+  data: OnboardingData,
+): Promise<UserRow> {
+  const { data: row, error } = await supabase
+    .from("users")
+    .update({
+      bio: data.bio.length > 0 ? data.bio : null,
+      skills: data.skills,
+      technologies: data.technologies,
+      developer_role: data.developerRole,
+      experience_level: data.experienceLevel,
+      interests: data.interests,
+      intent: data.intent,
+      onboarding_completed: true,
+    })
+    .eq("id", userId)
+    .select()
+    .single<UserRow>();
+
+  if (error || !row) {
+    throw new Error(`Failed to update onboarding: ${error?.message ?? "no row returned"}`);
+  }
+
+  return row;
 }

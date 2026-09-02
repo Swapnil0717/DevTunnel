@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { getCookie } from "hono/cookie";
+import { z } from "zod";
 import type { Env, Variables } from "../types";
 import { getEnv, sessionTtlSeconds } from "../config/env";
 import { getSupabase } from "../lib/supabase";
@@ -18,8 +19,9 @@ import {
   setSessionCookies,
   clearSessionCookies,
 } from "../lib/cookies";
-import { upsertUserFromGitHub, toAuthUser } from "../db/users";
+import { upsertUserFromGitHub, toAuthUser, completeOnboarding } from "../db/users";
 import { createSession, getUserForSessionToken, revokeSessionByToken } from "../db/sessions";
+import { requireAuth } from "../middleware/auth";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
 import { logger } from "../lib/logger";
@@ -42,6 +44,27 @@ function sanitizeNextPath(next: string | undefined | null): string {
   if (next.includes("://")) return fallback;
   return next;
 }
+
+/**
+ * Validation schema for `PATCH /auth/onboarding`. Mirrors `OnboardingData`
+ * in devtunnel-frontend/src/lib/onboarding/types.ts. `developerRole`,
+ * `experienceLevel`, and `intent` are required (not nullable) because the
+ * wizard's own UI (`OnboardingWizard.canContinue`) never lets the user
+ * reach the final "Finish setup" step without them — but the backend
+ * re-validates independently rather than trusting that (rule 15: never
+ * trust frontend validation). `bio`, `skills`, `technologies`, and
+ * `interests` are optional/unbounded-by-the-wizard, so they're validated
+ * but not required.
+ */
+const onboardingSchema = z.object({
+  bio: z.string().trim().max(500).optional().default(""),
+  skills: z.array(z.string().trim().min(1).max(50)).max(20).optional().default([]),
+  technologies: z.array(z.string().trim().min(1).max(50)).max(20).optional().default([]),
+  developerRole: z.enum(["FRONTEND", "BACKEND", "FULL_STACK"]),
+  experienceLevel: z.enum(["BEGINNER", "INTERMEDIATE", "ADVANCED"]),
+  interests: z.array(z.string().trim().min(1).max(50)).max(20).optional().default([]),
+  intent: z.enum(["START_PROJECT", "FIND_PROJECT"]),
+});
 
 /**
  * `POST /auth/github` (devtunnel_workflow.txt, Module C1).
@@ -177,6 +200,60 @@ auth.get("/me", async (c) => {
   }
 
   return c.json({ user: toAuthUser(userRow) }, 200);
+});
+
+/**
+ * `PATCH /auth/onboarding` (devtunnel_workflow.txt, Module C1 — "User
+ * onboarding" screen). Matches the contract already documented in
+ * devtunnel-frontend/src/lib/onboarding/api.ts. Requires a signed-in
+ * session (rule 11) and validates the full body server-side (rules 14–15)
+ * even though the wizard's UI already gates step advancement. The user id
+ * is taken exclusively from the verified session (`requireAuth`), never
+ * from the request body, so a signed-in user can only ever update their
+ * own row (rule 12).
+ */
+auth.patch("/onboarding", requireAuth, async (c) => {
+  const env = getEnv(c.env);
+
+  const withinLimit = await checkRateLimit(c, { bucket: "auth-onboarding", limit: 20, windowSeconds: 60 });
+  if (!withinLimit) {
+    return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+  }
+
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return errorResponse(c, 400, "invalid_json", "Request body must be valid JSON");
+  }
+
+  const parsed = onboardingSchema.safeParse(body);
+  if (!parsed.success) {
+    return errorResponse(
+      c,
+      422,
+      "validation_error",
+      parsed.error.issues[0]?.message ?? "Invalid onboarding data",
+    );
+  }
+
+  const user = c.get("user");
+  if (!user) {
+    // requireAuth already guarantees this is set — kept for type safety.
+    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+  }
+
+  try {
+    const supabase = getSupabase(env);
+    const updatedRow = await completeOnboarding(supabase, user.id, parsed.data);
+    return c.json({ user: toAuthUser(updatedRow) }, 200);
+  } catch (err) {
+    logger.error("onboarding_update_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      requestId: c.get("requestId"),
+    });
+    return errorResponse(c, 500, "internal_error", "Something went wrong");
+  }
 });
 
 /**
