@@ -9,8 +9,14 @@ import { logger } from "../lib/logger";
  * `githubId` (internal lookup key) is deliberately excluded — see
  * devtunnel-frontend/src/lib/auth/types.ts and rule 9 (separate public and
  * private data).
+ *
+ * `isMaintainer` isn't a column on this row — it's derived from
+ * `devtunnel.project_maintainers` (db/devtunnelStats.ts `getIsMaintainer`)
+ * and passed in by the caller, since that requires its own query. Callers
+ * that don't need it (or haven't looked it up yet) can omit it; it
+ * defaults to `false` rather than silently guessing "true".
  */
-export function toAuthUser(row: UserRow): AuthUser {
+export function toAuthUser(row: UserRow, isMaintainer = false): AuthUser {
   return {
     id: row.id,
     email: row.email,
@@ -24,6 +30,13 @@ export function toAuthUser(row: UserRow): AuthUser {
     createdAt: row.created_at,
     lastLoginAt: row.last_login_at,
     onboardingCompleted: row.onboarding_completed,
+    skills: row.skills,
+    technologies: row.technologies,
+    developerRole: row.developer_role,
+    experienceLevel: row.experience_level,
+    interests: row.interests,
+    intent: row.intent,
+    isMaintainer,
   };
 }
 

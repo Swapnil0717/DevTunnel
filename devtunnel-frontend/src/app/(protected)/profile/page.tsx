@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { buildMetadata } from "@/lib/seo";
 import { getServerUser } from "@/lib/auth/get-server-user";
 import { getServerContributionsSummary } from "@/lib/profile/get-server-contributions-summary";
+import { getServerDevTunnelContributionsSummary } from "@/lib/profile/get-server-devtunnel-contributions-summary";
+import { getServerDevTunnelStats } from "@/lib/profile/get-server-devtunnel-stats";
 import { ProfileHeader } from "@/components/profile/profile-header";
 import { ProfileTags } from "@/components/profile/profile-tags";
 import { ProfileStats } from "@/components/profile/profile-stats";
@@ -26,17 +28,34 @@ export const metadata: Metadata = buildMetadata({
 // Visual redesign per 5_devtunnel_profile_page.html. Split into
 // components/profile/* (header, tags, stats, tabs) rather than one big
 // file, matching the components/home/* convention elsewhere in this
-// codebase. The "Contributions" stat and the contribution-history tab's
-// calendar are now backed by real data from
-// GET /users/me/contributions(/summary) (devtunnel-backend
-// src/routes/contributions.ts) — see the comments in ProfileStats and
-// ProfileTabs for why "Projects"/"Pull requests" still render honest
-// empty states instead of invented figures
-// (Frontend_Development_Rules.txt rule 58).
+// codebase.
+//
+// The profile page's stats now pull from FOUR real backend sources,
+// fetched here in parallel:
+//   - getServerUser() — GET /auth/me (devtunnel-backend src/routes/auth.ts),
+//     now including every onboarding field + `isMaintainer` (see
+//     ProfileTags).
+//   - getServerContributionsSummary() — GET /users/me/contributions/summary
+//     (src/routes/contributions.ts), the GitHub rolling-365-day total.
+//   - getServerDevTunnelContributionsSummary() —
+//     GET /users/me/contributions/devtunnel/summary
+//     (src/routes/devtunnelStats.ts), the DevTunnel-native rolling total —
+//     shown next to the GitHub number in ProfileStats' "Contributions" card.
+//   - getServerDevTunnelStats() — GET /users/me/devtunnel-stats
+//     (src/routes/devtunnelStats.ts) — projects created/maintained, tasks
+//     completed, pull requests merged, all backed by real tables
+//     (devtunnel-backend/sql/004_add_devtunnel_contributions.sql).
+// Each fetcher independently returns `null` on failure so one source
+// going down never blocks the rest of the page — see the comments on
+// each fetcher for why (Frontend_Development_Rules.txt rule 58: never
+// invent a number, always render an honest "not available" state
+// instead).
 export default async function ProfilePage() {
-  const [user, contributionsSummary] = await Promise.all([
+  const [user, githubSummary, devtunnelSummary, devtunnelStats] = await Promise.all([
     getServerUser(),
     getServerContributionsSummary(),
+    getServerDevTunnelContributionsSummary(),
+    getServerDevTunnelStats(),
   ]);
 
   return (
@@ -48,7 +67,11 @@ export default async function ProfilePage() {
           <div className="p-[22px]">
             <ProfileHeader user={user} />
             <ProfileTags user={user} />
-            <ProfileStats contributions={contributionsSummary} />
+            <ProfileStats
+              githubSummary={githubSummary}
+              devtunnelSummary={devtunnelSummary}
+              devtunnelStats={devtunnelStats}
+            />
             <ProfileTabs />
           </div>
         </div>

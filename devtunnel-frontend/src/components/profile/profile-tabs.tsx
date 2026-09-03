@@ -24,13 +24,20 @@ const TABS = [
  * Real, accessible tab UI (Frontend_Development_Rules.txt rule 4 —
  * semantic HTML/ARIA over generic divs).
  *
- * "Contribution history" now renders the real GitHub contribution
- * calendar (`ContributionCalendar`, backed by
- * `GET /users/me/contributions`) instead of a static empty state.
- * "Projects" and "Pull requests" still render an honest empty state —
- * those are DevTunnel-native concepts with no backing table yet (only
- * `users`/`sessions` exist in devtunnel-backend/sql), so there is nothing
- * truthful to show there until that module is built
+ * "Contribution history" now renders two real contribution calendars
+ * side by side — GitHub's (`ContributionCalendar source="github"`,
+ * backed by `GET /users/me/contributions`) and DevTunnel's own
+ * (`source="devtunnel"`, backed by `GET /users/me/contributions/devtunnel`
+ * — devtunnel-backend src/routes/devtunnelStats.ts) — so a contributor
+ * can see their GitHub activity next to what they've specifically done
+ * through DevTunnel (tasks completed, PRs merged here).
+ *
+ * "Projects" and "Pull requests" still render an honest empty state for
+ * now — the profile page's stat cards (ProfileStats) already surface the
+ * real counts for these from `GET /users/me/devtunnel-stats`; a
+ * browsable per-tab list of the actual projects/PRs is a further step
+ * once devtunnel-backend exposes list (not just count) endpoints for
+ * them, so this tab doesn't invent a list here
  * (Frontend_Development_Rules.txt rule 58).
  */
 export function ProfileTabs() {
@@ -75,7 +82,21 @@ export function ProfileTabs() {
         aria-labelledby={`profile-tab-${active.id}`}
       >
         {active.id === "contributions" ? (
-          <ContributionCalendar />
+          <div className="space-y-6">
+            <div>
+              <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-text-dim">
+                GitHub
+              </h3>
+              <ContributionCalendar source="github" />
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-text-dim">
+                Through DevTunnel
+              </h3>
+              <ContributionCalendar source="devtunnel" />
+            </div>
+          </div>
         ) : (
           <div className="rounded-lg border border-border-subtle bg-surface px-4 py-8 text-center text-[12.5px] text-text-dim">
             {active.empty}

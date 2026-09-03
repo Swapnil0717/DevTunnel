@@ -6,6 +6,7 @@ import { handleError } from "./middleware/errorHandler";
 import { auth } from "./routes/auth";
 import { health } from "./routes/health";
 import { contributions } from "./routes/contributions";
+import { devtunnelStats } from "./routes/devtunnelStats";
 import { logger } from "./lib/logger";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -28,6 +29,7 @@ app.use("*", async (c, next) => {
 app.route("/auth", auth);
 app.route("/", health);
 app.route("/", contributions);
+app.route("/", devtunnelStats);
 
 app.notFound((c) =>
   c.json({ error: { code: "not_found", message: "Not found", requestId: c.get("requestId") } }, 404),

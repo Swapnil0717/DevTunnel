@@ -6,7 +6,7 @@
  * Frontend_Development_Rules.txt rule 17 (public profiles must never expose
  * private/auth data) and rule 20 (API data must be safely rendered).
  */
- import type { DeveloperRole, ExperienceLevel } from "@/lib/onboarding/types";
+ import type { ContributorIntent, DeveloperRole, ExperienceLevel } from "@/lib/onboarding/types";
 
  export type UserRole = "CONTRIBUTOR" | "MAINTAINER" | "ADMIN";
  
@@ -33,21 +33,35 @@
     */
    onboardingCompleted: boolean;
    /**
-    * Optional — the same shape submitted by `submitOnboarding()`
-    * (lib/onboarding/api.ts). Same documented assumption as that file:
-    * `devtunnel.users` doesn't have dedicated columns for these yet
-    * (they're called out as "later modules" work in
-    * devtunnel-backend/sql/001_create_schema.sql), so `GET /auth/me` may
-    * not return them today. Declared optional/nullable and read
-    * defensively everywhere (see components/profile/profile-tags.tsx) —
-    * never assumed present, never backfilled with placeholder data
-    * (Frontend_Development_Rules.txt rule 49 — validate dynamic content;
-    * rule 58 — never invent unavailable data).
+    * The same fields submitted by `submitOnboarding()`
+    * (lib/onboarding/api.ts), now returned by both `GET /auth/me` and
+    * `PATCH /auth/onboarding` (devtunnel-backend/src/db/users.ts
+    * `toAuthUser`) — every field asked for during onboarding is present
+    * here so the profile page can render all of it
+    * (components/profile/profile-tags.tsx), not just a subset. Arrays
+    * default to `[]` and enum fields to `null` server-side before
+    * onboarding is completed — never assume a non-empty value, never
+    * backfill with placeholder data (Frontend_Development_Rules.txt rule
+    * 49 — validate dynamic content; rule 58 — never invent unavailable
+    * data).
     */
-   developerRole?: DeveloperRole | null;
-   experienceLevel?: ExperienceLevel | null;
-   skills?: string[];
-   technologies?: string[];
+   skills: string[];
+   technologies: string[];
+   developerRole: DeveloperRole | null;
+   experienceLevel: ExperienceLevel | null;
+   interests: string[];
+   intent: ContributorIntent | null;
+   /**
+    * Whether this user maintains at least one DevTunnel project
+    * (devtunnel.project_maintainers —
+    * devtunnel-backend/src/db/devtunnelStats.ts `getIsMaintainer`). This
+    * is independent of `role` — a `CONTRIBUTOR`-role account can still be
+    * a maintainer of a specific project, so the profile page shows both
+    * badges when both are true (components/profile/profile-tags.tsx)
+    * rather than treating maintainer status as a single account-wide
+    * role.
+    */
+   isMaintainer: boolean;
  }
  
  export type AuthStatus = "loading" | "authenticated" | "unauthenticated";

@@ -3,8 +3,12 @@
 import { useEffect, useState, useCallback } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/layout/nav-icons";
 import { GithubLoginButton } from "@/components/auth/github-login-button";
-import { fetchContributionMonth, ProfileApiError } from "@/lib/profile/api";
-import type { ContributionMonth } from "@/lib/profile/types";
+import {
+  fetchContributionMonth,
+  fetchDevTunnelContributionMonth,
+  ProfileApiError,
+} from "@/lib/profile/api";
+import type { BaseContributionMonth } from "@/lib/profile/types";
 
 const MONTH_LABEL_FORMATTER = new Intl.DateTimeFormat("en-US", {
   month: "long",
@@ -55,47 +59,76 @@ const LEVEL_CLASSES: Record<0 | 1 | 2 | 3 | 4, string> = {
 
 type Status = "loading" | "ready" | "error" | "no-github" | "reauth-required";
 
+export interface ContributionCalendarProps {
+  /**
+   * Which system this calendar's "green squares" come from. Both render
+   * through the exact same grid UI (5_devtunnel_profile_page.html) — only
+   * the data source and its failure modes differ. `github` can be
+   * unlinked or have an expired authorization (GithubLoginButton
+   * fallback below); `devtunnel` activity is always queryable for a
+   * signed-in user and simply reads as an honest all-zero month when
+   * they have no DevTunnel-native activity yet — there's no "connect an
+   * account" step for your own DevTunnel history.
+   */
+  source: "github" | "devtunnel";
+}
+
 /**
  * GitHub-style monthly contribution calendar for the profile page's
- * "Contribution history" tab — real data from
- * `GET /users/me/contributions` (devtunnel-backend
- * src/routes/contributions.ts, fetched using the signed-in user's own
- * GitHub authorization — src/db/githubTokens.ts), one calendar month at
- * a time, with prev/next arrows to navigate.
+ * "Contribution history" tab. Renders one calendar month at a time with
+ * prev/next arrows, backed by real data from either:
+ *  - `GET /users/me/contributions` (source="github", devtunnel-backend
+ *    src/routes/contributions.ts, using the signed-in user's own GitHub
+ *    authorization — src/db/githubTokens.ts), or
+ *  - `GET /users/me/contributions/devtunnel` (source="devtunnel",
+ *    devtunnel-backend src/routes/devtunnelStats.ts, the user's own
+ *    DevTunnel-native activity — sql/004_add_devtunnel_contributions.sql).
+ *
+ * `profile-tabs.tsx` renders one of each side by side so a contributor
+ * can see their GitHub activity next to what they've done through
+ * DevTunnel itself.
  */
-export function ContributionCalendar() {
+export function ContributionCalendar({ source }: ContributionCalendarProps) {
   const [month, setMonth] = useState<string>(() => currentMonthUTC());
-  const [data, setData] = useState<ContributionMonth | null>(null);
+  const [data, setData] = useState<BaseContributionMonth | null>(null);
   const [status, setStatus] = useState<Status>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const load = useCallback(async (targetMonth: string) => {
-    setStatus("loading");
-    setErrorMessage(null);
-    try {
-      const result = await fetchContributionMonth(targetMonth);
-      setData(result);
-      setStatus("ready");
-    } catch (err) {
-      if (err instanceof ProfileApiError && err.code === "github_account_not_linked") {
-        setStatus("no-github");
-        return;
+  const load = useCallback(
+    async (targetMonth: string) => {
+      setStatus("loading");
+      setErrorMessage(null);
+      try {
+        const result =
+          source === "github"
+            ? await fetchContributionMonth(targetMonth)
+            : await fetchDevTunnelContributionMonth(targetMonth);
+        setData(result);
+        setStatus("ready");
+      } catch (err) {
+        if (source === "github" && err instanceof ProfileApiError) {
+          if (err.code === "github_account_not_linked") {
+            setStatus("no-github");
+            return;
+          }
+          if (err.code === "github_reauth_required") {
+            setStatus("reauth-required");
+            return;
+          }
+        }
+        setErrorMessage(
+          err instanceof ProfileApiError ? err.message : "Couldn't load contribution data right now.",
+        );
+        setStatus("error");
       }
-      if (err instanceof ProfileApiError && err.code === "github_reauth_required") {
-        setStatus("reauth-required");
-        return;
-      }
-      setErrorMessage(
-        err instanceof ProfileApiError ? err.message : "Couldn't load contribution data right now.",
-      );
-      setStatus("error");
-    }
-  }, []);
+    },
+    [source],
+  );
 
   useEffect(() => {
     void load(month);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month]);
+  }, [month, source]);
 
   if (status === "no-github") {
     return (

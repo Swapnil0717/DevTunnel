@@ -1,35 +1,90 @@
-import type { ContributionSummary } from "@/lib/profile/types";
+import type { ContributionSummary, DevTunnelStats } from "@/lib/profile/types";
 
 /**
- * Contributions / Projects / Pull requests counts
- * (5_devtunnel_profile_page.html).
+ * Contributions / Projects / Tasks done / Pull requests stat cards
+ * (5_devtunnel_profile_page.html), now entirely backed by real data:
  *
- * "Contributions" is now real: `summary` comes from
- * `GET /users/me/contributions/summary` (devtunnel-backend
- * src/routes/contributions.ts — a rolling 365-day total pulled live from
- * GitHub), fetched server-side in profile/page.tsx and passed down here,
- * same pattern as `user` from getServerUser().
+ * - "Contributions" shows two numbers side by side rather than one:
+ *   the GitHub rolling-365-day total (`githubSummary`, from
+ *   `GET /users/me/contributions/summary` — devtunnel-backend
+ *   src/routes/contributions.ts) next to the DevTunnel-native rolling
+ *   total (`devtunnelSummary`, from
+ *   `GET /users/me/contributions/devtunnel/summary` —
+ *   src/routes/devtunnelStats.ts). These are two genuinely different
+ *   numbers — "everything on GitHub" vs. "what happened specifically
+ *   through DevTunnel" — so both are shown rather than picking one.
+ * - "Projects" shows projects created, plus "maintaining N" underneath
+ *   when this user maintains at least one project (a contributor can
+ *   also be a maintainer — see profile-tags.tsx for the badge version of
+ *   the same fact).
+ * - "Tasks done" and "Pull requests" are `devtunnelStats.tasksCompleted`
+ *   / `pullRequestsMerged`, both from `GET /users/me/devtunnel-stats`.
  *
- * "Projects" and "Pull requests" still have no backing aggregation
- * endpoint — devtunnel-backend has no Project/Task/PullRequest tables yet
- * (only users/sessions — see sql/001_create_schema.sql). Rendering a
- * number there without a real source would be inventing statistics
- * (Frontend_Development_Rules.txt rule 58/59), so those two cards keep
- * their honest "not available yet" state. Swap the "—" for a real count
- * as soon as that endpoint exists — the layout doesn't need to change,
- * just the value passed in.
+ * Every card still falls back to an honest "—" (not a guessed 0) when
+ * its source failed to load server-side — never invent a number
+ * (Frontend_Development_Rules.txt rule 58/59).
  */
 export function ProfileStats({
-  contributions,
+  githubSummary,
+  devtunnelSummary,
+  devtunnelStats,
 }: {
-  contributions: ContributionSummary | null;
+  githubSummary: ContributionSummary | null;
+  devtunnelSummary: ContributionSummary | null;
+  devtunnelStats: DevTunnelStats | null;
 }) {
   return (
-    <div className="mb-5 grid grid-cols-3 gap-3" aria-label="Contribution stats">
-      <div className="rounded-lg bg-surface px-3.5 py-3">
+    <div
+      className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4"
+      aria-label="Contribution stats"
+    >
+      <div className="col-span-2 rounded-lg bg-surface px-3.5 py-3 sm:col-span-1">
         <p className="m-0 mb-1 text-[11px] text-text-dim">Contributions</p>
-        {contributions ? (
-          <p className="m-0 text-xl font-medium text-text">{contributions.totalContributions}</p>
+        <div className="flex items-baseline gap-3">
+          <div>
+            {githubSummary ? (
+              <p className="m-0 text-xl font-medium text-text">
+                {githubSummary.totalContributions}
+              </p>
+            ) : (
+              <p className="m-0 text-xl font-medium text-text-faint" aria-hidden="true">
+                —
+              </p>
+            )}
+            <p className="m-0 text-[10px] text-text-faint">GitHub</p>
+          </div>
+
+          <div aria-hidden="true" className="h-6 w-px bg-border" />
+
+          <div>
+            {devtunnelSummary ? (
+              <p className="m-0 text-xl font-medium text-text">
+                {devtunnelSummary.totalContributions}
+              </p>
+            ) : (
+              <p className="m-0 text-xl font-medium text-text-faint" aria-hidden="true">
+                —
+              </p>
+            )}
+            <p className="m-0 text-[10px] text-text-faint">via DevTunnel</p>
+          </div>
+        </div>
+        {!githubSummary && !devtunnelSummary ? (
+          <span className="sr-only">Not available yet</span>
+        ) : null}
+      </div>
+
+      <div className="rounded-lg bg-surface px-3.5 py-3">
+        <p className="m-0 mb-1 text-[11px] text-text-dim">Projects</p>
+        {devtunnelStats ? (
+          <>
+            <p className="m-0 text-xl font-medium text-text">{devtunnelStats.projectsCreated}</p>
+            {devtunnelStats.isMaintainer ? (
+              <p className="m-0 text-[10px] text-text-faint">
+                Maintaining {devtunnelStats.projectsMaintaining}
+              </p>
+            ) : null}
+          </>
         ) : (
           <>
             <p className="m-0 text-xl font-medium text-text-faint" aria-hidden="true">
@@ -40,15 +95,33 @@ export function ProfileStats({
         )}
       </div>
 
-      {(["Projects", "Pull requests"] as const).map((label) => (
-        <div key={label} className="rounded-lg bg-surface px-3.5 py-3">
-          <p className="m-0 mb-1 text-[11px] text-text-dim">{label}</p>
-          <p className="m-0 text-xl font-medium text-text-faint" aria-hidden="true">
-            —
-          </p>
-          <span className="sr-only">Not available yet</span>
-        </div>
-      ))}
+      <div className="rounded-lg bg-surface px-3.5 py-3">
+        <p className="m-0 mb-1 text-[11px] text-text-dim">Tasks done</p>
+        {devtunnelStats ? (
+          <p className="m-0 text-xl font-medium text-text">{devtunnelStats.tasksCompleted}</p>
+        ) : (
+          <>
+            <p className="m-0 text-xl font-medium text-text-faint" aria-hidden="true">
+              —
+            </p>
+            <span className="sr-only">Not available yet</span>
+          </>
+        )}
+      </div>
+
+      <div className="rounded-lg bg-surface px-3.5 py-3">
+        <p className="m-0 mb-1 text-[11px] text-text-dim">Pull requests</p>
+        {devtunnelStats ? (
+          <p className="m-0 text-xl font-medium text-text">{devtunnelStats.pullRequestsMerged}</p>
+        ) : (
+          <>
+            <p className="m-0 text-xl font-medium text-text-faint" aria-hidden="true">
+              —
+            </p>
+            <span className="sr-only">Not available yet</span>
+          </>
+        )}
+      </div>
     </div>
   );
 }

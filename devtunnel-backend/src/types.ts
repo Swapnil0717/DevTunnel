@@ -79,6 +79,17 @@ export interface OnboardingData {
  * frontend reads must be present, and nothing more sensitive (no
  * githubId, no encrypted tokens, no internal flags) is ever included
  * (Backend_Development_Rules.txt rule 9).
+ *
+ * `skills`/`technologies`/`developerRole`/`experienceLevel`/`interests`/
+ * `intent` are the onboarding wizard's own fields (sql/002) — surfaced
+ * here so the profile page can render every field asked for during
+ * onboarding, not just bio/skills/technologies as before.
+ *
+ * `isMaintainer` is NOT a column on `users` — it's derived per-request
+ * from `devtunnel.project_maintainers` (db/devtunnelStats.ts
+ * `getIsMaintainer`) and folded in by whichever route builds this object
+ * (middleware/auth.ts, routes/auth.ts `/me` and `/onboarding`). See
+ * db/users.ts `toAuthUser` for where it's threaded in.
  */
 export interface AuthUser {
   id: string;
@@ -93,6 +104,13 @@ export interface AuthUser {
   createdAt: string;
   lastLoginAt: string | null;
   onboardingCompleted: boolean;
+  skills: string[];
+  technologies: string[];
+  developerRole: DeveloperRole | null;
+  experienceLevel: ExperienceLevel | null;
+  interests: string[];
+  intent: ContributorIntent | null;
+  isMaintainer: boolean;
 }
 
 /**
@@ -150,8 +168,26 @@ export interface ContributionWeek {
   days: ContributionDay[];
 }
 
-/** Cached/returned shape for a single month's calendar. */
+/**
+ * Cached/returned shape for a single month's calendar. Shared by both
+ * the GitHub calendar (src/lib/githubGraphql.ts) and the DevTunnel-native
+ * calendar (src/lib/devtunnelActivity.ts) — same grid shape, different
+ * data source.
+ */
 export interface ContributionCalendar {
   totalContributions: number;
   weeks: ContributionWeek[];
+}
+
+/**
+ * DevTunnel-native profile stats — projects created/maintained, tasks
+ * completed, pull requests merged, all backed by real tables
+ * (sql/004_add_devtunnel_contributions.sql). See db/devtunnelStats.ts.
+ */
+export interface DevTunnelStats {
+  projectsCreated: number;
+  projectsMaintaining: number;
+  tasksCompleted: number;
+  pullRequestsMerged: number;
+  isMaintainer: boolean;
 }

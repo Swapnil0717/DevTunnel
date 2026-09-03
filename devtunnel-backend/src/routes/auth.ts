@@ -22,6 +22,7 @@ import {
 import { upsertUserFromGitHub, toAuthUser, completeOnboarding } from "../db/users";
 import { createSession, getUserForSessionToken, revokeSessionByToken } from "../db/sessions";
 import { persistGithubTokens } from "../db/githubTokens";
+import { getIsMaintainer } from "../db/devtunnelStats";
 import { requireAuth } from "../middleware/auth";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
@@ -211,6 +212,12 @@ auth.get("/callback", async (c) => {
  * the session itself instead of using `requireAuth` (which would also
  * return 401, but framing it through the shared middleware would make an
  * ordinary signed-out page load look like a security event in logs).
+ *
+ * Includes `isMaintainer` (devtunnel.project_maintainers —
+ * db/devtunnelStats.ts `getIsMaintainer`) alongside the onboarding
+ * fields already on `UserRow`, so the profile page's badges
+ * (components/profile/profile-tags.tsx) and stats have everything they
+ * need from this single call.
  */
 auth.get("/me", async (c) => {
   const env = getEnv(c.env);
@@ -231,7 +238,8 @@ auth.get("/me", async (c) => {
     return errorResponse(c, 401, "unauthenticated", "Not signed in");
   }
 
-  return c.json({ user: toAuthUser(userRow) }, 200);
+  const isMaintainer = await getIsMaintainer(supabase, userRow.id);
+  return c.json({ user: toAuthUser(userRow, isMaintainer) }, 200);
 });
 
 /**
@@ -278,7 +286,9 @@ auth.patch("/onboarding", requireAuth, async (c) => {
   try {
     const supabase = getSupabase(env);
     const updatedRow = await completeOnboarding(supabase, user.id, parsed.data);
-    return c.json({ user: toAuthUser(updatedRow) }, 200);
+    // `user.isMaintainer` already comes from `requireAuth`, which just
+    // resolved it for this same request — no need to look it up twice.
+    return c.json({ user: toAuthUser(updatedRow, user.isMaintainer) }, 200);
   } catch (err) {
     logger.error("onboarding_update_failed", {
       error: err instanceof Error ? err.message : String(err),

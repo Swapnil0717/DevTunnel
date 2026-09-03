@@ -5,6 +5,7 @@ import { getEnv } from "../config/env";
 import { getSupabase } from "../lib/supabase";
 import { getUserForSessionToken } from "../db/sessions";
 import { toAuthUser } from "../db/users";
+import { getIsMaintainer } from "../db/devtunnelStats";
 import { SESSION_COOKIE } from "../lib/cookies";
 import { errorResponse } from "../lib/response";
 import { logger } from "../lib/logger";
@@ -16,11 +17,13 @@ import { logger } from "../lib/logger";
  * directly since it needs to answer 401 without throwing.
  *
  * Attaches the resolved `AuthUser` to the context as `user` for downstream
- * handlers. Every protected handler must still perform its own
- * authorization (does *this* user own *this* resource) — this middleware
- * only answers "who is making the request", not "are they allowed to do
- * this" (rule 12: authorization must be explicit, separate from
- * authentication).
+ * handlers, including `isMaintainer` (devtunnel.project_maintainers —
+ * db/devtunnelStats.ts) so every protected route sees the same, fully
+ * populated user object `GET /auth/me` returns. Every protected handler
+ * must still perform its own authorization (does *this* user own *this*
+ * resource) — this middleware only answers "who is making the request",
+ * not "are they allowed to do this" (rule 12: authorization must be
+ * explicit, separate from authentication).
  */
 export const requireAuth: MiddlewareHandler<{ Bindings: Env }> = async (c, next) => {
   const env = getEnv(c.env);
@@ -36,7 +39,8 @@ export const requireAuth: MiddlewareHandler<{ Bindings: Env }> = async (c, next)
     if (!userRow) {
       return errorResponse(c, 401, "unauthenticated", "Sign-in required");
     }
-    c.set("user", toAuthUser(userRow));
+    const isMaintainer = await getIsMaintainer(supabase, userRow.id);
+    c.set("user", toAuthUser(userRow, isMaintainer));
     await next();
   } catch (err) {
     logger.error("session_lookup_failed", { error: String(err), requestId: c.get("requestId") });
