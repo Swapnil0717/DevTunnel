@@ -1,4 +1,5 @@
 import { TaskRow } from "./task-row";
+import { SectionMessage } from "./section-message";
 import { getMyTasks } from "@/lib/home/api";
 
 export async function MyTasksList() {
@@ -6,18 +7,18 @@ export async function MyTasksList() {
 
   if (result.status === "error") {
     return (
-      <p className="text-[11.5px] text-status-error-text">
-        Couldn&apos;t load your tasks. Try refreshing the page.
-      </p>
+      <SectionMessage>
+        Your tasks aren&apos;t available yet — check back soon.
+      </SectionMessage>
     );
   }
 
   if (result.status === "empty") {
     return (
-      <p className="text-[11.5px] text-text-dim">
-        You don&apos;t have any active tasks yet. Browse recommended projects to
-        get started.
-      </p>
+      <SectionMessage>
+        You don&apos;t have any active tasks yet. Browse recommended projects
+        to get started.
+      </SectionMessage>
     );
   }
 

@@ -1,4 +1,5 @@
 import { ProjectCard } from "./project-card";
+import { SectionMessage } from "./section-message";
 import { getRecommendedProjects } from "@/lib/home/api";
 
 export async function RecommendedProjectsList() {
@@ -6,22 +7,22 @@ export async function RecommendedProjectsList() {
 
   if (result.status === "error") {
     return (
-      <p className="text-[11.5px] text-status-error-text">
-        Couldn&apos;t load recommended projects. Try refreshing the page.
-      </p>
+      <SectionMessage>
+        Project recommendations aren&apos;t available yet — check back soon.
+      </SectionMessage>
     );
   }
 
   if (result.status === "empty") {
     return (
-      <p className="text-[11.5px] text-text-dim">
+      <SectionMessage>
         Complete your profile to get project recommendations.
-      </p>
+      </SectionMessage>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
       {result.data.map((project) => (
         <ProjectCard key={project.slug} project={project} />
       ))}

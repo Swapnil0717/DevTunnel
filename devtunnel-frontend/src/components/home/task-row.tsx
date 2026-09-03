@@ -11,7 +11,7 @@ const STATUS_STYLES: Record<
   },
   IN_REVIEW: {
     label: "In review",
-    className: "bg-status-success-bg text-status-success-text",
+    className: "bg-status-success-bg text-status-success-label",
   },
 };
 
@@ -39,9 +39,9 @@ export function TaskRow(props: TaskRowProps) {
       href={href}
       className="flex items-center justify-between gap-2 rounded-lg bg-surface px-3 py-2.5 hover:bg-surface-raised"
     >
-      <span className="text-[11.5px] text-text truncate">{props.title}</span>
+      <span className="text-[11.5px] text-text-secondary truncate">{props.title}</span>
       {props.variant === "recommended" ? (
-        <span className="shrink-0 text-[10px] text-status-success-text">
+        <span className="shrink-0 text-[10px] text-status-success-label">
           Match · {props.role}
         </span>
       ) : (

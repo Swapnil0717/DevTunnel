@@ -1,6 +1,8 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AuthProvider } from "@/lib/auth/auth-provider";
+import { AppSidebar } from "@/components/layout/app-sidebar";
+import { AppBottomNav } from "@/components/layout/app-bottom-nav";
 import { getServerUser } from "@/lib/auth/get-server-user";
 import { needsOnboarding } from "@/lib/onboarding/needs-onboarding";
 
@@ -27,6 +29,10 @@ import { needsOnboarding } from "@/lib/onboarding/needs-onboarding";
  * /onboarding itself is excluded — otherwise a not-yet-onboarded user
  * would get redirected to /onboarding while already on /onboarding,
  * which is a redirect loop.
+ *
+ * This layout also owns the app-shell navigation: `AppSidebar` for sm+
+ * screens, `AppBottomNav` for mobile. /onboarding is a full-bleed wizard
+ * in the reference designs, not a shell page, so it skips both.
  */
 export default async function ProtectedLayout({
   children,
@@ -44,5 +50,20 @@ export default async function ProtectedLayout({
     redirect("/onboarding");
   }
 
-  return <AuthProvider initialUser={user}>{children}</AuthProvider>;
+  if (pathname === "/onboarding") {
+    return <AuthProvider initialUser={user}>{children}</AuthProvider>;
+  }
+
+  return (
+    <AuthProvider initialUser={user}>
+      <div className="flex min-h-screen bg-bg">
+        <AppSidebar />
+        {/* pb-16 keeps content clear of the fixed bottom nav on mobile */}
+        <div className="flex min-w-0 flex-1 flex-col pb-16 sm:pb-0">
+          {children}
+        </div>
+      </div>
+      <AppBottomNav />
+    </AuthProvider>
+  );
 }

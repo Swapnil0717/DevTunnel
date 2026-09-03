@@ -18,6 +18,7 @@ const config: Config = {
         },
         text: {
           DEFAULT: "#F2F2F2",
+          secondary: "#D9D9D9",
           muted: "#8A8A8A",
           dim: "#6B6B6B",
           faint: "#5A5A5A",
@@ -29,7 +30,11 @@ const config: Config = {
         },
         status: {
           idle: "#639922",
+          "idle-bg": "#151A0C",
+          "idle-text": "#A3C468",
           info: "#378ADD",
+          "info-bg": "#141B2E",
+          "info-text": "#85B7EB",
           error: "#E24B4A",
           "error-bg": "#150E0E",
           "error-border": "#3A1F1F",

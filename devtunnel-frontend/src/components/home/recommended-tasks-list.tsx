@@ -1,4 +1,5 @@
 import { TaskRow } from "./task-row";
+import { SectionMessage } from "./section-message";
 import { getRecommendedTasks } from "@/lib/home/api";
 
 export async function RecommendedTasksList() {
@@ -6,16 +7,14 @@ export async function RecommendedTasksList() {
 
   if (result.status === "error") {
     return (
-      <p className="text-[11.5px] text-status-error-text">
-        Couldn&apos;t load recommended tasks. Try refreshing the page.
-      </p>
+      <SectionMessage>
+        Recommended tasks aren&apos;t available yet — check back soon.
+      </SectionMessage>
     );
   }
 
   if (result.status === "empty") {
-    return (
-      <p className="text-[11.5px] text-text-dim">No recommended tasks right now.</p>
-    );
+    return <SectionMessage>No recommended tasks right now.</SectionMessage>;
   }
 
   return (
