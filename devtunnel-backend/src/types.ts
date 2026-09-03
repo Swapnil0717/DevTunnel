@@ -162,6 +162,18 @@ export interface SessionRow {
 export interface ContributionDay {
   date: string; // YYYY-MM-DD, UTC
   count: number;
+  /**
+   * Whether `date` actually falls within the requested `month`. Every
+   * week is always a full Sunday-start 7-day row (see
+   * devtunnelActivity.ts / clipToMonth in routes/contributions.ts) so
+   * `days[i]`'s weekday is always predictable — but the first/last week
+   * of a month legitimately spans into the adjacent month. Those spill-
+   * over days are kept as real placeholders (so the grid's row-per-
+   * weekday alignment never shifts) but flagged `inMonth: false` so the
+   * frontend can render them as empty cells instead of showing a count
+   * that isn't part of the month being viewed.
+   */
+  inMonth: boolean;
 }
 
 export interface ContributionWeek {

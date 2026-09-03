@@ -59,12 +59,12 @@ export default async function ProfilePage() {
   ]);
 
   return (
-    <main className="px-4 py-5 sm:px-[26px] sm:py-[22px]">
+    <main className="px-3 py-4 sm:px-[26px] sm:py-[22px]">
       <h1 className="sr-only">Your profile</h1>
 
       {user ? (
-        <div className="mx-auto w-full max-w-[720px] rounded-xl border border-border bg-bg">
-          <div className="p-[22px]">
+        <div className="mx-auto w-full max-w-[1100px] overflow-hidden rounded-xl border border-border bg-bg">
+          <div className="p-4 sm:p-8">
             <ProfileHeader user={user} />
             <ProfileTags user={user} />
             <ProfileStats

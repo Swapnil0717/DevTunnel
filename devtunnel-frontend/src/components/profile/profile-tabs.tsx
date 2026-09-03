@@ -51,7 +51,7 @@ export function ProfileTabs() {
       <div
         role="tablist"
         aria-label="Profile activity"
-        className="mb-3.5 flex gap-4 border-b border-border-subtle"
+        className="mb-3.5 flex gap-4 overflow-x-auto overflow-y-hidden border-b border-border-subtle"
       >
         {TABS.map((tab) => {
           const isActive = tab.id === activeId;
@@ -64,7 +64,7 @@ export function ProfileTabs() {
               aria-selected={isActive}
               aria-controls={`profile-panel-${tab.id}`}
               onClick={() => setActiveId(tab.id)}
-              className={`-mb-px border-b-[1.5px] pb-[9px] text-[12.5px] transition-colors ${
+              className={`-mb-px shrink-0 whitespace-nowrap border-b-[1.5px] pb-[9px] text-[12.5px] transition-colors ${
                 isActive
                   ? "border-text text-text"
                   : "border-transparent text-text-dim hover:text-text-muted"
@@ -82,7 +82,7 @@ export function ProfileTabs() {
         aria-labelledby={`profile-tab-${active.id}`}
       >
         {active.id === "contributions" ? (
-          <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div>
               <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-text-dim">
                 GitHub

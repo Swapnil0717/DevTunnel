@@ -1,6 +1,17 @@
 export type ContributionDay = {
   date: string; // YYYY-MM-DD
   count: number;
+  /**
+   * Whether `date` is actually inside the month being viewed. Weeks are
+   * always full Sunday-start 7-day rows (see devtunnel-backend
+   * src/lib/devtunnelActivity.ts / markMonthMembership in
+   * src/routes/contributions.ts) so every `days[i]` lines up with its
+   * real weekday — the first/last week's spillover days into the
+   * adjacent month are kept as placeholders (`inMonth: false`, `count: 0`)
+   * rather than dropped, since dropping them would shift every later day
+   * in the week out of its correct weekday row.
+   */
+  inMonth: boolean;
 };
 
 export type ContributionWeek = {

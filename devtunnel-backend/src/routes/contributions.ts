@@ -40,18 +40,24 @@ function monthBoundsISO(month: string): { fromISO: string; toISO: string } {
 }
 
 /**
- * Defensively drops any day GitHub's response includes outside the
- * requested month — a second, cheap guarantee on top of what's been
- * observed of GitHub's own range-clipping behavior, so a client never
- * renders a stray day from an adjacent month even if that ever changes
- * upstream.
+ * Marks which days GitHub's response actually belong to the requested
+ * month, without dropping the leading/trailing days of the month's first
+ * and last week. GitHub's weeks are always full Sunday-start 7-day rows;
+ * removing the out-of-month days entirely (as an earlier version of this
+ * function did) shifted every remaining day up by however many got
+ * dropped, so `days[i]` no longer lined up with its real weekday once
+ * rendered against a Sun..Sat row grid. Keeping every day and flagging
+ * `inMonth` instead preserves that alignment — the frontend renders
+ * `inMonth: false` days as empty cells rather than omitting them.
  */
-function clipToMonth(calendar: ContributionCalendar, month: string): ContributionCalendar {
-  const weeks = calendar.weeks
-    .map((week) => ({
-      days: week.days.filter((day) => day.date.startsWith(month)),
-    }))
-    .filter((week) => week.days.length > 0);
+function markMonthMembership(calendar: ContributionCalendar, month: string): ContributionCalendar {
+  const weeks = calendar.weeks.map((week) => ({
+    days: week.days.map((day) => ({
+      date: day.date,
+      count: day.date.startsWith(month) ? day.count : 0,
+      inMonth: day.date.startsWith(month),
+    })),
+  }));
   return { totalContributions: calendar.totalContributions, weeks };
 }
 
@@ -150,7 +156,7 @@ contributions.get("/users/me/contributions", requireAuth, async (c) => {
     let calendar = await getCached<ContributionCalendar>(c.env, cacheKey);
     if (!calendar) {
       const { fromISO, toISO } = monthBoundsISO(month);
-      calendar = clipToMonth(await fetchContributionCalendar(accessToken, login, fromISO, toISO), month);
+      calendar = markMonthMembership(await fetchContributionCalendar(accessToken, login, fromISO, toISO), month);
       await setCached(c.env, cacheKey, calendar, ttlSeconds);
     }
 

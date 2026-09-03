@@ -193,7 +193,7 @@ export function ContributionCalendar({ source }: ContributionCalendarProps) {
         </div>
       </div>
 
-      <div className="rounded-lg border border-border-subtle bg-surface p-4">
+      <div className="rounded-lg border border-border-subtle bg-surface p-3 sm:p-4">
         {status === "error" ? (
           <p className="py-6 text-center text-[12.5px] text-text-dim">
             {errorMessage ?? "Couldn't load contribution data right now."}
@@ -201,48 +201,69 @@ export function ContributionCalendar({ source }: ContributionCalendarProps) {
         ) : status === "loading" && !data ? (
           <p className="py-6 text-center text-[12.5px] text-text-dim">Loading contribution history…</p>
         ) : data ? (
-          <>
-            <div className="mb-1.5 flex gap-[3px] pl-6">
-              {WEEKDAY_LABELS.map((label, i) =>
-                i % 2 === 1 ? (
-                  <span key={label} className="w-[13px] text-[9px] text-text-faint">
-                    {label.slice(0, 1)}
-                  </span>
-                ) : (
-                  <span key={label} className="w-[13px]" aria-hidden="true" />
-                ),
-              )}
-            </div>
-
+          <div className="-mx-3 overflow-x-auto overflow-y-hidden px-3 sm:mx-0 sm:overflow-visible sm:px-0">
             <div
-              className="flex gap-[3px] overflow-x-auto pb-1"
+              className="flex w-fit gap-1 pb-1"
               role="img"
               aria-label={`${data.totalContributions} contributions in ${monthLabel(data.month)}`}
             >
+              {/* Every weekday labeled (Sun..Sat, top to bottom) — one label
+                  per row, matching the day squares beside it row-for-row,
+                  since each week.days[i] is that weekday. Two-letter
+                  abbreviations (Su/Mo/Tu/We/Th/Fr/Sa) so Sunday and
+                  Saturday don't both collapse to the same single "S". */}
+              <div className="flex shrink-0 flex-col gap-1 pr-2" aria-hidden="true">
+                {WEEKDAY_LABELS.map((label) => (
+                  <span
+                    key={label}
+                    className="flex h-4 w-6 items-center text-[9px] text-text-faint"
+                  >
+                    {label.slice(0, 2)}
+                  </span>
+                ))}
+              </div>
+
               {data.weeks.map((week, weekIndex) => (
-                <div key={weekIndex} className="flex flex-col gap-[3px]">
+                <div key={weekIndex} className="flex flex-col gap-1">
                   {week.days.map((day) => {
+                    if (!day.inMonth) {
+                      // Spillover day from the adjacent month, kept only so
+                      // this week stays a full 7-day row and every other
+                      // day in it lines up with its correct weekday — not
+                      // part of the month being viewed, so render it as an
+                      // empty, non-interactive placeholder instead of a
+                      // real (and misleading) contribution square.
+                      return (
+                        <div
+                          key={day.date}
+                          aria-hidden="true"
+                          className="h-4 w-4 shrink-0 rounded-[3px]"
+                        />
+                      );
+                    }
                     const level = levelFor(day.count, maxCount);
                     return (
                       <div
                         key={day.date}
                         title={`${day.count} contribution${day.count === 1 ? "" : "s"} on ${day.date}`}
-                        className={`h-[13px] w-[13px] rounded-[3px] ${LEVEL_CLASSES[level]}`}
+                        className={`h-4 w-4 shrink-0 rounded-[3px] ${LEVEL_CLASSES[level]}`}
                       />
                     );
                   })}
                 </div>
               ))}
             </div>
+          </div>
+        ) : null}
 
-            <div className="mt-3 flex items-center justify-end gap-1 text-[10px] text-text-faint">
-              <span>Less</span>
-              {([0, 1, 2, 3, 4] as const).map((level) => (
-                <span key={level} className={`h-[10px] w-[10px] rounded-[2px] ${LEVEL_CLASSES[level]}`} />
-              ))}
-              <span>More</span>
-            </div>
-          </>
+        {data ? (
+          <div className="mt-3 flex items-center justify-end gap-1 text-[10px] text-text-faint">
+            <span>Less</span>
+            {([0, 1, 2, 3, 4] as const).map((level) => (
+              <span key={level} className={`h-[10px] w-[10px] rounded-[2px] ${LEVEL_CLASSES[level]}`} />
+            ))}
+            <span>More</span>
+          </div>
         ) : null}
       </div>
     </div>
