@@ -21,6 +21,7 @@ import {
 } from "../lib/cookies";
 import { upsertUserFromGitHub, toAuthUser, completeOnboarding } from "../db/users";
 import { createSession, getUserForSessionToken, revokeSessionByToken } from "../db/sessions";
+import { persistGithubTokens } from "../db/githubTokens";
 import { requireAuth } from "../middleware/auth";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
@@ -153,11 +154,28 @@ auth.get("/callback", async (c) => {
   }
 
   try {
-    const accessToken = await exchangeCodeForToken(env, code);
-    const identity = await fetchGitHubIdentity(accessToken);
+    const tokens = await exchangeCodeForToken(env, code);
+    const identity = await fetchGitHubIdentity(tokens.accessToken);
 
     const supabase = getSupabase(env);
     const userRow = await upsertUserFromGitHub(supabase, identity);
+
+    // Best-effort: persisting the GitHub token bundle powers the profile
+    // contribution calendar (src/routes/contributions.ts), but it is not
+    // essential to signing in. A failure here must not block an otherwise
+    // successful login — logged loudly instead (rule 21: never silently
+    // swallow an error; this one is deliberately non-fatal to the request
+    // it's attached to, same pattern as the session `last_used_at` touch
+    // in src/db/sessions.ts).
+    try {
+      await persistGithubTokens(supabase, env, userRow.id, tokens);
+    } catch (err) {
+      logger.error("github_token_persist_failed", {
+        userId: userRow.id,
+        error: err instanceof Error ? err.message : String(err),
+        requestId: c.get("requestId"),
+      });
+    }
 
     const sessionToken = await createSession(
       supabase,
@@ -276,6 +294,10 @@ auth.patch("/onboarding", requireAuth, async (c) => {
  * Revokes the session server-side (deletes the row, not just the cookie —
  * see db/sessions.ts) and clears both cookies. Idempotent: calling this
  * with no session, or an already-revoked session, still returns 200.
+ * Deliberately does NOT clear stored GitHub tokens — logging out of
+ * DevTunnel and revoking DevTunnel's stored GitHub authorization are
+ * different actions; the user can sign back in without re-approving
+ * GitHub as long as their GitHub token is still valid.
  */
 auth.post("/logout", async (c) => {
   const env = getEnv(c.env);

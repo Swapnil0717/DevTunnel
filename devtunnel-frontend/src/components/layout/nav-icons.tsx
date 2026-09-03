@@ -1,7 +1,7 @@
 /**
  * Small inline outline icons for the app shell (sidebar nav + entry
  * actions). Kept as plain SVG instead of an icon-font/library so we don't
- * pull in a new dependency for five glyphs (Frontend_Development_Rules.txt
+ * pull in a new dependency for a handful of glyphs (Frontend_Development_Rules.txt
  * rule 34 — avoid large libraries for functionality that can be
  * implemented simply). Always decorative — paired with real text next to
  * them, so they're aria-hidden (rule 43).
@@ -77,6 +77,23 @@
      <svg {...base} className={className}>
        <path d="M14.5 5.5 18.5 9.5 8 20H4v-4L14.5 5.5Z" />
        <path d="M13 7l4 4" />
+     </svg>
+   );
+ }
+
+ /** Month-navigation arrows for the profile contribution calendar. */
+ export function ChevronLeftIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M14.5 6 8.5 12l6 6" />
+     </svg>
+   );
+ }
+
+ export function ChevronRightIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M9.5 6l6 6-6 6" />
      </svg>
    );
  }

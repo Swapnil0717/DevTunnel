@@ -14,6 +14,20 @@ const envSchema = z.object({
   GITHUB_CLIENT_SECRET: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   SESSION_HMAC_SECRET: z.string().min(16, "SESSION_HMAC_SECRET must be at least 16 characters"),
+  // Encrypts each user's stored GitHub user-to-server access/refresh
+  // token at rest (src/lib/crypto.ts encryptSecret/decryptSecret,
+  // src/db/githubTokens.ts). This is NOT a GitHub credential — it's a
+  // key this backend alone controls. Generate with `openssl rand -base64
+  // 32` and set via `wrangler secret put GITHUB_TOKEN_ENCRYPTION_KEY`.
+  // Rotating it invalidates every stored token (users simply need to
+  // sign in again — not a data-loss event, just a re-auth prompt).
+  GITHUB_TOKEN_ENCRYPTION_KEY: z.string().refine((value) => {
+    try {
+      return Uint8Array.from(atob(value), (ch) => ch.charCodeAt(0)).length === 32;
+    } catch {
+      return false;
+    }
+  }, "GITHUB_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key (generate with `openssl rand -base64 32`)"),
 });
 
 export type ValidatedEnv = z.infer<typeof envSchema>;

@@ -68,6 +68,18 @@ const config: Config = {
           border: "#2A3352",
           icon: "#5B7FD6",
         },
+        // Contribution-calendar intensity scale (profile page). No
+        // reference design exists for this yet, so these five steps are
+        // derived directly from the existing `accent` green (#1D9E75) at
+        // increasing lightness — GitHub's own convention — rather than
+        // an unrelated invented palette.
+        contrib: {
+          0: "#141414", // same as surface-raised: no contributions that day
+          1: "#0E2F23",
+          2: "#155940",
+          3: "#1B8963",
+          4: "#1D9E75", // = accent, the highest-intensity day
+        },
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],

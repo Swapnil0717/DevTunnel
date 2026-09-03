@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { buildMetadata } from "@/lib/seo";
 import { getServerUser } from "@/lib/auth/get-server-user";
+import { getServerContributionsSummary } from "@/lib/profile/get-server-contributions-summary";
 import { ProfileHeader } from "@/components/profile/profile-header";
 import { ProfileTags } from "@/components/profile/profile-tags";
 import { ProfileStats } from "@/components/profile/profile-stats";
@@ -25,12 +26,18 @@ export const metadata: Metadata = buildMetadata({
 // Visual redesign per 5_devtunnel_profile_page.html. Split into
 // components/profile/* (header, tags, stats, tabs) rather than one big
 // file, matching the components/home/* convention elsewhere in this
-// codebase. The stat numbers and the activity heatmap in that reference
-// design are sample data with no backing endpoint — see the comments in
-// ProfileStats and ProfileTabs for why those render honest empty states
-// instead of invented figures (Frontend_Development_Rules.txt rule 58).
+// codebase. The "Contributions" stat and the contribution-history tab's
+// calendar are now backed by real data from
+// GET /users/me/contributions(/summary) (devtunnel-backend
+// src/routes/contributions.ts) — see the comments in ProfileStats and
+// ProfileTabs for why "Projects"/"Pull requests" still render honest
+// empty states instead of invented figures
+// (Frontend_Development_Rules.txt rule 58).
 export default async function ProfilePage() {
-  const user = await getServerUser();
+  const [user, contributionsSummary] = await Promise.all([
+    getServerUser(),
+    getServerContributionsSummary(),
+  ]);
 
   return (
     <main className="px-4 py-5 sm:px-[26px] sm:py-[22px]">
@@ -41,7 +48,7 @@ export default async function ProfilePage() {
           <div className="p-[22px]">
             <ProfileHeader user={user} />
             <ProfileTags user={user} />
-            <ProfileStats />
+            <ProfileStats contributions={contributionsSummary} />
             <ProfileTabs />
           </div>
         </div>

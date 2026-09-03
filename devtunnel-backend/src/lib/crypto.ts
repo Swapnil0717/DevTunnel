@@ -4,7 +4,7 @@
  * (Backend_Development_Rules.txt rule 69).
  */
 
-function toHex(buffer: ArrayBuffer): string {
+ function toHex(buffer: ArrayBuffer): string {
   return Array.from(new Uint8Array(buffer))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
@@ -95,4 +95,47 @@ export async function verifyOAuthState(
   } catch {
     return null;
   }
+}
+
+async function importAesKey(base64Key: string): Promise<CryptoKey> {
+  const raw = fromBase64Url(base64Key.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""));
+  // GITHUB_TOKEN_ENCRYPTION_KEY is validated to decode to 32 bytes in
+  // src/config/env.ts — this is a defensive re-check, not the primary
+  // validation.
+  if (raw.length !== 32) {
+    throw new Error("Encryption key must decode to exactly 32 bytes");
+  }
+  return crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+}
+
+/**
+ * Encrypts a secret (e.g. a GitHub user access/refresh token) for storage
+ * at rest using AES-256-GCM. Returns a single opaque, URL-safe string
+ * (random 96-bit IV + ciphertext, concatenated) — nothing about the
+ * plaintext is recoverable without `GITHUB_TOKEN_ENCRYPTION_KEY`
+ * (Backend_Development_Rules.txt rule 6/8: secrets are never stored in
+ * plaintext, even server-side).
+ */
+export async function encryptSecret(plaintext: string, base64Key: string): Promise<string> {
+  const key = await importAesKey(base64Key);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    new TextEncoder().encode(plaintext),
+  );
+  const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(ciphertext), iv.length);
+  return toBase64Url(combined.buffer);
+}
+
+/** Reverses `encryptSecret`. Throws if the key is wrong or the value was tampered with. */
+export async function decryptSecret(encoded: string, base64Key: string): Promise<string> {
+  const key = await importAesKey(base64Key);
+  const combined = fromBase64Url(encoded);
+  const iv = combined.slice(0, 12);
+  const ciphertext = combined.slice(12);
+  const plaintextBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+  return new TextDecoder().decode(plaintextBuf);
 }

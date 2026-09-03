@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { ContributionCalendar } from "./contribution-calendar";
 
 const TABS = [
   {
     id: "contributions",
     label: "Contribution history",
-    empty:
-      "No contribution activity yet. Recent activity will show up here once you start contributing.",
   },
   {
     id: "projects",
@@ -23,12 +22,16 @@ const TABS = [
 
 /**
  * Real, accessible tab UI (Frontend_Development_Rules.txt rule 4 —
- * semantic HTML/ARIA over generic divs). The mockup's colored activity
- * heatmap under this tab isn't reproduced here: it's sample data with no
- * backing endpoint (same reasoning as ProfileStats), so it would have
- * meant fabricating a contribution history for whoever is signed in.
- * Each panel instead shows a truthful empty state until that data
- * exists.
+ * semantic HTML/ARIA over generic divs).
+ *
+ * "Contribution history" now renders the real GitHub contribution
+ * calendar (`ContributionCalendar`, backed by
+ * `GET /users/me/contributions`) instead of a static empty state.
+ * "Projects" and "Pull requests" still render an honest empty state —
+ * those are DevTunnel-native concepts with no backing table yet (only
+ * `users`/`sessions` exist in devtunnel-backend/sql), so there is nothing
+ * truthful to show there until that module is built
+ * (Frontend_Development_Rules.txt rule 58).
  */
 export function ProfileTabs() {
   const [activeId, setActiveId] = useState<(typeof TABS)[number]["id"]>(
@@ -70,9 +73,14 @@ export function ProfileTabs() {
         role="tabpanel"
         id={`profile-panel-${active.id}`}
         aria-labelledby={`profile-tab-${active.id}`}
-        className="rounded-lg border border-border-subtle bg-surface px-4 py-8 text-center text-[12.5px] text-text-dim"
       >
-        {active.empty}
+        {active.id === "contributions" ? (
+          <ContributionCalendar />
+        ) : (
+          <div className="rounded-lg border border-border-subtle bg-surface px-4 py-8 text-center text-[12.5px] text-text-dim">
+            {active.empty}
+          </div>
+        )}
       </div>
     </div>
   );

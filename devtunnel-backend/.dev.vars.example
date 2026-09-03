@@ -5,3 +5,9 @@
 GITHUB_CLIENT_SECRET=your_github_oauth_app_client_secret
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 SESSION_HMAC_SECRET=a_long_random_string_used_to_sign_the_oauth_state_cookie
+
+# Encrypts each user's stored GitHub access/refresh token at rest
+# (src/lib/crypto.ts, src/db/githubTokens.ts). This is a key this backend
+# controls, not a GitHub credential. Generate with:
+#   openssl rand -base64 32
+GITHUB_TOKEN_ENCRYPTION_KEY=a_base64_encoded_32_byte_key

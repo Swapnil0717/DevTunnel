@@ -8,6 +8,9 @@
  */
  export interface Env {
   // --- KV ---
+  // Also doubles as a lightweight JSON response cache (see src/lib/cache.ts)
+  // for the GitHub contribution-calendar endpoints — see that file for why
+  // a second KV namespace wasn't introduced for that.
   RATE_LIMIT_KV: KVNamespace;
 
   // --- Non-secret config (wrangler.toml [vars]) ---
@@ -25,6 +28,7 @@
   GITHUB_CLIENT_SECRET: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   SESSION_HMAC_SECRET: string;
+  GITHUB_TOKEN_ENCRYPTION_KEY: string;
 }
 
 /** Values attached to the Hono context by middleware. */
@@ -73,7 +77,7 @@ export interface OnboardingData {
  * Frontend-safe user shape. Mirrors `AuthUser` in
  * devtunnel-frontend/src/lib/auth/types.ts exactly — every field the
  * frontend reads must be present, and nothing more sensitive (no
- * githubId, no internal flags) is ever included
+ * githubId, no encrypted tokens, no internal flags) is ever included
  * (Backend_Development_Rules.txt rule 9).
  */
 export interface AuthUser {
@@ -91,7 +95,14 @@ export interface AuthUser {
   onboardingCompleted: boolean;
 }
 
-/** Full row shape as stored in `devtunnel.users` (includes private fields). */
+/**
+ * Full row shape as stored in `devtunnel.users` (includes private fields).
+ * `github_*_token_encrypted` columns hold AES-256-GCM ciphertext only
+ * (src/lib/crypto.ts) — the raw token is never stored, logged, or
+ * returned to any client (rules 6, 8, 59). Only src/db/githubTokens.ts
+ * ever selects these columns; every other query in this codebase selects
+ * an explicit column list that omits them (rule 23: avoid SELECT *).
+ */
 export interface UserRow {
   id: string;
   email: string;
@@ -113,6 +124,10 @@ export interface UserRow {
   interests: string[];
   intent: ContributorIntent | null;
   onboarding_completed: boolean;
+  github_access_token_encrypted: string | null;
+  github_access_token_expires_at: string | null;
+  github_refresh_token_encrypted: string | null;
+  github_refresh_token_expires_at: string | null;
 }
 
 export interface SessionRow {
@@ -123,4 +138,20 @@ export interface SessionRow {
   expires_at: string;
   last_used_at: string;
   user_agent: string | null;
+}
+
+/** One day's contribution count from GitHub's contribution calendar. */
+export interface ContributionDay {
+  date: string; // YYYY-MM-DD, UTC
+  count: number;
+}
+
+export interface ContributionWeek {
+  days: ContributionDay[];
+}
+
+/** Cached/returned shape for a single month's calendar. */
+export interface ContributionCalendar {
+  totalContributions: number;
+  weeks: ContributionWeek[];
 }

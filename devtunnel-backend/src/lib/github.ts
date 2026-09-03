@@ -39,17 +39,24 @@ async function fetchWithTimeout(input: string, init: RequestInit): Promise<Respo
  *
  *  - No `scope` parameter — a GitHub App's access is entirely defined by
  *    the permissions configured on the app itself (Settings > Permissions
- *    & events), not a scope string. Sending one is meaningless here.
+ *    & events), not a scope string.
  *  - Verified email access requires the app to have **Account
- *    permissions > Email addresses: Read-only** granted (separate from
- *    the "Repository permissions" section) — set that in the GitHub App
- *    settings, not in this code.
- *  - The resulting user access token is a GitHub-App user-to-server
- *    token, which may expire in ~8h if "Expire user authorization
- *    tokens" is on. That's irrelevant here: this backend uses the token
- *    exactly once, immediately, to read the identity below, then issues
- *    its own independent session (src/db/sessions.ts) — GitHub's token
- *    is never stored or reused.
+ *    permissions > Email addresses: Read-only** granted — set that in the
+ *    GitHub App settings, not in this code.
+ *  - The resulting user access token is a GitHub-App **user-to-server**
+ *    token. If the App has "Expire user authorization tokens" enabled,
+ *    it expires (commonly ~8h) and GitHub also issues a longer-lived
+ *    refresh token; if that setting is off, the access token doesn't
+ *    expire and no refresh token is issued. Both shapes are handled
+ *    below (`expires_in`/`refresh_token`/`refresh_token_expires_in` are
+ *    all optional in the response schema) — this backend doesn't assume
+ *    which mode is configured.
+ *
+ * Unlike the original version of this file, the token is no longer used
+ * once and discarded: src/db/githubTokens.ts persists it (encrypted)
+ * per-user, so devtunnel-backend can later call the GitHub GraphQL API
+ * (contribution calendar, src/routes/contributions.ts) using each user's
+ * own authorization rather than a separate server-wide credential.
  */
 export function buildAuthorizeUrl(env: ValidatedEnv, state: string): string {
   const url = new URL(GITHUB_AUTHORIZE_URL);
@@ -60,15 +67,50 @@ export function buildAuthorizeUrl(env: ValidatedEnv, state: string): string {
 }
 
 const tokenResponseSchema = z.union([
-  z.object({ access_token: z.string().min(1), token_type: z.string(), scope: z.string().optional() }),
+  z.object({
+    access_token: z.string().min(1),
+    token_type: z.string(),
+    scope: z.string().optional(),
+    expires_in: z.number().positive().optional(),
+    refresh_token: z.string().min(1).optional(),
+    refresh_token_expires_in: z.number().positive().optional(),
+  }),
   z.object({ error: z.string(), error_description: z.string().optional() }),
 ]);
+
+/** Everything this backend needs to store/refresh a user's GitHub authorization. */
+export interface GitHubTokenBundle {
+  accessToken: string;
+  /** ISO 8601, or null if the App isn't configured to expire user tokens. */
+  accessTokenExpiresAt: string | null;
+  /** null if the App isn't configured to expire user tokens (no refresh token issued). */
+  refreshToken: string | null;
+  /** ISO 8601, or null when there's no refresh token. */
+  refreshTokenExpiresAt: string | null;
+}
+
+function toTokenBundle(data: {
+  access_token: string;
+  expires_in?: number;
+  refresh_token?: string;
+  refresh_token_expires_in?: number;
+}): GitHubTokenBundle {
+  const now = Date.now();
+  return {
+    accessToken: data.access_token,
+    accessTokenExpiresAt: data.expires_in ? new Date(now + data.expires_in * 1000).toISOString() : null,
+    refreshToken: data.refresh_token ?? null,
+    refreshTokenExpiresAt: data.refresh_token_expires_in
+      ? new Date(now + data.refresh_token_expires_in * 1000).toISOString()
+      : null,
+  };
+}
 
 /** rule 50: code exchange step. rule 52: validate the shape before trusting it. */
 export async function exchangeCodeForToken(
   env: ValidatedEnv,
   code: string,
-): Promise<string> {
+): Promise<GitHubTokenBundle> {
   const res = await fetchWithTimeout(GITHUB_TOKEN_URL, {
     method: "POST",
     headers: {
@@ -95,7 +137,49 @@ export async function exchangeCodeForToken(
   if ("error" in parsed.data) {
     throw new GitHubOAuthError("access_denied", parsed.data.error_description ?? parsed.data.error);
   }
-  return parsed.data.access_token;
+  return toTokenBundle(parsed.data);
+}
+
+/**
+ * Exchanges a stored refresh token for a fresh access token (only
+ * meaningful when the App has "Expire user authorization tokens" on).
+ * Called from src/db/githubTokens.ts when a stored access token is
+ * expired/near-expiry. A `GitHubOAuthError` here (e.g. `access_denied`
+ * because the refresh token itself expired or was revoked) signals the
+ * caller to fall back to "the user needs to sign in with GitHub again" —
+ * never retried silently.
+ */
+export async function refreshAccessToken(
+  env: ValidatedEnv,
+  refreshToken: string,
+): Promise<GitHubTokenBundle> {
+  const res = await fetchWithTimeout(GITHUB_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "User-Agent": USER_AGENT,
+    },
+    body: JSON.stringify({
+      client_id: env.GITHUB_CLIENT_ID,
+      client_secret: env.GITHUB_CLIENT_SECRET,
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new GitHubOAuthError("github_unavailable", `GitHub token refresh endpoint returned ${res.status}`);
+  }
+
+  const parsed = tokenResponseSchema.safeParse(await res.json());
+  if (!parsed.success) {
+    throw new GitHubOAuthError("github_unavailable", "Unexpected GitHub token refresh response shape");
+  }
+  if ("error" in parsed.data) {
+    throw new GitHubOAuthError("access_denied", parsed.data.error_description ?? parsed.data.error);
+  }
+  return toTokenBundle(parsed.data);
 }
 
 const githubUserSchema = z.object({
