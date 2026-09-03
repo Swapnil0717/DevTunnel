@@ -6,8 +6,10 @@
  * Frontend_Development_Rules.txt rule 17 (public profiles must never expose
  * private/auth data) and rule 20 (API data must be safely rendered).
  */
- export type UserRole = "CONTRIBUTOR" | "MAINTAINER" | "ADMIN";
+ import type { DeveloperRole, ExperienceLevel } from "@/lib/onboarding/types";
 
+ export type UserRole = "CONTRIBUTOR" | "MAINTAINER" | "ADMIN";
+ 
  export interface AuthUser {
    id: string;
    email: string;
@@ -30,6 +32,22 @@
     * timestamps or cookies on the frontend.
     */
    onboardingCompleted: boolean;
+   /**
+    * Optional — the same shape submitted by `submitOnboarding()`
+    * (lib/onboarding/api.ts). Same documented assumption as that file:
+    * `devtunnel.users` doesn't have dedicated columns for these yet
+    * (they're called out as "later modules" work in
+    * devtunnel-backend/sql/001_create_schema.sql), so `GET /auth/me` may
+    * not return them today. Declared optional/nullable and read
+    * defensively everywhere (see components/profile/profile-tags.tsx) —
+    * never assumed present, never backfilled with placeholder data
+    * (Frontend_Development_Rules.txt rule 49 — validate dynamic content;
+    * rule 58 — never invent unavailable data).
+    */
+   developerRole?: DeveloperRole | null;
+   experienceLevel?: ExperienceLevel | null;
+   skills?: string[];
+   technologies?: string[];
  }
  
  export type AuthStatus = "loading" | "authenticated" | "unauthenticated";

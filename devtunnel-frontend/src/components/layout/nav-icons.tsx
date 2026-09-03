@@ -62,3 +62,21 @@
      </svg>
    );
  }
+ 
+ export function SettingsIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <circle cx="12" cy="12" r="3" />
+       <path d="M12 3.5v2.1M12 18.4v2.1M20.5 12h-2.1M5.6 12H3.5M17.7 6.3l-1.5 1.5M7.8 16.2l-1.5 1.5M17.7 17.7l-1.5-1.5M7.8 7.8 6.3 6.3" />
+     </svg>
+   );
+ }
+ 
+ export function EditIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M14.5 5.5 18.5 9.5 8 20H4v-4L14.5 5.5Z" />
+       <path d="M13 7l4 4" />
+     </svg>
+   );
+ }

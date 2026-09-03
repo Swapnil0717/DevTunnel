@@ -8,9 +8,17 @@ import { AUTH_FLAG_COOKIE } from "@/lib/auth/session";
  * `/home` is the real contributor landing page in the sign-in → onboarding
  * → home flow (devtunnel_workflow.txt, Module C1); `/dashboard` stays
  * listed too since (protected)/dashboard/page.tsx still redirects old
- * bookmarked links there.
+ * bookmarked links there. `/settings` was added alongside the new
+ * AppSidebar "Settings" link — it lives under (protected) like /profile,
+ * so it needs the same fast edge-level bounce.
  */
-const PROTECTED_PREFIXES = ["/dashboard", "/home", "/profile", "/onboarding"];
+const PROTECTED_PREFIXES = [
+  "/dashboard",
+  "/home",
+  "/profile",
+  "/settings",
+  "/onboarding",
+];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -41,6 +49,7 @@ export const config = {
     "/dashboard/:path*",
     "/home/:path*",
     "/profile/:path*",
+    "/settings/:path*",
     "/onboarding/:path*",
   ],
 };

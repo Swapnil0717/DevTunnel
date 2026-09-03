@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import { buildMetadata } from "@/lib/seo";
 import { getServerUser } from "@/lib/auth/get-server-user";
-import type { AuthUser } from "@/lib/auth/types";
+import { ProfileHeader } from "@/components/profile/profile-header";
+import { ProfileTags } from "@/components/profile/profile-tags";
+import { ProfileStats } from "@/components/profile/profile-stats";
+import { ProfileTabs } from "@/components/profile/profile-tabs";
 
 export const metadata: Metadata = buildMetadata({
   title: "Your profile",
@@ -16,73 +18,37 @@ export const metadata: Metadata = buildMetadata({
 // side, same as the layout) purely to render profile fields — no client
 // loading flash, and no private fields beyond what AuthUser exposes.
 //
-// Navigation now comes from the shared app-shell sidebar rendered in
-// (protected)/layout.tsx, so this page no longer renders its own
-// `<AppHeader />` — that would have produced a duplicate nav bar.
-
-const ROLE_LABEL: Record<AuthUser["role"], string> = {
-  CONTRIBUTOR: "Contributor",
-  MAINTAINER: "Maintainer",
-  ADMIN: "Admin",
-};
-
+// Navigation comes from the shared app-shell sidebar rendered in
+// (protected)/layout.tsx, so this page doesn't render its own header/nav
+// — that would produce a duplicate nav landmark.
+//
+// Visual redesign per 5_devtunnel_profile_page.html. Split into
+// components/profile/* (header, tags, stats, tabs) rather than one big
+// file, matching the components/home/* convention elsewhere in this
+// codebase. The stat numbers and the activity heatmap in that reference
+// design are sample data with no backing endpoint — see the comments in
+// ProfileStats and ProfileTabs for why those render honest empty states
+// instead of invented figures (Frontend_Development_Rules.txt rule 58).
 export default async function ProfilePage() {
   const user = await getServerUser();
 
   return (
-    <main className="px-6 py-12">
-      <h1 className="m-0 mb-6 text-xl font-medium text-text">Your profile</h1>
+    <main className="px-4 py-5 sm:px-[26px] sm:py-[22px]">
+      <h1 className="sr-only">Your profile</h1>
 
       {user ? (
-        <div className="flex max-w-[480px] items-start gap-4 rounded-[10px] border border-border bg-surface p-6">
-          {user.avatarUrl ? (
-            <Image
-              src={user.avatarUrl}
-              alt=""
-              width={56}
-              height={56}
-              className="rounded-full border border-border"
-            />
-          ) : null}
-          <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[13px]">
-            <dt className="text-text-muted">Name</dt>
-            <dd className="m-0 text-text">{user.name ?? user.username}</dd>
-
-            <dt className="text-text-muted">Username</dt>
-            <dd className="m-0 text-text">{user.username}</dd>
-
-            <dt className="text-text-muted">Role</dt>
-            <dd className="m-0 text-text">{ROLE_LABEL[user.role]}</dd>
-
-            {user.githubUsername ? (
-              <>
-                <dt className="text-text-muted">GitHub</dt>
-                <dd className="m-0 text-text">
-                  {user.githubProfileUrl ? (
-                    <a
-                      href={user.githubProfileUrl}
-                      className="text-accent underline-offset-2 hover:underline"
-                    >
-                      @{user.githubUsername}
-                    </a>
-                  ) : (
-                    `@${user.githubUsername}`
-                  )}
-                </dd>
-              </>
-            ) : null}
-
-            {user.bio ? (
-              <>
-                <dt className="text-text-muted">Bio</dt>
-                <dd className="m-0 text-text">{user.bio}</dd>
-              </>
-            ) : null}
-          </dl>
+        <div className="mx-auto w-full max-w-[720px] rounded-xl border border-border bg-bg">
+          <div className="p-[22px]">
+            <ProfileHeader user={user} />
+            <ProfileTags user={user} />
+            <ProfileStats />
+            <ProfileTabs />
+          </div>
         </div>
       ) : (
         <p className="text-[14px] text-text-muted">
-          We couldn&apos;t load your profile right now. Try refreshing the page.
+          We couldn&apos;t load your profile right now. Try refreshing the
+          page.
         </p>
       )}
     </main>

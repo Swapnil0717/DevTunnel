@@ -60,6 +60,14 @@ const config: Config = {
         "tag-skill": { bg: "#1A1526", border: "#3C3489", text: "#AFA9EC" },
         "tag-tech": { bg: "#151F17", border: "#27500A", text: "#97C459" },
         "tag-interest": { bg: "#1E1418", border: "#72243E", text: "#ED93B1" },
+        // Fallback avatar circle for a user with no `avatarUrl` — lifted
+        // from 5_devtunnel_profile_page.html, same "lift, don't invent"
+        // convention as the tokens above.
+        "avatar-placeholder": {
+          bg: "#1D2233",
+          border: "#2A3352",
+          icon: "#5B7FD6",
+        },
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],

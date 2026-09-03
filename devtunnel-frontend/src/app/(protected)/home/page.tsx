@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { HomeHeader } from "@/components/home/home-header";
 import { WelcomeBanner } from "@/components/home/welcome-banner";
 import { EntryActions } from "@/components/home/entry-actions";
 import { RecommendedProjectsSection } from "@/components/home/recommended-projects-section";
@@ -19,7 +20,7 @@ export const metadata: Metadata = {
  * lib/onboarding/needs-onboarding.ts for the actual check.
  *
  * Content is capped at max-w-[1040px] and centered — without it, on a
- * wide monitor the sidebar's fixed 132px leaves the rest of the row to
+ * wide monitor the sidebar's fixed 208px leaves the rest of the row to
  * stretch the two-column entry-action cards and three-column project grid
  * far wider than they were designed for, which reads as empty/unfinished
  * rather than intentional.
@@ -29,6 +30,7 @@ export default async function HomePage() {
     <main className="flex-1 min-w-0 px-4 py-5 sm:px-[26px] sm:py-[22px]">
       <div className="mx-auto w-full max-w-[1040px]">
         <h1 className="sr-only">Contributor home</h1>
+        <HomeHeader />
         <WelcomeBanner />
         <EntryActions />
         <RecommendedProjectsSection />
