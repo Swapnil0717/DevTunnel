@@ -226,7 +226,17 @@ export function ContributionCalendar({ source }: ContributionCalendarProps) {
               {data.weeks.map((week, weekIndex) => (
                 <div key={weekIndex} className="flex flex-col gap-1">
                   {week.days.map((day) => {
-                    if (!day.inMonth) {
+                    // Derived from `day.date` itself rather than trusting
+                    // `day.inMonth` alone: if a backend/cache payload ever
+                    // comes back without that flag (e.g. an older cached
+                    // shape), `day.inMonth` reads as `undefined` for every
+                    // day, and `!day.inMonth` would then be true across the
+                    // whole grid — silently rendering it as entirely empty
+                    // placeholders despite a correct, non-zero month total.
+                    // Falling back to a same-month date check keeps a
+                    // shape mismatch from blanking the whole calendar.
+                    const inMonth = day.inMonth ?? day.date.startsWith(data.month);
+                    if (!inMonth) {
                       // Spillover day from the adjacent month, kept only so
                       // this week stays a full 7-day row and every other
                       // day in it lines up with its correct weekday — not

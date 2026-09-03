@@ -40,25 +40,69 @@ function monthBoundsISO(month: string): { fromISO: string; toISO: string } {
 }
 
 /**
- * Marks which days GitHub's response actually belong to the requested
- * month, without dropping the leading/trailing days of the month's first
- * and last week. GitHub's weeks are always full Sunday-start 7-day rows;
- * removing the out-of-month days entirely (as an earlier version of this
- * function did) shifted every remaining day up by however many got
- * dropped, so `days[i]` no longer lined up with its real weekday once
- * rendered against a Sun..Sat row grid. Keeping every day and flagging
- * `inMonth` instead preserves that alignment — the frontend renders
- * `inMonth: false` days as empty cells rather than omitting them.
+ * Rebuilds GitHub's response into full Sunday-start 7-day week rows,
+ * placing each day by its own real date rather than by its position in
+ * whatever week grouping GitHub returned.
+ *
+ * An earlier version of this function ("markMonthMembership") assumed
+ * GitHub always hands back full Sun–Sat weeks for the requested range,
+ * and just flagged each `days[i]` in place. That assumption only holds
+ * when the range happens to start on a Sunday. This endpoint's `from` is
+ * always the 1st of the calendar month (see monthBoundsISO), which is a
+ * Sunday only 1 month in 7 — the rest of the time GitHub's first
+ * returned week starts partway through (e.g. September 2026 starts on a
+ * Tuesday), so `days[0]` is that month's 1st, not a Sunday. Trusting
+ * position-in-week as weekday then puts every day 1–6 rows too high once
+ * rendered against a fixed Sun..Sat grid — a real contribution made on a
+ * Tuesday could render under the "Sunday" row.
+ *
+ * Rebuilding from each day's actual date (the same approach
+ * `buildDevtunnelMonthCalendar` in devtunnelActivity.ts already uses,
+ * which is why the DevTunnel-native calendar was never affected by this)
+ * makes the grid immune to whatever week-grouping/order the upstream API
+ * happens to use. Spillover days from the adjacent month are kept as
+ * real (zero-count) entries flagged `inMonth: false` rather than
+ * dropped, so every week row still has exactly 7 days and the frontend
+ * can render them as empty placeholder cells.
  */
-function markMonthMembership(calendar: ContributionCalendar, month: string): ContributionCalendar {
-  const weeks = calendar.weeks.map((week) => ({
-    days: week.days.map((day) => ({
-      date: day.date,
-      count: day.date.startsWith(month) ? day.count : 0,
-      inMonth: day.date.startsWith(month),
-    })),
-  }));
-  return { totalContributions: calendar.totalContributions, weeks };
+function alignCalendarToMonth(calendar: ContributionCalendar, month: string): ContributionCalendar {
+  const countsByDate = new Map<string, number>();
+  for (const week of calendar.weeks) {
+    for (const day of week.days) {
+      countsByDate.set(day.date, day.count);
+    }
+  }
+
+  const [yearStr, monthStr] = month.split("-") as [string, string];
+  const year = Number(yearStr);
+  const monthIndex = Number(monthStr) - 1;
+
+  const firstOfMonth = new Date(Date.UTC(year, monthIndex, 1));
+  const lastOfMonth = new Date(Date.UTC(year, monthIndex + 1, 0));
+
+  const start = new Date(firstOfMonth);
+  start.setUTCDate(start.getUTCDate() - start.getUTCDay());
+  const end = new Date(lastOfMonth);
+  end.setUTCDate(end.getUTCDate() + (6 - end.getUTCDay()));
+
+  const weeks: ContributionCalendar["weeks"] = [];
+  let totalContributions = 0;
+  const cursor = new Date(start);
+
+  while (cursor.getTime() <= end.getTime()) {
+    const days: ContributionCalendar["weeks"][number]["days"] = [];
+    for (let i = 0; i < 7; i++) {
+      const dateStr = cursor.toISOString().slice(0, 10);
+      const inMonth = dateStr.startsWith(month);
+      const count = inMonth ? countsByDate.get(dateStr) ?? 0 : 0;
+      days.push({ date: dateStr, count, inMonth });
+      if (inMonth) totalContributions += count;
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    weeks.push({ days });
+  }
+
+  return { totalContributions, weeks };
 }
 
 /**
@@ -145,7 +189,16 @@ contributions.get("/users/me/contributions", requireAuth, async (c) => {
   const accessToken = tokenOrResponse;
 
   const login = user.githubUsername;
-  const cacheKey = `contrib:month:${login.toLowerCase()}:${month}`;
+  // Versioned so a stale KV entry written by an earlier build of this
+  // endpoint is never served as-is once its cached *shape* or *values*
+  // change underneath it — see the two prior bumps: v2 added `inMonth`
+  // to each day; v3 fixes alignCalendarToMonth (below) placing days by
+  // their real date instead of their position in GitHub's own week
+  // grouping, which for most months put every contribution 1–6 rows too
+  // high in the grid. Without bumping this, a month cached before that
+  // fix would keep serving the misaligned grid until its TTL happened to
+  // expire.
+  const cacheKey = `contrib:month:v3:${login.toLowerCase()}:${month}`;
   // The current month's data changes throughout the day; a completed past
   // month essentially never changes, so it can be cached much longer
   // (rule 65: cache public, relatively stable data; rule 42: protect an
@@ -156,7 +209,7 @@ contributions.get("/users/me/contributions", requireAuth, async (c) => {
     let calendar = await getCached<ContributionCalendar>(c.env, cacheKey);
     if (!calendar) {
       const { fromISO, toISO } = monthBoundsISO(month);
-      calendar = markMonthMembership(await fetchContributionCalendar(accessToken, login, fromISO, toISO), month);
+      calendar = alignCalendarToMonth(await fetchContributionCalendar(accessToken, login, fromISO, toISO), month);
       await setCached(c.env, cacheKey, calendar, ttlSeconds);
     }
 

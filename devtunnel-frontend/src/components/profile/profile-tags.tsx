@@ -1,6 +1,5 @@
 import type { AuthUser } from "@/lib/auth/types";
 import {
-  CONTRIBUTOR_INTENT_LABEL,
   DEVELOPER_ROLE_LABEL,
   EXPERIENCE_LEVEL_LABEL,
 } from "@/lib/onboarding/types";
@@ -28,8 +27,8 @@ const ROLE_LABEL: Record<AuthUser["role"], string> = {
  *   than only one. (Skipped only when `role` is already `MAINTAINER` or
  *   `ADMIN`, so the word "Maintainer" never renders twice.)
  * - Developer role / experience level / skills / technologies / interests
- *   / intent only render when present — an empty onboarding field just
- *   means one fewer badge/line, never a placeholder
+ *   only render when present — an empty onboarding field just means one
+ *   fewer badge/line, never a placeholder
  *   (Frontend_Development_Rules.txt rule 58).
  */
 export function ProfileTags({ user }: { user: AuthUser }) {
@@ -89,12 +88,6 @@ export function ProfileTags({ user }: { user: AuthUser }) {
             </span>
           ))}
         </div>
-      ) : null}
-
-      {user.intent ? (
-        <p className="m-0 mt-2 text-[11px] text-text-dim">
-          {CONTRIBUTOR_INTENT_LABEL[user.intent]}
-        </p>
       ) : null}
     </div>
   );

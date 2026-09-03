@@ -15,8 +15,8 @@ const TABS = [
   },
   {
     id: "pull-requests",
-    label: "Pull requests",
-    empty: "No pull requests yet.",
+    label: "Pull requests merged",
+    empty: "No merged pull requests yet.",
   },
 ] as const;
 
@@ -32,10 +32,10 @@ const TABS = [
  * can see their GitHub activity next to what they've specifically done
  * through DevTunnel (tasks completed, PRs merged here).
  *
- * "Projects" and "Pull requests" still render an honest empty state for
- * now — the profile page's stat cards (ProfileStats) already surface the
- * real counts for these from `GET /users/me/devtunnel-stats`; a
- * browsable per-tab list of the actual projects/PRs is a further step
+ * "Projects" and "Pull requests merged" still render an honest empty
+ * state for now — the profile page's stat cards (ProfileStats) already
+ * surface the real counts for these from `GET /users/me/devtunnel-stats`;
+ * a browsable per-tab list of the actual projects/PRs is a further step
  * once devtunnel-backend exposes list (not just count) endpoints for
  * them, so this tab doesn't invent a list here
  * (Frontend_Development_Rules.txt rule 58).
