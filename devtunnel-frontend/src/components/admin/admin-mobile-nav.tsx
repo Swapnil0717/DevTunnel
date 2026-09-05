@@ -2,14 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ADMIN_NAV_ITEMS } from "./admin-nav-items";
+import { ADMIN_NAV_LINKS } from "./admin-nav-items";
 
 /**
  * Narrow-viewport counterpart to `AdminSidebar` (hidden `md` and up). A
  * full-height sidebar doesn't fit a phone-width screen, so this renders
- * the same nav entries as a horizontally scrollable strip of pills
- * instead — same data source (`ADMIN_NAV_ITEMS`), same disabled/"Soon"
- * treatment for modules that aren't built yet.
+ * the sidebar's nav entries as a horizontally scrollable strip of pills
+ * instead. `AdminSidebar` groups "All Projects"/"Project Onboarding" under
+ * a "Projects" header and similarly for "Tasks" (Admin Portal Master
+ * Coding Specification, section 2), but a pill strip has no room for
+ * nested headers, so this uses `ADMIN_NAV_LINKS` — the same routes
+ * flattened back into one sequence — instead of `ADMIN_NAV_ITEMS`. Same
+ * disabled/"Soon" treatment as the sidebar for routes that aren't built
+ * yet.
  */
 export function AdminMobileNav() {
   const pathname = usePathname();
@@ -19,7 +24,7 @@ export function AdminMobileNav() {
       aria-label="Admin"
       className="flex gap-2 overflow-x-auto border-b border-border-subtle bg-bg px-4 py-2.5 md:hidden"
     >
-      {ADMIN_NAV_ITEMS.map(({ href, label, Icon, built }) => {
+      {ADMIN_NAV_LINKS.map(({ href, label, Icon, built }) => {
         if (!built) {
           return (
             <span

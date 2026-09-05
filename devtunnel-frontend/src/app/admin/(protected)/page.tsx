@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { buildMetadata } from "@/lib/seo";
 import { getServerUser } from "@/lib/auth/get-server-user";
 import { AdminStatCard } from "@/components/admin/admin-stat-card";
-import { SectionMessage } from "@/components/home/section-message";
+import { AdminTractionChart } from "@/components/admin/admin-traction-chart";
 
 export const metadata: Metadata = buildMetadata({
   title: "Admin dashboard",
@@ -13,36 +13,51 @@ export const metadata: Metadata = buildMetadata({
 });
 
 /**
- * `/admin` (devtunnel_workflow.txt, Module A2 — Admin Dashboard).
+ * `/admin` — Admin Portal Master Coding Specification, section 3 (Admin
+ * Dashboard).
  *
- * This builds Module A2's real layout — the metric grid and a recent
- * activity panel, matching the module's own mock-up shape (Projects,
- * Published, Drafts, Tasks, Contributors, Active Projects) — but every
- * value renders as an honest "—" rather than a number. There is no
- * `/admin/*` aggregation endpoint on the backend yet (Module 43 — Admin
- * Backend), and rendering placeholder numbers here would be exactly the
- * fabricated statistics rule 58 forbids ("AI-generated code must not
- * invent SEO data ... statistics"). `AdminStatCard` and `SectionMessage`
- * already know how to render that "not available yet" state, so wiring
- * up the real numbers later only means replacing the `null`s below with
- * a fetch call — the shell doesn't need to change.
+ * The spec calls for exactly two things here: a metric grid, and a
+ * time-series graph of user activity — nothing repository-health related
+ * ("It should not become a repository-health dashboard").
  *
- * The rest of Module 31's sections (A3 Projects through A12 Activity)
- * are intentionally not built as pages yet — they're listed in
- * `AdminSidebar` / `AdminMobileNav` as disabled "Soon" entries instead,
- * so the full shape of the portal is visible without shipping links to
- * pages that don't exist (rule 11).
+ * Metrics, per section 3:
+ *  - Primary: Total Users, Total Projects, Total Tasks, Tasks Submitted.
+ *  - Optional secondary: Active Contributors, Completed Tasks, Open
+ *    DevTunnel Tasks.
+ *
+ * "Only include metrics that already exist or can be reliably calculated
+ * from the database" — there is no `GET /admin/dashboard` aggregation
+ * endpoint on the backend yet (only `/admin/auth` and `/admin/activity`
+ * exist today), so every value below renders as an honest "—" via
+ * `AdminStatCard` rather than a fabricated number (rule 58 — AI-generated
+ * code must not invent statistics). Wiring up the real numbers later only
+ * means replacing the `null`s with a fetch call once that endpoint ships —
+ * this shell doesn't need to change shape.
+ *
+ * The User Activity / Traction Graph (section 3) has the same "no invented
+ * data" treatment in `AdminTractionChart`, backed by the not-yet-built
+ * `GET /admin/dashboard/activity`.
+ *
+ * Everything else in the spec's page list (Projects, Project Onboarding,
+ * Tasks, Task Onboarding, New Issues, Activity) is intentionally not built
+ * as a page yet — it's listed in `AdminSidebar` / `AdminMobileNav` as
+ * disabled "Soon" entries instead, so the full shape of the portal is
+ * visible without shipping links to pages that don't exist (rule 11).
  */
 export default async function AdminDashboardPage() {
   const user = await getServerUser();
 
-  const stats: { label: string; value: number | null }[] = [
-    { label: "Projects", value: null },
-    { label: "Published", value: null },
-    { label: "Drafts", value: null },
-    { label: "Tasks", value: null },
-    { label: "Contributors", value: null },
-    { label: "Active projects", value: null },
+  const primaryStats: { label: string; value: number | null }[] = [
+    { label: "Total users", value: null },
+    { label: "Total projects", value: null },
+    { label: "Total tasks", value: null },
+    { label: "Tasks submitted", value: null },
+  ];
+
+  const secondaryStats: { label: string; value: number | null }[] = [
+    { label: "Active contributors", value: null },
+    { label: "Completed tasks", value: null },
+    { label: "Open DevTunnel tasks", value: null },
   ];
 
   return (
@@ -60,8 +75,22 @@ export default async function AdminDashboardPage() {
         >
           Platform overview
         </h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {primaryStats.map((stat) => (
+            <AdminStatCard key={stat.label} label={stat.label} value={stat.value} />
+          ))}
+        </div>
+      </section>
+
+      <section aria-labelledby="dashboard-secondary-stats-heading" className="mb-8">
+        <h2
+          id="dashboard-secondary-stats-heading"
+          className="mb-2.5 text-[12.5px] font-normal text-text-muted"
+        >
+          Contribution &amp; task activity
+        </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {stats.map((stat) => (
+          {secondaryStats.map((stat) => (
             <AdminStatCard key={stat.label} label={stat.label} value={stat.value} />
           ))}
         </div>
@@ -72,27 +101,24 @@ export default async function AdminDashboardPage() {
           id="dashboard-activity-heading"
           className="mb-2.5 text-[12.5px] font-normal text-text-muted"
         >
-          Recent activity
+          User activity
         </h2>
-        <SectionMessage>
-          Activity will show up here once the Activity API (Module A12) is
-          wired up.
-        </SectionMessage>
+        <AdminTractionChart />
       </section>
 
       <div className="rounded-[10px] border border-border bg-surface px-6 py-5">
         <p className="m-0 mb-2 text-sm font-medium text-text">
-          Project curation tools aren&apos;t live yet
+          Project and task curation tools aren&apos;t live yet
         </p>
         <p className="m-0 text-[13px] leading-[1.6] text-text-muted">
-          Repository import, task management, and publishing (Modules
-          A3&ndash;A12) are listed in the sidebar so the full shape of the
+          Project onboarding, task onboarding, and the dashboard aggregation
+          endpoints are listed in the sidebar so the full shape of the
           portal is visible, but they open once the corresponding{" "}
           <code className="rounded bg-surface-raised px-1 py-0.5 font-mono text-xs text-text-secondary">
             /admin/*
           </code>{" "}
-          backend endpoints exist. Admin authentication and access control
-          are fully wired up.
+          backend routes exist. Admin authentication and access control are
+          fully wired up.
         </p>
       </div>
     </main>

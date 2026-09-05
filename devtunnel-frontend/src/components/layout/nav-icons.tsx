@@ -196,3 +196,18 @@
      </svg>
    );
  }
+
+ /**
+  * Admin Portal Master Coding Specification, section 2 — Tasks ▸ "New
+  * Issues" (GitHub issues not yet represented as a DevTunnel task). Reuses
+  * the open-circle-dot shape GitHub itself uses for an open issue, so the
+  * glyph reads correctly at a glance next to "New Issues" in the sidebar.
+  */
+ export function IssueIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <circle cx="12" cy="12" r="8.25" />
+       <circle cx="12" cy="12" r="2.15" fill="currentColor" stroke="none" />
+     </svg>
+   );
+ }
