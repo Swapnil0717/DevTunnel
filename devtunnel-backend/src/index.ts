@@ -7,7 +7,9 @@ import { auth } from "./routes/auth";
 import { health } from "./routes/health";
 import { contributions } from "./routes/contributions";
 import { devtunnelStats } from "./routes/devtunnelStats";
+
 import { logger } from "./lib/logger";
+import { admin } from "./routes/admin/index";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -30,6 +32,10 @@ app.route("/auth", auth);
 app.route("/", health);
 app.route("/", contributions);
 app.route("/", devtunnelStats);
+// Admin Backend (devtunnel_workflow.txt section 43). Every route in
+// ./routes/admin enforces its own requireAuth + requireAdminRole (+
+// requirePermission where relevant) — see src/routes/admin/index.ts.
+app.route("/admin", admin);
 
 app.notFound((c) =>
   c.json({ error: { code: "not_found", message: "Not found", requestId: c.get("requestId") } }, 404),
