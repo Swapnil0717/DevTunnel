@@ -80,7 +80,7 @@
      </svg>
    );
  }
-
+ 
  /** Month-navigation arrows for the profile contribution calendar. */
  export function ChevronLeftIcon({ className = "" }: IconProps) {
    return (
@@ -89,11 +89,110 @@
      </svg>
    );
  }
-
+ 
  export function ChevronRightIcon({ className = "" }: IconProps) {
    return (
      <svg {...base} className={className}>
        <path d="M9.5 6l6 6-6 6" />
+     </svg>
+   );
+ }
+ 
+ /**
+  * Icons below this line are for the Admin Portal shell
+  * (components/admin/admin-nav-items.ts) — same convention as the set
+  * above: plain inline SVG, aria-hidden, always paired with visible text.
+  */
+ 
+ /** Module A2 — Admin Dashboard. */
+ export function GridIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <rect x="4" y="4" width="7" height="7" rx="1.2" />
+       <rect x="13" y="4" width="7" height="7" rx="1.2" />
+       <rect x="4" y="13" width="7" height="7" rx="1.2" />
+       <rect x="13" y="13" width="7" height="7" rx="1.2" />
+     </svg>
+   );
+ }
+ 
+ /** Module A6 — Repository Information. */
+ export function GitBranchIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <circle cx="6" cy="6" r="2.2" />
+       <circle cx="6" cy="18" r="2.2" />
+       <circle cx="18" cy="6" r="2.2" />
+       <path d="M6 8.2V15.8" />
+       <path d="M18 8.2V11a5 5 0 0 1-5 5H8.5" />
+     </svg>
+   );
+ }
+ 
+ /** Module A7 — Project Files. */
+ export function FileIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M7 3.5h7l4 4V19a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z" />
+       <path d="M14 3.5V8h4.3" />
+       <path d="M9 12.5h6" />
+       <path d="M9 16h6" />
+     </svg>
+   );
+ }
+ 
+ /** Module A8 — Admin Task Creation / Task Management. */
+ export function ChecklistIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <rect x="4" y="5.3" width="3.4" height="3.4" rx="0.8" />
+       <path d="M10 7h10" />
+       <rect x="4" y="12" width="3.4" height="3.4" rx="0.8" />
+       <path d="M10 13.7h10" />
+       <rect x="4" y="18.7" width="3.4" height="3.4" rx="0.8" />
+       <path d="M10 20.4h7" />
+     </svg>
+   );
+ }
+ 
+ /** Module A9 — Project Preview. */
+ export function EyeIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+       <circle cx="12" cy="12" r="2.6" />
+     </svg>
+   );
+ }
+ 
+ /** Module A10 — Publish System. */
+ export function UploadIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M12 15.5V4" />
+       <path d="M7.5 8.5 12 4l4.5 4.5" />
+       <path d="M5 15.5v3a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5v-3" />
+     </svg>
+   );
+ }
+ 
+ /** Module A11 — GitHub Synchronization. */
+ export function RefreshIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M4.5 12a7.5 7.5 0 0 1 12.6-5.5" />
+       <path d="M17.5 4v3.5H14" />
+       <path d="M19.5 12a7.5 7.5 0 0 1-12.6 5.5" />
+       <path d="M6.5 20v-3.5H10" />
+     </svg>
+   );
+ }
+ 
+ /** Module A12 — Reports / Activity. */
+ export function ActivityIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M3.5 12h4l2-6 4.5 12 2-6h4.5" />
      </svg>
    );
  }

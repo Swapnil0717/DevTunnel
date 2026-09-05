@@ -5,6 +5,8 @@ import { AuthProvider } from "@/lib/auth/auth-provider";
 import { getServerUser } from "@/lib/auth/get-server-user";
 import { isAdmin } from "@/lib/auth/is-admin";
 import { AdminHeader } from "@/components/auth/admin-header";
+import { AdminSidebar } from "@/components/admin/admin-sidebar";
+import { AdminMobileNav } from "@/components/admin/admin-mobile-nav";
 
 /**
  * Real route protection for everything under `/admin` (devtunnel_workflow.txt,
@@ -30,6 +32,13 @@ import { AdminHeader } from "@/components/auth/admin-header";
  * outside this group — never gets wrapped by it. A layout that requires
  * `role: "ADMIN"` to render can't also host the page where someone who
  * *isn't* an admin yet is supposed to sign in.
+ *
+ * Admin Home shell: `AdminSidebar` (branding + Module 31's full section
+ * list, `md` and up) sits alongside a content column topped by
+ * `AdminHeader` (current section + signed-in admin + sign-out) and, below
+ * `md` where the sidebar is hidden, `AdminMobileNav` — same nav entries as
+ * a horizontally scrollable strip. Every admin page (starting with the
+ * Module A2 dashboard) renders inside `{children}` beneath those two.
  */
 export default async function AdminProtectedLayout({
   children,
@@ -45,9 +54,13 @@ export default async function AdminProtectedLayout({
 
   return (
     <AuthProvider initialUser={user}>
-      <div className="flex min-h-screen flex-col bg-bg">
-        <AdminHeader />
-        <div className="flex-1">{children}</div>
+      <div className="flex min-h-screen bg-bg">
+        <AdminSidebar />
+        <div className="flex min-h-screen flex-1 flex-col">
+          <AdminHeader />
+          <AdminMobileNav />
+          <div className="flex-1">{children}</div>
+        </div>
       </div>
     </AuthProvider>
   );
