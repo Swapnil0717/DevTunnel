@@ -4,12 +4,23 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth/use-auth";
 
+interface LogoutButtonProps {
+  className?: string;
+  /**
+   * Where to send the person after signing out. Defaults to the
+   * contributor `/login`; the Admin Portal shell passes `/admin/login` so
+   * signing out of admin doesn't land on the contributor sign-in screen
+   * (devtunnel_workflow.txt, Module A1 — Admin Authentication).
+   */
+  redirectTo?: string;
+}
+
 /**
  * Calls `POST /auth/logout` (via `useAuth().logout`) and returns the user
  * to the sign-in screen. Devtunnel_workflow.txt task: "Create logout
  * functionality".
  */
-export function LogoutButton({ className = "" }: { className?: string }) {
+export function LogoutButton({ className = "", redirectTo = "/login" }: LogoutButtonProps) {
   const { logout } = useAuth();
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -18,7 +29,7 @@ export function LogoutButton({ className = "" }: { className?: string }) {
     setIsLoggingOut(true);
     try {
       await logout();
-      router.push("/login");
+      router.push(redirectTo);
     } catch {
       // If the request fails, let the person try again rather than
       // stranding them on a broken button.

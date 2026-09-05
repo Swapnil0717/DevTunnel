@@ -1,10 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/use-auth";
 import { StatusDot } from "@/components/ui/status-dot";
 import { needsOnboarding } from "@/lib/onboarding/needs-onboarding";
+import { isAdmin } from "@/lib/auth/is-admin";
 
 const DEFAULT_DESTINATION = "/home";
 
@@ -16,42 +17,54 @@ type CallbackPhase = "verifying" | "success" | "error";
 
 /**
  * Handles the return leg of the GitHub OAuth flow (devtunnel_workflow.txt,
- * Module C1 - Authentication: "GitHub OAuth callback";
- * 2_devtunnel_auth_callback_states.html).
+ * Module C1 - Authentication: "GitHub OAuth callback").
  *
  * Assumption (documented since the backend isn't part of this deliverable):
- * GitHub's OAuth callback URL is registered to the *backend's*
- * `GET /auth/callback`, because exchanging the authorization code for a
+ * GitHub's OAuth callback URL is registered to the backend's
+ * GET /auth/callback, because exchanging the authorization code for a
  * token requires the OAuth client secret, which must never live in
  * frontend code (rule 19). The backend performs that exchange, starts the
  * session, and redirects the browser here - to this frontend route - with
  * either:
- *   - `?status=success&next=/some/path`, or
- *   - `?status=error&reason=<human-readable-reason>`
+ *   - ?status=success&next=/some/path, or
+ *   - ?status=error&reason=<human-readable-reason>
  *
- * This page never sees, stores, or forwards the GitHub `code` itself.
+ * This page never sees, stores, or forwards the GitHub code itself.
  *
  * Sign-in -> onboarding -> home routing (devtunnel_workflow.txt, Module C1):
- * once the session is confirmed via `refreshUser()`, a first-time sign-in
- * (`needsOnboarding(freshUser)`) always goes to `/onboarding` regardless of
- * `next` - `next` only matters for someone who's already onboarded (e.g. a
+ * once the session is confirmed via refreshUser(), a first-time sign-in
+ * (needsOnboarding(freshUser)) always goes to /onboarding regardless of
+ * next - next only matters for someone who's already onboarded (e.g. a
  * deep link that bounced them to /login first). Everyone else lands on
- * `/home`, never `/dashboard` (dashboard has no real content yet - it's
+ * /home, never /dashboard (dashboard has no real content yet - it's
  * kept only as a redirect shim for old bookmarked links).
  *
  * Renders one of three real, mutually exclusive states - never a static
- * showcase of all of them at once (rule 23): `verifying` while
- * `GET /auth/me` confirms the new session, `success` briefly once it's
- * confirmed, and `error` when the backend reports the sign-in failed.
+ * showcase of all of them at once (rule 23): verifying while GET /auth/me
+ * confirms the new session, success briefly once it's confirmed, and
+ * error when the backend reports the sign-in failed.
+ *
+ * Admin RBAC gate (devtunnel_workflow.txt, Module A1 - Admin
+ * Authentication): this same callback also lands admin-portal sign-ins,
+ * since /admin/login's GithubLoginButton posts next=/admin... through
+ * the identical /auth/github -> /auth/callback flow - there is no
+ * separate admin OAuth route. When next targets /admin, a confirmed
+ * session that isn't role "ADMIN" must never be allowed through: rather
+ * than routing it to /onboarding or /home like a contributor sign-in,
+ * it's logged out again immediately (the GitHub identity is valid, it's
+ * just not an authorized admin) and bounced back to
+ * /admin/login?error=not_authorized, which explains why instead of
+ * silently dropping the person into a portal they don't have access to.
  */
 export function OAuthCallbackView() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { refreshUser } = useAuth();
+  const { refreshUser, logout } = useAuth();
 
   const urlStatus = searchParams.get("status");
   const reason = searchParams.get("reason");
   const next = searchParams.get("next") || DEFAULT_DESTINATION;
+  const isAdminNext = next === "/admin" || next.startsWith("/admin/");
 
   const [phase, setPhase] = useState<CallbackPhase>(
     urlStatus === "error" ? "error" : "verifying",
@@ -66,6 +79,20 @@ export function OAuthCallbackView() {
     async function completeSignIn() {
       const freshUser = await refreshUser();
       if (isCancelled) return;
+
+      if (isAdminNext) {
+        if (!freshUser || !isAdmin(freshUser)) {
+          await logout();
+          if (!isCancelled) router.replace("/admin/login?error=not_authorized");
+          return;
+        }
+
+        setPhase("success");
+        redirectTimer = setTimeout(() => {
+          if (!isCancelled) router.replace(next);
+        }, SUCCESS_DISPLAY_MS);
+        return;
+      }
 
       const destination =
         freshUser && needsOnboarding(freshUser) ? "/onboarding" : next;
@@ -102,7 +129,7 @@ export function OAuthCallbackView() {
           {reason ?? "GitHub sign-in was cancelled or denied."}
         </p>
         <a
-          href="/login"
+          href={isAdminNext ? "/admin/login" : "/login"}
           className="inline-block rounded-md bg-text px-4 py-2 text-[13px] font-medium text-bg transition-opacity hover:opacity-90"
         >
           Back to sign in
