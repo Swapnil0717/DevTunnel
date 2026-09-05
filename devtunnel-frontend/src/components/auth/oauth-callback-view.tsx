@@ -39,6 +39,14 @@ type CallbackPhase = "verifying" | "success" | "error";
  * /home, never /dashboard (dashboard has no real content yet - it's
  * kept only as a redirect shim for old bookmarked links).
  *
+ * Admin redirect on the contributor path: this is separate from the
+ * isAdminNext gate below, which only fires when someone signed in through
+ * /admin/login. A person who signs in through the *regular* /login flow
+ * (next stays /home) but whose account has since been promoted to
+ * role "ADMIN" must still land on the Admin Portal, never contributor
+ * /home - so isAdmin(freshUser) is checked first, ahead of onboarding,
+ * in the destination calculation below.
+ *
  * Renders one of three real, mutually exclusive states - never a static
  * showcase of all of them at once (rule 23): verifying while GET /auth/me
  * confirms the new session, success briefly once it's confirmed, and
@@ -94,8 +102,13 @@ export function OAuthCallbackView() {
         return;
       }
 
-      const destination =
-        freshUser && needsOnboarding(freshUser) ? "/onboarding" : next;
+      const destination = !freshUser
+        ? next
+        : isAdmin(freshUser)
+          ? "/admin"
+          : needsOnboarding(freshUser)
+            ? "/onboarding"
+            : next;
 
       setPhase("success");
       redirectTimer = setTimeout(() => {
