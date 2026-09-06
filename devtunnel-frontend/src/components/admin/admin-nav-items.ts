@@ -100,7 +100,7 @@ export const ADMIN_NAV_ITEMS: AdminNavEntry[] = [
         href: "/admin/projects/new",
         label: "Project Onboarding",
         Icon: PlusIcon,
-        built: false,
+        built: true,
       },
     ],
   },

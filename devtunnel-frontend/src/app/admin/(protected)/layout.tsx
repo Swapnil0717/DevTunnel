@@ -39,17 +39,30 @@ import { AdminMobileNav } from "@/components/admin/admin-mobile-nav";
  * `md` where the sidebar is hidden, `AdminMobileNav` — same nav entries as
  * a horizontally scrollable strip. Every admin page (starting with the
  * Module A2 dashboard) renders inside `{children}` beneath those two.
+ *
+ * `FULL_BLEED_PATHS` is the exception to that shell: Project Onboarding
+ * (`/admin/projects/new`) is a multi-step wizard with its own sidebar, so
+ * stacking it inside `AdminSidebar` + `AdminHeader` would double up the
+ * chrome. Same treatment as the contributor `/onboarding` page relative to
+ * `(protected)/layout.tsx` — the auth/role check still runs unconditionally
+ * above, only the shell around `{children}` is skipped.
  */
+const FULL_BLEED_PATHS = ["/admin/projects/new"];
+
 export default async function AdminProtectedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const user = await getServerUser();
+  const pathname = headers().get("x-pathname") ?? "/admin";
 
   if (!user || !isAdmin(user)) {
-    const pathname = headers().get("x-pathname") ?? "/admin";
     redirect(`/admin/login?next=${encodeURIComponent(pathname)}`);
+  }
+
+  if (FULL_BLEED_PATHS.includes(pathname)) {
+    return <AuthProvider initialUser={user}>{children}</AuthProvider>;
   }
 
   return (

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { buildMetadata } from "@/lib/seo";
 import { getServerUser } from "@/lib/auth/get-server-user";
 import { AdminStatCard } from "@/components/admin/admin-stat-card";
@@ -38,11 +39,14 @@ export const metadata: Metadata = buildMetadata({
  * data" treatment in `AdminTractionChart`, backed by the not-yet-built
  * `GET /admin/dashboard/activity`.
  *
- * Everything else in the spec's page list (Projects, Project Onboarding,
- * Tasks, Task Onboarding, New Issues, Activity) is intentionally not built
- * as a page yet — it's listed in `AdminSidebar` / `AdminMobileNav` as
- * disabled "Soon" entries instead, so the full shape of the portal is
+ * Everything else in the spec's page list except Project Onboarding
+ * (Projects, Tasks, Task Onboarding, New Issues, Activity) is intentionally
+ * not built as a page yet — it's listed in `AdminSidebar` / `AdminMobileNav`
+ * as disabled "Soon" entries instead, so the full shape of the portal is
  * visible without shipping links to pages that don't exist (rule 11).
+ * Project Onboarding (`/admin/projects/new`) is now real — its own
+ * full-bleed wizard, `built: true` in `admin-nav-items.ts` — so the
+ * placeholder card below links to it instead of describing it as pending.
  */
 export default async function AdminDashboardPage() {
   const user = await getServerUser();
@@ -107,19 +111,23 @@ export default async function AdminDashboardPage() {
       </section>
 
       <div className="rounded-[10px] border border-border bg-surface px-6 py-5">
-        <p className="m-0 mb-2 text-sm font-medium text-text">
-          Project and task curation tools aren&apos;t live yet
-        </p>
-        <p className="m-0 text-[13px] leading-[1.6] text-text-muted">
-          Project onboarding, task onboarding, and the dashboard aggregation
-          endpoints are listed in the sidebar so the full shape of the
-          portal is visible, but they open once the corresponding{" "}
+        <p className="m-0 mb-2 text-sm font-medium text-text">Onboard a new project</p>
+        <p className="m-0 mb-4 text-[13px] leading-[1.6] text-text-muted">
+          Project Onboarding is live — walk through the wizard to add a new
+          project. Task onboarding, New Issues, and the dashboard aggregation
+          endpoints are still listed in the sidebar as pending; they open
+          once the corresponding{" "}
           <code className="rounded bg-surface-raised px-1 py-0.5 font-mono text-xs text-text-secondary">
             /admin/*
           </code>{" "}
-          backend routes exist. Admin authentication and access control are
-          fully wired up.
+          backend routes exist.
         </p>
+        <Link
+          href="/admin/projects/new"
+          className="inline-flex items-center rounded-[8px] bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground hover:bg-accent/90"
+        >
+          Start Project Onboarding
+        </Link>
       </div>
     </main>
   );
