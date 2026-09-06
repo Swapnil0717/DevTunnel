@@ -9,7 +9,6 @@ import { contributions } from "./routes/contributions";
 import { devtunnelStats } from "./routes/devtunnelStats";
 import { admin } from "./routes/admin/index";
 
-
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 app.use("*", requestId);

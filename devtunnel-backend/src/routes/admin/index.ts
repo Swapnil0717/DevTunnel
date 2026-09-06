@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env, Variables } from "../../types";
 import { adminAuth } from "./auth";
 import { adminActivity } from "./activity";
+import { adminProjectOnboarding } from "../projectOnboarding";
 
 /**
  * Admin Backend router (devtunnel_workflow.txt section 43): mounted at
@@ -12,11 +13,13 @@ import { adminActivity } from "./activity";
  * enforced per-route, not by any check at this aggregation layer, so a
  * route can never accidentally end up unprotected by being mounted here.
  *
- * Only `/admin/auth` and `/admin/activity` exist so far. Future admin
- * modules (`/admin/projects`, `/admin/github`, ...) get their own file in
- * this directory and are mounted here the same way.
+ * `/admin/auth`, `/admin/activity`, and `/admin/projects/onboarding`
+ * exist so far. Future admin modules (`/admin/projects`, `/admin/tasks`,
+ * `/admin/github`, ...) get their own file in this directory and are
+ * mounted here the same way.
  */
 export const admin = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 admin.route("/auth", adminAuth);
 admin.route("/activity", adminActivity);
+admin.route("/projects/onboarding", adminProjectOnboarding);
