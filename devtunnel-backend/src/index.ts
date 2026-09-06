@@ -1,46 +1,28 @@
 import { Hono } from "hono";
-import type { Env, Variables } from "./types";
-import { requestId } from "./middleware/requestId";
-import { corsMiddleware } from "./middleware/cors";
-import { handleError } from "./middleware/errorHandler";
-import { auth } from "./routes/auth";
-import { health } from "./routes/health";
-import { contributions } from "./routes/contributions";
-import { devtunnelStats } from "./routes/devtunnelStats";
+import type { Env, Variables } from "../../types";
+import { adminActivity } from "./routes/admin/activity";
+import { adminAuth } from "./routes/admin/auth";
+import { adminProjectOnboarding } from "./routes/projectOnboarding";
 
-import { logger } from "./lib/logger";
-import { admin } from "./routes/admin/index";
 
-const app = new Hono<{ Bindings: Env; Variables: Variables }>();
+/**
+ * Admin Backend router (devtunnel_workflow.txt section 43 /
+ * admin_workflow.txt): mounted at `/admin` in src/index.ts. Every route
+ * under here requires both `requireAuth` (admin authentication) and
+ * `requireAdminRole` (admin authorization), and most also declare a
+ * specific RBAC permission via `requirePermission`
+ * (src/middleware/adminAuth.ts, src/lib/rbac.ts) — enforced per-route,
+ * not by any check at this aggregation layer, so a route can never
+ * accidentally end up unprotected by being mounted here.
+ *
+ * `/admin/auth`, `/admin/activity`, and `/admin/projects/onboarding`
+ * (admin_workflow.txt section 6 — Project Onboarding) exist so far.
+ * Future admin modules (`/admin/projects`, `/admin/tasks`,
+ * `/admin/github`, ...) get their own file in this directory and are
+ * mounted here the same way.
+ */
+export const admin = new Hono<{ Bindings: Env; Variables: Variables }>();
 
-app.use("*", requestId);
-app.use("*", corsMiddleware());
-
-app.use("*", async (c, next) => {
-  const start = Date.now();
-  await next();
-  logger.info("request_completed", {
-    requestId: c.get("requestId"),
-    method: c.req.method,
-    path: c.req.path,
-    status: c.res.status,
-    durationMs: Date.now() - start,
-  });
-});
-
-app.route("/auth", auth);
-app.route("/", health);
-app.route("/", contributions);
-app.route("/", devtunnelStats);
-// Admin Backend (devtunnel_workflow.txt section 43). Every route in
-// ./routes/admin enforces its own requireAuth + requireAdminRole (+
-// requirePermission where relevant) — see src/routes/admin/index.ts.
-app.route("/admin", admin);
-
-app.notFound((c) =>
-  c.json({ error: { code: "not_found", message: "Not found", requestId: c.get("requestId") } }, 404),
-);
-
-app.onError(handleError);
-
-export default app;
+admin.route("/auth", adminAuth);
+admin.route("/activity", adminActivity);
+admin.route("/projects/onboarding", adminProjectOnboarding);

@@ -203,3 +203,153 @@ export interface DevTunnelStats {
   pullRequestsMerged: number;
   isMaintainer: boolean;
 }
+
+/* -------------------------------------------------------------------------
+ * Admin — Project Onboarding (admin_workflow.txt section 6; sql/006).
+ *
+ * Every interface below is written to match, field-for-field, the already
+ * shipped frontend contract in
+ * devtunnel-frontend/src/lib/admin/project-onboarding/types.ts — that file
+ * is treated as the source of truth for shape/naming so the wizard the
+ * frontend already implements works against this backend without any
+ * frontend change.
+ * ---------------------------------------------------------------------- */
+
+/** A GitHub identity as returned for a repository author or contributor. */
+export interface OnboardingGithubIdentity {
+  username: string;
+  name: string | null;
+  avatarUrl: string | null;
+  profileUrl: string;
+}
+
+/** Step 1 result — everything GitHub supplied for the imported repository. */
+export interface OnboardingRepository {
+  url: string;
+  owner: string;
+  name: string;
+  fullName: string;
+  githubDescription: string | null;
+  readme: string | null;
+  defaultBranch: string;
+  primaryLanguage: string | null;
+  stars: number;
+  forks: number;
+  openIssues: number;
+  author: OnboardingGithubIdentity;
+  contributors: OnboardingGithubIdentity[];
+  hasGithubAppAccess: boolean;
+}
+
+export type DescriptionChoice = "EXISTING" | "CUSTOM";
+
+export interface OnboardingDescription {
+  choice: DescriptionChoice;
+  customDescription: string | null;
+}
+
+/**
+ * Step 3 — detected/curated tech stack. Every array defaults to `[]` (never
+ * a fabricated guess — Backend_Development_Rules.txt rule 37/38).
+ */
+export interface OnboardingTechStack {
+  languages: string[];
+  frontend: string[];
+  backend: string[];
+  frameworks: string[];
+  databases: string[];
+  libraries: string[];
+  buildTools: string[];
+  packageManager: string | null;
+}
+
+/** Backend-authoritative completion flags (section 24). */
+export interface ProjectOnboardingStepState {
+  repositoryCompleted: boolean;
+  descriptionCompleted: boolean;
+  techStackCompleted: boolean;
+  previewCompleted: boolean;
+  validationCompleted: boolean;
+}
+
+/** The onboarding draft as returned to the admin frontend. */
+export interface ProjectOnboardingDraft {
+  id: string;
+  repository: OnboardingRepository | null;
+  description: OnboardingDescription | null;
+  techStack: OnboardingTechStack | null;
+  steps: ProjectOnboardingStepState;
+}
+
+export interface ProjectOnboardingValidationIssue {
+  step: keyof ProjectOnboardingStepState;
+  message: string;
+}
+
+export interface ProjectOnboardingValidationResult {
+  valid: boolean;
+  issues: ProjectOnboardingValidationIssue[];
+}
+
+/** Result of `POST /admin/projects/onboarding/:id/complete`. */
+export interface CreatedProject {
+  id: string;
+  slug: string;
+  name: string;
+}
+
+/**
+ * Full row shape as stored in `devtunnel.project_onboarding_drafts`
+ * (sql/006). `github_author`/`github_contributors`/`tech_stack` are jsonb
+ * columns holding the shapes above — validated on the way out by
+ * src/db/projectOnboarding.ts, never trusted blindly (rule 73: validate
+ * database results).
+ */
+export interface ProjectOnboardingDraftRow {
+  id: string;
+  admin_id: string;
+
+  repository_url: string | null;
+  github_owner: string | null;
+  github_repo_name: string | null;
+  github_full_name: string | null;
+  github_description: string | null;
+  readme: string | null;
+  default_branch: string | null;
+  primary_language: string | null;
+  stars: number | null;
+  forks: number | null;
+  open_issues: number | null;
+  github_author: OnboardingGithubIdentity | null;
+  github_contributors: OnboardingGithubIdentity[] | null;
+  has_github_app_access: boolean;
+  repository_completed: boolean;
+
+  description_choice: DescriptionChoice | null;
+  custom_description: string | null;
+  description_completed: boolean;
+
+  tech_stack: OnboardingTechStack | null;
+  tech_stack_completed: boolean;
+
+  preview_completed: boolean;
+  validation_completed: boolean;
+
+  completed_project_id: string | null;
+  completed_at: string | null;
+
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Public-safe subset of `devtunnel.projects` used by the onboarding
+ * completion response. The full admin project-listing/detail row shape
+ * (section 4/18) is intentionally out of scope of this file — this is
+ * only what `complete_project_onboarding()` (sql/006) returns.
+ */
+export interface ProjectRow {
+  id: string;
+  slug: string;
+  name: string;
+}
