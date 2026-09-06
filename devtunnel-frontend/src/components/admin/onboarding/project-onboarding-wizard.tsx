@@ -107,12 +107,19 @@ export function ProjectOnboardingWizard() {
   }, [step, draft?.id]);
 
   // Step 4 entry: always re-fetch the preview from the backend so it
-  // reflects exactly what's stored, not accumulated local state.
+  // reflects exactly what's stored, not accumulated local state. Also
+  // updates `draft` (not just `previewDraft`) since this call is what
+  // marks `preview_completed` true on the backend — Step 5's checklist
+  // reads `draft.steps`, so without this it would still show Preview as
+  // incomplete even after a successful fetch.
   useEffect(() => {
     if (step !== 4 || !draft) return;
     setIsLoadingPreview(true);
     fetchOnboardingPreview(draft.id)
-      .then(setPreviewDraft)
+      .then((next) => {
+        setPreviewDraft(next);
+        setDraft(next);
+      })
       .catch(() => setStepError("Couldn't load the preview. Try going back and forward again."))
       .finally(() => setIsLoadingPreview(false));
   }, [step, draft?.id]);
