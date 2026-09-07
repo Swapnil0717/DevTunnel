@@ -1,9 +1,11 @@
+// devtunnel-backend/src/routes/projectOnboarding.ts
+
 import { Hono } from "hono";
 import { z } from "zod";
 import { getEnv } from "../config/env";
 import { recordAdminAudit } from "../db/adminAudit";
 import { getValidGithubAccessToken } from "../db/githubTokens";
-import { ProjectOnboardingError, saveRepositoryImport, toOnboardingDraft, saveDescription, saveTechStack, getDraftForAdmin, markPreviewCompleted, computeValidation, saveValidationResult } from "../db/projectOnboarding";
+import { ProjectOnboardingError, saveRepositoryImport, toOnboardingDraft, saveDescription, saveTechStack, getDraftForAdmin, markPreviewCompleted, computeValidation, saveValidationResult, completeOnboarding } from "../db/projectOnboarding";
 import { GitHubRepoError, parseGithubRepoUrl, fetchRepositoryMetadata, fetchRepositoryContributors, fetchRepositoryReadme, fetchRepositoryLanguages } from "../lib/githubRepo";
 import { logger } from "../lib/logger";
 import { checkRateLimit } from "../lib/rateLimit";
@@ -480,7 +482,7 @@ adminProjectOnboarding.post(
 
     try {
       const supabase = getSupabase(env);
-      const project = await runCompleteOnboarding(supabase, admin.id, idResult.data);
+      const project = await completeOnboarding(supabase, admin.id, idResult.data);
 
       // rule 96: audit important administrative actions. Best-effort —
       // must never fail a request that already succeeded (same posture

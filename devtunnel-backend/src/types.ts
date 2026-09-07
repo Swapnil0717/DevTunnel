@@ -353,3 +353,76 @@ export interface ProjectRow {
   slug: string;
   name: string;
 }
+
+/* -------------------------------------------------------------------------
+ * Admin — Projects List (admin_workflow.txt section 4 — "Projects Page";
+ * section 22 — Admin Backend API Map: `GET /admin/projects`,
+ * `GET /admin/projects/:id`).
+ *
+ * Field-for-field match with the already-shipped frontend contract in
+ * devtunnel-frontend/src/lib/admin/projects/types.ts — that file is the
+ * source of truth for shape/naming here, same convention as the Project
+ * Onboarding types above.
+ * ---------------------------------------------------------------------- */
+
+/** Minimal GitHub identity for the table's "Author" column (section 4/26). */
+export interface AdminProjectAuthor {
+  username: string;
+  name: string | null;
+  avatarUrl: string | null;
+}
+
+/**
+ * Only `ACTIVE` is ever produced today (a project only ever comes into
+ * existence already active — section 24/`complete_project_onboarding`,
+ * sql/006). `ARCHIVED` is kept only as an honest fallback for a future
+ * archive/suspend flow the enum already reserves room for
+ * (`devtunnel.project_status`, sql/006) — never a status this backend
+ * invents on its own.
+ */
+export type AdminProjectStatus = "ACTIVE" | "ARCHIVED";
+
+/**
+ * A single row of the Admin Projects table (section 4 ▸ Frontend):
+ * "Project Name, GitHub Repository, Author, DevTunnel Contributors,
+ * GitHub Contributors, Task Count, Status".
+ *
+ * `devTunnelContributorCount` and `githubContributorCount` are kept as two
+ * separate fields, never summed or merged — section 5 is explicit that
+ * "GitHub Contributors ≠ DevTunnel Contributors" and "Do not mix the two
+ * datasets."
+ */
+export interface AdminProjectSummary {
+  id: string;
+  slug: string;
+  name: string;
+  repositoryUrl: string;
+  repositoryFullName: string;
+  author: AdminProjectAuthor;
+  devTunnelContributorCount: number;
+  githubContributorCount: number;
+  taskCount: number;
+  status: AdminProjectStatus;
+}
+
+/**
+ * Raw row shape as returned by `devtunnel.admin_project_list`
+ * (sql/007_add_admin_project_list.sql) — a read-only view over
+ * `devtunnel.projects` joined with per-project task/contributor
+ * aggregates. Never selected with `select("*")` (rule 23) — see the
+ * explicit column list in src/db/adminProjects.ts.
+ */
+export interface AdminProjectListRow {
+  id: string;
+  slug: string;
+  name: string;
+  repo_url: string | null;
+  github_full_name: string | null;
+  github_owner: string | null;
+  github_author: OnboardingGithubIdentity | null;
+  status: AdminProjectStatus;
+  created_at: string;
+  github_contributor_count: number;
+  task_count: number;
+  devtunnel_contributor_count: number;
+}
