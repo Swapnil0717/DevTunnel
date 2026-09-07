@@ -1,112 +1,150 @@
--- DevTunnel — Admin Projects List (admin_workflow.txt section 4 —
--- "Projects Page"; section 22 — "GET /admin/projects", "GET
--- /admin/projects/:id").
+-- DevTunnel — Fix ambiguous column references in complete_project_onboarding()
 --
--- Adds:
---   1. A missing index on `devtunnel.pull_requests (project_id)` — the
---      table already has indexes on `author_id`/`status`
---      (004_add_devtunnel_contributions.sql) but not the column this
---      migration's contributor aggregation groups by.
---   2. `devtunnel.admin_project_list` — a read-only view that pre-joins
---      each project with its task count and DevTunnel-contributor count,
---      so `GET /admin/projects` can page through every project with one
---      query instead of N+1 per-project lookups (Backend_Development_
---      Rules.txt rule 21: pagination/large collections must actually
---      scale).
+-- Bug: `returns table (id uuid, slug text, name text)` implicitly declares
+-- `id`, `slug`, and `name` as PL/pgSQL variables scoped to the ENTIRE
+-- function body — not just the final `return query`. Any bare,
+-- unqualified reference to a column named `id` or `slug` elsewhere in the
+-- function is therefore ambiguous between "the OUT variable" and "the
+-- table column", which Postgres rejects at call time with:
+--
+--   column reference "id" is ambiguous
+--
+-- Two spots hit this in the original 006 definition:
+--   1. `select * into v_draft from ... where id = p_draft_id`
+--      (ambiguous: OUT var `id` vs. project_onboarding_drafts.id)
+--   2. `while exists (select 1 from devtunnel.projects where slug = v_slug)`
+--      (ambiguous: OUT var `slug` vs. projects.slug)
+--
+-- Fix: qualify every such reference with its table name/alias. Logic is
+-- otherwise unchanged from 006.
 --
 -- Run once, after 006_add_project_onboarding.sql.
---
--- Per rule 5, this migration only adds what `GET /admin/projects` /
--- `GET /admin/projects/:id` actually need — it does not add the separate
--- `/admin/projects/:id/contributors` or `/admin/projects/:id/github-
--- contributors` detail routes (section 22), which are their own,
--- not-yet-requested feature.
+-- ---------------------------------------------------------------------------
 
-create schema if not exists devtunnel; -- no-op if 001 already ran
+create or replace function devtunnel.complete_project_onboarding(
+  p_draft_id uuid,
+  p_admin_id uuid
+)
+returns table (id uuid, slug text, name text)
+language plpgsql
+as $$
+declare
+  v_draft   devtunnel.project_onboarding_drafts%rowtype;
+  v_base_slug text;
+  v_slug      text;
+  v_suffix    integer := 1;
+  v_project_id uuid;
+begin
+  select * into v_draft
+  from devtunnel.project_onboarding_drafts pod
+  where pod.id = p_draft_id
+  for update;
 
--- ---------------------------------------------------------------------------
--- Missing index: the DevTunnel-contributor aggregation below groups
--- `pull_requests` by `project_id`, which had no supporting index.
--- ---------------------------------------------------------------------------
-create index if not exists pull_requests_project_id_idx
-  on devtunnel.pull_requests (project_id);
+  if not found then
+    raise exception 'ONBOARDING_NOT_FOUND';
+  end if;
 
--- ---------------------------------------------------------------------------
--- admin_project_list — one row per DevTunnel project, joined with:
---
---   github_contributor_count  — length of the GitHub contributor snapshot
---                                captured at onboarding time
---                                (`projects.github_contributors`, sql/006).
---                                This is GitHub's own contributor list,
---                                never mixed with DevTunnel's (section 5).
---
---   task_count                — count of `devtunnel.tasks` rows for the
---                                project.
---
---   devtunnel_contributor_count — distinct count of users who either (a)
---                                are/were assigned a task on the project,
---                                or (b) authored a pull request tracked
---                                against the project (section 5's
---                                "DevTunnel contributor calculation":
---                                tasks -> assignees, submissions/PRs ->
---                                authors, deduplicated). There is no
---                                separate "submissions" table in this
---                                schema yet, so this uses the two
---                                DevTunnel-native tables that actually
---                                exist today (rule 5: never invent schema
---                                beyond what's built) — a future
---                                submissions table would be added as a
---                                third branch of the union below, not by
---                                fabricating a count now.
---
--- Deliberately read-only (no INSERT/UPDATE ever targets this view) and
--- selects an explicit column list of already-public-to-admin fields —
--- never `projects.*`, so a private/internal column added to `projects`
--- later (e.g. an eventual encrypted field) is never accidentally exposed
--- through this view without a conscious edit here (rule 8).
--- ---------------------------------------------------------------------------
-create or replace view devtunnel.admin_project_list as
-select
-  p.id,
-  p.slug,
-  p.name,
-  p.repo_url,
-  p.github_full_name,
-  p.github_owner,
-  p.github_author,
-  p.status,
-  p.created_at,
-  case
-    when jsonb_typeof(p.github_contributors) = 'array' then jsonb_array_length(p.github_contributors)
-    else 0
-  end as github_contributor_count,
-  coalesce(task_counts.task_count, 0) as task_count,
-  coalesce(contributor_counts.devtunnel_contributor_count, 0) as devtunnel_contributor_count
-from devtunnel.projects p
-left join (
-  select project_id, count(*) as task_count
-  from devtunnel.tasks
-  group by project_id
-) task_counts on task_counts.project_id = p.id
-left join (
-  select project_id, count(distinct user_id) as devtunnel_contributor_count
-  from (
-    select project_id, assignee_id as user_id
-    from devtunnel.tasks
-    where assignee_id is not null
-    union
-    select project_id, author_id as user_id
-    from devtunnel.pull_requests
-  ) devtunnel_contributors
-  group by project_id
-) contributor_counts on contributor_counts.project_id = p.id;
+  if v_draft.admin_id <> p_admin_id then
+    -- Reported identically to "not found" by the caller (never reveal
+    -- that a draft exists for a different admin — rule 13).
+    raise exception 'ONBOARDING_NOT_FOUND';
+  end if;
 
--- ---------------------------------------------------------------------------
--- Access control — same posture as every other table in this schema
--- (001/004/005/006): this backend talks to Supabase exclusively with the
--- service role key (src/lib/supabase.ts), which bypasses RLS/grants by
--- design. Views can't have RLS enabled directly, so the equivalent
--- defense-in-depth here is revoking table-level privileges from
--- anon/authenticated, same as every base table.
--- ---------------------------------------------------------------------------
-revoke all on devtunnel.admin_project_list from anon, authenticated;
+  if v_draft.completed_project_id is not null then
+    raise exception 'ONBOARDING_ALREADY_COMPLETED';
+  end if;
+
+  if not (
+    v_draft.repository_completed
+    and v_draft.description_completed
+    and v_draft.tech_stack_completed
+    and v_draft.preview_completed
+    and v_draft.validation_completed
+    and v_draft.has_github_app_access
+    and v_draft.github_full_name is not null
+  ) then
+    raise exception 'ONBOARDING_INCOMPLETE';
+  end if;
+
+  -- Another draft may have raced this one to onboard the same repository
+  -- between Step 1 and now; the partial unique index on
+  -- projects.github_full_name is the real guard, but checking here first
+  -- gives a clean, specific error instead of a generic constraint-
+  -- violation 500.
+  if exists (
+    select 1 from devtunnel.projects p
+    where p.github_full_name = v_draft.github_full_name
+  ) then
+    raise exception 'REPOSITORY_ALREADY_ONBOARDED';
+  end if;
+
+  v_base_slug := lower(regexp_replace(coalesce(v_draft.github_repo_name, 'project'), '[^a-zA-Z0-9]+', '-', 'g'));
+  v_base_slug := trim(both '-' from v_base_slug);
+  if v_base_slug = '' then
+    v_base_slug := 'project';
+  end if;
+  v_slug := v_base_slug;
+
+  while exists (select 1 from devtunnel.projects p where p.slug = v_slug) loop
+    v_suffix := v_suffix + 1;
+    v_slug := v_base_slug || '-' || v_suffix;
+  end loop;
+
+  insert into devtunnel.projects (
+    name,
+    slug,
+    description,
+    repo_url,
+    created_by,
+    github_owner,
+    github_repo_name,
+    github_full_name,
+    github_description,
+    readme,
+    default_branch,
+    primary_language,
+    stars,
+    forks,
+    open_issues,
+    github_author,
+    github_contributors,
+    description_source,
+    custom_description,
+    tech_stack,
+    status,
+    onboarding_draft_id
+  ) values (
+    v_draft.github_repo_name,
+    v_slug,
+    case when v_draft.description_choice = 'CUSTOM' then v_draft.custom_description else v_draft.github_description end,
+    v_draft.repository_url,
+    p_admin_id,
+    v_draft.github_owner,
+    v_draft.github_repo_name,
+    v_draft.github_full_name,
+    v_draft.github_description,
+    v_draft.readme,
+    v_draft.default_branch,
+    v_draft.primary_language,
+    coalesce(v_draft.stars, 0),
+    coalesce(v_draft.forks, 0),
+    coalesce(v_draft.open_issues, 0),
+    v_draft.github_author,
+    v_draft.github_contributors,
+    v_draft.description_choice,
+    v_draft.custom_description,
+    coalesce(v_draft.tech_stack, '{}'::jsonb),
+    'ACTIVE',
+    v_draft.id
+  )
+  returning devtunnel.projects.id into v_project_id;
+
+  update devtunnel.project_onboarding_drafts pod
+  set completed_project_id = v_project_id,
+      completed_at = now()
+  where pod.id = v_draft.id;
+
+  return query
+    select p.id, p.slug, p.name from devtunnel.projects p where p.id = v_project_id;
+end;
+$$;
