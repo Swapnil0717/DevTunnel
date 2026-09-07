@@ -196,7 +196,7 @@
      </svg>
    );
  }
-
+ 
  /**
   * Admin Portal Master Coding Specification, section 2 — Tasks ▸ "New
   * Issues" (GitHub issues not yet represented as a DevTunnel task). Reuses
@@ -208,6 +208,25 @@
      <svg {...base} className={className}>
        <circle cx="12" cy="12" r="8.25" />
        <circle cx="12" cy="12" r="2.15" fill="currentColor" stroke="none" />
+     </svg>
+   );
+ }
+ 
+ /**
+  * Destructive action icon for "Delete project" — Project Detail page
+  * (Module A9) action bar and the Projects table (Module A3) row action
+  * that replaces "Sync". Always paired with the visible word "Delete",
+  * never the only cue that the action is destructive
+  * (Frontend_Development_Rules.txt rule 43).
+  */
+ export function TrashIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M5 7h14" />
+       <path d="M9.5 7V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2" />
+       <path d="M7 7l1 12.4a1.5 1.5 0 0 0 1.5 1.4h5a1.5 1.5 0 0 0 1.5-1.4L17 7" />
+       <path d="M10.2 11v6" />
+       <path d="M13.8 11v6" />
      </svg>
    );
  }

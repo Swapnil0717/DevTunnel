@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { GitBranchIcon } from "@/components/layout/nav-icons";
 import { AdminProjectStatusBadge } from "./admin-project-status-badge";
+import { DeleteProjectButton } from "./delete-project-button";
 import type { AdminProjectSummary } from "@/lib/admin/projects/types";
 
 /**
@@ -30,13 +32,18 @@ function PendingAction({ label }: { label: string }) {
  * never summed or merged — section 5: "GitHub Contributors ≠ DevTunnel
  * Contributors... Do not mix the two datasets."
  *
- * Actions (section 4): View, Edit, Tasks, Repository, Sync. Only
- * "Repository" is a real link here — it's the project's actual GitHub
- * URL, already known data, not a DevTunnel page. View/Edit/Tasks/Sync all
- * depend on pages or endpoints that don't exist yet (`/admin/projects/:id`,
- * `/admin/projects/:id/tasks`, `POST /admin/projects/:id/sync`), so they
- * render as disabled `PendingAction`s instead of dead links or buttons
- * that would call a 404.
+ * Actions (section 4): View, Edit, Tasks, Repository, Sync. "Repository"
+ * is a real link — it's the project's actual GitHub URL, already known
+ * data, not a DevTunnel page. "View" is now a real link too, to the
+ * Project Detail page (`/admin/projects/:id`, section 18). Edit/Tasks
+ * still depend on pages that don't exist yet (`/admin/projects/:id/edit`,
+ * `/admin/projects/:id/tasks`), so they stay disabled `PendingAction`s
+ * instead of dead links.
+ *
+ * "Sync" is replaced with "Delete" (product decision, in red) — a
+ * project's DevTunnel representation can now be removed directly from
+ * the table via `DeleteProjectButton`, rather than only from the Project
+ * Detail page.
  *
  * A real `<table>` (rule 4 — semantic HTML over generic divs), wrapped in
  * a horizontally scrolling container so the seven columns stay usable on
@@ -103,10 +110,15 @@ export function AdminProjectsTable({ projects }: { projects: AdminProjectSummary
               </td>
               <td className="px-4 py-3">
                 <div className="flex flex-wrap items-center gap-1">
-                  <PendingAction label="View" />
+                  <Link
+                    href={`/admin/projects/${project.id}`}
+                    className="rounded-md px-2 py-1 text-[11.5px] font-medium text-text-secondary hover:text-accent"
+                  >
+                    View
+                  </Link>
                   <PendingAction label="Edit" />
                   <PendingAction label="Tasks" />
-                  <PendingAction label="Sync" />
+                  <DeleteProjectButton projectId={project.id} projectName={project.name} />
                 </div>
               </td>
             </tr>
