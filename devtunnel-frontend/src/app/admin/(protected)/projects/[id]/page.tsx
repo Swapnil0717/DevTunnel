@@ -8,6 +8,7 @@ import { AdminStatCard } from "@/components/admin/admin-stat-card";
 import { DeleteProjectButton } from "@/components/admin/projects/delete-project-button";
 import { GitBranchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
+import { MarkdownReadme } from "@/components/ui/markdown-readme";
 
 interface ProjectDetailPageProps {
   params: { id: string };
@@ -52,9 +53,12 @@ export async function generateMetadata({
  * `notFound()` rather than a fabricated "empty project" page
  * (Frontend_Development_Rules.txt rule 25).
  *
- * The README is rendered as raw text inside a `<pre>`, same as the
- * Project Onboarding preview step (`preview-step.tsx`) — never through
- * `dangerouslySetInnerHTML` (rule 20).
+ * The README is rendered GitHub-style via `MarkdownReadme` (headings,
+ * lists, tables, checkboxes, code blocks laid out, not raw `.md` text),
+ * same as the Project Onboarding Description and Preview steps
+ * (`description-step.tsx`, `preview-step.tsx`) — it parses to React
+ * elements rather than going through `dangerouslySetInnerHTML`
+ * (rule 20).
  *
  * Actions here replace "Sync GitHub" (section 18's original action list)
  * with "Delete project" in red, per product direction — see
@@ -186,9 +190,7 @@ export default async function AdminProjectDetailPage({ params }: ProjectDetailPa
         </h2>
         <div className="max-h-[420px] overflow-y-auto rounded-md border border-border-subtle bg-surface-raised p-4">
           {project.readme ? (
-            <pre className="m-0 whitespace-pre-wrap font-mono text-[11.5px] leading-[1.6] text-text-secondary">
-              {project.readme}
-            </pre>
+            <MarkdownReadme content={project.readme} />
           ) : (
             <p className="m-0 text-[12px] text-text-faint">No README found.</p>
           )}

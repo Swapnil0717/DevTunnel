@@ -2,6 +2,7 @@
 
 import { useId } from "react";
 import { OptionCard } from "@/components/onboarding/option-card";
+import { MarkdownReadme } from "@/components/ui/markdown-readme";
 import type {
   DescriptionChoice,
   OnboardingDescription,
@@ -59,9 +60,7 @@ export function DescriptionStep({ repository, value, onChange }: DescriptionStep
         <p className="m-0 mb-1 text-[11px] uppercase tracking-wide text-text-faint">README</p>
         <div className="max-h-[220px] overflow-y-auto rounded-md border border-border-subtle bg-surface-raised p-3">
           {repository.readme ? (
-            <pre className="m-0 whitespace-pre-wrap font-mono text-[11.5px] leading-[1.6] text-text-secondary">
-              {repository.readme}
-            </pre>
+            <MarkdownReadme content={repository.readme} />
           ) : (
             <p className="m-0 text-[12px] text-text-faint">No README found on the default branch.</p>
           )}
