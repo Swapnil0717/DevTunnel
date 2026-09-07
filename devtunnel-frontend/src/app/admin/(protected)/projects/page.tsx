@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { buildMetadata } from "@/lib/seo";
 import { getAdminProjects } from "@/lib/admin/projects/api";
-import { AdminProjectsTable } from "@/components/admin/projects/admin-projects-table";
+import { AdminProjectsExplorer } from "@/components/admin/projects/admin-projects-explorer";
 import { SectionMessage } from "@/components/home/section-message";
 
 export const metadata: Metadata = buildMetadata({
@@ -19,11 +19,13 @@ export const metadata: Metadata = buildMetadata({
  *
  * "Show all projects currently available on DevTunnel." Fetches
  * `GET /admin/projects` server-side (section 22 — Admin Backend API Map)
- * and renders the section-4 table. That endpoint isn't built on the
- * backend yet (see `lib/admin/projects/api.ts`), so — same convention as
- * the dashboard's stat cards and traction chart — a failed or empty
- * fetch degrades to one honest `SectionMessage` instead of a fabricated
- * table or a blank page (Frontend_Development_Rules.txt rule 58).
+ * and hands the full list to `AdminProjectsExplorer`, which adds a
+ * client-side search + status filter on top of the section-4 table.
+ * That endpoint isn't built on the backend yet (see
+ * `lib/admin/projects/api.ts`), so — same convention as the dashboard's
+ * stat cards and traction chart — a failed or empty fetch degrades to
+ * one honest `SectionMessage` instead of a fabricated table or a blank
+ * page (Frontend_Development_Rules.txt rule 58).
  */
 export default async function AdminProjectsPage() {
   const result = await getAdminProjects();
@@ -58,7 +60,7 @@ export default async function AdminProjectsPage() {
           .
         </SectionMessage>
       ) : (
-        <AdminProjectsTable projects={result.data} />
+        <AdminProjectsExplorer projects={result.data} />
       )}
     </main>
   );
