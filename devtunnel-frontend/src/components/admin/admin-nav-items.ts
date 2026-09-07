@@ -18,8 +18,9 @@ export interface AdminNavLink {
    * Whether this route actually exists yet. Every route from the Admin
    * Portal Master Coding Specification's navigation (section 2) and final
    * page list (section 29) is listed here so the full shape of the Admin
-   * Portal is visible in the nav, but only Dashboard (`/admin`) has a real
-   * page today.
+   * Portal is visible in the nav, but only Dashboard (`/admin`), All
+   * Projects (`/admin/projects`), and Project Onboarding
+   * (`/admin/projects/new`) have real pages today.
    *
    * `AdminSidebar` / `AdminMobileNav` render `built: false` entries as
    * disabled, non-navigating labels rather than `<Link>`s to pages that
@@ -93,7 +94,7 @@ export const ADMIN_NAV_ITEMS: AdminNavEntry[] = [
         href: "/admin/projects",
         label: "All Projects",
         Icon: FolderIcon,
-        built: false,
+        built: true,
       },
       {
         type: "link",

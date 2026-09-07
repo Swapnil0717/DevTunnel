@@ -39,14 +39,15 @@ export const metadata: Metadata = buildMetadata({
  * data" treatment in `AdminTractionChart`, backed by the not-yet-built
  * `GET /admin/dashboard/activity`.
  *
- * Everything else in the spec's page list except Project Onboarding
- * (Projects, Tasks, Task Onboarding, New Issues, Activity) is intentionally
- * not built as a page yet — it's listed in `AdminSidebar` / `AdminMobileNav`
- * as disabled "Soon" entries instead, so the full shape of the portal is
- * visible without shipping links to pages that don't exist (rule 11).
- * Project Onboarding (`/admin/projects/new`) is now real — its own
- * full-bleed wizard, `built: true` in `admin-nav-items.ts` — so the
- * placeholder card below links to it instead of describing it as pending.
+ * Everything else in the spec's page list except Project Onboarding and
+ * All Projects (Tasks, Task Onboarding, New Issues, Activity) is
+ * intentionally not built as a page yet — it's listed in `AdminSidebar` /
+ * `AdminMobileNav` as disabled "Soon" entries instead, so the full shape
+ * of the portal is visible without shipping links to pages that don't
+ * exist (rule 11). Project Onboarding (`/admin/projects/new`) and All
+ * Projects (`/admin/projects`) are now real — `built: true` in
+ * `admin-nav-items.ts` — so the placeholder card below links to
+ * onboarding instead of describing it as pending.
  */
 export default async function AdminDashboardPage() {
   const user = await getServerUser();
