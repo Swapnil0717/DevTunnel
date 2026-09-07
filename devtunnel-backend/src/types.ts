@@ -426,3 +426,53 @@ export interface AdminProjectListRow {
   task_count: number;
   devtunnel_contributor_count: number;
 }
+
+/**
+ * `GET /admin/projects/:id` response (admin_workflow.txt section 18 —
+ * "Project Detail Page"; section 22). Field-for-field match with the
+ * already-shipped frontend contract in
+ * devtunnel-frontend/src/lib/admin/projects/types.ts — that file names
+ * this exact shape (`AdminProjectDetail extends AdminProjectSummary`) and
+ * is the reason `getAdminProjectById`/`AdminProjectSummary` alone are not
+ * enough for this route: the detail page (page.tsx) renders
+ * `project.githubDescription`, `project.readme`, and
+ * `project.openIssuesCount`, none of which the list-row summary carries.
+ *
+ * `githubDescription`/`readme`/`openIssuesCount` all come straight off
+ * `devtunnel.projects` (sql/006 — `github_description`, `readme`,
+ * `open_issues`), captured once at onboarding time (Project Onboarding
+ * Step 1) — never re-fetched from GitHub on every detail-page view.
+ */
+export interface AdminProjectDetail extends AdminProjectSummary {
+  /** GitHub's own repository description, or `null` if GitHub has none set. */
+  githubDescription: string | null;
+  /** Full README content as imported from the repository's default branch. */
+  readme: string | null;
+  /** Open issue count on GitHub for this repository (not a DevTunnel task count). */
+  openIssuesCount: number;
+}
+
+/**
+ * Raw row shape for the extra columns `AdminProjectDetail` needs beyond
+ * `AdminProjectListRow` — selected directly from `devtunnel.projects`
+ * (the base table, not the `admin_project_list` view; see
+ * src/db/adminProjects.ts `getAdminProjectDetailById`).
+ */
+export interface AdminProjectDetailExtraRow {
+  github_description: string | null;
+  readme: string | null;
+  open_issues: number;
+}
+
+/**
+ * Response body of `DELETE /admin/projects/:id` (sql/008 —
+ * `devtunnel.delete_admin_project`). The project is soft-deleted, never
+ * physically removed (rule 86 — see sql/008's header comment), so this
+ * confirms the deletion happened and when, rather than returning nothing.
+ */
+export interface DeleteAdminProjectResult {
+  id: string;
+  slug: string;
+  name: string;
+  deletedAt: string;
+}

@@ -30,6 +30,7 @@ import type { UserRole } from "../types";
  *   GET   /admin/projects/:id            -> admin:projects:read
  *   POST  /admin/projects                -> admin:projects:write
  *   PATCH /admin/projects/:id            -> admin:projects:write
+ *   DELETE /admin/projects/:id           -> admin:projects:delete
  *   GET   /admin/projects/:id/files      -> admin:projects:files:read
  *   POST  /admin/projects/:id/tasks      -> admin:projects:tasks:write
  *   POST  /admin/projects/:id/author     -> admin:projects:author:write
@@ -47,6 +48,7 @@ import type { UserRole } from "../types";
 export const ADMIN_PERMISSIONS = [
   "admin:projects:read",
   "admin:projects:write",
+  "admin:projects:delete",
   "admin:projects:publish",
   "admin:projects:files:read",
   "admin:projects:tasks:write",

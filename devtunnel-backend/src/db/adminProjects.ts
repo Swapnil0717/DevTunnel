@@ -1,5 +1,22 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AdminProjectListRow, AdminProjectSummary } from "../types";
+import type {
+  AdminProjectDetail,
+  AdminProjectDetailExtraRow,
+  AdminProjectListRow,
+  AdminProjectSummary,
+  DeleteAdminProjectResult,
+} from "../types";
+
+/**
+ * Explicit column list for the detail-only fields — selected from
+ * `devtunnel.projects` directly (the base table, NOT the
+ * `admin_project_list` view `LIST_COLUMNS` below reads from). These three
+ * columns were never added to that view's exposed columns because the
+ * list row (`AdminProjectSummary`) never needed them — only the single-
+ * project detail page does (rule 23: never `select("*")`, select exactly
+ * what the caller needs).
+ */
+const DETAIL_EXTRA_COLUMNS = "github_description, readme, open_issues";
 
 /**
  * Explicit column list — never `select("*")` (Backend_Development_Rules.txt
@@ -120,4 +137,115 @@ export async function getAdminProjectById(
 
   if (error) throw new Error(`Failed to load project: ${error.message}`);
   return data ? toAdminProjectSummary(data) : null;
+}
+
+/**
+ * Full single-project detail backing `GET /admin/projects/:id` (section
+ * 18 — "Project Detail Page") and the frontend's `AdminProjectDetail`
+ * contract (devtunnel-frontend/src/lib/admin/projects/types.ts) — the
+ * shape its `page.tsx` actually renders: description, README, and open
+ * GitHub issue count, none of which `getAdminProjectById`'s
+ * `AdminProjectSummary` carries.
+ *
+ * Two reads, not one: the list/summary fields still come from the
+ * `admin_project_list` view (same aggregate counts as the Projects table
+ * — `getAdminProjectById` above, kept as the single place that maps that
+ * view's row shape), and the three detail-only fields come from
+ * `devtunnel.projects` directly via `DETAIL_EXTRA_COLUMNS`. This mirrors
+ * `db/devtunnelStats.ts` already querying `.from("projects")` directly
+ * against the same schema-scoped client (src/lib/supabase.ts) — not a new
+ * pattern in this codebase. Returns `null` when no project with that id
+ * exists, same as `getAdminProjectById` — the route maps that to a 404,
+ * never a 500 (rule 17).
+ */
+export async function getAdminProjectDetailById(
+  supabase: SupabaseClient,
+  id: string,
+): Promise<AdminProjectDetail | null> {
+  const summary = await getAdminProjectById(supabase, id);
+  if (!summary) return null;
+
+  const { data, error } = await supabase
+    .from("projects")
+    .select(DETAIL_EXTRA_COLUMNS)
+    .eq("id", id)
+    .maybeSingle<AdminProjectDetailExtraRow>();
+
+  if (error) throw new Error(`Failed to load project detail: ${error.message}`);
+  if (!data) {
+    // The view row above exists but the base table row is gone — a race
+    // with a concurrent delete between the two reads. Treat it the same
+    // as "not found" rather than returning a half-populated object.
+    return null;
+  }
+
+  return {
+    ...summary,
+    githubDescription: data.github_description,
+    readme: data.readme,
+    openIssuesCount: data.open_issues,
+  };
+}
+
+/**
+ * Errors `deleteAdminProject` raises for delete-specific business rules,
+ * kept distinct from a generic thrown `Error` so the route handler
+ * (src/routes/admin/projects.ts) can map each one to the correct HTTP
+ * status without string-matching a message — same pattern as
+ * `ProjectOnboardingError` in src/db/projectOnboarding.ts (rule 20:
+ * centralized, predictable error handling).
+ */
+export class AdminProjectDeleteError extends Error {
+  code: "not_found" | "already_deleted";
+  constructor(code: AdminProjectDeleteError["code"], message: string) {
+    super(message);
+    this.name = "AdminProjectDeleteError";
+    this.code = code;
+  }
+}
+
+/**
+ * Soft-deletes a project — backs `DELETE /admin/projects/:id`.
+ *
+ * Delegates to the atomic `delete_admin_project` Postgres function
+ * (sql/008) so the existence check, already-deleted check, and the
+ * `deleted_at`/`deleted_by`/`delete_reason` update happen in one
+ * transaction with the project row locked for the duration (same
+ * rationale as `completeOnboarding` in src/db/projectOnboarding.ts —
+ * rule 26/55/74: read-then-write business logic belongs in the database
+ * transaction, not split across a read and a write from the application).
+ *
+ * Never issues a physical `DELETE` — `devtunnel.tasks` and
+ * `devtunnel.pull_requests` reference this project with `on delete
+ * cascade` (sql/004), so a hard delete would destroy their history along
+ * with the project row (rule 85/86 — see sql/008's header comment).
+ */
+export async function deleteAdminProject(
+  supabase: SupabaseClient,
+  adminId: string,
+  projectId: string,
+  reason: string | null,
+): Promise<DeleteAdminProjectResult> {
+  const { data, error } = await supabase.rpc("delete_admin_project", {
+    p_project_id: projectId,
+    p_admin_id: adminId,
+    p_reason: reason,
+  });
+
+  if (error) {
+    const message = error.message ?? "";
+    if (message.includes("PROJECT_NOT_FOUND")) {
+      throw new AdminProjectDeleteError("not_found", "Project not found");
+    }
+    if (message.includes("PROJECT_ALREADY_DELETED")) {
+      throw new AdminProjectDeleteError("already_deleted", "This project has already been deleted");
+    }
+    throw new Error(`Failed to delete project: ${error.message}`);
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) {
+    throw new Error("delete_admin_project returned no row");
+  }
+  return { id: row.id, slug: row.slug, name: row.name, deletedAt: row.deleted_at };
 }
