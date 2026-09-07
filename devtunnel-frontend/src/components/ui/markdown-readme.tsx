@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -199,7 +200,7 @@ const components: Components = {
   thead: ({ children }) => <thead className="border-b border-border">{children}</thead>,
   th: ({ children, align }) => (
     <th
-      style={align ? { textAlign: align } : undefined}
+      style={toCellStyle(align)}
       className="border border-border-subtle px-3 py-1.5 text-left font-semibold text-text"
     >
       {children}
@@ -207,13 +208,29 @@ const components: Components = {
   ),
   td: ({ children, align }) => (
     <td
-      style={align ? { textAlign: align } : undefined}
+      style={toCellStyle(align)}
       className="border border-border-subtle px-3 py-1.5 text-text-secondary"
     >
       {children}
     </td>
   ),
 };
+
+/**
+ * GFM table alignment includes `"char"` (align on a delimiter character,
+ * e.g. a decimal point) alongside the usual `left`/`right`/`center` —
+ * that's a Markdown-spec concept with no CSS equivalent, since
+ * `text-align` only accepts `left | right | center | justify`. No table
+ * renderer actually implements character alignment (GitHub doesn't
+ * either — it falls back to left-aligned), so `"char"` is dropped here
+ * rather than passed through as an invalid inline style.
+ */
+function toCellStyle(align: string | null | undefined): CSSProperties | undefined {
+  if (align === "left" || align === "right" || align === "center" || align === "justify") {
+    return { textAlign: align };
+  }
+  return undefined;
+}
 
 export function MarkdownReadme({ content }: MarkdownReadmeProps) {
   return (

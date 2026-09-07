@@ -3,6 +3,7 @@
 // `lib/admin/project-onboarding/api.ts`. Kept out of `./api.ts`, which
 // imports `next/headers` and can only ever run in a Server Component.
 import { API_BASE_URL } from "@/lib/config";
+import type { AdminProjectDetail, AdminProjectUpdatePayload } from "./types";
 
 export class AdminProjectsApiError extends Error {
   status: number;
@@ -37,4 +38,36 @@ export async function deleteAdminProject(id: string): Promise<void> {
   if (!res.ok) {
     throw new AdminProjectsApiError(`Failed to delete project (${res.status})`, res.status);
   }
+}
+
+/**
+ * `PATCH /admin/projects/:id` (admin_workflow.txt section 22 — Admin
+ * Backend API Map, "Projects"). Backs the Project Detail page's inline
+ * edit panel (`EditProjectDetailsPanel`) — the same two fields Project
+ * Onboarding's Step 2 (Description) and Step 3 (Tech Stack) hand the
+ * Admin, now editable after the project is already live, without
+ * touching the GitHub repository itself. See `AdminProjectUpdatePayload`
+ * in `./types` for exactly what this can and can't change.
+ *
+ * Client-side (not `./api.ts`) for the same reason `deleteAdminProject`
+ * is: it's a mutation triggered from a Client Component, carried by the
+ * session cookie via `credentials: "include"`, not a server-rendered
+ * `GET`.
+ */
+export async function updateAdminProject(
+  id: string,
+  payload: AdminProjectUpdatePayload,
+): Promise<AdminProjectDetail> {
+  const res = await fetch(`${API_BASE_URL}/admin/projects/${id}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    throw new AdminProjectsApiError(`Failed to update project (${res.status})`, res.status);
+  }
+
+  return (await res.json()) as AdminProjectDetail;
 }
