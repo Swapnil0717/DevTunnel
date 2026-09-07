@@ -6,12 +6,23 @@ import { getAdminProjectDetail } from "@/lib/admin/projects/api";
 import { AdminProjectStatusBadge } from "@/components/admin/projects/admin-project-status-badge";
 import { AdminStatCard } from "@/components/admin/admin-stat-card";
 import { DeleteProjectButton } from "@/components/admin/projects/delete-project-button";
-import { GitBranchIcon } from "@/components/layout/nav-icons";
+import { EditProjectDetailsPanel } from "@/components/admin/projects/edit-project-details-panel";
+import { EditIcon, GitBranchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
 
 interface ProjectDetailPageProps {
   params: { id: string };
+  /**
+   * `?edit=1` opens the Description/Tech Stack panel straight into edit
+   * mode — this is what the Projects table's "Edit" row action links to
+   * now, since there is no separate `/admin/projects/:id/edit` page in
+   * the spec (section 22's Admin Backend API Map only lists
+   * `PATCH /admin/projects/:id`, not a distinct edit route). Anything
+   * other than `"1"` is treated the same as absent, so a stray/garbled
+   * query value never silently forces edit mode open.
+   */
+  searchParams?: { edit?: string };
 }
 
 /**
@@ -62,12 +73,19 @@ export async function generateMetadata({
  *
  * Actions here replace "Sync GitHub" (section 18's original action list)
  * with "Delete project" in red, per product direction — see
- * `DeleteProjectButton`. Edit and Task management still route back to
- * `/admin/projects` for now, since `/admin/projects/:id/edit` and
- * `/admin/projects/:id/tasks` aren't built yet.
+ * `DeleteProjectButton`. Task management still routes back to
+ * `/admin/projects` for now, since `/admin/projects/:id/tasks` isn't
+ * built yet. Editing is handled inline on this page — see
+ * `EditProjectDetailsPanel` — rather than a separate `/edit` route,
+ * since the only mutation the spec defines is a flat
+ * `PATCH /admin/projects/:id`, not a distinct edit page/flow.
  */
-export default async function AdminProjectDetailPage({ params }: ProjectDetailPageProps) {
+export default async function AdminProjectDetailPage({
+  params,
+  searchParams,
+}: ProjectDetailPageProps) {
   const result = await getAdminProjectDetail(params.id);
+  const startInEditMode = searchParams?.edit === "1";
 
   if (result.status === "not-found") {
     notFound();
@@ -136,6 +154,13 @@ export default async function AdminProjectDetailPage({ params }: ProjectDetailPa
           >
             View on GitHub
           </a>
+          <Link
+            href={`/admin/projects/${project.id}?edit=1`}
+            className="inline-flex items-center gap-1.5 rounded-[8px] border border-border bg-surface px-3.5 py-2 text-[13px] font-medium text-text hover:bg-surface-raised"
+          >
+            <EditIcon className="h-3.5 w-3.5 shrink-0" />
+            Edit details
+          </Link>
           <DeleteProjectButton
             projectId={project.id}
             projectName={project.name}
@@ -163,20 +188,7 @@ export default async function AdminProjectDetailPage({ params }: ProjectDetailPa
         </div>
       </section>
 
-      <section
-        aria-labelledby="project-description-heading"
-        className="mb-8 rounded-[10px] border border-border bg-surface p-5"
-      >
-        <h2
-          id="project-description-heading"
-          className="m-0 mb-2 text-[11px] uppercase tracking-wide text-text-faint"
-        >
-          Description
-        </h2>
-        <p className="m-0 text-[13px] leading-[1.6] text-text">
-          {project.githubDescription ?? "No description set."}
-        </p>
-      </section>
+      <EditProjectDetailsPanel project={project} startInEditMode={startInEditMode} />
 
       <section
         aria-labelledby="project-readme-heading"

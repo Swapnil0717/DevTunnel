@@ -6,9 +6,7 @@ import type { AdminProjectSummary } from "@/lib/admin/projects/types";
 
 /**
  * A secondary row action that doesn't have a real page to link to yet.
- * Same "Soon" convention `AdminSidebar` uses for unbuilt nav routes
- * (admin-nav-items.ts) — never a link to a page that 404s
- * (Frontend_Development_Rules.txt rule 11).
+ * Same "Soon" convention AdminSidebar uses for unbuilt nav routes.
  */
 function PendingAction({ label }: { label: string }) {
   return (
@@ -23,33 +21,27 @@ function PendingAction({ label }: { label: string }) {
 }
 
 /**
- * Projects table (admin_workflow.txt, section 4 — Projects Page ▸
- * Frontend): "Show all projects currently available on DevTunnel."
+ * Projects table.
  *
- * Columns match the spec exactly: Project Name, GitHub Repository,
- * Author, DevTunnel Contributors, GitHub Contributors, Task Count,
- * Status. The two contributor columns are deliberately separate numbers,
- * never summed or merged — section 5: "GitHub Contributors ≠ DevTunnel
- * Contributors... Do not mix the two datasets."
+ * Columns:
+ * Project Name, GitHub Repository, Author,
+ * DevTunnel Contributors, GitHub Contributors,
+ * Task Count, Status, Actions.
  *
- * Actions (section 4): View, Edit, Tasks, Repository, Sync. "Repository"
- * is a real link — it's the project's actual GitHub URL, already known
- * data, not a DevTunnel page. "View" is now a real link too, to the
- * Project Detail page (`/admin/projects/:id`, section 18). Edit/Tasks
- * still depend on pages that don't exist yet (`/admin/projects/:id/edit`,
- * `/admin/projects/:id/tasks`), so they stay disabled `PendingAction`s
- * instead of dead links.
+ * DevTunnel contributors and GitHub contributors are kept
+ * as separate values and are never merged.
  *
- * "Sync" is replaced with "Delete" (product decision, in red) — a
- * project's DevTunnel representation can now be removed directly from
- * the table via `DeleteProjectButton`, rather than only from the Project
- * Detail page.
- *
- * A real `<table>` (rule 4 — semantic HTML over generic divs), wrapped in
- * a horizontally scrolling container so the seven columns stay usable on
- * narrow viewports without collapsing into an unreadable grid.
+ * Actions:
+ * - View: Project Detail page
+ * - Edit: Project Detail page with ?edit=1
+ * - Tasks: Disabled until the Tasks page is implemented
+ * - Delete: Removes the project
  */
-export function AdminProjectsTable({ projects }: { projects: AdminProjectSummary[] }) {
+export function AdminProjectsTable({
+  projects,
+}: {
+  projects: AdminProjectSummary[];
+}) {
   return (
     <div className="overflow-x-auto rounded-[10px] border border-border">
       <table className="w-full min-w-[880px] border-collapse text-left text-[12.5px]">
@@ -75,15 +67,22 @@ export function AdminProjectsTable({ projects }: { projects: AdminProjectSummary
             ))}
           </tr>
         </thead>
+
         <tbody>
           {projects.map((project) => (
             <tr
               key={project.id}
               className="border-b border-border-subtle last:border-b-0 hover:bg-surface/60"
             >
-              <th scope="row" className="px-4 py-3 font-medium text-text">
+              {/* Project */}
+              <th
+                scope="row"
+                className="px-4 py-3 font-medium text-text"
+              >
                 {project.name}
               </th>
+
+              {/* GitHub Repository */}
               <td className="px-4 py-3">
                 <a
                   href={project.repositoryUrl}
@@ -95,30 +94,59 @@ export function AdminProjectsTable({ projects }: { projects: AdminProjectSummary
                   {project.repositoryFullName}
                 </a>
               </td>
+
+              {/* Author */}
               <td className="px-4 py-3 text-text-secondary">
                 @{project.author.username}
               </td>
+
+              {/* DevTunnel Contributors */}
               <td className="px-4 py-3 text-text-secondary">
                 {project.devTunnelContributorCount}
               </td>
+
+              {/* GitHub Contributors */}
               <td className="px-4 py-3 text-text-secondary">
                 {project.githubContributorCount}
               </td>
-              <td className="px-4 py-3 text-text-secondary">{project.taskCount}</td>
+
+              {/* Tasks */}
+              <td className="px-4 py-3 text-text-secondary">
+                {project.taskCount}
+              </td>
+
+              {/* Status */}
               <td className="px-4 py-3">
                 <AdminProjectStatusBadge status={project.status} />
               </td>
+
+              {/* Actions */}
               <td className="px-4 py-3">
                 <div className="flex flex-wrap items-center gap-1">
+                  {/* View */}
                   <Link
                     href={`/admin/projects/${project.id}`}
                     className="rounded-md px-2 py-1 text-[11.5px] font-medium text-text-secondary hover:text-accent"
                   >
                     View
                   </Link>
-                  <PendingAction label="Edit" />
+
+                  {/* Edit */}
+                  <Link
+                    href={`/admin/projects/${project.id}?edit=1`}
+                    className="rounded-md px-2 py-1 font-mono text-[11.5px] font-medium text-text-secondary hover:text-accent"
+                  >
+                    Edit
+                  </Link>
+
+                  {/* Tasks - Not implemented yet */}
                   <PendingAction label="Tasks" />
-                  <DeleteProjectButton projectId={project.id} projectName={project.name} />
+
+                  {/* Delete */}
+                  <DeleteProjectButton
+                    projectId={project.id}
+                    projectName={project.name}
+                  />
                 </div>
               </td>
             </tr>
