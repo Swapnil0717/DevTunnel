@@ -1,404 +1,421 @@
-// devtunnel-backend/src/routes/taskOnboarding.ts
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type {
+  DeveloperRole,
+  ExperienceLevel,
+  GithubIssueSummary,
+  IssueInformationChoice,
+  OnboardingTechStack,
+  TaskOnboardingDraft,
+  TaskOnboardingDraftRow,
+  TaskOnboardingProjectEligibilityRow,
+  TaskOnboardingProjectOption,
+} from "../types";
 
-import { Hono } from "hono";
-import { z } from "zod";
-import { getEnv } from "../config/env";
-import { getProjectGithubRepoRef } from "../db/adminProjects";
-import { getValidGithubAccessToken } from "../db/githubTokens";
-import {
-  TaskOnboardingError,
-  getTaskOnboardingDraftForAdmin,
-  getTaskOnboardingProjectById,
-  listEligibleTaskOnboardingProjects,
-  saveTaskIssueInformation,
-  selectTaskOnboardingIssue,
-  selectTaskOnboardingProject,
-  toTaskOnboardingDraft,
-} from "../db/taskOnboarding";
-import { GitHubRepoError, fetchRepositoryIssue } from "../lib/githubRepo";
-import { logger } from "../lib/logger";
-import { checkRateLimit } from "../lib/rateLimit";
-import { errorResponse } from "../lib/response";
-import { getSupabase } from "../lib/supabase";
-import { requireAdminRole, requirePermission } from "../middleware/adminAuth";
-import { requireAuth } from "../middleware/auth";
-import { Env, TaskOnboardingProjectOption, Variables } from "../types";
+/** Explicit column list — never `select("*")` (Backend_Development_Rules.txt rule 23). */
+const DRAFT_COLUMNS =
+  "id, admin_id, project_id, project_selected, " +
+  "issue_number, github_issue, issue_selected, " +
+  "issue_information_choice, custom_description, issue_information_completed, " +
+  "tech_stack, tech_stack_loaded, " +
+  "curation_role, curation_difficulty, difficulty_defined, " +
+  "completed_task_id, completed_at, created_at, updated_at";
 
 /**
- * Admin — Task Onboarding wizard (admin_workflow.txt section 10 — "Create
- * Task — Task Onboarding"; backend routes per section 22's "Task
- * onboarding" group). **Step 1 — Project Selection**, **Step 2 — Select
- * Existing Issue**, and **Step 3 — Issue Information** are implemented
- * here; Steps 4–7 (tech-stack attachment, difficulty/role curation,
- * preview, final validation, completion) are separate, not-yet-built
- * routes that will extend this same draft (sql/009/sql/010's header
- * comments) — this file does not stub them out, per
- * Backend_Development_Rules.txt rule 5 ("never invent implementation
- * beyond what's actually being built").
- *
- * Every route here requires admin authentication + role (mounted the
- * same way as every other admin module — see src/routes/admin/index.ts)
- * plus the `admin:tasks:read`/`admin:tasks:write` RBAC permission
- * src/lib/rbac.ts reserves for task routes.
- *
- * Response bodies intentionally return the `TaskOnboardingProjectOption[]`
- * / `TaskOnboardingDraft` object directly — NOT wrapped in the `{ data:
- * ... }` envelope used elsewhere in this backend (src/lib/response.ts) —
- * to match the already-implemented frontend contract in
- * devtunnel-frontend/src/lib/admin/task-onboarding/api.ts, which parses
- * each response body directly as that type (the same documented exception
- * already used for src/routes/projectOnboarding.ts). Error responses
- * still use the standard `{ error: { code, message, requestId } }`
- * envelope — the frontend only inspects `res.ok`/`res.status` on failure,
- * never the error body shape, so this doesn't create two incompatible
- * conventions for the same caller.
+ * Explicit column list for the eligible-project lookups below — selected
+ * directly from `devtunnel.projects`, never `select("*")` (rule 23). Kept
+ * intentionally small: this is a list-friendly projection
+ * (`TaskOnboardingProjectOption`), not the full admin project row.
  */
-export const adminTaskOnboarding = new Hono<{ Bindings: Env; Variables: Variables }>();
+const PROJECT_ELIGIBILITY_COLUMNS = "id, slug, name, github_full_name, primary_language";
 
-function mapTaskOnboardingError(c: Parameters<typeof errorResponse>[0], err: TaskOnboardingError) {
-  switch (err.code) {
-    case "not_found":
-      return errorResponse(c, 404, "task_onboarding_draft_not_found", err.message);
-    case "already_completed":
-      return errorResponse(c, 409, "task_onboarding_already_completed", err.message);
-    case "project_ineligible":
-      return errorResponse(c, 422, "project_not_eligible", err.message);
-    case "issue_not_found":
-      return errorResponse(c, 404, "issue_not_found", err.message);
-    case "step_incomplete":
-      return errorResponse(c, 409, "task_onboarding_step_incomplete", err.message);
-    default:
-      return errorResponse(c, 409, "task_onboarding_conflict", err.message);
+/**
+ * Errors this module raises for task-onboarding-specific business rules,
+ * kept distinct from a generic thrown `Error` so route handlers
+ * (src/routes/taskOnboarding.ts) can map each one to the correct HTTP
+ * status without string-matching a message (rule 20: centralized,
+ * predictable error handling) — same pattern as `ProjectOnboardingError`
+ * (src/db/projectOnboarding.ts).
+ */
+export class TaskOnboardingError extends Error {
+  code: "not_found" | "already_completed" | "project_ineligible" | "conflict" | "issue_not_found" | "step_incomplete";
+  constructor(code: TaskOnboardingError["code"], message: string) {
+    super(message);
+    this.name = "TaskOnboardingError";
+    this.code = code;
   }
 }
 
-/**
- * Maps a `GitHubRepoError` (src/lib/githubRepo.ts) to the standard error
- * envelope — same mapping already used by
- * src/routes/admin/projects.ts / src/routes/projectOnboarding.ts for the
- * same error type (rule 20: centralized, predictable error handling for
- * the same failure modes wherever they surface).
- */
-function mapGithubError(c: Parameters<typeof errorResponse>[0], err: GitHubRepoError) {
-  switch (err.reason) {
-    case "not_found":
-      return errorResponse(c, 404, "issue_not_found", err.message);
-    case "rate_limited":
-      return errorResponse(c, 429, "github_rate_limited", err.message);
-    case "invalid_url":
-      return errorResponse(c, 400, "invalid_request", err.message);
-    default:
-      return errorResponse(c, 502, "github_unavailable", err.message);
-  }
+function toProjectOption(row: TaskOnboardingProjectEligibilityRow): TaskOnboardingProjectOption {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    repositoryFullName: row.github_full_name ?? "",
+    primaryLanguage: row.primary_language,
+  };
 }
 
-/* ---------------------------------------------------------------------- *
- * Step 1 — GET /admin/tasks/onboarding/projects
- * ---------------------------------------------------------------------- */
-
-adminTaskOnboarding.get(
-  "/projects",
-  requireAuth,
-  requireAdminRole,
-  requirePermission("admin:tasks:read"),
-  async (c) => {
-    const env = getEnv(c.env);
-
-    const withinLimit = await checkRateLimit(c, {
-      bucket: "admin-task-onboarding-projects-list",
-      limit: 60,
-      windowSeconds: 60,
-    });
-    if (!withinLimit) return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
-
-    try {
-      const supabase = getSupabase(env);
-      const projects = await listEligibleTaskOnboardingProjects(supabase);
-      return c.json(projects, 200);
-    } catch (err) {
-      logger.error("admin_task_onboarding_projects_list_failed", {
-        error: err instanceof Error ? err.message : String(err),
-        requestId: c.get("requestId"),
-      });
-      return errorResponse(c, 500, "internal_error", "Couldn't load projects right now");
-    }
-  },
-);
-
-/* ---------------------------------------------------------------------- *
- * Step 1 — POST /admin/tasks/onboarding
- * ---------------------------------------------------------------------- */
-
-const selectProjectSchema = z.object({
-  projectId: z.string().uuid("Invalid project id"),
-  draftId: z.string().uuid("Invalid onboarding draft id").optional(),
-});
-
-adminTaskOnboarding.post(
-  "/",
-  requireAuth,
-  requireAdminRole,
-  requirePermission("admin:tasks:write"),
-  async (c) => {
-    const env = getEnv(c.env);
-    const admin = c.get("user");
-    if (!admin) {
-      // requireAuth + requireAdminRole already guarantee this — kept for
-      // type safety, same pattern as src/routes/projectOnboarding.ts.
-      return errorResponse(c, 401, "unauthenticated", "Sign-in required");
-    }
-
-    const withinLimit = await checkRateLimit(c, {
-      bucket: "admin-task-onboarding-select-project",
-      limit: 20,
-      windowSeconds: 300,
-    });
-    if (!withinLimit) return errorResponse(c, 429, "rate_limited", "Too many requests.");
-
-    const bodyResult = selectProjectSchema.safeParse(await c.req.json().catch(() => null));
-    if (!bodyResult.success) {
-      return errorResponse(
-        c,
-        400,
-        "invalid_request",
-        bodyResult.error.issues[0]?.message ?? "Invalid request body",
-      );
-    }
-
-    try {
-      const supabase = getSupabase(env);
-      const isNewDraft = !bodyResult.data.draftId;
-
-      const { draft, project } = await selectTaskOnboardingProject(
-        supabase,
-        admin.id,
-        bodyResult.data.draftId,
-        bodyResult.data.projectId,
-      );
-
-      return c.json(toTaskOnboardingDraft(draft, project), isNewDraft ? 201 : 200);
-    } catch (err) {
-      if (err instanceof TaskOnboardingError) return mapTaskOnboardingError(c, err);
-      logger.error("admin_task_onboarding_select_project_failed", {
-        error: err instanceof Error ? err.message : String(err),
-        requestId: c.get("requestId"),
-      });
-      return errorResponse(c, 500, "internal_error", "Couldn't select the project right now");
-    }
-  },
-);
-
-const draftIdSchema = z.string().uuid("Invalid onboarding draft id");
+/**
+ * Maps a raw `devtunnel.task_onboarding_drafts` row (+ the project it
+ * points at) to the frontend-facing `TaskOnboardingDraft` shape
+ * (devtunnel-frontend/src/lib/admin/task-onboarding/types.ts).
+ * `admin_id` is deliberately never included (rule 9: separate
+ * public/private data).
+ *
+ * `issue` is populated once `issue_selected` is true (Step 2);
+ * `issueInformation` once `issue_information_completed` is true (Step 3);
+ * `techStack` once `tech_stack_loaded` is true (Step 4); `curation` once
+ * `difficulty_defined` is true (Step 5) — each stays `null` until its own
+ * step has genuinely completed, never inferred from a later step alone
+ * (rule 24 equivalent: backend is the sole authority on completion state).
+ */
+export function toTaskOnboardingDraft(
+  row: TaskOnboardingDraftRow,
+  project: TaskOnboardingProjectOption,
+): TaskOnboardingDraft {
+  return {
+    id: row.id,
+    project,
+    issue: row.issue_selected ? row.github_issue : null,
+    issueInformation: row.issue_information_completed
+      ? {
+          choice: row.issue_information_choice as IssueInformationChoice,
+          customDescription: row.custom_description,
+        }
+      : null,
+    curation: row.difficulty_defined
+      ? {
+          role: row.curation_role as DeveloperRole,
+          difficulty: row.curation_difficulty as ExperienceLevel,
+        }
+      : null,
+    techStack: row.tech_stack_loaded ? row.tech_stack : null,
+    steps: {
+      projectSelected: row.project_selected,
+      issueSelected: row.issue_selected,
+      issueInformationCompleted: row.issue_information_completed,
+      techStackLoaded: row.tech_stack_loaded,
+      difficultyDefined: row.difficulty_defined,
+      previewCompleted: false,
+      validationCompleted: false,
+    },
+  };
+}
 
 /**
- * Loads a draft's currently-attached project for response purposes,
- * throwing the same `TaskOnboardingError` shape as every other
- * business-rule failure in this module rather than a bare 404/500 —
- * indicates the project a draft still points at has since disappeared
- * (e.g. deleted between Step 1 and now), which is a conflict on this
- * *draft*, not an "issue not found" or generic internal error (rule 20:
- * centralized, predictable error handling).
+ * Step 1 (Backend) — eligible means an active, non-deleted DevTunnel
+ * project: `status = 'ACTIVE'` (sql/006) and `deleted_at is null`
+ * (sql/008). Queried directly against `devtunnel.projects` rather than
+ * the `admin_project_list` view, applying both eligibility predicates
+ * explicitly (rule 5: never invent/assume schema that hasn't actually
+ * been verified).
+ *
+ * Backs `GET /admin/tasks/onboarding/projects`.
  */
-async function loadDraftProject(
-  supabase: ReturnType<typeof getSupabase>,
+export async function listEligibleTaskOnboardingProjects(
+  supabase: SupabaseClient,
+): Promise<TaskOnboardingProjectOption[]> {
+  const { data, error } = await supabase
+    .from("projects")
+    .select(PROJECT_ELIGIBILITY_COLUMNS)
+    .eq("status", "ACTIVE")
+    .is("deleted_at", null)
+    .order("name", { ascending: true });
+
+  if (error) throw new Error(`Failed to load eligible task-onboarding projects: ${error.message}`);
+
+  return ((data ?? []) as TaskOnboardingProjectEligibilityRow[]).map(toProjectOption);
+}
+
+/**
+ * Single-project eligibility check, re-run server-side on every project
+ * selection — never trusts that a `projectId` came from the (already
+ * filtered) `GET .../projects` list a moment earlier (rule 15). Returns
+ * `null` when the project doesn't exist or isn't eligible.
+ */
+async function getEligibleTaskOnboardingProject(
+  supabase: SupabaseClient,
   projectId: string,
-): Promise<TaskOnboardingProjectOption> {
-  const project = await getTaskOnboardingProjectById(supabase, projectId);
-  if (!project) {
+): Promise<TaskOnboardingProjectOption | null> {
+  const { data, error } = await supabase
+    .from("projects")
+    .select(PROJECT_ELIGIBILITY_COLUMNS)
+    .eq("id", projectId)
+    .eq("status", "ACTIVE")
+    .is("deleted_at", null)
+    .maybeSingle<TaskOnboardingProjectEligibilityRow>();
+
+  if (error) throw new Error(`Failed to load project for task onboarding: ${error.message}`);
+  return data ? toProjectOption(data) : null;
+}
+
+/**
+ * Loads a *project* (not eligibility-filtered — a draft's project may have
+ * been onboarded well before this step, and the admin never re-selects it
+ * here) purely for response-building (`toTaskOnboardingDraft` needs a
+ * `TaskOnboardingProjectOption`). Used by every Step 2–5 route after
+ * writing to a draft, so the response always reflects the project the
+ * draft is actually attached to. Returns `null` if the project has since
+ * been deleted — the caller treats that as a conflict on the draft, not a
+ * silent stale response (rule 73: never trust a prior read as still
+ * valid).
+ */
+export async function getTaskOnboardingProjectById(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<TaskOnboardingProjectOption | null> {
+  const { data, error } = await supabase
+    .from("projects")
+    .select(PROJECT_ELIGIBILITY_COLUMNS)
+    .eq("id", projectId)
+    .is("deleted_at", null)
+    .maybeSingle<TaskOnboardingProjectEligibilityRow>();
+
+  if (error) throw new Error(`Failed to load task onboarding draft's project: ${error.message}`);
+  return data ? toProjectOption(data) : null;
+}
+
+/**
+ * Loads a draft, scoped to the requesting admin (`admin_id = adminId`).
+ * Returns `null` for both "doesn't exist" and "belongs to a different
+ * admin" (rule 13: prevent IDOR).
+ */
+export async function getTaskOnboardingDraftForAdmin(
+  supabase: SupabaseClient,
+  draftId: string,
+  adminId: string,
+): Promise<TaskOnboardingDraftRow | null> {
+  const { data, error } = await supabase
+    .from("task_onboarding_drafts")
+    .select(DRAFT_COLUMNS)
+    .eq("id", draftId)
+    .eq("admin_id", adminId)
+    .maybeSingle<TaskOnboardingDraftRow>();
+
+  if (error) throw new Error(`Failed to load task onboarding draft: ${error.message}`);
+  return data;
+}
+
+async function requireEditableDraft(
+  supabase: SupabaseClient,
+  draftId: string,
+  adminId: string,
+): Promise<TaskOnboardingDraftRow> {
+  const draft = await getTaskOnboardingDraftForAdmin(supabase, draftId, adminId);
+  if (!draft) {
+    throw new TaskOnboardingError("not_found", "Task onboarding draft not found");
+  }
+  if (draft.completed_task_id) {
     throw new TaskOnboardingError(
-      "conflict",
-      "The project attached to this task onboarding draft no longer exists",
+      "already_completed",
+      "This task onboarding draft has already been completed and can no longer be edited",
     );
   }
-  return project;
+  return draft;
 }
 
-/* ---------------------------------------------------------------------- *
- * Step 2 — PATCH /admin/tasks/onboarding/:id/issue
- * ---------------------------------------------------------------------- */
+/**
+ * Step 1 write. Creates a new draft when `draftId` is omitted, or re-runs
+ * project selection against an existing (not-yet-completed) draft owned
+ * by this admin.
+ *
+ * Selecting a *different* project than the one already attached resets
+ * every later step (issue, issue information, tech stack, curation) back
+ * to incomplete — those steps were built against the previous project's
+ * repository/tech stack, so they can no longer be trusted once the
+ * project changes (rule 26: don't let stale downstream state silently
+ * survive an upstream change).
+ */
+export async function selectTaskOnboardingProject(
+  supabase: SupabaseClient,
+  adminId: string,
+  draftId: string | undefined,
+  projectId: string,
+): Promise<{ draft: TaskOnboardingDraftRow; project: TaskOnboardingProjectOption }> {
+  let existing: TaskOnboardingDraftRow | null = null;
+  if (draftId) {
+    existing = await requireEditableDraft(supabase, draftId, adminId);
+  }
 
-const selectIssueSchema = z.object({
-  issueNumber: z.number().int().positive("Invalid issue number"),
-});
+  const project = await getEligibleTaskOnboardingProject(supabase, projectId);
+  if (!project) {
+    throw new TaskOnboardingError(
+      "project_ineligible",
+      "This project isn't available for task onboarding — it may have been deleted or is no longer active",
+    );
+  }
 
-adminTaskOnboarding.patch(
-  "/:id/issue",
-  requireAuth,
-  requireAdminRole,
-  requirePermission("admin:tasks:write"),
-  async (c) => {
-    const env = getEnv(c.env);
-    const admin = c.get("user");
-    if (!admin) {
-      // requireAuth + requireAdminRole already guarantee this — kept for
-      // type safety, same pattern as this file's other routes.
-      return errorResponse(c, 401, "unauthenticated", "Sign-in required");
-    }
+  const projectChanged = existing !== null && existing.project_id !== project.id;
 
-    const draftIdResult = draftIdSchema.safeParse(c.req.param("id"));
-    if (!draftIdResult.success) {
-      return errorResponse(c, 400, "invalid_request", draftIdResult.error.issues[0]!.message);
-    }
+  const values: Record<string, unknown> = {
+    admin_id: adminId,
+    project_id: project.id,
+    project_selected: true,
+  };
 
-    const withinLimit = await checkRateLimit(c, {
-      bucket: "admin-task-onboarding-select-issue",
-      limit: 20,
-      windowSeconds: 300,
-    });
-    if (!withinLimit) return errorResponse(c, 429, "rate_limited", "Too many requests.");
+  if (projectChanged) {
+    values.issue_number = null;
+    values.github_issue = null;
+    values.issue_selected = false;
+    values.issue_information_choice = null;
+    values.custom_description = null;
+    values.issue_information_completed = false;
+    values.tech_stack = null;
+    values.tech_stack_loaded = false;
+    values.curation_role = null;
+    values.curation_difficulty = null;
+    values.difficulty_defined = false;
+  }
 
-    const bodyResult = selectIssueSchema.safeParse(await c.req.json().catch(() => null));
-    if (!bodyResult.success) {
-      return errorResponse(
-        c,
-        400,
-        "invalid_request",
-        bodyResult.error.issues[0]?.message ?? "Invalid request body",
-      );
-    }
+  const query = draftId
+    ? supabase.from("task_onboarding_drafts").update(values).eq("id", draftId).eq("admin_id", adminId)
+    : supabase.from("task_onboarding_drafts").insert(values);
 
-    try {
-      const supabase = getSupabase(env);
+  const { data, error } = await query.select(DRAFT_COLUMNS).single<TaskOnboardingDraftRow>();
+  if (error) throw new Error(`Failed to save task onboarding project selection: ${error.message}`);
 
-      // Load the draft first purely to find which project's repository to
-      // query — `selectTaskOnboardingIssue` below re-validates ownership
-      // and editability itself before writing anything (rule 15: never
-      // trust an earlier read as authorization for the write that follows).
-      const draft = await getTaskOnboardingDraftForAdmin(supabase, draftIdResult.data, admin.id);
-      if (!draft) {
-        return mapTaskOnboardingError(
-          c,
-          new TaskOnboardingError("not_found", "Task onboarding draft not found"),
-        );
-      }
-      if (draft.completed_task_id) {
-        return mapTaskOnboardingError(
-          c,
-          new TaskOnboardingError(
-            "already_completed",
-            "This task onboarding draft has already been completed and can no longer be edited",
-          ),
-        );
-      }
+  return { draft: data, project };
+}
 
-      const repoRef = await getProjectGithubRepoRef(supabase, draft.project_id);
-      if (!repoRef) {
-        return mapTaskOnboardingError(
-          c,
-          new TaskOnboardingError(
-            "project_ineligible",
-            "This draft's project is no longer available — it may have been deleted",
-          ),
-        );
-      }
+/**
+ * Step 2 write. Requires an already-editable draft owned by this admin
+ * (`requireEditableDraft`). `issue` must already be the backend's own
+ * re-fetched snapshot from GitHub (src/lib/githubRepo.ts
+ * `fetchRepositoryIssue`) — this function never fetches from GitHub
+ * itself, keeping the "external API call" and "persist the result"
+ * concerns separated the same way `selectTaskOnboardingProject` above
+ * separates eligibility-checking from writing.
+ *
+ * Selecting a *different* issue than the one already attached resets
+ * Step 3 (issue information) back to incomplete — that step's custom
+ * description was written against the previous issue's content.
+ */
+export async function selectTaskOnboardingIssue(
+  supabase: SupabaseClient,
+  adminId: string,
+  draftId: string,
+  issue: GithubIssueSummary,
+): Promise<TaskOnboardingDraftRow> {
+  const existing = await requireEditableDraft(supabase, draftId, adminId);
+  const issueChanged = existing.issue_number !== issue.number;
 
-      // Re-fetch the issue directly from GitHub rather than trusting
-      // anything the admin's client sent beyond the issue number itself
-      // (rule 15) — this is the "backend has independently re-verified"
-      // step sql/010's header comment describes.
-      const accessToken = await getValidGithubAccessToken(supabase, env, admin.id);
-      const issue = await fetchRepositoryIssue(
-        accessToken,
-        repoRef.owner,
-        repoRef.repo,
-        bodyResult.data.issueNumber,
-      );
-      if (!issue) {
-        return mapTaskOnboardingError(
-          c,
-          new TaskOnboardingError(
-            "issue_not_found",
-            "This issue doesn't exist on GitHub, or isn't a selectable issue",
-          ),
-        );
-      }
+  const values: Record<string, unknown> = {
+    issue_number: issue.number,
+    github_issue: issue,
+    issue_selected: true,
+  };
 
-      const updatedDraft = await selectTaskOnboardingIssue(supabase, admin.id, draftIdResult.data, issue);
-      const project = await loadDraftProject(supabase, updatedDraft.project_id);
+  if (issueChanged) {
+    values.issue_information_choice = null;
+    values.custom_description = null;
+    values.issue_information_completed = false;
+  }
 
-      return c.json(toTaskOnboardingDraft(updatedDraft, project), 200);
-    } catch (err) {
-      if (err instanceof TaskOnboardingError) return mapTaskOnboardingError(c, err);
-      if (err instanceof GitHubRepoError) return mapGithubError(c, err);
-      logger.error("admin_task_onboarding_select_issue_failed", {
-        error: err instanceof Error ? err.message : String(err),
-        requestId: c.get("requestId"),
-      });
-      return errorResponse(c, 500, "internal_error", "Couldn't select this issue right now");
-    }
-  },
-);
+  const { data, error } = await supabase
+    .from("task_onboarding_drafts")
+    .update(values)
+    .eq("id", draftId)
+    .eq("admin_id", adminId)
+    .select(DRAFT_COLUMNS)
+    .single<TaskOnboardingDraftRow>();
 
-/* ---------------------------------------------------------------------- *
- * Step 3 — PATCH /admin/tasks/onboarding/:id/issue-information
- * ---------------------------------------------------------------------- */
+  if (error) throw new Error(`Failed to save task onboarding issue selection: ${error.message}`);
+  return data;
+}
 
-const issueInformationSchema = z
-  .object({
-    choice: z.enum(["EXISTING", "CUSTOM"]),
-    customDescription: z.string().trim().max(20_000).optional(),
-  })
-  .refine((val) => val.choice !== "CUSTOM" || !!val.customDescription?.trim(), {
-    message: "Custom information is required when choosing custom information",
-    path: ["customDescription"],
-  });
+/**
+ * Step 3 write. Requires Step 2 to have already completed
+ * (`issue_selected`) — enforced here in addition to sql/010's database
+ * constraint (`task_onboarding_drafts_issue_info_requires_issue`) so the
+ * route gets a clean, mapped `TaskOnboardingError` instead of a raw
+ * Postgres constraint-violation message (rule 20).
+ */
+export async function saveTaskIssueInformation(
+  supabase: SupabaseClient,
+  adminId: string,
+  draftId: string,
+  choice: IssueInformationChoice,
+  customDescription: string | null,
+): Promise<TaskOnboardingDraftRow> {
+  const existing = await requireEditableDraft(supabase, draftId, adminId);
+  if (!existing.issue_selected) {
+    throw new TaskOnboardingError(
+      "step_incomplete",
+      "Select an issue before saving issue information",
+    );
+  }
 
-adminTaskOnboarding.patch(
-  "/:id/issue-information",
-  requireAuth,
-  requireAdminRole,
-  requirePermission("admin:tasks:write"),
-  async (c) => {
-    const env = getEnv(c.env);
-    const admin = c.get("user");
-    if (!admin) {
-      // requireAuth + requireAdminRole already guarantee this — kept for
-      // type safety, same pattern as this file's other routes.
-      return errorResponse(c, 401, "unauthenticated", "Sign-in required");
-    }
+  const values = {
+    issue_information_choice: choice,
+    custom_description: choice === "CUSTOM" ? customDescription : null,
+    issue_information_completed: true,
+  };
 
-    const draftIdResult = draftIdSchema.safeParse(c.req.param("id"));
-    if (!draftIdResult.success) {
-      return errorResponse(c, 400, "invalid_request", draftIdResult.error.issues[0]!.message);
-    }
+  const { data, error } = await supabase
+    .from("task_onboarding_drafts")
+    .update(values)
+    .eq("id", draftId)
+    .eq("admin_id", adminId)
+    .select(DRAFT_COLUMNS)
+    .single<TaskOnboardingDraftRow>();
 
-    const withinLimit = await checkRateLimit(c, {
-      bucket: "admin-task-onboarding-issue-information",
-      limit: 30,
-      windowSeconds: 300,
-    });
-    if (!withinLimit) return errorResponse(c, 429, "rate_limited", "Too many requests.");
+  if (error) throw new Error(`Failed to save task onboarding issue information: ${error.message}`);
+  return data;
+}
 
-    const bodyResult = issueInformationSchema.safeParse(await c.req.json().catch(() => null));
-    if (!bodyResult.success) {
-      return errorResponse(
-        c,
-        400,
-        "invalid_request",
-        bodyResult.error.issues[0]?.message ?? "Invalid request body",
-      );
-    }
+/**
+ * Step 4 write. `techStack` must already be the project's own
+ * backend-read tech stack (src/db/adminProjects.ts `getProjectTechStack`)
+ * — this function never reads the project itself, same
+ * fetch/persist separation as `selectTaskOnboardingIssue` above. Requires
+ * Step 1 to have already completed (a draft always has a project the
+ * moment it exists, so this is really just the standard editable-draft
+ * check).
+ */
+export async function attachTaskOnboardingTechStack(
+  supabase: SupabaseClient,
+  adminId: string,
+  draftId: string,
+  techStack: OnboardingTechStack,
+): Promise<TaskOnboardingDraftRow> {
+  await requireEditableDraft(supabase, draftId, adminId);
 
-    try {
-      const supabase = getSupabase(env);
+  const { data, error } = await supabase
+    .from("task_onboarding_drafts")
+    .update({ tech_stack: techStack, tech_stack_loaded: true })
+    .eq("id", draftId)
+    .eq("admin_id", adminId)
+    .select(DRAFT_COLUMNS)
+    .single<TaskOnboardingDraftRow>();
 
-      const updatedDraft = await saveTaskIssueInformation(
-        supabase,
-        admin.id,
-        draftIdResult.data,
-        bodyResult.data.choice,
-        bodyResult.data.choice === "CUSTOM" ? bodyResult.data.customDescription ?? null : null,
-      );
-      const project = await loadDraftProject(supabase, updatedDraft.project_id);
+  if (error) throw new Error(`Failed to save task onboarding tech stack: ${error.message}`);
+  return data;
+}
 
-      return c.json(toTaskOnboardingDraft(updatedDraft, project), 200);
-    } catch (err) {
-      if (err instanceof TaskOnboardingError) return mapTaskOnboardingError(c, err);
-      logger.error("admin_task_onboarding_issue_information_failed", {
-        error: err instanceof Error ? err.message : String(err),
-        requestId: c.get("requestId"),
-      });
-      return errorResponse(c, 500, "internal_error", "Couldn't save issue information right now");
-    }
-  },
-);
+/**
+ * Step 5 write. `role`/`difficulty` reuse the exact
+ * `DeveloperRole`/`ExperienceLevel` enums `devtunnel.users` already
+ * defines (sql/002) — validated by the route's Zod schema
+ * (src/routes/taskOnboarding.ts `curationSchema`) before ever reaching
+ * here.
+ */
+export async function saveTaskCuration(
+  supabase: SupabaseClient,
+  adminId: string,
+  draftId: string,
+  role: DeveloperRole,
+  difficulty: ExperienceLevel,
+): Promise<TaskOnboardingDraftRow> {
+  await requireEditableDraft(supabase, draftId, adminId);
+
+  const { data, error } = await supabase
+    .from("task_onboarding_drafts")
+    .update({ curation_role: role, curation_difficulty: difficulty, difficulty_defined: true })
+    .eq("id", draftId)
+    .eq("admin_id", adminId)
+    .select(DRAFT_COLUMNS)
+    .single<TaskOnboardingDraftRow>();
+
+  if (error) throw new Error(`Failed to save task onboarding difficulty: ${error.message}`);
+  return data;
+}

@@ -442,6 +442,13 @@ export interface AdminProjectListRow {
  * `devtunnel.projects` (sql/006 — `github_description`, `readme`,
  * `open_issues`), captured once at onboarding time (Project Onboarding
  * Step 1) — never re-fetched from GitHub on every detail-page view.
+ *
+ * `description`/`techStack` mirror the same onboarding-time choices
+ * captured for Project Onboarding Steps 2–3 (`description_source` /
+ * `custom_description` / `tech_stack`, sql/006), surfaced here so
+ * `PATCH /admin/projects/:id` (via `updateAdminProject`) has something to
+ * diff/recompute against and the detail page's edit panel can pre-fill
+ * both fields.
  */
 export interface AdminProjectDetail extends AdminProjectSummary {
   /** GitHub's own repository description, or `null` if GitHub has none set. */
@@ -450,6 +457,10 @@ export interface AdminProjectDetail extends AdminProjectSummary {
   readme: string | null;
   /** Open issue count on GitHub for this repository (not a DevTunnel task count). */
   openIssuesCount: number;
+  /** The admin's description choice for this project, or `null` if never set. */
+  description: OnboardingDescription | null;
+  /** The project's curated tech stack, or `null` if none has been recorded. */
+  techStack: OnboardingTechStack | null;
 }
 
 /**
@@ -462,6 +473,21 @@ export interface AdminProjectDetailExtraRow {
   github_description: string | null;
   readme: string | null;
   open_issues: number;
+  description_source: DescriptionChoice | null;
+  custom_description: string | null;
+  tech_stack: unknown;
+}
+
+/**
+ * Validated payload for `PATCH /admin/projects/:id` — the two fields
+ * Project Onboarding's Step 2 (Description) and Step 3 (Tech Stack)
+ * already hand the Admin control over. See
+ * src/db/adminProjects.ts `updateAdminProject` for why every other
+ * GitHub-sourced field has no writable path here.
+ */
+export interface AdminProjectUpdatePayload {
+  description?: OnboardingDescription;
+  techStack?: OnboardingTechStack;
 }
 
 /**
@@ -476,6 +502,22 @@ export interface DeleteAdminProjectResult {
   name: string;
   deletedAt: string;
 }
+
+/* -------------------------------------------------------------------------
+ * Admin — Task Onboarding (admin_workflow.txt section 10 — "Create Task —
+ * Task Onboarding"; section 25 — "Task Onboarding State"; sql/009,
+ * sql/010, sql/011).
+ *
+ * Every interface below is written to match, field-for-field, the already
+ * shipped frontend contract in
+ * devtunnel-frontend/src/lib/admin/task-onboarding/types.ts — same
+ * convention as the Project Onboarding types above. Steps 1–5 (Project
+ * Selection, Select Existing Issue, Issue Information, Fetch Project Tech
+ * Stack, Difficulty) are backed by real data; `issue`/`issueInformation`/
+ * `techStack`/`curation` are typed to match that frontend contract exactly
+ * but each stays `null` until its own step has genuinely completed (rule
+ * 5: never invent data a not-yet-built step hasn't actually produced).
+ * ---------------------------------------------------------------------- */
 
 /**
  * The minimal GitHub coordinates needed to call the GitHub REST API for a
@@ -496,23 +538,6 @@ export interface AdminProjectGithubRepoRef {
   repo: string;
 }
 
-/* -------------------------------------------------------------------------
- * Admin — Task Onboarding, Step 1 only (admin_workflow.txt section 10 —
- * "Create Task — Task Onboarding, Step 1 — Project Selection"; section 25
- * — "Task Onboarding State"; sql/009).
- *
- * Every interface below is written to match, field-for-field, the already
- * shipped frontend contract in
- * devtunnel-frontend/src/lib/admin/task-onboarding/types.ts — same
- * convention as the Project Onboarding types above. Only the pieces Step 1
- * actually produces are backed by real data here
- * (`TaskOnboardingProjectOption`, `TaskOnboardingDraft.project`,
- * `steps.projectSelected`); `issue`, `issueInformation`, `curation`, and
- * `techStack` are typed to match that frontend contract exactly but are
- * always `null` until Steps 2–5 are implemented (rule 5: never invent data
- * a not-yet-built step hasn't actually produced).
- * ---------------------------------------------------------------------- */
-
 /**
  * Step 1 — "Project Selection" list option. Deliberately a small,
  * list-friendly shape — not the full `AdminProjectSummary` table row —
@@ -528,8 +553,9 @@ export interface TaskOnboardingProjectOption {
 
 /**
  * Raw row shape for the columns `listEligibleTaskOnboardingProjects` /
- * `getEligibleTaskOnboardingProject` select directly from
- * `devtunnel.projects` (never `select("*")` — rule 23).
+ * `getEligibleTaskOnboardingProject` / `getTaskOnboardingProjectById`
+ * select directly from `devtunnel.projects` (never `select("*")` — rule
+ * 23).
  */
 export interface TaskOnboardingProjectEligibilityRow {
   id: string;
@@ -580,7 +606,14 @@ export interface TaskIssueInformation {
   customDescription: string | null;
 }
 
-/** Step 5 result shape — reserved, not yet populated (see `GithubIssueSummary` above). */
+/**
+ * Step 5 result shape — the Admin's role + difficulty curation for this
+ * task (admin_workflow.txt section 10 ▸ Step 5 — "Difficulty"). Reuses
+ * `DeveloperRole` / `ExperienceLevel` verbatim (see
+ * src/routes/taskOnboarding.ts `curationSchema`) rather than a second
+ * vocabulary — "Use the exact difficulty values already defined by the
+ * current source/schema if they exist."
+ */
 export interface TaskCuration {
   role: DeveloperRole | null;
   difficulty: ExperienceLevel | null;
@@ -588,13 +621,14 @@ export interface TaskCuration {
 
 /**
  * Backend-authoritative completion flags (section 25 — "Task Onboarding
- * State"). Field names follow the spec's own list verbatim. Only
- * `projectSelected`, `issueSelected`, and `issueInformationCompleted` are
- * ever `true` today — every later flag stays `false` until its
- * corresponding step (tech stack, difficulty, preview, validation) is
- * implemented; the frontend wizard already reads these to decide what
- * it's allowed to do next, so a flag must never be set early (rule 24
- * equivalent: backend is the sole authority on completion state).
+ * State"). Field names follow the spec's own list verbatim.
+ * `projectSelected`, `issueSelected`, `issueInformationCompleted`,
+ * `techStackLoaded`, and `difficultyDefined` are backed by real data
+ * today; `previewCompleted` and `validationCompleted` stay `false` until
+ * Steps 6–7 are implemented — the frontend wizard already reads these to
+ * decide what it's allowed to do next, so a flag must never be set early
+ * (rule 24 equivalent: backend is the sole authority on completion
+ * state).
  */
 export interface TaskOnboardingStepState {
   projectSelected: boolean;
@@ -619,9 +653,8 @@ export interface TaskOnboardingDraft {
 
 /**
  * Full row shape as stored in `devtunnel.task_onboarding_drafts`
- * (sql/009, extended by sql/010 for Steps 2–3). Every later-step column
- * beyond Steps 1–3 (tech-stack attachment, difficulty/curation, preview,
- * validation) is intentionally NOT modeled here yet
+ * (sql/009, extended by sql/010 for Steps 2–3 and sql/011 for Steps 4–5).
+ * Steps 6–7 (preview, validation) are intentionally NOT modeled here yet
  * (Backend_Development_Rules.txt rule 5: don't invent schema beyond what
  * this step actually needs). Whichever step is implemented next extends
  * this row type alongside its own migration.
@@ -642,6 +675,15 @@ export interface TaskOnboardingDraftRow {
   issue_information_choice: IssueInformationChoice | null;
   custom_description: string | null;
   issue_information_completed: boolean;
+
+  // Step 4 — Fetch Project Tech Stack (sql/011)
+  tech_stack: OnboardingTechStack | null;
+  tech_stack_loaded: boolean;
+
+  // Step 5 — Difficulty (sql/011)
+  curation_role: DeveloperRole | null;
+  curation_difficulty: ExperienceLevel | null;
+  difficulty_defined: boolean;
 
   completed_task_id: string | null;
   completed_at: string | null;

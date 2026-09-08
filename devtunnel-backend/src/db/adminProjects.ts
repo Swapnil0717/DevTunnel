@@ -43,6 +43,11 @@ const DETAIL_EXTRA_COLUMNS =
  *     older row saved before a field existed) is filled with `[]` rather
  *     than left `undefined`, so the shape returned to the frontend always
  *     matches `OnboardingTechStack` exactly.
+ *
+ * Reused by `getAdminProjectDetailById` (project detail page) and
+ * `getProjectTechStack` (Task Onboarding Step 4 — "Fetch Project Tech
+ * Stack") so both callers apply the exact same normalization rather than
+ * each re-implementing it slightly differently.
  */
 function toOnboardingTechStackOrNull(raw: unknown): OnboardingTechStack | null {
   if (!raw || typeof raw !== "object") return null;
@@ -290,6 +295,45 @@ export async function getProjectGithubRepoRef(
   if (!owner || !repo) return null;
 
   return { owner, repo };
+}
+
+/** Row shape for `getProjectTechStack` below — never `select("*")` (rule 23). */
+interface ProjectTechStackRow {
+  tech_stack: unknown;
+  deleted_at: string | null;
+}
+
+/**
+ * Reads a project's own already-recorded tech stack
+ * (`devtunnel.projects.tech_stack`, populated at Project Onboarding Step 3
+ * — sql/006) for Task Onboarding Step 4 ("Fetch Project Tech Stack") to
+ * attach onto a draft. Reuses `toOnboardingTechStackOrNull` so an
+ * unset/empty `{}` column value (a project onboarded before Step 3 ever
+ * ran, or one with every tech-stack field cleared) is reported as `null`
+ * rather than a shape-breaking empty object (same reasoning as
+ * `getAdminProjectDetailById` above).
+ *
+ * Returns `null` for a project that doesn't exist, has been soft-deleted,
+ * or genuinely has no tech stack recorded — all three are "nothing to
+ * attach" from the caller's point of view (src/routes/taskOnboarding.ts
+ * maps `null` to `project_ineligible` only when combined with a
+ * deleted/missing project; an empty tech stack alone is a legitimate,
+ * attachable "no tech stack detected yet" state handled by the route).
+ */
+export async function getProjectTechStack(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<OnboardingTechStack | null> {
+  const { data, error } = await supabase
+    .from("projects")
+    .select("tech_stack, deleted_at")
+    .eq("id", projectId)
+    .maybeSingle<ProjectTechStackRow>();
+
+  if (error) throw new Error(`Failed to load project tech stack: ${error.message}`);
+  if (!data || data.deleted_at) return null;
+
+  return toOnboardingTechStackOrNull(data.tech_stack);
 }
 
 /**

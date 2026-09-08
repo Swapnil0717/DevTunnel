@@ -43,11 +43,15 @@ import type { UserRole } from "../types";
  *   POST  /admin/tasks/onboarding          -> admin:tasks:write
  *   PATCH /admin/tasks/onboarding/:id/issue             -> admin:tasks:write
  *   PATCH /admin/tasks/onboarding/:id/issue-information -> admin:tasks:write
+ *   PATCH /admin/tasks/onboarding/:id/tech-stack        -> admin:tasks:write
+ *   PATCH /admin/tasks/onboarding/:id/difficulty        -> admin:tasks:write
  *   GET   /admin/projects/:id/github/issues -> admin:projects:github:read
+ *   GET   /admin/projects/:id/tech-stack    -> admin:projects:read
  *
  * `admin:tasks:read` / `admin:tasks:write` back admin_workflow.txt section
  * 10's Task Onboarding wizard (today: Step 1 — "Project Selection", Step 2
- * — "Select Existing Issue", and Step 3 — "Issue Information",
+ * — "Select Existing Issue", Step 3 — "Issue Information", Step 4 —
+ * "Fetch Project Tech Stack", and Step 5 — "Difficulty",
  * src/routes/taskOnboarding.ts) and are named to match the existing
  * `admin:projects:read` / `admin:projects:write` pair so the later
  * `/admin/tasks` (all tasks) and remaining Task Onboarding step routes
@@ -59,15 +63,18 @@ import type { UserRole } from "../types";
  * GitHub API on every call (unlike every other `admin:projects:read`
  * route, which only reads DevTunnel's own database) and is the same
  * "different blast radius gets its own permission" reasoning already
- * applied to `admin:projects:delete` above.
+ * applied to `admin:projects:delete` above. `GET
+ * /admin/projects/:id/tech-stack`, by contrast, only ever reads
+ * `devtunnel.projects` — no GitHub call — so it uses plain
+ * `admin:projects:read` rather than the GitHub-scoped permission.
  *
  * `GET /admin/auth/me`, `GET /admin/activity`, `GET /admin/projects/:id/
- * github/issues`, and the Task Onboarding Steps 1–3 routes are
- * implemented as of this module (Admin Backend: authentication +
- * authorization + RBAC). The rest of the permission list above exists now
- * so future admin route modules (project/task/author/publish/GitHub-sync
- * endpoints) plug into the same RBAC engine instead of each inventing its
- * own role check.
+ * github/issues`, `GET /admin/projects/:id/tech-stack`, and the Task
+ * Onboarding Steps 1–5 routes are implemented as of this module (Admin
+ * Backend: authentication + authorization + RBAC). The rest of the
+ * permission list above exists now so future admin route modules
+ * (project/task/author/publish/GitHub-sync endpoints) plug into the same
+ * RBAC engine instead of each inventing its own role check.
  */
 export const ADMIN_PERMISSIONS = [
   "admin:projects:read",
