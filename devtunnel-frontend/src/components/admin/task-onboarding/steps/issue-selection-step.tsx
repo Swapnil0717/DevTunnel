@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { SectionMessage } from "@/components/home/section-message";
 import { IssueIcon } from "@/components/layout/nav-icons";
+import { GithubLoginButton } from "@/components/auth/github-login-button";
 import {
   fetchProjectIssues,
   selectIssue,
@@ -14,6 +15,15 @@ interface IssueSelectionStepProps {
   draft: TaskOnboardingDraft;
   onSelected: (draft: TaskOnboardingDraft) => void;
 }
+
+/**
+ * Distinguishes "your GitHub connection expired, reconnect" (backend
+ * status 401 — `github_reauth_required`) from every other load failure
+ * (network hiccup, GitHub genuinely slow/down). The two need different
+ * recovery actions: reconnecting fixes the first, retrying fixes the
+ * second — a single boolean can't tell the admin which one to do.
+ */
+type LoadFailure = "unauthorized" | "unknown";
 
 /**
  * Step 2 of Task Onboarding — "Select Existing Issue" (admin_workflow.txt,
@@ -28,18 +38,37 @@ interface IssueSelectionStepProps {
  */
 export function IssueSelectionStep({ draft, onSelected }: IssueSelectionStepProps) {
   const [issues, setIssues] = useState<GithubIssueSummary[] | null>(null);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<LoadFailure | null>(null);
   const [selectingNumber, setSelectingNumber] = useState<number | null>(null);
   const [selectError, setSelectError] = useState<string | null>(null);
+  // Bumping this re-runs the fetch below without needing draft.project to
+  // change — lets "Try again" recover from a transient failure (e.g. a
+  // slow GitHub response) instead of leaving the admin stuck on the
+  // "aren't available right now" message with no way forward but going
+  // back to Step 1 and re-selecting the project.
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     if (!draft.project) return;
+    let cancelled = false;
     setIssues(null);
-    setLoadError(false);
+    setLoadError(null);
     fetchProjectIssues(draft.project.id)
-      .then(setIssues)
-      .catch(() => setLoadError(true));
-  }, [draft.project]);
+      .then((result) => {
+        if (!cancelled) setIssues(result);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setLoadError(
+          error instanceof TaskOnboardingApiError && error.status === 401
+            ? "unauthorized"
+            : "unknown",
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [draft.project, retryCount]);
 
   async function handleSelect(issue: GithubIssueSummary) {
     setSelectingNumber(issue.number);
@@ -81,8 +110,29 @@ export function IssueSelectionStep({ draft, onSelected }: IssueSelectionStepProp
         </p>
       ) : null}
 
-      {loadError ? (
-        <SectionMessage>Issues aren&apos;t available right now — check back soon.</SectionMessage>
+      {loadError === "unauthorized" ? (
+        <div className="mb-1">
+          <SectionMessage>
+            Your GitHub connection has expired — reconnect GitHub to load issues for this
+            repository.
+          </SectionMessage>
+          <div className="mt-2 max-w-[220px]">
+            <GithubLoginButton
+              next={typeof window !== "undefined" ? window.location.pathname : undefined}
+            />
+          </div>
+        </div>
+      ) : loadError === "unknown" ? (
+        <div className="mb-1">
+          <SectionMessage>Issues aren&apos;t available right now — check back soon.</SectionMessage>
+          <button
+            type="button"
+            onClick={() => setRetryCount((count) => count + 1)}
+            className="mt-2 text-[12px] font-medium text-accent hover:underline"
+          >
+            Try again
+          </button>
+        </div>
       ) : !issues ? (
         <p className="m-0 text-[12.5px] text-text-dim">Loading issues…</p>
       ) : issues.length === 0 ? (

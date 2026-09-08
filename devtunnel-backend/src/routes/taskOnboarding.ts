@@ -94,6 +94,8 @@ function mapGithubError(c: Parameters<typeof errorResponse>[0], err: GitHubRepoE
       return errorResponse(c, 429, "github_rate_limited", err.message);
     case "invalid_url":
       return errorResponse(c, 400, "invalid_request", err.message);
+    case "unauthorized":
+      return errorResponse(c, 401, "github_reauth_required", err.message);
     default:
       return errorResponse(c, 502, "github_unavailable", err.message);
   }

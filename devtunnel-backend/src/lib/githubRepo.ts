@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { GithubIssueSummary, OnboardingGithubIdentity } from "../types";
+import { logger } from "./logger";
 
 /**
  * GitHub REST client for Admin Project Onboarding, Step 1 ("Import GitHub
@@ -20,7 +21,14 @@ import type { GithubIssueSummary, OnboardingGithubIdentity } from "../types";
  */
 
 const GITHUB_API_BASE = "https://api.github.com";
-const REQUEST_TIMEOUT_MS = 8000;
+// GitHub's own API is routinely slow to answer (observed 8-9s round trips
+// on `issues` under normal load, not just under rate limiting), so a hard
+// 8s cutoff was tripping on healthy-but-slow responses and surfacing as a
+// hard failure with nothing to retry it. 15s gives real slow responses
+// room to land; MAX_RETRIES below covers the requests that are genuinely
+// timing out or hit a transient network blip.
+const REQUEST_TIMEOUT_MS = 15000;
+const MAX_RETRIES = 1;
 const USER_AGENT = "devtunnel-backend";
 
 export class GitHubRepoError extends Error {
@@ -29,6 +37,7 @@ export class GitHubRepoError extends Error {
     | "invalid_url"
     | "not_found"
     | "rate_limited"
+    | "unauthorized"
     | "github_unavailable";
   constructor(reason: GitHubRepoError["reason"], message: string) {
     super(message);
@@ -37,13 +46,28 @@ export class GitHubRepoError extends Error {
   }
 }
 
-/** rule 53: never let an external request hang indefinitely. */
-async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+/**
+ * rule 53: never let an external request hang indefinitely.
+ *
+ * Retries once (network failure or our own abort/timeout only — never a
+ * completed non-2xx HTTP response, which `assertOk` handles separately)
+ * before giving up. This is what actually fixes the "GET .../issues 502
+ * Bad Gateway" flakiness: a single slow-but-otherwise-healthy GitHub
+ * response was being treated as a hard outage with no second chance.
+ */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  attempt = 0,
+): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     return await fetch(url, { ...init, signal: controller.signal });
   } catch (err) {
+    if (attempt < MAX_RETRIES) {
+      return fetchWithTimeout(url, init, attempt + 1);
+    }
     throw new GitHubRepoError(
       "github_unavailable",
       `GitHub request failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -63,18 +87,54 @@ function authHeaders(accessToken: string | null): Record<string, string> {
   return headers;
 }
 
-/** Throws a mapped, safe-to-surface `GitHubRepoError` for a non-2xx GitHub response. */
-function assertOk(res: Response, context: string): void {
+/**
+ * Throws a mapped, safe-to-surface `GitHubRepoError` for a non-2xx GitHub
+ * response.
+ *
+ * Every failure branch here also logs the *real* GitHub status and (a
+ * truncated, token-free) response body server-side via `logger.error` —
+ * previously every non-404/403/429 failure collapsed into a generic
+ * "github_unavailable" 502 with no way to tell, from the wrangler log
+ * alone, whether GitHub was actually down or the stored access token was
+ * simply bad (401 "Bad credentials" is the single most common cause of a
+ * fast, consistent 502 here — an expired/revoked token that
+ * `getValidGithubAccessToken` didn't catch because it still looked
+ * unexpired by our own stored timestamp).
+ */
+async function assertOk(res: Response, context: string): Promise<void> {
   if (res.ok) return;
+
+  // Read once, defensively — GitHub error bodies are small JSON, but this
+  // must never throw if the body is empty/non-JSON.
+  const bodyText = await res.text().catch(() => "");
+  const bodySnippet = bodyText.slice(0, 300);
+
   if (res.status === 404) {
+    logger.warn("github_api_not_found", { context, status: res.status, body: bodySnippet });
     throw new GitHubRepoError(
       "not_found",
       "Repository not found, or not accessible with the connected GitHub account",
     );
   }
+  if (res.status === 401) {
+    // A stored token that looks unexpired by our own timestamp but that
+    // GitHub itself rejects — expired early, revoked by the user on
+    // GitHub's side, or invalidated by an OAuth app secret rotation.
+    logger.error("github_api_unauthorized", { context, status: res.status, body: bodySnippet });
+    throw new GitHubRepoError(
+      "unauthorized",
+      "Your GitHub connection is no longer valid — reconnect GitHub and try again",
+    );
+  }
   if (res.status === 403 || res.status === 429) {
+    logger.warn("github_api_rate_limited", { context, status: res.status, body: bodySnippet });
     throw new GitHubRepoError("rate_limited", "GitHub rate limit reached — try again shortly");
   }
+  logger.error("github_api_unexpected_status", {
+    context,
+    status: res.status,
+    body: bodySnippet,
+  });
   throw new GitHubRepoError("github_unavailable", `GitHub ${context} returned ${res.status}`);
 }
 
@@ -185,7 +245,7 @@ export async function fetchRepositoryMetadata(
   const res = await fetchWithTimeout(`${GITHUB_API_BASE}/repos/${owner}/${repo}`, {
     headers: authHeaders(accessToken),
   });
-  assertOk(res, "repository lookup");
+  await assertOk(res, "repository lookup");
 
   const parsed = repoSchema.safeParse(await res.json());
   if (!parsed.success) {
@@ -227,7 +287,7 @@ export async function fetchRepositoryContributors(
   if (res.status === 204) return [];
   if (!res.ok) {
     if (res.status === 404) return [];
-    assertOk(res, "contributors lookup");
+    await assertOk(res, "contributors lookup");
   }
 
   const parsed = contributorsSchema.safeParse(await res.json());
@@ -373,7 +433,7 @@ export async function fetchRepositoryIssues(
     `${GITHUB_API_BASE}/repos/${owner}/${repo}/issues?state=open&per_page=${limit}&sort=updated&direction=desc`,
     { headers: authHeaders(accessToken) },
   );
-  assertOk(res, "issues lookup");
+  await assertOk(res, "issues lookup");
 
   const parsed = z.array(githubIssueSchema).safeParse(await res.json());
   if (!parsed.success) {
@@ -402,7 +462,7 @@ export async function fetchRepositoryIssue(
     headers: authHeaders(accessToken),
   });
   if (res.status === 404) return null;
-  assertOk(res, "issue lookup");
+  await assertOk(res, "issue lookup");
 
   const parsed = githubIssueSchema.safeParse(await res.json());
   if (!parsed.success) {
