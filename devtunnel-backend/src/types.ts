@@ -506,17 +506,15 @@ export interface DeleteAdminProjectResult {
 /* -------------------------------------------------------------------------
  * Admin — Task Onboarding (admin_workflow.txt section 10 — "Create Task —
  * Task Onboarding"; section 25 — "Task Onboarding State"; sql/009,
- * sql/010, sql/011).
+ * sql/010, sql/011, sql/012).
  *
  * Every interface below is written to match, field-for-field, the already
  * shipped frontend contract in
  * devtunnel-frontend/src/lib/admin/task-onboarding/types.ts — same
- * convention as the Project Onboarding types above. Steps 1–5 (Project
+ * convention as the Project Onboarding types above. All 7 steps (Project
  * Selection, Select Existing Issue, Issue Information, Fetch Project Tech
- * Stack, Difficulty) are backed by real data; `issue`/`issueInformation`/
- * `techStack`/`curation` are typed to match that frontend contract exactly
- * but each stays `null` until its own step has genuinely completed (rule
- * 5: never invent data a not-yet-built step hasn't actually produced).
+ * Stack, Difficulty, Issue Preview, Final Validation) plus completion are
+ * backed by real data.
  * ---------------------------------------------------------------------- */
 
 /**
@@ -621,14 +619,11 @@ export interface TaskCuration {
 
 /**
  * Backend-authoritative completion flags (section 25 — "Task Onboarding
- * State"). Field names follow the spec's own list verbatim.
- * `projectSelected`, `issueSelected`, `issueInformationCompleted`,
- * `techStackLoaded`, and `difficultyDefined` are backed by real data
- * today; `previewCompleted` and `validationCompleted` stay `false` until
- * Steps 6–7 are implemented — the frontend wizard already reads these to
- * decide what it's allowed to do next, so a flag must never be set early
- * (rule 24 equivalent: backend is the sole authority on completion
- * state).
+ * State"). Field names follow the spec's own list verbatim. All seven
+ * flags are backed by real data — the frontend wizard reads these on
+ * every draft response to decide what it's allowed to do next, never a
+ * locally-computed guess (rule 24 equivalent: backend is the sole
+ * authority on completion state).
  */
 export interface TaskOnboardingStepState {
   projectSelected: boolean;
@@ -653,11 +648,8 @@ export interface TaskOnboardingDraft {
 
 /**
  * Full row shape as stored in `devtunnel.task_onboarding_drafts`
- * (sql/009, extended by sql/010 for Steps 2–3 and sql/011 for Steps 4–5).
- * Steps 6–7 (preview, validation) are intentionally NOT modeled here yet
- * (Backend_Development_Rules.txt rule 5: don't invent schema beyond what
- * this step actually needs). Whichever step is implemented next extends
- * this row type alongside its own migration.
+ * (sql/009, extended by sql/010 for Steps 2–3, sql/011 for Steps 4–5, and
+ * sql/012 for Steps 6–7).
  */
 export interface TaskOnboardingDraftRow {
   id: string;
@@ -685,9 +677,34 @@ export interface TaskOnboardingDraftRow {
   curation_difficulty: ExperienceLevel | null;
   difficulty_defined: boolean;
 
+  // Step 6 — Issue Preview (sql/012)
+  preview_completed: boolean;
+
+  // Step 7 — Final Validation (sql/012)
+  validation_completed: boolean;
+
   completed_task_id: string | null;
   completed_at: string | null;
 
   created_at: string;
   updated_at: string;
+}
+
+/** A single unmet-requirement message from `POST .../:id/validate`. */
+export interface TaskOnboardingValidationIssue {
+  step: keyof TaskOnboardingStepState;
+  message: string;
+}
+
+export interface TaskOnboardingValidationResult {
+  valid: boolean;
+  issues: TaskOnboardingValidationIssue[];
+}
+
+/** Result of `POST /admin/tasks/onboarding/:id/complete`. */
+export interface CreatedTask {
+  id: string;
+  slug: string;
+  title: string;
+  projectSlug: string;
 }
