@@ -122,7 +122,7 @@ export const ADMIN_NAV_ITEMS: AdminNavEntry[] = [
         href: "/admin/tasks/new",
         label: "Create Task",
         Icon: PlusIcon,
-        built: false,
+        built: true,
       },
       {
         type: "link",

@@ -47,7 +47,7 @@ import { AdminMobileNav } from "@/components/admin/admin-mobile-nav";
  * `(protected)/layout.tsx` — the auth/role check still runs unconditionally
  * above, only the shell around `{children}` is skipped.
  */
-const FULL_BLEED_PATHS = ["/admin/projects/new"];
+ const FULL_BLEED_PATHS = ["/admin/projects/new", "/admin/tasks/new"];
 
 export default async function AdminProtectedLayout({
   children,
