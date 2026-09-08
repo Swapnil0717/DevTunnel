@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { OnboardingGithubIdentity } from "../types";
+import type { GithubIssueSummary, OnboardingGithubIdentity } from "../types";
 
 /**
  * GitHub REST client for Admin Project Onboarding, Step 1 ("Import GitHub
@@ -297,6 +297,120 @@ export async function fetchRepositoryFile(
   } catch {
     return null;
   }
+}
+
+/**
+ * GitHub's `GET /repos/{owner}/{repo}/issues` (and the single-issue
+ * variant) return *both* issues and pull requests — a PR is just an issue
+ * with a `pull_request` key attached. Task Onboarding Step 2 ("Select
+ * Existing Issue") only ever wants genuine issues, so this schema keeps
+ * `pull_request` optional purely so it can be checked and filtered on,
+ * never so it flows through to `GithubIssueSummary`.
+ */
+const githubIssueSchema = z.object({
+  number: z.number().int().positive(),
+  title: z.string().min(1),
+  state: z.enum(["open", "closed"]),
+  html_url: z.string().url(),
+  body: z.string().nullable().optional(),
+  comments: z.number().int().nonnegative(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  user: githubIdentitySchema.nullable(),
+  labels: z.array(
+    z.union([z.string(), z.object({ name: z.string().optional() })]),
+  ),
+  pull_request: z.unknown().optional(),
+});
+
+function toIssueLabels(raw: z.infer<typeof githubIssueSchema>["labels"]): string[] {
+  return raw
+    .map((label) => (typeof label === "string" ? label : label.name ?? null))
+    .filter((label): label is string => Boolean(label));
+}
+
+/**
+ * Maps a raw GitHub issue to the frontend-facing `GithubIssueSummary`
+ * shape (src/types.ts). Falls back to a placeholder identity for the rare
+ * case GitHub reports a `null` author (e.g. a deleted GitHub account) —
+ * `GithubIssueSummary.author` is non-optional, so this never fabricates a
+ * *username* GitHub didn't actually report, only fills the shape rule 73
+ * requires.
+ */
+function toIssueSummary(raw: z.infer<typeof githubIssueSchema>): GithubIssueSummary {
+  return {
+    number: raw.number,
+    title: raw.title,
+    state: raw.state === "open" ? "OPEN" : "CLOSED",
+    url: raw.html_url,
+    labels: toIssueLabels(raw.labels),
+    author: raw.user
+      ? toIdentity(raw.user)
+      : { username: "ghost", name: null, avatarUrl: null, profileUrl: raw.html_url },
+    body: raw.body ?? null,
+    commentCount: raw.comments,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+  };
+}
+
+/**
+ * "Fetch Issues" (Task Onboarding Step 2 algorithm — admin_workflow.txt
+ * section 10). Fetches open issues only ("Remove irrelevant/unsupported
+ * issues" — a closed issue isn't selectable work) and filters out pull
+ * requests, which GitHub's issues endpoint otherwise mixes in. Capped the
+ * same way `fetchRepositoryContributors` is (rule 67: bound response
+ * size) — Admin picks from a first page of the repository's most
+ * recently updated open issues rather than the entire backlog.
+ */
+export async function fetchRepositoryIssues(
+  accessToken: string | null,
+  owner: string,
+  repo: string,
+  limit = 50,
+): Promise<GithubIssueSummary[]> {
+  const res = await fetchWithTimeout(
+    `${GITHUB_API_BASE}/repos/${owner}/${repo}/issues?state=open&per_page=${limit}&sort=updated&direction=desc`,
+    { headers: authHeaders(accessToken) },
+  );
+  assertOk(res, "issues lookup");
+
+  const parsed = z.array(githubIssueSchema).safeParse(await res.json());
+  if (!parsed.success) {
+    throw new GitHubRepoError("github_unavailable", "Unexpected GitHub issues response shape");
+  }
+
+  return parsed.data.filter((issue) => !issue.pull_request).map(toIssueSummary);
+}
+
+/**
+ * "Re-fetch [the] issue" a Task Onboarding admin selected, so the backend
+ * never trusts an issue's title/body/labels purely because they were
+ * offered in an earlier `fetchRepositoryIssues` list response
+ * (Backend_Development_Rules.txt rule 15). Returns `null` when the issue
+ * doesn't exist, or turns out to actually be a pull request — both cases
+ * the caller (src/db/taskOnboarding.ts) treats as "not selectable",
+ * exactly like an outright 404.
+ */
+export async function fetchRepositoryIssue(
+  accessToken: string | null,
+  owner: string,
+  repo: string,
+  issueNumber: number,
+): Promise<GithubIssueSummary | null> {
+  const res = await fetchWithTimeout(`${GITHUB_API_BASE}/repos/${owner}/${repo}/issues/${issueNumber}`, {
+    headers: authHeaders(accessToken),
+  });
+  if (res.status === 404) return null;
+  assertOk(res, "issue lookup");
+
+  const parsed = githubIssueSchema.safeParse(await res.json());
+  if (!parsed.success) {
+    throw new GitHubRepoError("github_unavailable", "Unexpected GitHub issue response shape");
+  }
+  if (parsed.data.pull_request) return null;
+
+  return toIssueSummary(parsed.data);
 }
 
 const languagesSchema = z.record(z.string(), z.number());

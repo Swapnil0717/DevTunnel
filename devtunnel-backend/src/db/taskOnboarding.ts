@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
+  GithubIssueSummary,
+  IssueInformationChoice,
   TaskOnboardingDraft,
   TaskOnboardingDraftRow,
   TaskOnboardingProjectEligibilityRow,
@@ -8,7 +10,10 @@ import type {
 
 /** Explicit column list — never `select("*")` (Backend_Development_Rules.txt rule 23). */
 const DRAFT_COLUMNS =
-  "id, admin_id, project_id, project_selected, completed_task_id, completed_at, created_at, updated_at";
+  "id, admin_id, project_id, project_selected, " +
+  "issue_number, github_issue, issue_selected, " +
+  "issue_information_choice, custom_description, issue_information_completed, " +
+  "completed_task_id, completed_at, created_at, updated_at";
 
 /**
  * Explicit column list for the eligible-project lookups below — selected
@@ -27,7 +32,13 @@ const PROJECT_ELIGIBILITY_COLUMNS = "id, slug, name, github_full_name, primary_l
  * (src/db/projectOnboarding.ts).
  */
 export class TaskOnboardingError extends Error {
-  code: "not_found" | "already_completed" | "project_ineligible" | "conflict";
+  code:
+    | "not_found"
+    | "already_completed"
+    | "project_ineligible"
+    | "issue_not_found"
+    | "step_incomplete"
+    | "conflict";
   constructor(code: TaskOnboardingError["code"], message: string) {
     super(message);
     this.name = "TaskOnboardingError";
@@ -53,11 +64,16 @@ function toProjectOption(row: TaskOnboardingProjectEligibilityRow): TaskOnboardi
  * here, "public" means "visible to the owning admin", still narrower than
  * the full row).
  *
- * `issue`, `issueInformation`, `curation`, and `techStack` are always
- * `null` and their corresponding `steps` flags always `false` — Steps 2–7
- * of this wizard are not yet implemented, and this function must never
- * fabricate progress the draft hasn't actually made (rule 24 equivalent:
- * backend is the sole authority on completion state).
+ * `issue` and `issueInformation` reflect Steps 2–3, now that both are
+ * implemented — read straight off the row's own jsonb snapshot
+ * (`github_issue`) and choice columns rather than re-fetched from GitHub
+ * on every draft read (see sql/010's header comment on `github_issue`).
+ * `curation` and `techStack` remain always `null`, and `techStackLoaded`
+ * /`difficultyDefined`/`previewCompleted`/`validationCompleted` always
+ * `false` — Steps 4–7 of this wizard are not yet implemented, and this
+ * function must never fabricate progress the draft hasn't actually made
+ * (rule 24 equivalent: backend is the sole authority on completion
+ * state).
  */
 export function toTaskOnboardingDraft(
   row: TaskOnboardingDraftRow,
@@ -66,14 +82,16 @@ export function toTaskOnboardingDraft(
   return {
     id: row.id,
     project,
-    issue: null,
-    issueInformation: null,
+    issue: row.github_issue,
+    issueInformation: row.issue_information_choice
+      ? { choice: row.issue_information_choice, customDescription: row.custom_description }
+      : null,
     curation: null,
     techStack: null,
     steps: {
       projectSelected: row.project_selected,
-      issueSelected: false,
-      issueInformationCompleted: false,
+      issueSelected: row.issue_selected,
+      issueInformationCompleted: row.issue_information_completed,
       techStackLoaded: false,
       difficultyDefined: false,
       previewCompleted: false,
@@ -135,6 +153,32 @@ async function getEligibleTaskOnboardingProject(
     .maybeSingle<TaskOnboardingProjectEligibilityRow>();
 
   if (error) throw new Error(`Failed to load project for task onboarding: ${error.message}`);
+  return data ? toProjectOption(data) : null;
+}
+
+/**
+ * Plain by-id project lookup for *display* purposes only — used by the
+ * Step 2/3 routes (src/routes/taskOnboarding.ts) to re-render
+ * `TaskOnboardingDraft.project` after an update that doesn't itself
+ * re-select the project. Deliberately does NOT apply the
+ * `getEligibleTaskOnboardingProject` eligibility filter (`status =
+ * 'ACTIVE'`, `deleted_at is null`) — a project already recorded on a
+ * draft via Step 1 should keep rendering here even if it becomes
+ * ineligible afterward; eligibility is only ever re-checked at the point
+ * a *selection* is written (`selectTaskOnboardingProject`), never on a
+ * later read of an already-selected draft.
+ */
+export async function getTaskOnboardingProjectById(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<TaskOnboardingProjectOption | null> {
+  const { data, error } = await supabase
+    .from("projects")
+    .select(PROJECT_ELIGIBILITY_COLUMNS)
+    .eq("id", projectId)
+    .maybeSingle<TaskOnboardingProjectEligibilityRow>();
+
+  if (error) throw new Error(`Failed to load task onboarding project: ${error.message}`);
   return data ? toProjectOption(data) : null;
 }
 
@@ -220,4 +264,107 @@ export async function selectTaskOnboardingProject(
   if (error) throw new Error(`Failed to save task onboarding project selection: ${error.message}`);
 
   return { draft: data, project };
+}
+
+/**
+ * Step 2 write — "Select Existing Issue" (admin_workflow.txt section 10;
+ * sql/010). `issue` must already be a snapshot the *caller* independently
+ * re-fetched from GitHub for this exact draft's project
+ * (src/routes/taskOnboarding.ts `PATCH /:id/issue`, via
+ * src/lib/githubRepo.ts `fetchRepositoryIssue`) — this function never
+ * calls GitHub itself (rule 70: business/persistence logic here, external
+ * I/O at the route layer, same separation `selectTaskOnboardingProject`
+ * above and `completeOnboarding` (src/db/projectOnboarding.ts) already
+ * use) and never trusts a title/body/labels the admin could have typed —
+ * only what was actually re-verified against GitHub moments earlier
+ * (rule 15).
+ *
+ * Selecting a *different* issue than the one already on the draft resets
+ * Step 3's issue-information choice (`issue_information_choice`,
+ * `custom_description`, `issue_information_completed`) back to
+ * not-yet-completed — Step 3's information was scoped to the previous
+ * issue's content and must not silently carry over onto a new one (sql/010's
+ * `task_onboarding_drafts_issue_info_requires_issue` constraint already
+ * requires this ordering; this is the application-level enforcement of
+ * the same rule, rule 25).
+ */
+export async function selectTaskOnboardingIssue(
+  supabase: SupabaseClient,
+  adminId: string,
+  draftId: string,
+  issue: GithubIssueSummary,
+): Promise<TaskOnboardingDraftRow> {
+  await requireEditableDraft(supabase, draftId, adminId);
+
+  const values = {
+    issue_number: issue.number,
+    github_issue: issue,
+    issue_selected: true,
+    issue_information_choice: null,
+    custom_description: null,
+    issue_information_completed: false,
+  };
+
+  const { data, error } = await supabase
+    .from("task_onboarding_drafts")
+    .update(values)
+    .eq("id", draftId)
+    .eq("admin_id", adminId)
+    .select(DRAFT_COLUMNS)
+    .single<TaskOnboardingDraftRow>();
+
+  if (error) throw new Error(`Failed to save task onboarding issue selection: ${error.message}`);
+  return data;
+}
+
+/**
+ * Step 3 write — "Issue Information" (admin_workflow.txt section 10;
+ * sql/010). Requires an issue to already be selected (`issue_selected`)
+ * — Step 3 comes strictly after Step 2 in the mandatory flow — enforced
+ * here as `step_incomplete` (mapped to a 409 by
+ * src/routes/taskOnboarding.ts) in addition to sql/010's
+ * `task_onboarding_drafts_issue_info_requires_issue` database backstop
+ * (rule 25: use database constraints, don't rely on application code
+ * alone).
+ *
+ * `customDescription` is only ever persisted when `choice === "CUSTOM"` —
+ * for `"EXISTING"` it is always written as `null`, even if the caller
+ * (already validated by the route's Zod schema) supplied one, so the
+ * stored row can never disagree with its own `choice` about whether
+ * custom text exists (sql/010's `..._issue_information_consistent`
+ * constraint would reject that combination anyway; this keeps the
+ * intent — not just the constraint — consistent).
+ */
+export async function saveTaskIssueInformation(
+  supabase: SupabaseClient,
+  adminId: string,
+  draftId: string,
+  choice: IssueInformationChoice,
+  customDescription: string | null,
+): Promise<TaskOnboardingDraftRow> {
+  const draft = await requireEditableDraft(supabase, draftId, adminId);
+
+  if (!draft.issue_selected) {
+    throw new TaskOnboardingError(
+      "step_incomplete",
+      "Select an issue before providing issue information",
+    );
+  }
+
+  const values = {
+    issue_information_choice: choice,
+    custom_description: choice === "CUSTOM" ? customDescription : null,
+    issue_information_completed: true,
+  };
+
+  const { data, error } = await supabase
+    .from("task_onboarding_drafts")
+    .update(values)
+    .eq("id", draftId)
+    .eq("admin_id", adminId)
+    .select(DRAFT_COLUMNS)
+    .single<TaskOnboardingDraftRow>();
+
+  if (error) throw new Error(`Failed to save task onboarding issue information: ${error.message}`);
+  return data;
 }

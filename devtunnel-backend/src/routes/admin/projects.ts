@@ -13,10 +13,13 @@ import {
   AdminProjectUpdateError,
   deleteAdminProject,
   getAdminProjectDetailById,
+  getProjectGithubRepoRef,
   listAdminProjects,
   updateAdminProject,
 } from "../../db/adminProjects";
 import { recordAdminAudit } from "../../db/adminAudit";
+import { getValidGithubAccessToken } from "../../db/githubTokens";
+import { GitHubRepoError, fetchRepositoryIssues } from "../../lib/githubRepo";
 
 /**
  * Admin — Projects (admin_workflow.txt section 4 — "Projects Page"; RBAC
@@ -40,6 +43,25 @@ const listQuerySchema = z.object({
 });
 
 const idSchema = z.string().uuid("Invalid project id");
+
+/**
+ * Maps a `GitHubRepoError` (src/lib/githubRepo.ts) to the standard error
+ * envelope — same mapping `src/routes/projectOnboarding.ts` already uses
+ * for the same error type (rule 20: centralized, predictable error
+ * handling for the same failure modes wherever they surface).
+ */
+function mapGithubError(c: Parameters<typeof errorResponse>[0], err: GitHubRepoError) {
+  switch (err.reason) {
+    case "not_found":
+      return errorResponse(c, 404, "repository_not_found", err.message);
+    case "rate_limited":
+      return errorResponse(c, 429, "github_rate_limited", err.message);
+    case "invalid_url":
+      return errorResponse(c, 400, "invalid_repository_url", err.message);
+    default:
+      return errorResponse(c, 502, "github_unavailable", err.message);
+  }
+}
 
 /**
  * Body validation for `PATCH /admin/projects/:id` (section 22 — Admin
@@ -231,6 +253,82 @@ adminProjects.get(
         requestId: c.get("requestId"),
       });
       return errorResponse(c, 500, "internal_error", "Couldn't load this project right now");
+    }
+  },
+);
+
+/**
+ * `GET /admin/projects/:id/github/issues` (admin_workflow.txt section 10
+ * ▸ Step 2 — "Select Existing Issue"; RBAC permission
+ * `admin:projects:github:read`, src/lib/rbac.ts).
+ *
+ * "After selecting a project: Fetch GitHub Issues ... The Admin should
+ * not need to manually type an issue number if it already exists on
+ * GitHub." Backs Task Onboarding Step 2's issue picker — resolves the
+ * project's GitHub coordinates from what Project Onboarding already
+ * captured (`getProjectGithubRepoRef`, never a client-supplied
+ * owner/repo — rule 15), then fetches that repository's open issues
+ * directly from GitHub. This is a live read (not cached/snapshotted) —
+ * unlike a *selected* issue (sql/010's `github_issue` snapshot), the
+ * picker itself should always reflect GitHub's current open-issue list.
+ *
+ * Kept on `/admin/projects` (not `/admin/tasks/onboarding`) because the
+ * issues belong to the *project's* repository, not to any one
+ * in-progress task draft — the same project's issues are fetched fresh
+ * every time Step 2 runs, regardless of which draft is asking.
+ *
+ * Response body is the raw `GithubIssueSummary[]` array — NOT wrapped in
+ * the `{ data: ... }` envelope (src/lib/response.ts) — matching every
+ * other Task/Project Onboarding list route's already-documented
+ * exception (see `GET /admin/projects` above).
+ */
+adminProjects.get(
+  "/:id/github/issues",
+  requireAuth,
+  requireAdminRole,
+  requirePermission("admin:projects:github:read"),
+  async (c) => {
+    const env = getEnv(c.env);
+    const admin = c.get("user");
+    if (!admin) {
+      // requireAuth + requireAdminRole already guarantee this — kept for
+      // type safety, same pattern used throughout this file.
+      return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+    }
+
+    const idResult = idSchema.safeParse(c.req.param("id"));
+    if (!idResult.success) {
+      return errorResponse(c, 400, "invalid_request", idResult.error.issues[0]!.message);
+    }
+
+    const withinLimit = await checkRateLimit(c, {
+      bucket: "admin-projects-github-issues",
+      limit: 30,
+      windowSeconds: 60,
+    });
+    if (!withinLimit) {
+      return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+    }
+
+    try {
+      const supabase = getSupabase(env);
+
+      const repoRef = await getProjectGithubRepoRef(supabase, idResult.data);
+      if (!repoRef) {
+        return errorResponse(c, 404, "project_not_found", "Project not found");
+      }
+
+      const accessToken = await getValidGithubAccessToken(supabase, env, admin.id);
+      const issues = await fetchRepositoryIssues(accessToken, repoRef.owner, repoRef.repo);
+
+      return c.json(issues, 200);
+    } catch (err) {
+      if (err instanceof GitHubRepoError) return mapGithubError(c, err);
+      logger.error("admin_project_github_issues_failed", {
+        error: err instanceof Error ? err.message : String(err),
+        requestId: c.get("requestId"),
+      });
+      return errorResponse(c, 500, "internal_error", "Couldn't load GitHub issues right now");
     }
   },
 );

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AdminProjectDetail,
   AdminProjectDetailExtraRow,
+  AdminProjectGithubRepoRef,
   AdminProjectListRow,
   AdminProjectSummary,
   AdminProjectUpdatePayload,
@@ -243,6 +244,52 @@ export async function getAdminProjectDetailById(
         : null,
     techStack: toOnboardingTechStackOrNull(data.tech_stack),
   };
+}
+
+/** Row shape for `getProjectGithubRepoRef` below — never `select("*")` (rule 23). */
+interface GithubRepoRefRow {
+  github_owner: string | null;
+  github_full_name: string | null;
+  deleted_at: string | null;
+}
+
+/**
+ * Resolves the GitHub `{ owner, repo }` coordinates for an already-active
+ * DevTunnel project, straight from what Project Onboarding Step 1
+ * captured (`devtunnel.projects.github_owner` / `github_full_name`,
+ * sql/006) — never re-parsed from a client-supplied URL (rule 15: this is
+ * exactly the kind of value the backend already owns and must not accept
+ * as request input).
+ *
+ * Backs `GET /admin/projects/:id/github/issues` (admin_workflow.txt
+ * section 10 ▸ Step 2) and Task Onboarding's issue-selection routes
+ * (src/routes/taskOnboarding.ts), both of which need these coordinates to
+ * call src/lib/githubRepo.ts. Returns `null` for a project that doesn't
+ * exist, has been soft-deleted, or is missing a `github_full_name`
+ * snapshot (defensive only — every project created through
+ * `complete_project_onboarding` (sql/006) always has one) — the caller
+ * maps any of these to the same 404, indistinguishable to the admin
+ * (rule 13: prevent IDOR by never revealing *why* a resource isn't
+ * usable).
+ */
+export async function getProjectGithubRepoRef(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<AdminProjectGithubRepoRef | null> {
+  const { data, error } = await supabase
+    .from("projects")
+    .select("github_owner, github_full_name, deleted_at")
+    .eq("id", projectId)
+    .maybeSingle<GithubRepoRefRow>();
+
+  if (error) throw new Error(`Failed to load project GitHub reference: ${error.message}`);
+  if (!data || data.deleted_at || !data.github_full_name) return null;
+
+  const repo = data.github_full_name.split("/")[1];
+  const owner = data.github_owner ?? data.github_full_name.split("/")[0];
+  if (!owner || !repo) return null;
+
+  return { owner, repo };
 }
 
 /**
