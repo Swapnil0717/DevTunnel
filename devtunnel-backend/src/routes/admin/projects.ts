@@ -12,8 +12,10 @@ import {
   AdminProjectDeleteError,
   AdminProjectUpdateError,
   deleteAdminProject,
+  getAdminProjectById,
   getAdminProjectDetailById,
   getProjectGithubRepoRef,
+  getProjectTechStack,
   listAdminProjects,
   updateAdminProject,
 } from "../../db/adminProjects";
@@ -331,6 +333,84 @@ adminProjects.get(
         requestId: c.get("requestId"),
       });
       return errorResponse(c, 500, "internal_error", "Couldn't load GitHub issues right now");
+    }
+  },
+);
+
+/**
+ * `GET /admin/projects/:id/tech-stack` (admin_workflow.txt section 10 ▸
+ * Step 4 — "Fetch Project Tech Stack" ▸ Backend; RBAC permission
+ * `admin:projects:read`, src/lib/rbac.ts — a read-only, non-GitHub call
+ * unlike `/github/issues` above, so it stays on the cheaper permission
+ * per that file's own comment).
+ *
+ * "This should happen automatically after project selection ... Do not
+ * re-analyze the repository unnecessarily if the project already has a
+ * validated tech stack from Project Onboarding." Backs Task Onboarding
+ * Step 4's `fetchProjectTechStack` (devtunnel-frontend/src/lib/admin/
+ * task-onboarding/api.ts) — reads the project's already-recorded
+ * `tech_stack` column (sql/006, populated by Project Onboarding Step 3)
+ * via `getProjectTechStack`, rather than triggering a second repository
+ * analysis.
+ *
+ * Two reads, same as `getAdminProjectDetailById` above: `getAdminProjectById`
+ * first, purely to tell "project doesn't exist / was soft-deleted" (404)
+ * apart from "project exists but has no tech stack recorded yet" — the
+ * frontend's `OnboardingTechStack` shape has no third "unknown" state, so
+ * an existing project with nothing detected gets the same all-empty shape
+ * Project Onboarding's own Step 3 would show before analysis ever ran,
+ * not an error.
+ */
+adminProjects.get(
+  "/:id/tech-stack",
+  requireAuth,
+  requireAdminRole,
+  requirePermission("admin:projects:read"),
+  async (c) => {
+    const env = getEnv(c.env);
+
+    const idResult = idSchema.safeParse(c.req.param("id"));
+    if (!idResult.success) {
+      return errorResponse(c, 400, "invalid_request", idResult.error.issues[0]!.message);
+    }
+
+    const withinLimit = await checkRateLimit(c, {
+      bucket: "admin-projects-tech-stack",
+      limit: 120,
+      windowSeconds: 60,
+    });
+    if (!withinLimit) {
+      return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+    }
+
+    try {
+      const supabase = getSupabase(env);
+
+      const project = await getAdminProjectById(supabase, idResult.data);
+      if (!project) {
+        return errorResponse(c, 404, "project_not_found", "Project not found");
+      }
+
+      const techStack = await getProjectTechStack(supabase, idResult.data);
+      return c.json(
+        techStack ?? {
+          languages: [],
+          frontend: [],
+          backend: [],
+          frameworks: [],
+          databases: [],
+          libraries: [],
+          buildTools: [],
+          packageManager: null,
+        },
+        200,
+      );
+    } catch (err) {
+      logger.error("admin_project_tech_stack_failed", {
+        error: err instanceof Error ? err.message : String(err),
+        requestId: c.get("requestId"),
+      });
+      return errorResponse(c, 500, "internal_error", "Couldn't load this project's tech stack right now");
     }
   },
 );

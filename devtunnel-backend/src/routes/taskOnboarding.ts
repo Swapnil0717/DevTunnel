@@ -345,7 +345,7 @@ adminTaskOnboarding.patch(
 const issueInformationSchema = z
   .object({
     choice: z.enum(["EXISTING", "CUSTOM"]),
-    customDescription: z.string().trim().max(20_000).optional(),
+    customDescription: z.string().trim().max(20_000).nullable().optional(),
   })
   .refine((val) => val.choice !== "CUSTOM" || !!val.customDescription?.trim(), {
     message: "Custom information is required when choosing custom information",
