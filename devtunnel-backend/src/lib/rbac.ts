@@ -39,11 +39,23 @@ import type { UserRole } from "../types";
  *   POST  /admin/github                  -> admin:github:sync
  *   GET   /admin/activity                -> admin:activity:read
  *
- * Only `GET /admin/auth/me` and `GET /admin/activity` are implemented as
- * of this module (Admin Backend: authentication + authorization + RBAC).
- * The rest of the permission list above exists now so future admin route
- * modules (project/task/author/publish/GitHub-sync endpoints) plug into
- * the same RBAC engine instead of each inventing its own role check.
+ *   GET   /admin/tasks/onboarding/projects -> admin:tasks:read
+ *   POST  /admin/tasks/onboarding          -> admin:tasks:write
+ *
+ * `admin:tasks:read` / `admin:tasks:write` back admin_workflow.txt section
+ * 10's Task Onboarding wizard (today: Step 1 — "Project Selection" only,
+ * src/routes/taskOnboarding.ts) and are named to match the existing
+ * `admin:projects:read` / `admin:projects:write` pair so the later
+ * `/admin/tasks` (all tasks) and remaining Task Onboarding step routes
+ * plug into these same two permissions rather than each declaring a new
+ * one — same reasoning as `admin:projects:*` above.
+ *
+ * Only `GET /admin/auth/me`, `GET /admin/activity`, and the Task
+ * Onboarding Step 1 routes are implemented as of this module (Admin
+ * Backend: authentication + authorization + RBAC). The rest of the
+ * permission list above exists now so future admin route modules
+ * (project/task/author/publish/GitHub-sync endpoints) plug into the same
+ * RBAC engine instead of each inventing its own role check.
  */
 export const ADMIN_PERMISSIONS = [
   "admin:projects:read",
@@ -53,6 +65,8 @@ export const ADMIN_PERMISSIONS = [
   "admin:projects:files:read",
   "admin:projects:tasks:write",
   "admin:projects:author:write",
+  "admin:tasks:read",
+  "admin:tasks:write",
   "admin:github:sync",
   "admin:activity:read",
 ] as const;

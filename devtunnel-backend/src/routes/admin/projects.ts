@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import type { Env, Variables } from "../../types";
+import type { AdminProjectUpdatePayload, Env, Variables } from "../../types";
 import { getEnv } from "../../config/env";
 import { getSupabase } from "../../lib/supabase";
 import { requireAuth } from "../../middleware/auth";
@@ -10,9 +10,11 @@ import { errorResponse } from "../../lib/response";
 import { logger } from "../../lib/logger";
 import {
   AdminProjectDeleteError,
+  AdminProjectUpdateError,
   deleteAdminProject,
   getAdminProjectDetailById,
   listAdminProjects,
+  updateAdminProject,
 } from "../../db/adminProjects";
 import { recordAdminAudit } from "../../db/adminAudit";
 
@@ -38,6 +40,53 @@ const listQuerySchema = z.object({
 });
 
 const idSchema = z.string().uuid("Invalid project id");
+
+/**
+ * Body validation for `PATCH /admin/projects/:id` (section 22 — Admin
+ * Backend API Map, "Projects"). Deliberately mirrors, field for field,
+ * the Step 2 (`descriptionSchema`) and Step 3 (`techStackSchema`) Zod
+ * schemas in src/routes/projectOnboarding.ts — same "existing vs custom
+ * description" and tech-stack shape, just editable after the project is
+ * already live instead of during onboarding. Kept as a local copy rather
+ * than a shared import: the two route modules validate genuinely
+ * different resources (an onboarding draft vs. an already-active
+ * project) and this backend has no shared-validators module today (rule
+ * 103: don't add structure/dependencies a feature doesn't actually need).
+ *
+ * `.refine` at the top level requires at least one of `description` /
+ * `techStack` to be present — an empty `{}` body is rejected as a 400
+ * rather than silently accepted as a no-op PATCH (rule 17: don't paper
+ * over a caller mistake as success).
+ */
+const updateDescriptionSchema = z
+  .object({
+    choice: z.enum(["EXISTING", "CUSTOM"]),
+    customDescription: z.string().trim().max(20_000).nullable().optional(),
+  })
+  .refine((val) => val.choice !== "CUSTOM" || !!val.customDescription?.trim(), {
+    message: "Custom description is required when choosing a custom description",
+    path: ["customDescription"],
+  });
+
+const updateTechStackSchema = z.object({
+  languages: z.array(z.string().min(1).max(60)).max(30),
+  frontend: z.array(z.string().min(1).max(60)).max(30),
+  backend: z.array(z.string().min(1).max(60)).max(30),
+  frameworks: z.array(z.string().min(1).max(60)).max(30),
+  databases: z.array(z.string().min(1).max(60)).max(30),
+  libraries: z.array(z.string().min(1).max(60)).max(30),
+  buildTools: z.array(z.string().min(1).max(60)).max(30),
+  packageManager: z.string().min(1).max(60).nullable(),
+});
+
+const updateProjectSchema = z
+  .object({
+    description: updateDescriptionSchema.optional(),
+    techStack: updateTechStackSchema.optional(),
+  })
+  .refine((val) => val.description !== undefined || val.techStack !== undefined, {
+    message: "Provide at least one field to update (description or techStack)",
+  });
 
 /**
  * Body validation for `DELETE /admin/projects/:id`. `reason` is optional
@@ -182,6 +231,148 @@ adminProjects.get(
         requestId: c.get("requestId"),
       });
       return errorResponse(c, 500, "internal_error", "Couldn't load this project right now");
+    }
+  },
+);
+
+/**
+ * `PATCH /admin/projects/:id` (admin_workflow.txt section 22 — Admin
+ * Backend API Map, "Projects"; RBAC permission `admin:projects:write`
+ * already reserved for this exact route in src/lib/rbac.ts).
+ *
+ * Backs the Project Detail page's inline edit panel
+ * (devtunnel-frontend `EditProjectDetailsPanel` /
+ * `updateAdminProject` in devtunnel-frontend/src/lib/admin/projects/
+ * client-api.ts) — lets an Admin correct the two fields Project
+ * Onboarding's Step 2 (Description) and Step 3 (Tech Stack) already hand
+ * them control over, after the project is already live. Every other
+ * field on the project (name, repository, author, GitHub contributors,
+ * README, open issue count) is GitHub- or backend-derived and has no
+ * writable path through this endpoint — see `updateProjectSchema` and
+ * `AdminProjectUpdatePayload` (src/types.ts) for exactly what is and
+ * isn't accepted.
+ *
+ * Returns the full, freshly-read `AdminProjectDetail` (not just the two
+ * changed fields) so the frontend can replace its local state directly
+ * from the response without a second round-trip — same contract
+ * `updateAdminProject` in client-api.ts already expects.
+ */
+adminProjects.patch(
+  "/:id",
+  requireAuth,
+  requireAdminRole,
+  requirePermission("admin:projects:write"),
+  async (c) => {
+    const env = getEnv(c.env);
+    const user = c.get("user")!;
+
+    const idResult = idSchema.safeParse(c.req.param("id"));
+    if (!idResult.success) {
+      return errorResponse(c, 400, "invalid_request", idResult.error.issues[0]!.message);
+    }
+
+    const withinLimit = await checkRateLimit(c, {
+      bucket: "admin-projects-update",
+      limit: 30,
+      windowSeconds: 60,
+    });
+    if (!withinLimit) {
+      return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+    }
+
+    const rawBody = await c.req.json().catch(() => null);
+    const bodyResult = updateProjectSchema.safeParse(rawBody);
+    if (!bodyResult.success) {
+      return errorResponse(
+        c,
+        400,
+        "invalid_request",
+        bodyResult.error.issues[0]?.message ?? "Invalid request body",
+      );
+    }
+
+    const supabase = getSupabase(env);
+
+    // Normalize the Zod-inferred shape into `AdminProjectUpdatePayload`
+    // (src/types.ts) before handing it to the db layer: Zod's
+    // `.nullable().optional()` on `customDescription` infers
+    // `string | null | undefined`, while `OnboardingDescription` (shared
+    // with the onboarding wizard's own draft shape) only ever allows
+    // `string | null` — same normalization
+    // `POST /admin/projects/onboarding/:id/description`
+    // (src/routes/projectOnboarding.ts) already applies via
+    // `bodyResult.data.customDescription ?? null`.
+    const updatePayload: AdminProjectUpdatePayload = {};
+    if (bodyResult.data.description) {
+      updatePayload.description = {
+        choice: bodyResult.data.description.choice,
+        customDescription: bodyResult.data.description.customDescription ?? null,
+      };
+    }
+    if (bodyResult.data.techStack) {
+      updatePayload.techStack = bodyResult.data.techStack;
+    }
+
+    try {
+      const project = await updateAdminProject(supabase, idResult.data, updatePayload);
+
+      // Best-effort audit trail (rule 96: audit important administrative
+      // actions). Only records *which* fields changed and the chosen
+      // description source — never the free-text custom description or
+      // full tech-stack payload itself (rule 59: don't let unbounded
+      // user-controlled text flow into logs/audit rows unchecked).
+      try {
+        await recordAdminAudit(supabase, {
+          adminId: user.id,
+          action: "ADMIN_PROJECT_UPDATED",
+          resourceType: "project",
+          resourceId: project.id,
+          result: "SUCCESS",
+          metadata: {
+            slug: project.slug,
+            updatedFields: Object.keys(updatePayload),
+            descriptionChoice: updatePayload.description?.choice ?? null,
+          },
+        });
+      } catch (auditErr) {
+        logger.error("admin_audit_write_failed", {
+          error: auditErr instanceof Error ? auditErr.message : String(auditErr),
+          requestId: c.get("requestId"),
+        });
+      }
+
+      return c.json(project, 200);
+    } catch (err) {
+      if (err instanceof AdminProjectUpdateError) {
+        if (err.code === "not_found") {
+          return errorResponse(c, 404, "project_not_found", "Project not found");
+        }
+        // deleted
+        return errorResponse(c, 409, "project_deleted", err.message);
+      }
+
+      logger.error("admin_project_update_failed", {
+        error: err instanceof Error ? err.message : String(err),
+        requestId: c.get("requestId"),
+      });
+
+      try {
+        await recordAdminAudit(supabase, {
+          adminId: user.id,
+          action: "ADMIN_PROJECT_UPDATED",
+          resourceType: "project",
+          resourceId: idResult.data,
+          result: "FAILURE",
+          metadata: { error: err instanceof Error ? err.message : String(err) },
+        });
+      } catch (auditErr) {
+        logger.error("admin_audit_write_failed", {
+          error: auditErr instanceof Error ? auditErr.message : String(auditErr),
+          requestId: c.get("requestId"),
+        });
+      }
+
+      return errorResponse(c, 500, "internal_error", "Couldn't update this project right now");
     }
   },
 );

@@ -4,19 +4,72 @@ import type {
   AdminProjectDetailExtraRow,
   AdminProjectListRow,
   AdminProjectSummary,
+  AdminProjectUpdatePayload,
   DeleteAdminProjectResult,
+  OnboardingTechStack,
 } from "../types";
 
 /**
  * Explicit column list for the detail-only fields — selected from
  * `devtunnel.projects` directly (the base table, NOT the
- * `admin_project_list` view `LIST_COLUMNS` below reads from). These three
+ * `admin_project_list` view `LIST_COLUMNS` below reads from). These
  * columns were never added to that view's exposed columns because the
  * list row (`AdminProjectSummary`) never needed them — only the single-
- * project detail page does (rule 23: never `select("*")`, select exactly
- * what the caller needs).
+ * project detail page (and its edit panel) does (rule 23: never
+ * `select("*")`, select exactly what the caller needs).
  */
-const DETAIL_EXTRA_COLUMNS = "github_description, readme, open_issues";
+const DETAIL_EXTRA_COLUMNS =
+  "github_description, readme, open_issues, description_source, custom_description, tech_stack";
+
+/**
+ * Normalizes a `devtunnel.projects.tech_stack` jsonb value into the
+ * frontend-facing `OnboardingTechStack` shape, or `null` when nothing
+ * meaningful has actually been recorded.
+ *
+ * Two defensive reasons this exists rather than casting the column
+ * straight through (rule 73: never trust a database result blindly):
+ *
+ *  1. The column's schema default is `'{}'::jsonb` NOT NULL (sql/006), so
+ *     a project that never went through Step 3 (or had every tech-stack
+ *     field cleared via `PATCH /admin/projects/:id`) has a real, non-null
+ *     `{}` row value that is missing every array key `OnboardingTechStack`
+ *     requires — passing that straight to the frontend as `techStack`
+ *     would make `project.techStack ?? EMPTY_TECH_STACK` in
+ *     `EditProjectDetailsPanel` pick the truthy-but-empty `{}` over the
+ *     fallback, then crash the first time a field is indexed
+ *     (`techStack.languages.length`, etc.).
+ *  2. Any array key genuinely missing from the stored jsonb (e.g. an
+ *     older row saved before a field existed) is filled with `[]` rather
+ *     than left `undefined`, so the shape returned to the frontend always
+ *     matches `OnboardingTechStack` exactly.
+ */
+function toOnboardingTechStackOrNull(raw: unknown): OnboardingTechStack | null {
+  if (!raw || typeof raw !== "object") return null;
+  const value = raw as Partial<OnboardingTechStack>;
+
+  const languages = Array.isArray(value.languages) ? value.languages : [];
+  const frontend = Array.isArray(value.frontend) ? value.frontend : [];
+  const backend = Array.isArray(value.backend) ? value.backend : [];
+  const frameworks = Array.isArray(value.frameworks) ? value.frameworks : [];
+  const databases = Array.isArray(value.databases) ? value.databases : [];
+  const libraries = Array.isArray(value.libraries) ? value.libraries : [];
+  const buildTools = Array.isArray(value.buildTools) ? value.buildTools : [];
+  const packageManager = typeof value.packageManager === "string" ? value.packageManager : null;
+
+  const hasContent =
+    languages.length > 0 ||
+    frontend.length > 0 ||
+    backend.length > 0 ||
+    frameworks.length > 0 ||
+    databases.length > 0 ||
+    libraries.length > 0 ||
+    buildTools.length > 0 ||
+    Boolean(packageManager);
+
+  if (!hasContent) return null;
+
+  return { languages, frontend, backend, frameworks, databases, libraries, buildTools, packageManager };
+}
 
 /**
  * Explicit column list — never `select("*")` (Backend_Development_Rules.txt
@@ -184,7 +237,127 @@ export async function getAdminProjectDetailById(
     githubDescription: data.github_description,
     readme: data.readme,
     openIssuesCount: data.open_issues,
+    description:
+      data.description_source !== null
+        ? { choice: data.description_source, customDescription: data.custom_description }
+        : null,
+    techStack: toOnboardingTechStackOrNull(data.tech_stack),
   };
+}
+
+/**
+ * Errors `updateAdminProject` raises for update-specific business rules,
+ * kept distinct from a generic thrown `Error` so the route handler
+ * (src/routes/admin/projects.ts) can map each one to the correct HTTP
+ * status without string-matching a message — same pattern as
+ * `AdminProjectDeleteError` above and `ProjectOnboardingError` in
+ * src/db/projectOnboarding.ts (rule 20: centralized, predictable error
+ * handling).
+ */
+export class AdminProjectUpdateError extends Error {
+  code: "not_found" | "deleted";
+  constructor(code: AdminProjectUpdateError["code"], message: string) {
+    super(message);
+    this.name = "AdminProjectUpdateError";
+    this.code = code;
+  }
+}
+
+/** Row shape read before applying a `PATCH /admin/projects/:id` update. */
+interface UpdateTargetRow {
+  id: string;
+  deleted_at: string | null;
+  description_source: AdminProjectDetailExtraRow["description_source"];
+  custom_description: string | null;
+  github_description: string | null;
+}
+
+/**
+ * Applies a partial update to an already-active DevTunnel project —
+ * backs `PATCH /admin/projects/:id` (admin_workflow.txt section 22).
+ *
+ * Deliberately restricted to exactly the two fields Project Onboarding's
+ * Step 2 (Description) and Step 3 (Tech Stack) already hand the Admin
+ * control over (`AdminProjectUpdatePayload`) — the repository, author,
+ * GitHub contributors, name, and every other GitHub-sourced field stay
+ * exactly what GitHub reported and have no writable path here, same
+ * restriction the onboarding wizard itself enforces on those fields
+ * ("Admin should not manually enter Author, GitHub username, repository
+ * name, contributors, language, stars, forks, issues — these should come
+ * from GitHub").
+ *
+ * Reads the current row first (rather than blind-writing) for two
+ * reasons: (1) to give a specific 404/409 instead of a silent no-op when
+ * the project doesn't exist or has been soft-deleted (sql/008;
+ * `deleteAdminProject`), and (2) because a *partial* update needs the
+ * existing `github_description` to correctly recompute the computed
+ * `description` column when only `techStack` is being changed (or vice
+ * versa) — the same `description_source = 'CUSTOM' ? custom_description
+ * : github_description` rule `complete_project_onboarding()` (sql/006)
+ * applies at creation time is re-applied here so the two never drift
+ * apart after an edit.
+ *
+ * The final `.is("deleted_at", null)` guard on the write itself closes
+ * the (narrow) race where the project is soft-deleted by a concurrent
+ * request between the read above and this update — the write then
+ * affects zero rows instead of silently reviving a deleted project's
+ * content, and the caller gets a clean `not_found` from the follow-up
+ * `getAdminProjectDetailById` read below rather than a false success
+ * (rule 74: handle race conditions; rule 101: no fake success responses).
+ */
+export async function updateAdminProject(
+  supabase: SupabaseClient,
+  projectId: string,
+  input: AdminProjectUpdatePayload,
+): Promise<AdminProjectDetail> {
+  const { data: current, error: fetchError } = await supabase
+    .from("projects")
+    .select("id, deleted_at, description_source, custom_description, github_description")
+    .eq("id", projectId)
+    .maybeSingle<UpdateTargetRow>();
+
+  if (fetchError) throw new Error(`Failed to load project for update: ${fetchError.message}`);
+  if (!current) throw new AdminProjectUpdateError("not_found", "Project not found");
+  if (current.deleted_at) {
+    throw new AdminProjectUpdateError(
+      "deleted",
+      "This project has been deleted and can no longer be edited",
+    );
+  }
+
+  const values: Record<string, unknown> = {};
+
+  if (input.description) {
+    const nextChoice = input.description.choice;
+    const nextCustomDescription = nextChoice === "CUSTOM" ? input.description.customDescription ?? null : null;
+    values.description_source = nextChoice;
+    values.custom_description = nextCustomDescription;
+    // Keep the public `description` column (used elsewhere for the
+    // public project page) in lockstep with the same rule
+    // `complete_project_onboarding()` applies at creation time.
+    values.description = nextChoice === "CUSTOM" ? nextCustomDescription : current.github_description;
+  }
+
+  if (input.techStack) {
+    values.tech_stack = input.techStack;
+  }
+
+  const { error: updateError } = await supabase
+    .from("projects")
+    .update(values)
+    .eq("id", projectId)
+    .is("deleted_at", null);
+
+  if (updateError) throw new Error(`Failed to update project: ${updateError.message}`);
+
+  const detail = await getAdminProjectDetailById(supabase, projectId);
+  if (!detail) {
+    // Raced with a concurrent soft-delete between the write above and
+    // this read — report it the same as any other not-found rather than
+    // fabricating a response for a project that no longer resolves.
+    throw new AdminProjectUpdateError("not_found", "Project not found");
+  }
+  return detail;
 }
 
 /**

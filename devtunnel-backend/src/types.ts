@@ -476,3 +476,134 @@ export interface DeleteAdminProjectResult {
   name: string;
   deletedAt: string;
 }
+
+/* -------------------------------------------------------------------------
+ * Admin — Task Onboarding, Step 1 only (admin_workflow.txt section 10 —
+ * "Create Task — Task Onboarding, Step 1 — Project Selection"; section 25
+ * — "Task Onboarding State"; sql/009).
+ *
+ * Every interface below is written to match, field-for-field, the already
+ * shipped frontend contract in
+ * devtunnel-frontend/src/lib/admin/task-onboarding/types.ts — same
+ * convention as the Project Onboarding types above. Only the pieces Step 1
+ * actually produces are backed by real data here
+ * (`TaskOnboardingProjectOption`, `TaskOnboardingDraft.project`,
+ * `steps.projectSelected`); `issue`, `issueInformation`, `curation`, and
+ * `techStack` are typed to match that frontend contract exactly but are
+ * always `null` until Steps 2–5 are implemented (rule 5: never invent data
+ * a not-yet-built step hasn't actually produced).
+ * ---------------------------------------------------------------------- */
+
+/**
+ * Step 1 — "Project Selection" list option. Deliberately a small,
+ * list-friendly shape — not the full `AdminProjectSummary` table row —
+ * matching the frontend's own `TaskOnboardingProjectOption`.
+ */
+export interface TaskOnboardingProjectOption {
+  id: string;
+  slug: string;
+  name: string;
+  repositoryFullName: string;
+  primaryLanguage: string | null;
+}
+
+/**
+ * Raw row shape for the columns `listEligibleTaskOnboardingProjects` /
+ * `getEligibleTaskOnboardingProject` select directly from
+ * `devtunnel.projects` (never `select("*")` — rule 23).
+ */
+export interface TaskOnboardingProjectEligibilityRow {
+  id: string;
+  slug: string;
+  name: string;
+  github_full_name: string | null;
+  primary_language: string | null;
+}
+
+export type GithubIssueState = "OPEN" | "CLOSED";
+
+/**
+ * Step 2/3 result shape — reserved so `TaskOnboardingDraft.issue` below
+ * type-checks against the already-shipped frontend contract. Not yet
+ * populated by any implemented route (Step 2 — "Select Existing Issue" —
+ * is out of scope of this migration/route set).
+ */
+export interface GithubIssueSummary {
+  number: number;
+  title: string;
+  state: GithubIssueState;
+  url: string;
+  labels: string[];
+  author: OnboardingGithubIdentity;
+  body: string | null;
+  commentCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type IssueInformationChoice = "EXISTING" | "CUSTOM";
+
+/** Step 3 result shape — reserved, not yet populated (see `GithubIssueSummary` above). */
+export interface TaskIssueInformation {
+  choice: IssueInformationChoice;
+  customDescription: string | null;
+}
+
+/** Step 5 result shape — reserved, not yet populated (see `GithubIssueSummary` above). */
+export interface TaskCuration {
+  role: DeveloperRole | null;
+  difficulty: ExperienceLevel | null;
+}
+
+/**
+ * Backend-authoritative completion flags (section 25 — "Task Onboarding
+ * State"). Field names follow the spec's own list verbatim. Only
+ * `projectSelected` is ever `true` today — every later flag stays `false`
+ * until its corresponding step is implemented; the frontend wizard already
+ * reads these to decide what it's allowed to do next, so a flag must never
+ * be set early (rule 24 equivalent: backend is the sole authority on
+ * completion state).
+ */
+export interface TaskOnboardingStepState {
+  projectSelected: boolean;
+  issueSelected: boolean;
+  issueInformationCompleted: boolean;
+  techStackLoaded: boolean;
+  difficultyDefined: boolean;
+  previewCompleted: boolean;
+  validationCompleted: boolean;
+}
+
+/** The task onboarding draft as returned to the admin frontend. */
+export interface TaskOnboardingDraft {
+  id: string;
+  project: TaskOnboardingProjectOption | null;
+  issue: GithubIssueSummary | null;
+  issueInformation: TaskIssueInformation | null;
+  curation: TaskCuration | null;
+  techStack: OnboardingTechStack | null;
+  steps: TaskOnboardingStepState;
+}
+
+/**
+ * Full row shape as stored in `devtunnel.task_onboarding_drafts` (sql/009).
+ * Only Step 1's columns exist today — every later-step column
+ * (`issue_number`, issue-information choice, tech-stack attachment,
+ * curation) is intentionally NOT modeled here yet
+ * (Backend_Development_Rules.txt rule 5: don't invent schema beyond what
+ * this step actually needs). Whichever step is implemented next extends
+ * this row type alongside its own migration.
+ */
+export interface TaskOnboardingDraftRow {
+  id: string;
+  admin_id: string;
+
+  project_id: string;
+  project_selected: boolean;
+
+  completed_task_id: string | null;
+  completed_at: string | null;
+
+  created_at: string;
+  updated_at: string;
+}
