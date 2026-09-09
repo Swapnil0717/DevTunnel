@@ -57,7 +57,8 @@ export class TaskOnboardingError extends Error {
     | "conflict"
     | "issue_not_found"
     | "step_incomplete"
-    | "project_unavailable";
+    | "project_unavailable"
+    | "issue_already_onboarded";
   constructor(code: TaskOnboardingError["code"], message: string) {
     super(message);
     this.name = "TaskOnboardingError";
@@ -297,6 +298,43 @@ export async function selectTaskOnboardingProject(
 }
 
 /**
+ * Loaded once here, re-used by every route so the "issue already belongs
+ * to a task on this project" duplicate check below and the
+ * `complete_task_onboarding` RPC (sql/016) both key off the exact same
+ * (project_id, github_issue_number) pair.
+ */
+
+/**
+ * Early duplicate check for Step 2 (`selectTaskOnboardingIssue` below).
+ * `complete_task_onboarding` (sql/016) is the real, race-safe guard
+ * against onboarding the same project + GitHub issue twice — this is
+ * purely a fast-fail so an admin who picks an already-onboarded issue
+ * finds out immediately, instead of clicking through the remaining
+ * wizard steps only to hit `ISSUE_ALREADY_ONBOARDED` on the final
+ * "Create Task" click. Same posture as
+ * `isRepositoryAlreadyOnboarded` (src/db/projectOnboarding.ts). Excludes
+ * soft-deleted tasks (`deleted_at`, sql/013), same as the partial unique
+ * index (`tasks_project_id_github_issue_number_key`, sql/016) — a
+ * deleted task's issue is available for re-onboarding.
+ */
+async function isIssueAlreadyOnboarded(
+  supabase: SupabaseClient,
+  projectId: string,
+  issueNumber: number,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("tasks")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("github_issue_number", issueNumber)
+    .is("deleted_at", null)
+    .maybeSingle<{ id: string }>();
+
+  if (error) throw new Error(`Failed to check for an already-onboarded issue: ${error.message}`);
+  return data !== null;
+}
+
+/**
  * Step 2 write. Requires an already-editable draft owned by this admin
  * (`requireEditableDraft`). `issue` must already be the backend's own
  * re-fetched snapshot from GitHub (src/lib/githubRepo.ts
@@ -319,6 +357,20 @@ export async function selectTaskOnboardingIssue(
 ): Promise<TaskOnboardingDraftRow> {
   const existing = await requireEditableDraft(supabase, draftId, adminId);
   const issueChanged = existing.issue_number !== issue.number;
+
+  // Fast-fail duplicate check (see `isIssueAlreadyOnboarded` above) — only
+  // meaningful when the issue is actually changing (or being set for the
+  // first time); re-saving the same issue this draft already has selected
+  // is not a new duplicate. This is a courtesy early error, not the
+  // source of truth: the row-locked check inside `complete_task_onboarding`
+  // (sql/016) is what actually prevents a race from creating two tasks
+  // for the same project + issue.
+  if (issueChanged && (await isIssueAlreadyOnboarded(supabase, existing.project_id, issue.number))) {
+    throw new TaskOnboardingError(
+      "issue_already_onboarded",
+      "This GitHub issue has already been onboarded as a task on this project",
+    );
+  }
 
   const values: Record<string, unknown> = {
     issue_number: issue.number,
@@ -577,6 +629,12 @@ export async function completeTaskOnboarding(
       throw new TaskOnboardingError(
         "project_unavailable",
         "This draft's project is no longer available — it may have been deleted",
+      );
+    }
+    if (message.includes("ISSUE_ALREADY_ONBOARDED")) {
+      throw new TaskOnboardingError(
+        "issue_already_onboarded",
+        "This GitHub issue has already been onboarded as a task on this project",
       );
     }
     throw new Error(`Failed to complete task onboarding: ${error.message}`);

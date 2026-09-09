@@ -131,6 +131,32 @@ async function requireDraft(
   return draft;
 }
 
+/**
+ * Early duplicate check for Step 1 (`saveRepositoryImport` below).
+ * `complete_project_onboarding` (sql/006/008) is the real, race-safe
+ * guard against onboarding the same GitHub repository twice — this is
+ * purely a fast-fail so an admin who imports an already-onboarded
+ * repository finds out immediately, instead of clicking through all five
+ * remaining wizard steps only to hit `REPOSITORY_ALREADY_ONBOARDED` on
+ * the final "Create Project" click. Excludes soft-deleted projects, same
+ * as the partial unique index (`projects_github_full_name_key`, sql/008)
+ * — a deleted project's repository is available for re-onboarding.
+ */
+async function isRepositoryAlreadyOnboarded(
+  supabase: SupabaseClient,
+  githubFullName: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("github_full_name", githubFullName)
+    .is("deleted_at", null)
+    .maybeSingle<{ id: string }>();
+
+  if (error) throw new Error(`Failed to check for an already-onboarded repository: ${error.message}`);
+  return data !== null;
+}
+
 export interface RepositoryImportInput {
   repositoryUrl: string;
   owner: string;
@@ -164,6 +190,18 @@ export async function saveRepositoryImport(
 ): Promise<ProjectOnboardingDraftRow> {
   if (draftId) {
     await requireDraft(supabase, draftId, adminId);
+  }
+
+  // Fast-fail duplicate check (see `isRepositoryAlreadyOnboarded` above) —
+  // this is a courtesy early error, not the source of truth; the
+  // row-locked check inside `complete_project_onboarding` (sql/008) is
+  // what actually prevents a race from creating two projects for the
+  // same repository.
+  if (await isRepositoryAlreadyOnboarded(supabase, input.fullName)) {
+    throw new ProjectOnboardingError(
+      "repository_already_onboarded",
+      "This GitHub repository has already been onboarded as a DevTunnel project",
+    );
   }
 
   const values = {

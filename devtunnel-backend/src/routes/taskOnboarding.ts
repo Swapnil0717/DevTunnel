@@ -74,6 +74,8 @@ function mapTaskOnboardingError(c: Parameters<typeof errorResponse>[0], err: Tas
       return errorResponse(c, 409, "task_onboarding_step_incomplete", err.message);
     case "project_unavailable":
       return errorResponse(c, 409, "task_onboarding_project_unavailable", err.message);
+    case "issue_already_onboarded":
+      return errorResponse(c, 409, "issue_already_onboarded", err.message);
     default:
       return errorResponse(c, 409, "task_onboarding_conflict", err.message);
   }
