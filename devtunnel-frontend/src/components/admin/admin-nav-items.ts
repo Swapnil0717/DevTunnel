@@ -19,8 +19,9 @@ export interface AdminNavLink {
    * Portal Master Coding Specification's navigation (section 2) and final
    * page list (section 29) is listed here so the full shape of the Admin
    * Portal is visible in the nav, but only Dashboard (`/admin`), All
-   * Projects (`/admin/projects`), and Project Onboarding
-   * (`/admin/projects/new`) have real pages today.
+   * Projects (`/admin/projects`), Project Onboarding
+   * (`/admin/projects/new`), All Tasks (`/admin/tasks`), and Create Task
+   * (`/admin/tasks/new`) have real pages today.
    *
    * `AdminSidebar` / `AdminMobileNav` render `built: false` entries as
    * disabled, non-navigating labels rather than `<Link>`s to pages that
@@ -115,7 +116,7 @@ export const ADMIN_NAV_ITEMS: AdminNavEntry[] = [
         href: "/admin/tasks",
         label: "All Tasks",
         Icon: ChecklistIcon,
-        built: false,
+        built: true,
       },
       {
         type: "link",
@@ -148,12 +149,13 @@ export const ADMIN_NAV_LINKS: AdminNavLink[] = ADMIN_NAV_ITEMS.flatMap((entry) =
 
 /**
  * Resolves the nav entry (if any) whose route the given pathname is
- * currently inside. Shared by `AdminHeader` (page title), `AdminSidebar`,
- * and `AdminMobileNav` (active-state highlighting) so "what counts as
- * being on this section" is defined exactly once.
+ * currently inside. Shared by `AdminHeader` (page title),
+ * `AdminSidebar`, and `AdminMobileNav` (active-state highlighting) so
+ * "what counts as being on this section" is defined exactly once.
  */
 export function findActiveAdminNavItem(pathname: string | null): AdminNavLink | undefined {
   if (!pathname) return undefined;
+
   return ADMIN_NAV_LINKS.find(
     (item) => item.built && (pathname === item.href || pathname.startsWith(`${item.href}/`)),
   );

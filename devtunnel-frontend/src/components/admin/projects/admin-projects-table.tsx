@@ -5,22 +5,6 @@ import { DeleteProjectButton } from "./delete-project-button";
 import type { AdminProjectSummary } from "@/lib/admin/projects/types";
 
 /**
- * A secondary row action that doesn't have a real page to link to yet.
- * Same "Soon" convention AdminSidebar uses for unbuilt nav routes.
- */
-function PendingAction({ label }: { label: string }) {
-  return (
-    <span
-      aria-disabled="true"
-      title={`${label} isn't built yet`}
-      className="cursor-not-allowed rounded-md px-2 py-1 text-[11.5px] text-text-faint"
-    >
-      {label}
-    </span>
-  );
-}
-
-/**
  * Projects table.
  *
  * Columns:
@@ -34,7 +18,8 @@ function PendingAction({ label }: { label: string }) {
  * Actions:
  * - View: Project Detail page
  * - Edit: Project Detail page with ?edit=1
- * - Tasks: Disabled until the Tasks page is implemented
+ * - Tasks: All Tasks page (`/admin/tasks`), pre-filtered to this project
+ *   via `?project=<slug>` (`AdminTasksExplorer`'s project filter)
  * - Delete: Removes the project
  */
 export function AdminProjectsTable({
@@ -139,8 +124,13 @@ export function AdminProjectsTable({
                     Edit
                   </Link>
 
-                  {/* Tasks - Not implemented yet */}
-                  <PendingAction label="Tasks" />
+                  {/* Tasks */}
+                  <Link
+                    href={`/admin/tasks?project=${project.slug}`}
+                    className="rounded-md px-2 py-1 text-[11.5px] font-medium text-text-secondary hover:text-accent"
+                  >
+                    Tasks
+                  </Link>
 
                   {/* Delete */}
                   <DeleteProjectButton
