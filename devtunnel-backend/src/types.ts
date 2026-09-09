@@ -405,14 +405,22 @@ export interface AdminProjectSummary {
   githubContributorCount: number;
   taskCount: number;
   status: AdminProjectStatus;
+  /**
+   * Curated tech stack, surfaced on the list row (not just
+   * `AdminProjectDetail`) so `/admin/projects` can filter by it without
+   * a second per-project fetch. `null` when nothing has been recorded
+   * yet (sql/015_fix_admin_project_list_task_count.sql).
+   */
+  techStack: OnboardingTechStack | null;
 }
 
 /**
  * Raw row shape as returned by `devtunnel.admin_project_list`
- * (sql/007_add_admin_project_list.sql) — a read-only view over
- * `devtunnel.projects` joined with per-project task/contributor
- * aggregates. Never selected with `select("*")` (rule 23) — see the
- * explicit column list in src/db/adminProjects.ts.
+ * (sql/015_fix_admin_project_list_task_count.sql — see that file's
+ * header for why the view is redefined there instead of in 007) — a
+ * read-only view over `devtunnel.projects` joined with per-project
+ * task/contributor aggregates. Never selected with `select("*")`
+ * (rule 23) — see the explicit column list in src/db/adminProjects.ts.
  */
 export interface AdminProjectListRow {
   id: string;
@@ -427,6 +435,8 @@ export interface AdminProjectListRow {
   github_contributor_count: number;
   task_count: number;
   devtunnel_contributor_count: number;
+  /** Raw jsonb — normalize with `toOnboardingTechStackOrNull` before use, same as `ProjectTechStackRow.tech_stack`. */
+  tech_stack: unknown;
 }
 
 /**

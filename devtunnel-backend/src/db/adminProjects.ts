@@ -49,7 +49,7 @@ const DETAIL_EXTRA_COLUMNS =
  * Stack") so both callers apply the exact same normalization rather than
  * each re-implementing it slightly differently.
  */
-function toOnboardingTechStackOrNull(raw: unknown): OnboardingTechStack | null {
+export function toOnboardingTechStackOrNull(raw: unknown): OnboardingTechStack | null {
   if (!raw || typeof raw !== "object") return null;
   const value = raw as Partial<OnboardingTechStack>;
 
@@ -79,15 +79,19 @@ function toOnboardingTechStackOrNull(raw: unknown): OnboardingTechStack | null {
 
 /**
  * Explicit column list — never `select("*")` (Backend_Development_Rules.txt
- * rule 23), even though `devtunnel.admin_project_list` (sql/007) is already
- * a curated, admin-safe view. Naming every column here also means a column
- * added to the view later doesn't silently start flowing into
- * `AdminProjectSummary` without a conscious update to `toAdminProjectSummary`
- * below.
+ * rule 23), even though `devtunnel.admin_project_list`
+ * (sql/015_fix_admin_project_list_task_count.sql) is already a curated,
+ * admin-safe view. Naming every column here also means a column added to
+ * the view later doesn't silently start flowing into `AdminProjectSummary`
+ * without a conscious update to `toAdminProjectSummary` below.
+ *
+ * `tech_stack` was added here alongside the sql/015 fix so the Admin
+ * Projects list/filter bar can filter by tech stack without a second,
+ * per-project fetch (`AdminProjectsExplorer`'s "Tech stack" filter).
  */
 const LIST_COLUMNS =
   "id, slug, name, repo_url, github_full_name, github_owner, github_author, " +
-  "status, created_at, github_contributor_count, task_count, devtunnel_contributor_count";
+  "status, created_at, github_contributor_count, task_count, devtunnel_contributor_count, tech_stack";
 
 /**
  * Maps one row of the `devtunnel.admin_project_list` view (sql/007) to the
@@ -122,6 +126,7 @@ function toAdminProjectSummary(row: AdminProjectListRow): AdminProjectSummary {
     githubContributorCount: row.github_contributor_count,
     taskCount: row.task_count,
     status: row.status,
+    techStack: toOnboardingTechStackOrNull(row.tech_stack),
   };
 }
 

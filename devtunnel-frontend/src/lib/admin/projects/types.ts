@@ -53,6 +53,13 @@
    githubContributorCount: number;
    taskCount: number;
    status: AdminProjectStatus;
+   /**
+    * Curated tech stack, now surfaced on the list row (backend
+    * sql/015_fix_admin_project_list_task_count.sql) so the Projects page
+    * can filter by it without a per-project detail fetch. `null` when
+    * nothing has been recorded for this project yet.
+    */
+   techStack: OnboardingTechStack | null;
  }
  
  /**
