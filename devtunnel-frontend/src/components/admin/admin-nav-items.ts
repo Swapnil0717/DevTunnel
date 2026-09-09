@@ -20,8 +20,9 @@ export interface AdminNavLink {
    * page list (section 29) is listed here so the full shape of the Admin
    * Portal is visible in the nav, but only Dashboard (`/admin`), All
    * Projects (`/admin/projects`), Project Onboarding
-   * (`/admin/projects/new`), All Tasks (`/admin/tasks`), and Create Task
-   * (`/admin/tasks/new`) have real pages today.
+   * (`/admin/projects/new`), All Tasks (`/admin/tasks`), Create Task
+   * (`/admin/tasks/new`), and New Issues (`/admin/tasks/new-issues`)
+   * have real pages today.
    *
    * `AdminSidebar` / `AdminMobileNav` render `built: false` entries as
    * disabled, non-navigating labels rather than `<Link>`s to pages that
@@ -130,7 +131,7 @@ export const ADMIN_NAV_ITEMS: AdminNavEntry[] = [
         href: "/admin/tasks/new-issues",
         label: "New Issues",
         Icon: IssueIcon,
-        built: false,
+        built: true,
       },
     ],
   },
