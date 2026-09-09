@@ -861,3 +861,59 @@ export interface DeleteAdminTaskResult {
   title: string;
   deletedAt: string;
 }
+
+/* -------------------------------------------------------------------------
+ * Admin — New Issues (admin_workflow.txt section 9 — "DevTunnel Task
+ * Lifecycle"; section 16 — "New Issues Section"; section 17 — "New Issues
+ * Flow"; section 22 — Admin Backend API Map: `GET /admin/new-issues`,
+ * `POST /admin/new-issues/:id/ignore`; sql/014).
+ *
+ * Every interface below is written to match, field-for-field, the already
+ * shipped frontend contract in
+ * devtunnel-frontend/src/lib/admin/new-issues/types.ts — same convention
+ * as the Project/Task Onboarding and Admin Tasks types above.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * A project's resolved GitHub coordinates plus everything the New Issues
+ * table/filter bar needs (section 16 ▸ Frontend). `techStack` is the
+ * project's own already-validated tech stack, flattened the same way
+ * `AdminTaskSummary.techStack` is for onboarded tasks — a GitHub issue has
+ * no tech stack of its own.
+ */
+export interface AdminNewIssueProjectRef {
+  id: string;
+  slug: string;
+  name: string;
+  repositoryFullName: string;
+  repositoryUrl: string;
+  techStack: string[];
+}
+
+/**
+ * A single row of `GET /admin/new-issues`'s response (section 16 ▸
+ * Frontend column list: "Issue #, Issue Title, Project, GitHub Author,
+ * Labels, Created, Updated").
+ *
+ * `id` is the composite `{projectId}:{githubIssueNumber}` key
+ * (`ignoredIssueKey`, src/db/adminNewIssues.ts) — deliberately not a task
+ * id, since no task exists yet for a New Issue.
+ *
+ * `state` is kept even though the column list above doesn't name it
+ * explicitly: an issue can be closed on GitHub before an admin acts on
+ * it, and offering "Create Task" for an already-closed issue would
+ * curate a task for something no longer actionable.
+ */
+export interface AdminNewIssue {
+  id: string;
+  number: number;
+  title: string;
+  url: string;
+  state: GithubIssueState;
+  project: AdminNewIssueProjectRef;
+  /** The GitHub user who opened the issue — the "GitHub Author" column. */
+  author: OnboardingGithubIdentity;
+  labels: string[];
+  createdAt: string;
+  updatedAt: string;
+}
