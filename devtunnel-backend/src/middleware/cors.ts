@@ -18,7 +18,7 @@ export function corsMiddleware(): MiddlewareHandler<{ Bindings: Env }> {
     const handler = cors({
       origin: (origin) => (origin && allowed.has(origin) ? origin : undefined),
       credentials: true,
-      allowMethods: ["GET", "POST", "PATCH", "OPTIONS"],
+      allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type"],
       maxAge: 600,
     });
