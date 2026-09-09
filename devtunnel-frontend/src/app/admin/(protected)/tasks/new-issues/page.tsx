@@ -6,7 +6,7 @@ import { AdminNewIssuesExplorer } from "@/components/admin/new-issues/admin-new-
 import { SectionMessage } from "@/components/home/section-message";
 
 export const metadata: Metadata = buildMetadata({
-  title: "New issues",
+  title: "All Issue",
   description: "GitHub issues that exist in a DevTunnel project's repository but aren't onboarded as a DevTunnel task yet.",
   path: "/admin/tasks/new-issues",
   // Private application UI, never public content (Frontend_Development_Rules.txt rule 18).
@@ -45,7 +45,7 @@ export default async function AdminNewIssuesPage() {
     <main className="mx-auto max-w-6xl px-6 py-10">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="m-0 mb-1 text-xl font-medium text-text">New issues</h1>
+          <h1 className="m-0 mb-1 text-xl font-medium text-text">All Issue</h1>
           <p className="m-0 text-sm text-text-muted">
             GitHub issues from your projects&apos; repositories that aren&apos;t onboarded as
             DevTunnel tasks yet.

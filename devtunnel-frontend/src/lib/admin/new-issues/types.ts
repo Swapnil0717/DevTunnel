@@ -41,6 +41,16 @@
   * so filtering "by tech stack" (as requested) means filtering by the
   * tech stack of the project the issue belongs to, same inheritance
   * `AdminTaskSummary.techStack` documents for onboarded tasks.
+  *
+  * `onboardedAt` is the timestamp Project Onboarding published this
+  * project into DevTunnel (section 28: "CREATE PROJECT → ACTIVE
+  * PROJECT") — the same moment `AdminProjectSummary` would call the
+  * project's own creation date, just carried here on the issue's project
+  * reference so `since-onboarding.ts` doesn't need a second fetch to
+  * compare against it. Not built on the backend yet (see the file-level
+  * note above) — a documented assumption, not invented data
+  * (Frontend_Development_Rules.txt rule 58): every project *does* have
+  * exactly one onboarding moment, this just names the field for it.
   */
  export interface AdminNewIssueProjectRef {
    id: string;
@@ -49,6 +59,7 @@
    repositoryFullName: string;
    repositoryUrl: string;
    techStack: string[];
+   onboardedAt: string;
  }
  
  /**

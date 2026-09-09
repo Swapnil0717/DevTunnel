@@ -21,8 +21,9 @@ export interface AdminNavLink {
    * Portal is visible in the nav, but only Dashboard (`/admin`), All
    * Projects (`/admin/projects`), Project Onboarding
    * (`/admin/projects/new`), All Tasks (`/admin/tasks`), Create Task
-   * (`/admin/tasks/new`), and New Issues (`/admin/tasks/new-issues`)
-   * have real pages today.
+   * (`/admin/tasks/new`), New Issues (`/admin/tasks/new-issues`), and
+   * its Since Onboarding filter
+   * (`/admin/tasks/new-issues/since-onboarding`) have real pages today.
    *
    * `AdminSidebar` / `AdminMobileNav` render `built: false` entries as
    * disabled, non-navigating labels rather than `<Link>`s to pages that
@@ -65,7 +66,8 @@ export type AdminNavEntry = AdminNavLink | AdminNavGroup;
  * ├── Tasks
  * │   ├── All Tasks
  * │   ├── Create Task
- * │   └── New Issues
+ * │   ├── New Issues
+ * │   └── New Issues ▸ Since Onboarding
  * │
  * └── Activity
  * ```
@@ -83,6 +85,12 @@ export type AdminNavEntry = AdminNavLink | AdminNavGroup;
  * onboarding wizard's first step); Tasks → `/admin/tasks` (A12),
  * `/admin/tasks/new` (A13, the onboarding wizard's first step), and
  * `/admin/tasks/new-issues` (A15); Activity → `/admin/activity` (A16).
+ *
+ * `/admin/tasks/new-issues/since-onboarding` isn't in the spec's page
+ * list — it's a frontend-only filtered view nested under New Issues
+ * (see `lib/admin/new-issues/since-onboarding.ts`), not a new top-level
+ * page, so it's a sub-item of New Issues here rather than its own Tasks
+ * entry.
  */
 export const ADMIN_NAV_ITEMS: AdminNavEntry[] = [
   { type: "link", href: "/admin", label: "Dashboard", Icon: GridIcon, built: true },
@@ -129,7 +137,14 @@ export const ADMIN_NAV_ITEMS: AdminNavEntry[] = [
       {
         type: "link",
         href: "/admin/tasks/new-issues",
-        label: "New Issues",
+        label: "All Issue",
+        Icon: IssueIcon,
+        built: true,
+      },
+      {
+        type: "link",
+        href: "/admin/tasks/new-issues/since-onboarding",
+        label: "Since Onboarding",
         Icon: IssueIcon,
         built: true,
       },
@@ -153,11 +168,24 @@ export const ADMIN_NAV_LINKS: AdminNavLink[] = ADMIN_NAV_ITEMS.flatMap((entry) =
  * currently inside. Shared by `AdminHeader` (page title),
  * `AdminSidebar`, and `AdminMobileNav` (active-state highlighting) so
  * "what counts as being on this section" is defined exactly once.
+ *
+ * Picks the *longest* matching `href` rather than the first one found:
+ * since `/admin/tasks/new-issues/since-onboarding` (Since Onboarding)
+ * starts with `/admin/tasks/new-issues` (New Issues), both would match
+ * a naive first-match search on that URL, and array order would
+ * silently decide which nav item lit up. Preferring the longest match
+ * keeps a nested route's own, more specific link highlighted instead of
+ * its parent — the same behavior most routers give "active" nav state
+ * for nested paths.
  */
 export function findActiveAdminNavItem(pathname: string | null): AdminNavLink | undefined {
   if (!pathname) return undefined;
 
-  return ADMIN_NAV_LINKS.find(
+  const matches = ADMIN_NAV_LINKS.filter(
     (item) => item.built && (pathname === item.href || pathname.startsWith(`${item.href}/`)),
   );
+
+  if (matches.length === 0) return undefined;
+
+  return matches.reduce((longest, item) => (item.href.length > longest.href.length ? item : longest));
 }
