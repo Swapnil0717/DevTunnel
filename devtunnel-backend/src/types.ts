@@ -3,7 +3,7 @@
  *
  * Non-secret values are declared in wrangler.toml `[vars]`. Secrets
  * (marked below) are never put in wrangler.toml — they're set with
- * `wrangler secret put <name>` in production and `.dev.vars` locally
+ * `wrangler secret put <n>` in production and `.dev.vars` locally
  * (Backend_Development_Rules.txt rules 6–7).
  */
  export interface Env {
@@ -707,4 +707,157 @@ export interface CreatedTask {
   slug: string;
   title: string;
   projectSlug: string;
+}
+
+/* -------------------------------------------------------------------------
+ * Admin — Tasks (admin_workflow.txt section 8 — "Task Section"; section
+ * 13 — "Task Page"; section 14 — "People Doing Tasks"; section 15 —
+ * "Deleted DevTunnel Tasks / Issues"; section 22 — Admin Backend API Map,
+ * "Tasks": `GET /admin/tasks`, `GET /admin/tasks/:id`,
+ * `PATCH /admin/tasks/:id`, `DELETE /admin/tasks/:id`; sql/013).
+ *
+ * Every interface below is written to match, field-for-field, the already
+ * shipped frontend contract in devtunnel-frontend/src/lib/admin/tasks/
+ * types.ts — that file is treated as the source of truth for shape/naming,
+ * same convention as the Project/Task Onboarding types above.
+ * ---------------------------------------------------------------------- */
+
+/** `devtunnel.task_status` (sql/004) — the task's own DevTunnel lifecycle. */
+export type AdminTaskStatus = "OPEN" | "IN_PROGRESS" | "DONE";
+
+/**
+ * The project a task belongs to, trimmed to exactly what the Tasks table
+ * and filter bar need — not the full `AdminProjectSummary` row (section
+ * 26: "DevTunnel Task" hangs off "DevTunnel Project", not the other way
+ * around).
+ */
+export interface AdminTaskProjectRef {
+  id: string;
+  slug: string;
+  name: string;
+  repositoryFullName: string;
+  repositoryUrl: string;
+  author: AdminProjectAuthor;
+}
+
+/**
+ * The GitHub issue a task was onboarded from — a read-only reference
+ * built from the task's own `github_issue_snapshot` (sql/012, taken at
+ * Task Onboarding Step 2/3 selection time). "Do not modify the original
+ * GitHub issue" (section 10) applies here too.
+ */
+export interface AdminTaskGithubIssueRef {
+  number: number;
+  title: string;
+  url: string;
+  state: GithubIssueState;
+  author: OnboardingGithubIdentity;
+}
+
+/**
+ * A single row of the Tasks table (section 13 ▸ Frontend) plus the
+ * section 14 contributor breakdown. `activeContributorCount` /
+ * `completedContributorCount` are derived from `status` + `assignee_id`
+ * (0 or 1 — this schema has no multi-contributor table, and rule 38
+ * forbids fabricating one); `submissionCount` is a real count of
+ * `devtunnel.pull_requests` rows for this task (see
+ * `devtunnel.admin_task_list`, sql/013).
+ *
+ * `techStack` is the flattened tag list the task inherits from its
+ * project's already-validated tech stack — same flattening
+ * `TaskPreviewStep` already does for the onboarding preview (languages,
+ * frontend, backend, frameworks, databases, libraries, buildTools, in
+ * that order) — a task has no tech stack of its own.
+ *
+ * `deletedAt` is `null` for every task that still exists in DevTunnel.
+ * Non-null marks a soft-deleted task whose GitHub issue still exists
+ * (section 15).
+ */
+export interface AdminTaskSummary {
+  id: string;
+  slug: string | null;
+  title: string;
+  project: AdminTaskProjectRef;
+  githubIssue: AdminTaskGithubIssueRef | null;
+  role: DeveloperRole | null;
+  difficulty: ExperienceLevel | null;
+  techStack: string[];
+  status: AdminTaskStatus;
+  activeContributorCount: number;
+  completedContributorCount: number;
+  submissionCount: number;
+  deletedAt: string | null;
+}
+
+/**
+ * `GET /admin/tasks/:id` (section 22; A14 — "Task Details"). Extends the
+ * list-row summary with the task's full curated description — the same
+ * "existing GitHub issue vs. existing + custom" choice Task Onboarding's
+ * Step 3 already models, read back for an already-created task.
+ */
+export interface AdminTaskDetail extends AdminTaskSummary {
+  /** Only set when the task was onboarded/edited with a DevTunnel-specific description layered on the issue. */
+  customDescription: string | null;
+  /** The original GitHub issue body, exactly as imported — never rewritten. */
+  githubIssueBody: string | null;
+}
+
+/**
+ * Raw row shape as returned by `devtunnel.admin_task_list` (sql/013) — a
+ * read-only view over `devtunnel.tasks` joined with its project and a
+ * real submission count. Never selected with `select("*")` (rule 23) —
+ * see the explicit column list in src/db/adminTasks.ts.
+ */
+export interface AdminTaskListRow {
+  id: string;
+  slug: string | null;
+  title: string;
+  status: AdminTaskStatus;
+  role: DeveloperRole | null;
+  difficulty: ExperienceLevel | null;
+  assignee_id: string | null;
+  github_issue_number: number | null;
+  github_issue_url: string | null;
+  github_issue_snapshot: GithubIssueSummary | null;
+  custom_description: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  project_id: string;
+  project_slug: string;
+  project_name: string;
+  project_repo_url: string | null;
+  project_github_full_name: string | null;
+  project_github_author: OnboardingGithubIdentity | null;
+  project_github_owner: string | null;
+  project_tech_stack: OnboardingTechStack | null;
+  submission_count: number;
+}
+
+/**
+ * Validated payload for `PATCH /admin/tasks/:id` — deliberately limited
+ * to the fields Task Onboarding itself hands the Admin curation control
+ * over (role, difficulty, the custom description layered on the GitHub
+ * issue) plus the task's own DevTunnel `status`. Project, GitHub issue,
+ * contributors, and submission counts are derived/GitHub-sourced and have
+ * no writable counterpart here — same restriction `AdminProjectUpdatePayload`
+ * applies to projects.
+ */
+export interface AdminTaskUpdatePayload {
+  role?: DeveloperRole;
+  difficulty?: ExperienceLevel;
+  customDescription?: string | null;
+  status?: AdminTaskStatus;
+}
+
+/**
+ * Response body of `DELETE /admin/tasks/:id` (sql/013 —
+ * `devtunnel.delete_admin_task`). The task is soft-deleted, never
+ * physically removed (section 15), so this confirms the deletion
+ * happened and when, rather than returning nothing.
+ */
+export interface DeleteAdminTaskResult {
+  id: string;
+  slug: string | null;
+  title: string;
+  deletedAt: string;
 }

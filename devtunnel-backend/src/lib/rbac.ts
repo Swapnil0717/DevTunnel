@@ -52,11 +52,18 @@ import type { UserRole } from "../types";
  * 10's Task Onboarding wizard (today: Step 1 — "Project Selection", Step 2
  * — "Select Existing Issue", Step 3 — "Issue Information", Step 4 —
  * "Fetch Project Tech Stack", and Step 5 — "Difficulty",
- * src/routes/taskOnboarding.ts) and are named to match the existing
- * `admin:projects:read` / `admin:projects:write` pair so the later
- * `/admin/tasks` (all tasks) and remaining Task Onboarding step routes
- * plug into these same two permissions rather than each declaring a new
- * one — same reasoning as `admin:projects:*` above.
+ * src/routes/taskOnboarding.ts) AND section 13's "All Tasks" / "View
+ * Task" routes (`GET /admin/tasks`, `GET /admin/tasks/:id`,
+ * `PATCH /admin/tasks/:id`, src/routes/admin/tasks.ts) — named to match
+ * the existing `admin:projects:read` / `admin:projects:write` pair so
+ * these plug into the same two permissions rather than each declaring a
+ * new one, same reasoning as `admin:projects:*` above.
+ *
+ * `admin:tasks:delete` is its own, narrower permission — not folded into
+ * `admin:tasks:write` — for the exact reason `admin:projects:delete` is
+ * kept separate from `admin:projects:write` above: a soft-delete has a
+ * different blast radius than an ordinary curation edit, and a narrower
+ * admin role could plausibly get one without the other later.
  *
  * `admin:projects:github:read` is its own, narrower permission — not
  * folded into `admin:projects:read` — because it reaches out to the
@@ -69,8 +76,9 @@ import type { UserRole } from "../types";
  * `admin:projects:read` rather than the GitHub-scoped permission.
  *
  * `GET /admin/auth/me`, `GET /admin/activity`, `GET /admin/projects/:id/
- * github/issues`, `GET /admin/projects/:id/tech-stack`, and the Task
- * Onboarding Steps 1–5 routes are implemented as of this module (Admin
+ * github/issues`, `GET /admin/projects/:id/tech-stack`, the Task
+ * Onboarding Steps 1–5 routes, and the full `/admin/tasks` module
+ * (list/detail/update/delete) are implemented as of this module (Admin
  * Backend: authentication + authorization + RBAC). The rest of the
  * permission list above exists now so future admin route modules
  * (project/task/author/publish/GitHub-sync endpoints) plug into the same
@@ -87,6 +95,7 @@ export const ADMIN_PERMISSIONS = [
   "admin:projects:github:read",
   "admin:tasks:read",
   "admin:tasks:write",
+  "admin:tasks:delete",
   "admin:github:sync",
   "admin:activity:read",
 ] as const;
