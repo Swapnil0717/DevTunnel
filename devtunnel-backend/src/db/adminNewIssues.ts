@@ -1,3 +1,4 @@
+// devtunnel-backend/src/db/adminNewIssues.ts
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminNewIssueProjectRef, OnboardingTechStack } from "../types";
 
@@ -47,6 +48,7 @@ interface ActiveProjectRepoRow {
   github_owner: string | null;
   github_full_name: string | null;
   tech_stack: unknown;
+  created_at: string;
 }
 
 /**
@@ -58,7 +60,8 @@ interface ActiveProjectRepoRow {
  * `github_full_name` to actually call the GitHub API, which that view's
  * `LIST_COLUMNS` in src/db/adminProjects.ts doesn't select — same
  * resolution `getProjectGithubRepoRef` already does for a single project,
- * just batched across every active one here.
+ * just batched across every active one here. Also selects `created_at`,
+ * mapped straight through as `AdminNewIssueProjectRef.onboardedAt`.
  *
  * A project with no `github_full_name` snapshot (defensive only — every
  * project created through `complete_project_onboarding`, sql/006, always
@@ -72,7 +75,7 @@ export async function listActiveProjectsWithRepo(
 ): Promise<ActiveProjectWithRepo[]> {
   const { data, error } = await supabase
     .from("projects")
-    .select("id, slug, name, repo_url, github_owner, github_full_name, tech_stack")
+    .select("id, slug, name, repo_url, github_owner, github_full_name, tech_stack, created_at")
     .is("deleted_at", null)
     .not("github_full_name", "is", null);
 
@@ -97,6 +100,7 @@ export async function listActiveProjectsWithRepo(
         repositoryUrl: row.repo_url ?? "",
         repositoryFullName: row.github_full_name,
         techStack: flattenTechStack(row.tech_stack),
+        onboardedAt: row.created_at,
       },
     });
   }

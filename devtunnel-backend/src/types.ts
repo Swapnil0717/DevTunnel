@@ -1,9 +1,11 @@
+// devtunnel-backend/src/types.ts
+
 /**
  * Cloudflare Worker bindings + environment variables.
  *
  * Non-secret values are declared in wrangler.toml `[vars]`. Secrets
  * (marked below) are never put in wrangler.toml — they're set with
- * `wrangler secret put <n>` in production and `.dev.vars` locally
+ * `wrangler secret put <name>` in production and `.dev.vars` locally
  * (Backend_Development_Rules.txt rules 6–7).
  */
  export interface Env {
@@ -888,6 +890,7 @@ export interface AdminNewIssueProjectRef {
   repositoryFullName: string;
   repositoryUrl: string;
   techStack: string[];
+  onboardedAt: string;
 }
 
 /**
