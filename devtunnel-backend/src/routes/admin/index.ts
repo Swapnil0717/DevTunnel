@@ -4,6 +4,7 @@ import { adminAuth } from "./auth";
 import { adminActivity } from "./activity";
 import { adminProjects } from "./projects";
 import { adminTasks } from "./tasks";
+import { adminNewIssues } from "./newIssues";
 import { adminProjectOnboarding } from "../projectOnboarding";
 import { adminTaskOnboarding } from "../taskOnboarding";
 
@@ -17,8 +18,8 @@ import { adminTaskOnboarding } from "../taskOnboarding";
  * route can never accidentally end up unprotected by being mounted here.
  *
  * `/admin/auth`, `/admin/activity`, `/admin/projects`,
- * `/admin/projects/onboarding`, `/admin/tasks`, and
- * `/admin/tasks/onboarding` exist so far. `/admin/projects` and
+ * `/admin/projects/onboarding`, `/admin/tasks`, `/admin/tasks/onboarding`,
+ * and `/admin/new-issues` exist so far. `/admin/projects` and
  * `/admin/projects/onboarding` (separate routers) are independent —
  * active projects vs. in-progress onboarding drafts — and Hono's router
  * matches the literal `onboarding` path segment ahead of
@@ -29,8 +30,17 @@ import { adminTaskOnboarding } from "../taskOnboarding";
  * shape one level up — mounted as plain siblings below, with the same
  * literal-segment-before-`:id` guarantee keeping
  * `GET /admin/tasks/onboarding/...` from ever being swallowed by
- * `/admin/tasks/:id`. Future admin modules (`/admin/github`, ...) get
- * their own file in this directory and are mounted here the same way.
+ * `/admin/tasks/:id`. `/admin/new-issues` (src/routes/admin/newIssues.ts)
+ * is its own top-level sibling rather than nested under `/admin/tasks` —
+ * admin_workflow.txt section 16's own "Backend" list names the API route
+ * as flat `GET /admin/new-issues` (the `/admin/tasks/new-issues` name in
+ * that same section is the recommended *frontend page* URL, a separate
+ * decision — see devtunnel-frontend's page at
+ * `src/app/admin/(protected)/tasks/new-issues/page.tsx`), and this mount
+ * point matches the already-shipped
+ * `lib/admin/new-issues/api.ts`/`client-api.ts` contract exactly. Future
+ * admin modules (`/admin/github`, ...) get their own file in this
+ * directory and are mounted here the same way.
  */
 export const admin = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -40,3 +50,4 @@ admin.route("/projects", adminProjects);
 admin.route("/projects/onboarding", adminProjectOnboarding);
 admin.route("/tasks", adminTasks);
 admin.route("/tasks/onboarding", adminTaskOnboarding);
+admin.route("/new-issues", adminNewIssues);

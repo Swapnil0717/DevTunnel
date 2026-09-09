@@ -48,6 +48,9 @@ import type { UserRole } from "../types";
  *   GET   /admin/projects/:id/github/issues -> admin:projects:github:read
  *   GET   /admin/projects/:id/tech-stack    -> admin:projects:read
  *
+ *   GET   /admin/new-issues              -> admin:new-issues:read
+ *   POST  /admin/new-issues/:id/ignore   -> admin:new-issues:write
+ *
  * `admin:tasks:read` / `admin:tasks:write` back admin_workflow.txt section
  * 10's Task Onboarding wizard (today: Step 1 — "Project Selection", Step 2
  * — "Select Existing Issue", Step 3 — "Issue Information", Step 4 —
@@ -83,6 +86,20 @@ import type { UserRole } from "../types";
  * permission list above exists now so future admin route modules
  * (project/task/author/publish/GitHub-sync endpoints) plug into the same
  * RBAC engine instead of each inventing its own role check.
+ *
+ * `admin:new-issues:read` / `admin:new-issues:write` back
+ * admin_workflow.txt section 16's "New Issues Section"
+ * (`GET /admin/new-issues`) and its "Ignore" action
+ * (`POST /admin/new-issues/:id/ignore`, src/routes/admin/newIssues.ts) —
+ * kept as their own pair rather than folded into `admin:tasks:*`, even
+ * though the feature is about *not-yet-a-task* GitHub issues:
+ * `admin:new-issues:read` reaches out to GitHub on every call, across
+ * every active project (unlike `admin:tasks:read`, which only ever reads
+ * DevTunnel's own database) — the same "different blast radius gets its
+ * own permission" reasoning already applied to
+ * `admin:projects:github:read` above — and `admin:new-issues:write`
+ * mutates a table (`devtunnel.ignored_github_issues`, sql/014) that
+ * `admin:tasks:write` has no reason to touch.
  */
 export const ADMIN_PERMISSIONS = [
   "admin:projects:read",
@@ -96,6 +113,8 @@ export const ADMIN_PERMISSIONS = [
   "admin:tasks:read",
   "admin:tasks:write",
   "admin:tasks:delete",
+  "admin:new-issues:read",
+  "admin:new-issues:write",
   "admin:github:sync",
   "admin:activity:read",
 ] as const;
