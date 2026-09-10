@@ -51,6 +51,14 @@ import type { UserRole } from "../types";
  *   GET   /admin/new-issues              -> admin:new-issues:read
  *   POST  /admin/new-issues/:id/ignore   -> admin:new-issues:write
  *
+ *   POST  /admin/opensource-tools/onboarding/url                    -> admin:opensource-tools:write
+ *   PATCH /admin/opensource-tools/onboarding/:id/description        -> admin:opensource-tools:write
+ *   PATCH /admin/opensource-tools/onboarding/:id/labels              -> admin:opensource-tools:write
+ *   PATCH /admin/opensource-tools/onboarding/:id/setup-guide         -> admin:opensource-tools:write
+ *   GET   /admin/opensource-tools/onboarding/:id/preview             -> admin:opensource-tools:read
+ *   POST  /admin/opensource-tools/onboarding/:id/validate            -> admin:opensource-tools:write
+ *   POST  /admin/opensource-tools/onboarding/:id/complete            -> admin:opensource-tools:write
+ *
  * `admin:tasks:read` / `admin:tasks:write` back admin_workflow.txt section
  * 10's Task Onboarding wizard (today: Step 1 — "Project Selection", Step 2
  * — "Select Existing Issue", Step 3 — "Issue Information", Step 4 —
@@ -100,6 +108,18 @@ import type { UserRole } from "../types";
  * `admin:projects:github:read` above — and `admin:new-issues:write`
  * mutates a table (`devtunnel.ignored_github_issues`, sql/014) that
  * `admin:tasks:write` has no reason to touch.
+ *
+ * `admin:opensource-tools:read` / `admin:opensource-tools:write` back the
+ * Open Source Tool Onboarding wizard (`/admin/opensource-tools/new`,
+ * devtunnel-frontend/src/lib/admin/opensource-tool-onboarding/). Named
+ * and scoped identically to `admin:projects:read` / `admin:projects:write`
+ * — same read-vs-write split (fetching/previewing a draft vs. mutating
+ * one), just for a separate resource — rather than reusing the
+ * `admin:projects:*` pair itself: an open-source tool is not a project
+ * (the frontend types file's own header is explicit about this
+ * distinction), so a narrower admin role could plausibly manage one
+ * without the other later, the same reasoning `admin:tasks:*` already
+ * gets its own pair rather than folding into `admin:projects:*`.
  */
 export const ADMIN_PERMISSIONS = [
   "admin:projects:read",
@@ -117,6 +137,8 @@ export const ADMIN_PERMISSIONS = [
   "admin:new-issues:write",
   "admin:github:sync",
   "admin:activity:read",
+  "admin:opensource-tools:read",
+  "admin:opensource-tools:write",
 ] as const;
 
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];

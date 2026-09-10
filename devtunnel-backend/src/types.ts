@@ -930,3 +930,158 @@ export interface AdminNewIssue {
   createdAt: string;
   updatedAt: string;
 }
+
+// ============================================================================
+// INSERT INTO: devtunnel-backend/src/types.ts
+// WHERE: immediately after the `CreatedProject` interface (ends the
+//        "Admin — Project Onboarding" section, line ~301) and before
+//        `ProjectOnboardingDraftRow` — i.e. as its own new section right
+//        after the project-onboarding block ends at line 345 in the
+//        current file. Paste the whole block below there.
+// ============================================================================
+
+/* ----------------------------------------------------------------------
+ * Admin — Open Source Tool Onboarding (`/admin/opensource-tools/new`).
+ *
+ * There's no admin_workflow.txt section for this flow — it isn't part of
+ * the documented Admin Portal spec. Every interface below is written to
+ * match, field-for-field, the already-shipped frontend contract in
+ * devtunnel-frontend/src/lib/admin/opensource-tool-onboarding/types.ts —
+ * that file is treated as the source of truth for shape/naming, the same
+ * "frontend-as-source-of-truth" approach its own header documents.
+ *
+ * `DescriptionChoice` (EXISTING/CUSTOM, declared above for Project
+ * Onboarding) is reused as-is here rather than declaring a second,
+ * identical union — same reuse decision sql/017 makes for the Postgres
+ * enum behind it.
+ * ---------------------------------------------------------------------- */
+
+/** Step 1 result — everything resolved from the Admin-supplied tool URL. */
+export interface OnboardingToolSource {
+  url: string;
+  name: string;
+  /** Short description exactly as fetched, or `null` if none was found. */
+  fetchedDescription: string | null;
+  /** Full README/long-form content when the URL resolved to a GitHub repository, else `null`. */
+  readme: string | null;
+  primaryLanguage: string | null;
+}
+
+export interface OnboardingToolDescription {
+  choice: DescriptionChoice;
+  /** Only meaningful when `choice === "CUSTOM"`. */
+  customDescription: string | null;
+}
+
+/** Step 3 — free-form audience labels (roles, fields, ...). Not a fixed enum — the set isn't closed. */
+export interface OnboardingToolLabels {
+  values: string[];
+}
+
+/** Step 4 — Admin-authored Markdown. Never derived from `source.readme` (see that field's comment above). */
+export interface OnboardingToolSetupGuide {
+  content: string;
+}
+
+/** Backend-authoritative completion flags returned to the frontend wizard. */
+export interface ToolOnboardingStepState {
+  urlCompleted: boolean;
+  descriptionCompleted: boolean;
+  labelsCompleted: boolean;
+  setupGuideCompleted: boolean;
+  previewCompleted: boolean;
+}
+
+/** The onboarding draft as returned to the admin frontend. */
+export interface ToolOnboardingDraft {
+  id: string;
+  source: OnboardingToolSource | null;
+  description: OnboardingToolDescription | null;
+  labels: OnboardingToolLabels | null;
+  setupGuide: OnboardingToolSetupGuide | null;
+  steps: ToolOnboardingStepState;
+}
+
+export interface ToolOnboardingValidationIssue {
+  step: keyof ToolOnboardingStepState;
+  message: string;
+}
+
+export interface ToolOnboardingValidationResult {
+  valid: boolean;
+  issues: ToolOnboardingValidationIssue[];
+}
+
+/** Result of `POST /admin/opensource-tools/onboarding/:id/complete`. */
+export interface CreatedOpenSourceTool {
+  id: string;
+  slug: string;
+  name: string;
+}
+
+/**
+ * Full row shape as stored in `devtunnel.opensource_tool_onboarding_drafts`
+ * (sql/017). `labels` is a jsonb column holding a plain `string[]` —
+ * validated on the way out by src/db/opensourceToolOnboarding.ts, never
+ * trusted blindly (rule 73: validate database results).
+ *
+ * Note `validation_completed` has no counterpart in
+ * `ToolOnboardingStepState` above — it's an internal gate for
+ * `/complete`, the same role it plays in `ProjectOnboardingDraftRow`,
+ * just not one of the five steps this wizard surfaces back to the Admin.
+ */
+export interface OpenSourceToolOnboardingDraftRow {
+  id: string;
+  admin_id: string;
+
+  source_url: string | null;
+  source_name: string | null;
+  source_fetched_description: string | null;
+  source_readme: string | null;
+  source_primary_language: string | null;
+  url_completed: boolean;
+
+  description_choice: DescriptionChoice | null;
+  custom_description: string | null;
+  description_completed: boolean;
+
+  labels: string[] | null;
+  labels_completed: boolean;
+
+  setup_guide_content: string;
+  setup_guide_completed: boolean;
+
+  preview_completed: boolean;
+  validation_completed: boolean;
+
+  completed_tool_id: string | null;
+  completed_at: string | null;
+
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Full row shape as stored in `devtunnel.opensource_tools` (sql/017) —
+ * the published catalog table. Not yet consumed outside the onboarding
+ * completion path; declared now so src/db/opensourceToolOnboarding.ts
+ * (Step 4/5 of this build) has a typed return value for
+ * `complete_opensource_tool_onboarding` instead of an inline shape.
+ */
+export interface OpenSourceToolRow {
+  id: string;
+  slug: string;
+  name: string;
+  source_url: string;
+  fetched_description: string | null;
+  readme: string | null;
+  primary_language: string | null;
+  description_source: DescriptionChoice;
+  custom_description: string | null;
+  labels: string[];
+  setup_guide: string;
+  created_by: string;
+  onboarding_draft_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
