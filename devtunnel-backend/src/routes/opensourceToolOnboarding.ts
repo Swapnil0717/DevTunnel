@@ -22,7 +22,7 @@ import { logger } from "../lib/logger";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
 import { getSupabase } from "../lib/supabase";
-import { ToolSourceError } from "../lib/toolSource";
+import { resolveToolSource, ToolSourceError } from "../lib/toolSource";
 import { requireAdminRole, requirePermission } from "../middleware/adminAuth";
 import { requireAuth } from "../middleware/auth";
 import { Env, Variables } from "../types";
