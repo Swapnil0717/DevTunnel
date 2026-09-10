@@ -1,5 +1,11 @@
 import { API_BASE_URL } from "@/lib/config";
-import type { OnboardingToolDescription, OnboardingToolLabels, ToolOnboardingDraft } from "./types";
+import type {
+  CreatedOpenSourceTool,
+  OnboardingToolDescription,
+  OnboardingToolLabels,
+  ToolOnboardingDraft,
+  ToolOnboardingValidationResult,
+} from "./types";
 
 export class ToolOnboardingApiError extends Error {
   status: number;
@@ -52,11 +58,6 @@ export async function saveToolDescription(
 
 /**
  * Step 3 — `PATCH /admin/opensource-tools/onboarding/:id/labels`.
- *
- * Persists the free-form audience labels (roles, fields, etc.) an Admin
- * attaches to the tool — same "whatever the Admin typed, verbatim" rule
- * as the rest of this flow. Nothing here is inferred from the fetched
- * README or description; the Admin chooses every label explicitly.
  */
 export async function saveToolLabels(
   draftId: string,
@@ -71,5 +72,65 @@ export async function saveToolLabels(
   return parseDraftResponse(res, "save the tool labels");
 }
 
-// Step 4 (preview/validation, complete) is added here once it's built —
-// see `OpenSourceToolOnboardingWizard`.
+/**
+ * Step 4 (preview half) — `GET /admin/opensource-tools/onboarding/:id/preview`.
+ *
+ * Same convention as `fetchOnboardingPreview` in
+ * `project-onboarding/api.ts`: re-fetches the full draft so what the
+ * Admin reviews always reflects what's actually stored server-side,
+ * rather than trusting whatever this component happened to accumulate
+ * in local state across the last two steps.
+ */
+export async function fetchToolOnboardingPreview(draftId: string): Promise<ToolOnboardingDraft> {
+  const res = await fetch(`${API_BASE_URL}/admin/opensource-tools/onboarding/${draftId}/preview`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  return parseDraftResponse(res, "load the tool preview");
+}
+
+/**
+ * Step 4 (confirm half) — `POST /admin/opensource-tools/onboarding/:id/validate`.
+ *
+ * Same convention as `validateOnboarding` in `project-onboarding/api.ts`
+ * — the frontend never decides for itself whether onboarding is
+ * complete; this is the backend's authoritative check against
+ * `urlCompleted`, `descriptionCompleted`, `labelsCompleted`,
+ * `previewCompleted`.
+ */
+export async function validateToolOnboarding(
+  draftId: string,
+): Promise<ToolOnboardingValidationResult> {
+  const res = await fetch(`${API_BASE_URL}/admin/opensource-tools/onboarding/${draftId}/validate`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    throw new ToolOnboardingApiError(`Failed to validate the draft (${res.status})`, res.status);
+  }
+
+  return (await res.json()) as ToolOnboardingValidationResult;
+}
+
+/**
+ * `POST /admin/opensource-tools/onboarding/:id/complete`.
+ *
+ * Only reachable, per the same algorithm `project-onboarding/api.ts`
+ * documents, once every mandatory step and final validation have
+ * already passed — the backend rejects this call otherwise. On success
+ * the draft stops existing as a draft; the response is the real,
+ * now-listed catalog tool.
+ */
+export async function completeToolOnboarding(draftId: string): Promise<CreatedOpenSourceTool> {
+  const res = await fetch(`${API_BASE_URL}/admin/opensource-tools/onboarding/${draftId}/complete`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    throw new ToolOnboardingApiError(`Failed to create the tool (${res.status})`, res.status);
+  }
+
+  return (await res.json()) as CreatedOpenSourceTool;
+}
