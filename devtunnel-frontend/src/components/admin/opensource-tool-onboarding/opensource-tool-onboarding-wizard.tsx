@@ -6,14 +6,17 @@ import { StepIndicator } from "@/components/onboarding/step-indicator";
 import { SectionMessage } from "@/components/home/section-message";
 import {
   saveToolDescription,
+  saveToolLabels,
   ToolOnboardingApiError,
 } from "@/lib/admin/opensource-tool-onboarding/api";
 import type {
   OnboardingToolDescription,
+  OnboardingToolLabels,
   ToolOnboardingDraft,
 } from "@/lib/admin/opensource-tool-onboarding/types";
 import { ToolUrlStep } from "./steps/tool-url-step";
 import { DescriptionStep } from "./steps/description-step";
+import { LabelsStep } from "./steps/labels-step";
 
 const TOTAL_STEPS = 4;
 const STEP_LABELS = ["Tool URL", "Description", "Labels", "Preview & confirm"];
@@ -29,36 +32,25 @@ const DEFAULT_DESCRIPTION: OnboardingToolDescription = {
   customDescription: null,
 };
 
+const DEFAULT_LABELS: OnboardingToolLabels = { values: [] };
+
 /**
  * `/admin/opensource-tools/new` — Open Source Tool Onboarding wizard
  * ("Add Open Source Tool" in `admin-nav-items.ts`).
  *
- * Mirrors `ProjectOnboardingWizard` (components/admin/onboarding/) on
- * purpose — same sidebar + step-rail layout, same `StepIndicator`, same
- * Back/Continue footer — so an Admin who already knows Project
- * Onboarding recognizes this flow immediately. 4 steps instead of 5:
- * Tool URL → Description → Labels → Preview & Confirm. No Tech Stack
- * step — an "open source tool" listing doesn't need contributor-facing
- * tech-stack detection the way a full onboarded project does.
- *
- * Same "persist as you go" convention as Project Onboarding
- * (admin_workflow.txt section 24 — the backend, not this component,
- * owns whether a step is complete): Step 2's choice is saved to the
- * draft the moment the Admin presses Continue, and `draft` is always
- * replaced with whatever the backend returns.
- *
- * Built incrementally, one step at a time: Step 1 (Tool URL) and Step 2
- * (Description) are wired to real state and real API calls so far.
- * Steps 3–4 render an honest `SectionMessage` placeholder — same "don't
- * fake functionality that doesn't work yet" convention the rest of the
- * Admin Portal uses (Frontend_Development_Rules.txt rule 26) — until
- * each is built and swapped in.
+ * Built incrementally, one step at a time: Step 1 (Tool URL), Step 2
+ * (Description) and Step 3 (Labels) are wired to real state and real API
+ * calls so far. Step 4 renders an honest `SectionMessage` placeholder —
+ * same "don't fake functionality that doesn't work yet" convention the
+ * rest of the Admin Portal uses (Frontend_Development_Rules.txt rule
+ * 26) — until it's built and swapped in.
  */
 export function OpenSourceToolOnboardingWizard() {
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<ToolOnboardingDraft | null>(null);
 
   const [description, setDescription] = useState<OnboardingToolDescription>(DEFAULT_DESCRIPTION);
+  const [labels, setLabels] = useState<OnboardingToolLabels>(DEFAULT_LABELS);
   const [isSavingStep, setIsSavingStep] = useState(false);
   const [stepError, setStepError] = useState<string | null>(null);
 
@@ -89,6 +81,25 @@ export function OpenSourceToolOnboardingWizard() {
       return;
     }
 
+    if (step === 3) {
+      if (!draft) return;
+      setIsSavingStep(true);
+      try {
+        const next = await saveToolLabels(draft.id, labels);
+        setDraft(next);
+        setStep(4);
+      } catch (error) {
+        setStepError(
+          error instanceof ToolOnboardingApiError
+            ? "We couldn't save the labels. Please try again."
+            : "Something went wrong. Check your connection and try again.",
+        );
+      } finally {
+        setIsSavingStep(false);
+      }
+      return;
+    }
+
     setStep((current) => Math.min(TOTAL_STEPS, current + 1));
   }
 
@@ -97,13 +108,12 @@ export function OpenSourceToolOnboardingWizard() {
       ? Boolean(draft?.source)
       : step === 2
         ? description.choice === "EXISTING" || Boolean(description.customDescription?.trim())
-        : true;
+        : step === 3
+          ? labels.values.length > 0
+          : true;
 
   return (
     <main className="flex min-h-screen w-full flex-col bg-bg lg:flex-row">
-      {/* Sidebar: logo + vertical step rail on laptop; collapses to a
-          compact top strip with the horizontal step bar on mobile
-          (Frontend_Development_Rules.txt rule 33 — mobile-first). */}
       <aside className="flex flex-shrink-0 flex-col gap-6 border-b border-border-subtle px-4 py-5 sm:px-6 lg:w-[320px] lg:justify-between lg:gap-0 lg:border-b-0 lg:border-r lg:px-10 lg:py-12 xl:w-[380px]">
         <div className="flex items-center justify-between lg:block">
           <Logo asLink={false} />
@@ -132,7 +142,6 @@ export function OpenSourceToolOnboardingWizard() {
         </p>
       </aside>
 
-      {/* Content column */}
       <div className="flex flex-1 items-center justify-center px-4 py-6 sm:px-6 sm:py-10 lg:px-16 lg:py-14 xl:px-20">
         <div className="flex w-full max-w-[720px] flex-col gap-6 sm:gap-8">
           <div className="flex-1">
@@ -142,6 +151,7 @@ export function OpenSourceToolOnboardingWizard() {
                 onImported={(next) => {
                   setDraft(next);
                   setDescription(next.description ?? DEFAULT_DESCRIPTION);
+                  setLabels(next.labels ?? DEFAULT_LABELS);
                 }}
               />
             )}
@@ -154,15 +164,7 @@ export function OpenSourceToolOnboardingWizard() {
               />
             )}
 
-            {step === 3 && (
-              <div>
-                <h1 className="m-0 mb-1 text-[16px] font-medium text-text">Labels</h1>
-                <p className="m-0 mb-6 max-w-[520px] text-[13px] leading-[1.6] text-text-muted">
-                  Tag the roles and fields that benefit from this tool.
-                </p>
-                <SectionMessage>This step isn&apos;t built yet — check back soon.</SectionMessage>
-              </div>
-            )}
+            {step === 3 && <LabelsStep value={labels} onChange={setLabels} />}
 
             {step === 4 && (
               <div>

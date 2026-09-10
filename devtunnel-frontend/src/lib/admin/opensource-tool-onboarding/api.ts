@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "@/lib/config";
-import type { OnboardingToolDescription, ToolOnboardingDraft } from "./types";
+import type { OnboardingToolDescription, OnboardingToolLabels, ToolOnboardingDraft } from "./types";
 
 export class ToolOnboardingApiError extends Error {
   status: number;
@@ -20,14 +20,6 @@ async function parseDraftResponse(res: Response, action: string): Promise<ToolOn
 
 /**
  * Step 1 — `POST /admin/opensource-tools/onboarding/url`.
- *
- * The Admin supplies only `url` — everything else on the returned
- * draft's `source` (name, description, README, language) is resolved by
- * the backend, never typed in here. Passing an existing `draftId`
- * re-runs the fetch against an in-progress draft (e.g. the Admin
- * corrected a typo in the URL) instead of creating a second, orphaned
- * draft — same convention as `importRepository` in
- * `project-onboarding/api.ts`.
  */
 export async function importToolUrl(
   url: string,
@@ -44,13 +36,6 @@ export async function importToolUrl(
 
 /**
  * Step 2 — `PATCH /admin/opensource-tools/onboarding/:id/description`.
- *
- * Persists the Admin's choice between the description fetched from the
- * tool's URL and a custom one layered on top — same convention as
- * `saveDescription` in `project-onboarding/api.ts`. The fetched
- * description itself is never rewritten by this call; a custom
- * description is additional DevTunnel-only metadata, not an edit to
- * what was found at the source URL.
  */
 export async function saveToolDescription(
   draftId: string,
@@ -65,5 +50,26 @@ export async function saveToolDescription(
   return parseDraftResponse(res, "save the tool description");
 }
 
-// Steps 3–4 (labels, preview/validation, complete) are added here as
-// each step is built — see `OpenSourceToolOnboardingWizard`.
+/**
+ * Step 3 — `PATCH /admin/opensource-tools/onboarding/:id/labels`.
+ *
+ * Persists the free-form audience labels (roles, fields, etc.) an Admin
+ * attaches to the tool — same "whatever the Admin typed, verbatim" rule
+ * as the rest of this flow. Nothing here is inferred from the fetched
+ * README or description; the Admin chooses every label explicitly.
+ */
+export async function saveToolLabels(
+  draftId: string,
+  labels: OnboardingToolLabels,
+): Promise<ToolOnboardingDraft> {
+  const res = await fetch(`${API_BASE_URL}/admin/opensource-tools/onboarding/${draftId}/labels`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(labels),
+  });
+  return parseDraftResponse(res, "save the tool labels");
+}
+
+// Step 4 (preview/validation, complete) is added here once it's built —
+// see `OpenSourceToolOnboardingWizard`.
