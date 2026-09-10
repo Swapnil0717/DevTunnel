@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "@/lib/config";
-import type { ToolOnboardingDraft } from "./types";
+import type { OnboardingToolDescription, ToolOnboardingDraft } from "./types";
 
 export class ToolOnboardingApiError extends Error {
   status: number;
@@ -42,5 +42,28 @@ export async function importToolUrl(
   return parseDraftResponse(res, "import the tool URL");
 }
 
-// Steps 2–4 (description, labels, preview/validation, complete) are added
-// here as each step is built — see `OpenSourceToolOnboardingWizard`.
+/**
+ * Step 2 — `PATCH /admin/opensource-tools/onboarding/:id/description`.
+ *
+ * Persists the Admin's choice between the description fetched from the
+ * tool's URL and a custom one layered on top — same convention as
+ * `saveDescription` in `project-onboarding/api.ts`. The fetched
+ * description itself is never rewritten by this call; a custom
+ * description is additional DevTunnel-only metadata, not an edit to
+ * what was found at the source URL.
+ */
+export async function saveToolDescription(
+  draftId: string,
+  description: OnboardingToolDescription,
+): Promise<ToolOnboardingDraft> {
+  const res = await fetch(`${API_BASE_URL}/admin/opensource-tools/onboarding/${draftId}/description`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(description),
+  });
+  return parseDraftResponse(res, "save the tool description");
+}
+
+// Steps 3–4 (labels, preview/validation, complete) are added here as
+// each step is built — see `OpenSourceToolOnboardingWizard`.
