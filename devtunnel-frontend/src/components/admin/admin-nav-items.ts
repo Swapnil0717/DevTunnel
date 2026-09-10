@@ -6,6 +6,9 @@ import {
   ChecklistIcon,
   IssueIcon,
   ActivityIcon,
+  SparkleIcon,
+  CheckCircleIcon,
+  ToolIcon,
 } from "@/components/layout/nav-icons";
 
 /** A single navigable admin route — the leaf nodes of `ADMIN_NAV_ITEMS`. */
@@ -21,9 +24,9 @@ export interface AdminNavLink {
    * Portal is visible in the nav, but only Dashboard (`/admin`), All
    * Projects (`/admin/projects`), Project Onboarding
    * (`/admin/projects/new`), All Tasks (`/admin/tasks`), Create Task
-   * (`/admin/tasks/new`), New Issues (`/admin/tasks/new-issues`), and
-   * its Since Onboarding filter
-   * (`/admin/tasks/new-issues/since-onboarding`) have real pages today.
+   * (`/admin/tasks/new`), New Issues (`/admin/tasks/new-issues`), its
+   * Since Onboarding filter (`/admin/tasks/new-issues/since-onboarding`),
+   * and the AI / Open Source Tools sections below have real pages today.
    *
    * `AdminSidebar` / `AdminMobileNav` render `built: false` entries as
    * disabled, non-navigating labels rather than `<Link>`s to pages that
@@ -37,9 +40,9 @@ export interface AdminNavLink {
 }
 
 /**
- * A non-navigating section header with its own sub-routes — "Projects" and
- * "Tasks" in the spec's sidebar tree. Renders as a label followed by its
- * indented `items`, never as a link itself.
+ * A non-navigating section header with its own sub-routes — "Projects",
+ * "Tasks", "AI", and "Open Source Tools" in the sidebar tree. Renders as
+ * a label followed by its indented `items`, never as a link itself.
  */
 export interface AdminNavGroup {
   type: "group";
@@ -52,7 +55,8 @@ export type AdminNavEntry = AdminNavLink | AdminNavGroup;
 
 /**
  * Admin sidebar structure, matching the Admin Portal Master Coding
- * Specification, section 2 — Admin Navigation, exactly:
+ * Specification, section 2 — Admin Navigation, plus two additional
+ * sections (AI, Open Source Tools) requested on top of the spec:
  *
  * ```text
  * ADMIN
@@ -69,22 +73,35 @@ export type AdminNavEntry = AdminNavLink | AdminNavGroup;
  * │   ├── New Issues
  * │   └── New Issues ▸ Since Onboarding
  * │
+ * ├── AI
+ * │   ├── AI Added Projects
+ * │   ├── AI Added Tools
+ * │   ├── AI Added Tasks
+ * │   └── Confirmation by Admin
+ * │
+ * ├── Open Source Tools
+ * │   ├── All Open Source Tools
+ * │   └── Add Open Source Tool
+ * │
  * └── Activity
  * ```
  *
- * "No additional sections unless required by the existing source code" —
- * so items the previous nav carried (Authors, Repository details, Project
- * files, Project preview, Publish, GitHub sync) are intentionally dropped
- * from this top-level list. They're still real workflow steps (project
- * repository/contributors live under Project Details, publishing happens
- * at the end of Project Onboarding, etc.) — they just aren't their own
- * sidebar entries per the spec.
+ * The spec's "no additional sections unless required by the existing
+ * source code" note governed the original five entries; AI and Open
+ * Source Tools are a deliberate, explicitly requested extension on top
+ * of that base, not a spec section — so unlike the rest of this file,
+ * there's no Master Coding Specification module number to cite for
+ * them.
  *
- * Routes are taken from the spec's section 29 final page list:
- * Projects → `/admin/projects` (A3) and `/admin/projects/new` (A4, the
- * onboarding wizard's first step); Tasks → `/admin/tasks` (A12),
- * `/admin/tasks/new` (A13, the onboarding wizard's first step), and
- * `/admin/tasks/new-issues` (A15); Activity → `/admin/activity` (A16).
+ * Routes are taken from the spec's section 29 final page list where one
+ * exists: Projects → `/admin/projects` (A3) and `/admin/projects/new`
+ * (A4, the onboarding wizard's first step); Tasks →
+ * `/admin/tasks` (A12), `/admin/tasks/new` (A13, the onboarding
+ * wizard's first step), and `/admin/tasks/new-issues` (A15); Activity
+ * → `/admin/activity` (A16). AI and Open Source Tools have no spec
+ * module, so their routes follow the same `/admin/<section>/<action>`
+ * shape under a new `/admin/ai/*` and `/admin/opensource-tools/*`
+ * namespace instead.
  *
  * `/admin/tasks/new-issues/since-onboarding` isn't in the spec's page
  * list — it's a frontend-only filtered view nested under New Issues
@@ -146,6 +163,62 @@ export const ADMIN_NAV_ITEMS: AdminNavEntry[] = [
         href: "/admin/tasks/new-issues/since-onboarding",
         label: "Since Onboarding",
         Icon: IssueIcon,
+        built: true,
+      },
+    ],
+  },
+  {
+    type: "group",
+    label: "AI",
+    Icon: SparkleIcon,
+    items: [
+      {
+        type: "link",
+        href: "/admin/ai/projects",
+        label: "AI Added Projects",
+        Icon: FolderIcon,
+        built: true,
+      },
+      {
+        type: "link",
+        href: "/admin/ai/tools",
+        label: "AI Added Tools",
+        Icon: ToolIcon,
+        built: true,
+      },
+      {
+        type: "link",
+        href: "/admin/ai/tasks",
+        label: "AI Added Tasks",
+        Icon: ChecklistIcon,
+        built: true,
+      },
+      {
+        type: "link",
+        href: "/admin/ai/confirmation",
+        label: "Confirmation by Admin",
+        Icon: CheckCircleIcon,
+        built: true,
+      },
+    ],
+  },
+  {
+    type: "group",
+    label: "Open Source Tools",
+    Icon: ToolIcon,
+    items: [
+      {
+        type: "link",
+        href: "/admin/opensource-tools",
+        label: "All Open Source Tools",
+        Icon: ToolIcon,
+        built: true,
+      },
+      {
+        type: "link",
+        href: "/admin/opensource-tools/new",
+        label: "Add Open Source Tool",
+        Icon: PlusIcon,
         built: true,
       },
     ],

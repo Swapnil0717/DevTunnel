@@ -230,3 +230,45 @@
      </svg>
    );
  }
+
+  /**
+  * Admin sidebar — "AI" section header (AI Added Projects / AI Added Tools /
+  * AI Added Tasks / Confirmation by Admin). A simple four-point sparkle
+  * reads as "AI" at a glance without pulling in an icon library
+  * (Frontend_Development_Rules.txt rule 34).
+  */
+   export function SparkleIcon({ className = "" }: IconProps) {
+    return (
+      <svg {...base} className={className}>
+        <path d="M12 3.5c.5 3 2 5 5.5 5.5-3.5.5-5 2.5-5.5 5.5-.5-3-2-5-5.5-5.5C10 8.5 11.5 6.5 12 3.5Z" />
+        <path d="M18.5 15c.3 1.4.9 2 2.3 2.3-1.4.3-2 .9-2.3 2.3-.3-1.4-.9-2-2.3-2.3 1.4-.3 2-.9 2.3-2.3Z" />
+      </svg>
+    );
+  }
+ 
+  /**
+   * Admin sidebar — "AI" section, "Confirmation by Admin" leaf item: an
+   * admin reviewing/approving something AI produced, so a checkmark reads
+   * more precisely than the generic sparkle used for the group header.
+   */
+  export function CheckCircleIcon({ className = "" }: IconProps) {
+    return (
+      <svg {...base} className={className}>
+        <circle cx="12" cy="12" r="8.25" />
+        <path d="M8.5 12.3l2.3 2.3 4.7-5" />
+      </svg>
+    );
+  }
+ 
+  /**
+   * Admin sidebar — "Open Source Tools" section header and "All Open Source
+   * Tools" leaf item: a wrench for "tool", visually distinct from
+   * `FolderIcon` (Projects) and `ChecklistIcon` (Tasks).
+   */
+  export function ToolIcon({ className = "" }: IconProps) {
+    return (
+      <svg {...base} className={className}>
+        <path d="M14.7 6.3a3.5 3.5 0 0 0-4.6 4.2L4.5 16.1a1.7 1.7 0 0 0 2.4 2.4l5.6-5.6a3.5 3.5 0 0 0 4.2-4.6l-2.3 2.3-1.9-.5-.5-1.9 2.3-2.3Z" />
+      </svg>
+    );
+  }
