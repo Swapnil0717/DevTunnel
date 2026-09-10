@@ -3,6 +3,7 @@ import type {
   CreatedOpenSourceTool,
   OnboardingToolDescription,
   OnboardingToolLabels,
+  OnboardingToolSetupGuide,
   ToolOnboardingDraft,
   ToolOnboardingValidationResult,
 } from "./types";
@@ -73,7 +74,28 @@ export async function saveToolLabels(
 }
 
 /**
- * Step 4 (preview half) — `GET /admin/opensource-tools/onboarding/:id/preview`.
+ * Step 4 — `PATCH /admin/opensource-tools/onboarding/:id/setup-guide`.
+ *
+ * Saves the Admin-written "how to set up and use the tool" Markdown.
+ * Same persist-as-you-go convention as `saveToolDescription` /
+ * `saveToolLabels` above — the backend, not this frontend, decides
+ * whether the content is enough to mark `setupGuideCompleted` true.
+ */
+export async function saveToolSetupGuide(
+  draftId: string,
+  setupGuide: OnboardingToolSetupGuide,
+): Promise<ToolOnboardingDraft> {
+  const res = await fetch(`${API_BASE_URL}/admin/opensource-tools/onboarding/${draftId}/setup-guide`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(setupGuide),
+  });
+  return parseDraftResponse(res, "save the setup & usage guide");
+}
+
+/**
+ * Step 5 (preview half) — `GET /admin/opensource-tools/onboarding/:id/preview`.
  *
  * Same convention as `fetchOnboardingPreview` in
  * `project-onboarding/api.ts`: re-fetches the full draft so what the
@@ -90,13 +112,13 @@ export async function fetchToolOnboardingPreview(draftId: string): Promise<ToolO
 }
 
 /**
- * Step 4 (confirm half) — `POST /admin/opensource-tools/onboarding/:id/validate`.
+ * Step 5 (confirm half) — `POST /admin/opensource-tools/onboarding/:id/validate`.
  *
  * Same convention as `validateOnboarding` in `project-onboarding/api.ts`
  * — the frontend never decides for itself whether onboarding is
  * complete; this is the backend's authoritative check against
  * `urlCompleted`, `descriptionCompleted`, `labelsCompleted`,
- * `previewCompleted`.
+ * `setupGuideCompleted`, `previewCompleted`.
  */
 export async function validateToolOnboarding(
   draftId: string,

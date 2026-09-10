@@ -20,11 +20,12 @@ const CHECKLIST: { key: keyof ToolOnboardingStepState; label: string }[] = [
   { key: "urlCompleted", label: "Tool URL" },
   { key: "descriptionCompleted", label: "Description" },
   { key: "labelsCompleted", label: "Labels" },
+  { key: "setupGuideCompleted", label: "Setup & usage" },
   { key: "previewCompleted", label: "Preview" },
 ];
 
 /**
- * Step 4 of Open Source Tool Onboarding — "Preview & Confirm".
+ * Step 5 of Open Source Tool Onboarding — "Preview & Confirm".
  *
  * A single combined step by design (the original request asked for one
  * "preview and confirmation" page, unlike Project Onboarding's separate
@@ -72,7 +73,7 @@ export function PreviewConfirmStep({
     );
   }
 
-  const { source, description, labels, steps } = draft;
+  const { source, description, labels, setupGuide, steps } = draft;
 
   if (!source) {
     return (
@@ -145,6 +146,21 @@ export function PreviewConfirmStep({
             </div>
           ) : (
             <p className="m-0 text-[12px] text-text-faint">No labels added.</p>
+          )}
+        </section>
+
+        <section className="rounded-[10px] border border-border bg-surface p-5">
+          <p className="m-0 mb-3 text-[11px] uppercase tracking-wide text-text-faint">
+            Setup &amp; usage
+          </p>
+          {setupGuide && setupGuide.content.trim() ? (
+            <div className="max-h-[220px] overflow-y-auto rounded-md border border-border-subtle bg-surface-raised p-3">
+              <MarkdownReadme content={setupGuide.content} />
+            </div>
+          ) : (
+            <p className="m-0 text-[12px] text-text-faint">
+              No setup &amp; usage instructions written.
+            </p>
           )}
         </section>
       </div>

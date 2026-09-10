@@ -8,6 +8,7 @@ import {
   fetchToolOnboardingPreview,
   saveToolDescription,
   saveToolLabels,
+  saveToolSetupGuide,
   ToolOnboardingApiError,
   validateToolOnboarding,
 } from "@/lib/admin/opensource-tool-onboarding/api";
@@ -15,20 +16,23 @@ import type {
   CreatedOpenSourceTool,
   OnboardingToolDescription,
   OnboardingToolLabels,
+  OnboardingToolSetupGuide,
   ToolOnboardingDraft,
   ToolOnboardingValidationResult,
 } from "@/lib/admin/opensource-tool-onboarding/types";
 import { ToolUrlStep } from "./steps/tool-url-step";
 import { DescriptionStep } from "./steps/description-step";
 import { LabelsStep } from "./steps/labels-step";
+import { SetupGuideStep } from "./steps/setup-guide-step";
 import { PreviewConfirmStep } from "./steps/preview-confirm-step";
 
-const TOTAL_STEPS = 4;
-const STEP_LABELS = ["Tool URL", "Description", "Labels", "Preview & confirm"];
+const TOTAL_STEPS = 5;
+const STEP_LABELS = ["Tool URL", "Description", "Labels", "Setup & usage", "Preview & confirm"];
 const STEP_DESCRIPTIONS = [
   "Import the project by its URL.",
   "Choose the DevTunnel description.",
   "Tag who this tool benefits.",
+  "Write how to set up and use it.",
   "Confirm and add the tool.",
 ];
 
@@ -39,6 +43,8 @@ const DEFAULT_DESCRIPTION: OnboardingToolDescription = {
 
 const DEFAULT_LABELS: OnboardingToolLabels = { values: [] };
 
+const DEFAULT_SETUP_GUIDE: OnboardingToolSetupGuide = { content: "" };
+
 /**
  * `/admin/opensource-tools/new` — Open Source Tool Onboarding wizard
  * ("Add Open Source Tool" in `admin-nav-items.ts`).
@@ -46,13 +52,16 @@ const DEFAULT_LABELS: OnboardingToolLabels = { values: [] };
  * Mirrors `ProjectOnboardingWizard` (components/admin/onboarding/) on
  * purpose — same sidebar + step-rail layout, same `StepIndicator`, same
  * Back/Continue footer — so an Admin who already knows Project
- * Onboarding recognizes this flow immediately. 4 steps instead of 5:
- * Tool URL → Description → Labels → Preview & Confirm — one combined
- * final step rather than Project Onboarding's separate Preview and
- * Validation steps, per the original request for a single "preview and
- * confirmation" page. No Tech Stack step — an "open source tool"
+ * Onboarding recognizes this flow immediately. 5 steps: Tool URL →
+ * Description → Labels → Setup & Usage → Preview & Confirm — one
+ * combined final step rather than Project Onboarding's separate Preview
+ * and Validation steps, per the original request for a single "preview
+ * and confirmation" page. No Tech Stack step — an "open source tool"
  * listing doesn't need contributor-facing tech-stack detection the way
- * a full onboarded project does.
+ * a full onboarded project does. Setup & Usage exists precisely because
+ * a fetched README (Step 1) documents the project, not necessarily "how
+ * a contributor gets this running today" — so that's written by the
+ * Admin directly rather than derived from anything fetched.
  *
  * Same "persist as you go" convention as Project Onboarding
  * (admin_workflow.txt section 24 — the backend, not this component,
@@ -60,7 +69,7 @@ const DEFAULT_LABELS: OnboardingToolLabels = { values: [] };
  * the moment the Admin presses Continue, and `draft` is always replaced
  * with whatever the backend returns. `draft.steps` (the backend's own
  * completion flags) is what actually gates whether "Add tool" can be
- * pressed on Step 4 — this component's local `step` number only
+ * pressed on Step 5 — this component's local `step` number only
  * controls which step is currently *visible*, never whether the tool is
  * allowed to be created.
  *
@@ -73,6 +82,7 @@ export function OpenSourceToolOnboardingWizard() {
 
   const [description, setDescription] = useState<OnboardingToolDescription>(DEFAULT_DESCRIPTION);
   const [labels, setLabels] = useState<OnboardingToolLabels>(DEFAULT_LABELS);
+  const [setupGuide, setSetupGuide] = useState<OnboardingToolSetupGuide>(DEFAULT_SETUP_GUIDE);
 
   const [previewDraft, setPreviewDraft] = useState<ToolOnboardingDraft | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
@@ -87,7 +97,7 @@ export function OpenSourceToolOnboardingWizard() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [createdTool, setCreatedTool] = useState<CreatedOpenSourceTool | null>(null);
 
-  // Step 4 entry: always re-fetch the preview from the backend so it
+  // Step 5 entry: always re-fetch the preview from the backend so it
   // reflects exactly what's stored, not accumulated local state — then
   // immediately run final validation, since this step combines preview
   // and confirmation into one page. Also updates `draft` (not just
@@ -96,7 +106,7 @@ export function OpenSourceToolOnboardingWizard() {
   // `draft.steps`, so without this it would still show Preview as
   // incomplete even after a successful fetch.
   useEffect(() => {
-    if (step !== 4 || !draft || createdTool) return;
+    if (step !== 5 || !draft || createdTool) return;
     setIsLoadingPreview(true);
     setStepError(null);
     fetchToolOnboardingPreview(draft.id)
@@ -160,6 +170,24 @@ export function OpenSourceToolOnboardingWizard() {
       return;
     }
 
+    if (step === 4) {
+      setIsSavingStep(true);
+      try {
+        const next = await saveToolSetupGuide(draft.id, setupGuide);
+        setDraft(next);
+        setStep(5);
+      } catch (error) {
+        setStepError(
+          error instanceof ToolOnboardingApiError
+            ? "We couldn't save the setup & usage guide. Please try again."
+            : "Something went wrong. Check your connection and try again.",
+        );
+      } finally {
+        setIsSavingStep(false);
+      }
+      return;
+    }
+
     setStep((current) => Math.min(TOTAL_STEPS, current + 1));
   }
 
@@ -186,6 +214,7 @@ export function OpenSourceToolOnboardingWizard() {
     setDraft(null);
     setDescription(DEFAULT_DESCRIPTION);
     setLabels(DEFAULT_LABELS);
+    setSetupGuide(DEFAULT_SETUP_GUIDE);
     setPreviewDraft(null);
     setValidation(null);
     setCreatedTool(null);
@@ -200,7 +229,9 @@ export function OpenSourceToolOnboardingWizard() {
         ? description.choice === "EXISTING" || Boolean(description.customDescription?.trim())
         : step === 3
           ? labels.values.length > 0
-          : true;
+          : step === 4
+            ? Boolean(setupGuide.content.trim())
+            : true;
 
   return (
     <main className="flex min-h-screen w-full flex-col bg-bg lg:flex-row">
@@ -242,6 +273,7 @@ export function OpenSourceToolOnboardingWizard() {
                   setDraft(next);
                   setDescription(next.description ?? DEFAULT_DESCRIPTION);
                   setLabels(next.labels ?? DEFAULT_LABELS);
+                  setSetupGuide(next.setupGuide ?? DEFAULT_SETUP_GUIDE);
                 }}
               />
             )}
@@ -256,7 +288,9 @@ export function OpenSourceToolOnboardingWizard() {
 
             {step === 3 && <LabelsStep value={labels} onChange={setLabels} />}
 
-            {step === 4 &&
+            {step === 4 && <SetupGuideStep value={setupGuide} onChange={setSetupGuide} />}
+
+            {step === 5 &&
               (isLoadingPreview || !previewDraft ? (
                 <p className="m-0 text-[12.5px] text-text-dim">Loading preview…</p>
               ) : (
