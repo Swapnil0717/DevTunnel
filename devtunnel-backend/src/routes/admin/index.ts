@@ -7,6 +7,7 @@ import { adminTasks } from "./tasks";
 import { adminNewIssues } from "./newIssues";
 import { adminProjectOnboarding } from "../projectOnboarding";
 import { adminTaskOnboarding } from "../taskOnboarding";
+import { adminOpenSourceToolOnboarding } from "../opensourceToolOnboarding";
 
 /**
  * Admin Backend router (devtunnel_workflow.txt section 43): mounted at
@@ -30,7 +31,14 @@ import { adminTaskOnboarding } from "../taskOnboarding";
  * shape one level up — mounted as plain siblings below, with the same
  * literal-segment-before-`:id` guarantee keeping
  * `GET /admin/tasks/onboarding/...` from ever being swallowed by
- * `/admin/tasks/:id`. `/admin/new-issues` (src/routes/admin/newIssues.ts)
+ * `/admin/tasks/:id`. `/admin/opensource-tools/onboarding`
+ * (src/routes/opensourceToolOnboarding.ts) is mounted the same way —
+ * there is no plain `/admin/opensource-tools` sibling yet (no "list/edit
+ * an already-published tool" admin screen exists), so this mount point
+ * only ever sees the six onboarding-wizard routes (rbac.ts's route map,
+ * lines 54–60); it becomes a sibling of a future `/admin/opensource-tools`
+ * the same way `/admin/tasks/onboarding` already is of `/admin/tasks`.
+ * `/admin/new-issues` (src/routes/admin/newIssues.ts)
  * is its own top-level sibling rather than nested under `/admin/tasks` —
  * admin_workflow.txt section 16's own "Backend" list names the API route
  * as flat `GET /admin/new-issues` (the `/admin/tasks/new-issues` name in
@@ -50,4 +58,5 @@ admin.route("/projects", adminProjects);
 admin.route("/projects/onboarding", adminProjectOnboarding);
 admin.route("/tasks", adminTasks);
 admin.route("/tasks/onboarding", adminTaskOnboarding);
+admin.route("/opensource-tools/onboarding", adminOpenSourceToolOnboarding);
 admin.route("/new-issues", adminNewIssues);

@@ -1,462 +1,481 @@
-// devtunnel-backend/src/db/opensourceToolOnboarding.ts
+// devtunnel-backend/src/routes/opensourceToolOnboarding.ts
 
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type {
-  CreatedOpenSourceTool,
-  DescriptionChoice,
-  OpenSourceToolOnboardingDraftRow,
-  ToolOnboardingDraft,
-  ToolOnboardingValidationIssue,
-  ToolOnboardingValidationResult,
-} from "../types";
+import { Hono } from "hono";
+import { z } from "zod";
+import { getEnv } from "../config/env";
+import { recordAdminAudit } from "../db/adminAudit";
+import {
+  ToolOnboardingError,
+  saveUrlImport,
+  toOnboardingDraft,
+  saveDescription,
+  saveLabels,
+  saveSetupGuide,
+  markPreviewCompleted,
+  getDraftForAdmin,
+  computeValidation,
+  saveValidationResult,
+  completeOnboarding,
+} from "../db/opensourceToolOnboarding";
 
-/** Explicit column list — never `select("*")` (Backend_Development_Rules.md rule 23). */
-const DRAFT_COLUMNS =
-  "id, admin_id, source_url, source_name, source_fetched_description, source_readme, " +
-  "source_primary_language, url_completed, " +
-  "description_choice, custom_description, description_completed, " +
-  "labels, labels_completed, " +
-  "setup_guide_content, setup_guide_completed, " +
-  "preview_completed, validation_completed, " +
-  "completed_tool_id, completed_at, created_at, updated_at";
-
-/**
- * Errors this module raises for onboarding-specific business rules, kept
- * distinct from a generic thrown `Error` so route handlers
- * (src/routes/opensourceToolOnboarding.ts) can map each one to the
- * correct HTTP status without string-matching a message (rule 20:
- * centralized, predictable error handling). Mirrors
- * `ProjectOnboardingError` (src/db/projectOnboarding.ts) field-for-field —
- * `tool_already_onboarded` is this flow's equivalent of that module's
- * `repository_already_onboarded`.
- */
-export class ToolOnboardingError extends Error {
-  code:
-    | "not_found"
-    | "already_completed"
-    | "step_incomplete"
-    | "tool_already_onboarded"
-    | "conflict";
-  constructor(code: ToolOnboardingError["code"], message: string) {
-    super(message);
-    this.name = "ToolOnboardingError";
-    this.code = code;
-  }
-}
+import { logger } from "../lib/logger";
+import { checkRateLimit } from "../lib/rateLimit";
+import { errorResponse } from "../lib/response";
+import { getSupabase } from "../lib/supabase";
+import { ToolSourceError } from "../lib/Toolsource";
+import { requireAdminRole, requirePermission } from "../middleware/adminAuth";
+import { requireAuth } from "../middleware/auth";
+import { Env, Variables } from "../types";
 
 /**
- * Maps a raw `devtunnel.opensource_tool_onboarding_drafts` row to the
- * frontend-facing `ToolOnboardingDraft` shape
- * (devtunnel-frontend/src/lib/admin/opensource-tool-onboarding/types.ts).
- * `admin_id` and every other internal-only column are deliberately never
- * included in the returned object (rule 9: separate public/private data —
- * here, "public" means "visible to the owning admin", still narrower
- * than the full row).
+ * Admin — Open Source Tool Onboarding wizard
+ * (devtunnel-frontend/src/lib/admin/opensource-tool-onboarding/,
+ * `/admin/opensource-tools/new`). Every route here requires admin
+ * authentication + role (mounted the same way as every other admin
+ * module — see src/routes/admin/index.ts) plus the
+ * `admin:opensource-tools:write`/`admin:opensource-tools:read` RBAC
+ * permission src/lib/rbac.ts reserves for this route group (see its
+ * route map comment, lines 54–60).
+ *
+ * Response bodies for the six routes below intentionally return the
+ * `ToolOnboardingDraft` / `ToolOnboardingValidationResult` /
+ * `CreatedOpenSourceTool` object directly — NOT wrapped in the
+ * `{ data: ... }` envelope used elsewhere in this backend
+ * (src/lib/response.ts) — because they must match, field for field, the
+ * already-implemented frontend contract in
+ * devtunnel-frontend/src/lib/admin/opensource-tool-onboarding/api.ts,
+ * which parses each response body directly as that type. Error
+ * responses still use the standard `{ error: { code, message,
+ * requestId } }` envelope (src/lib/response.ts) — the frontend only
+ * inspects `res.ok`/`res.status` on failure, never the error body
+ * shape, so this doesn't create two incompatible conventions for the
+ * same caller. Mirrors src/routes/projectOnboarding.ts's own doc
+ * comment, field for field.
  */
-export function toOnboardingDraft(row: OpenSourceToolOnboardingDraftRow): ToolOnboardingDraft {
-  return {
-    id: row.id,
-    source:
-      row.source_url !== null && row.source_name !== null
-        ? {
-            url: row.source_url,
-            name: row.source_name,
-            fetchedDescription: row.source_fetched_description,
-            readme: row.source_readme,
-            primaryLanguage: row.source_primary_language,
-          }
-        : null,
-    description:
-      row.description_choice !== null
-        ? { choice: row.description_choice, customDescription: row.custom_description }
-        : null,
-    labels: row.labels !== null ? { values: row.labels } : null,
-    setupGuide:
-      row.setup_guide_content.length > 0 || row.setup_guide_completed
-        ? { content: row.setup_guide_content }
-        : null,
-    steps: {
-      urlCompleted: row.url_completed,
-      descriptionCompleted: row.description_completed,
-      labelsCompleted: row.labels_completed,
-      setupGuideCompleted: row.setup_guide_completed,
-      previewCompleted: row.preview_completed,
-    },
-  };
+export const adminOpenSourceToolOnboarding = new Hono<{ Bindings: Env; Variables: Variables }>();
+
+const uuidSchema = z.string().uuid("Invalid onboarding draft id");
+
+function mapOnboardingError(c: Parameters<typeof errorResponse>[0], err: ToolOnboardingError) {
+  switch (err.code) {
+    case "not_found":
+      return errorResponse(c, 404, "onboarding_draft_not_found", err.message);
+    case "already_completed":
+      return errorResponse(c, 409, "onboarding_already_completed", err.message);
+    case "tool_already_onboarded":
+      return errorResponse(c, 409, "tool_already_onboarded", err.message);
+    case "step_incomplete":
+      return errorResponse(c, 422, "onboarding_step_incomplete", err.message);
+    default:
+      return errorResponse(c, 409, "onboarding_conflict", err.message);
+  }
 }
 
-/**
- * Loads a draft, scoped to the requesting admin (`admin_id = adminId`).
- * Returns `null` for both "doesn't exist" and "belongs to a different
- * admin" — indistinguishable to the caller, which is deliberate (rule 13:
- * prevent IDOR — never reveal that a resource exists for someone else).
- */
-export async function getDraftForAdmin(
-  supabase: SupabaseClient,
-  draftId: string,
-  adminId: string,
-): Promise<OpenSourceToolOnboardingDraftRow | null> {
-  const { data, error } = await supabase
-    .from("opensource_tool_onboarding_drafts")
-    .select(DRAFT_COLUMNS)
-    .eq("id", draftId)
-    .eq("admin_id", adminId)
-    .maybeSingle<OpenSourceToolOnboardingDraftRow>();
-
-  if (error) throw new Error(`Failed to load tool onboarding draft: ${error.message}`);
-  return data;
+function mapToolSourceError(c: Parameters<typeof errorResponse>[0], err: ToolSourceError) {
+  switch (err.reason) {
+    case "not_found":
+      return errorResponse(c, 404, "tool_source_not_found", err.message);
+    case "invalid_url":
+      return errorResponse(c, 400, "invalid_tool_url", err.message);
+    case "unsupported_content":
+      return errorResponse(c, 422, "tool_source_unsupported", err.message);
+    default:
+      return errorResponse(c, 502, "tool_source_unavailable", err.message);
+  }
 }
 
-async function requireDraft(
-  supabase: SupabaseClient,
-  draftId: string,
-  adminId: string,
-): Promise<OpenSourceToolOnboardingDraftRow> {
-  const draft = await getDraftForAdmin(supabase, draftId, adminId);
-  if (!draft) {
-    throw new ToolOnboardingError("not_found", "Onboarding draft not found");
-  }
-  if (draft.completed_tool_id) {
-    throw new ToolOnboardingError(
-      "already_completed",
-      "This onboarding draft has already been completed and can no longer be edited",
-    );
-  }
-  return draft;
-}
+/* ---------------------------------------------------------------------- *
+ * Step 1 — POST /admin/opensource-tools/onboarding/url
+ * ---------------------------------------------------------------------- */
 
-/**
- * Early duplicate check for Step 1 (`saveUrlImport` below). The
- * row-locked check inside `complete_opensource_tool_onboarding`
- * (sql/017) is the real, race-safe guard against onboarding the same URL
- * twice — this is purely a fast-fail so an admin who imports an
- * already-onboarded tool's URL finds out immediately, instead of
- * clicking through all four remaining wizard steps only to hit
- * `TOOL_ALREADY_ONBOARDED` on the final "Create Tool" click. Same
- * reasoning as `isRepositoryAlreadyOnboarded`
- * (src/db/projectOnboarding.ts).
- */
-async function isToolAlreadyOnboarded(supabase: SupabaseClient, sourceUrl: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("opensource_tools")
-    .select("id")
-    .eq("source_url", sourceUrl)
-    .maybeSingle<{ id: string }>();
+const importUrlSchema = z.object({
+  url: z.string().trim().min(1).max(2000),
+  draftId: z.string().uuid().optional(),
+});
 
-  if (error) throw new Error(`Failed to check for an already-onboarded tool: ${error.message}`);
-  return data !== null;
-}
+adminOpenSourceToolOnboarding.post(
+  "/url",
+  requireAuth,
+  requireAdminRole,
+  requirePermission("admin:opensource-tools:write"),
+  async (c) => {
+    const env = getEnv(c.env);
+    const admin = c.get("user");
+    if (!admin) {
+      // requireAuth + requireAdminRole already guarantee this — kept for
+      // type safety, same pattern as src/routes/admin/auth.ts.
+      return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+    }
 
-export interface ToolSourceImportInput {
-  url: string;
-  name: string;
-  fetchedDescription: string | null;
-  readme: string | null;
-  primaryLanguage: string | null;
-}
+    const withinLimit = await checkRateLimit(c, {
+      bucket: "admin-tool-onboarding-url",
+      limit: 20,
+      windowSeconds: 300,
+    });
+    if (!withinLimit) return errorResponse(c, 429, "rate_limited", "Too many requests.");
 
-/**
- * Step 1 write. Creates a new draft when `draftId` is omitted, or
- * re-imports into an existing (not-yet-completed) draft owned by this
- * admin — re-running Step 1 always resets Steps 2–5's completion flags
- * (but not their stored values) since a different tool invalidates
- * whatever description/labels/setup-guide choices were made against the
- * previous source. Mirrors `saveRepositoryImport`
- * (src/db/projectOnboarding.ts).
- */
-export async function saveUrlImport(
-  supabase: SupabaseClient,
-  adminId: string,
-  draftId: string | undefined,
-  input: ToolSourceImportInput,
-): Promise<OpenSourceToolOnboardingDraftRow> {
-  if (draftId) {
-    await requireDraft(supabase, draftId, adminId);
-  }
+    const bodyResult = importUrlSchema.safeParse(await c.req.json().catch(() => null));
+    if (!bodyResult.success) {
+      return errorResponse(
+        c,
+        400,
+        "invalid_request",
+        bodyResult.error.issues[0]?.message ?? "Invalid request body",
+      );
+    }
 
-  // Fast-fail duplicate check (see `isToolAlreadyOnboarded` above) — this
-  // is a courtesy early error, not the source of truth; the row-locked
-  // check inside `complete_opensource_tool_onboarding` (sql/017) is what
-  // actually prevents a race from creating two catalog tools for the
-  // same URL.
-  if (await isToolAlreadyOnboarded(supabase, input.url)) {
-    throw new ToolOnboardingError(
-      "tool_already_onboarded",
-      "This URL has already been onboarded as an open source tool",
-    );
-  }
+    try {
+      const supabase = getSupabase(env);
+      const resolved = await resolveToolSource(bodyResult.data.url);
 
-  const values = {
-    admin_id: adminId,
-    source_url: input.url,
-    source_name: input.name,
-    source_fetched_description: input.fetchedDescription,
-    source_readme: input.readme,
-    source_primary_language: input.primaryLanguage,
-    url_completed: true,
-    // A fresh (or re-run) URL import invalidates anything that was
-    // derived from the *previous* source — never silently carry a stale
-    // description/labels/setup-guide/preview/validation state forward.
-    description_completed: false,
-    labels_completed: false,
-    setup_guide_completed: false,
-    preview_completed: false,
-    validation_completed: false,
-  };
+      const isNewDraft = !bodyResult.data.draftId;
+      const row = await saveUrlImport(supabase, admin.id, bodyResult.data.draftId, {
+        url: resolved.url,
+        name: resolved.name,
+        fetchedDescription: resolved.fetchedDescription,
+        readme: resolved.readme,
+        primaryLanguage: resolved.primaryLanguage,
+      });
 
-  const query = draftId
-    ? supabase.from("opensource_tool_onboarding_drafts").update(values).eq("id", draftId).eq("admin_id", adminId)
-    : supabase.from("opensource_tool_onboarding_drafts").insert(values);
+      return c.json(toOnboardingDraft(row), isNewDraft ? 201 : 200);
+    } catch (err) {
+      if (err instanceof ToolSourceError) return mapToolSourceError(c, err);
+      if (err instanceof ToolOnboardingError) return mapOnboardingError(c, err);
+      logger.error("admin_tool_onboarding_url_import_failed", {
+        error: err instanceof Error ? err.message : String(err),
+        requestId: c.get("requestId"),
+      });
+      return errorResponse(c, 500, "internal_error", "Couldn't import that tool URL right now");
+    }
+  },
+);
 
-  const { data, error } = await query.select(DRAFT_COLUMNS).single<OpenSourceToolOnboardingDraftRow>();
-  if (error) throw new Error(`Failed to save tool URL import: ${error.message}`);
-  return data;
-}
+/* ---------------------------------------------------------------------- *
+ * Step 2 — PATCH /admin/opensource-tools/onboarding/:id/description
+ * ---------------------------------------------------------------------- */
 
-/** Step 2 write. */
-export async function saveDescription(
-  supabase: SupabaseClient,
-  adminId: string,
-  draftId: string,
-  choice: DescriptionChoice,
-  customDescription: string | null,
-): Promise<OpenSourceToolOnboardingDraftRow> {
-  const draft = await requireDraft(supabase, draftId, adminId);
-  if (!draft.url_completed) {
-    throw new ToolOnboardingError(
-      "step_incomplete",
-      "Import a tool URL before setting the description",
-    );
-  }
-
-  const { data, error } = await supabase
-    .from("opensource_tool_onboarding_drafts")
-    .update({
-      description_choice: choice,
-      custom_description: choice === "CUSTOM" ? customDescription : null,
-      description_completed: true,
-      preview_completed: false,
-      validation_completed: false,
-    })
-    .eq("id", draftId)
-    .eq("admin_id", adminId)
-    .select(DRAFT_COLUMNS)
-    .single<OpenSourceToolOnboardingDraftRow>();
-
-  if (error) throw new Error(`Failed to save tool description: ${error.message}`);
-  return data;
-}
-
-/**
- * Step 3 write. `labels_completed` reflects whether the admin actually
- * tagged at least one audience label — an empty list is a legitimate
- * intermediate state (the step form autosaves as labels are added or
- * removed), not a completed step, so this is decided here rather than
- * unconditionally like `saveDescription` above (same
- * "backend decides whether the content is enough" convention
- * `saveToolSetupGuide`'s own doc comment in api.ts documents for Step 4).
- */
-export async function saveLabels(
-  supabase: SupabaseClient,
-  adminId: string,
-  draftId: string,
-  values: string[],
-): Promise<OpenSourceToolOnboardingDraftRow> {
-  const draft = await requireDraft(supabase, draftId, adminId);
-  if (!draft.url_completed) {
-    throw new ToolOnboardingError("step_incomplete", "Import a tool URL before setting labels");
-  }
-
-  // Trim and drop empties defensively — the frontend's `LabelsStep` is a
-  // free-form tag input, so this never trusts blank/whitespace-only
-  // entries as real labels (rule 14: validate every input).
-  const cleaned = values.map((v) => v.trim()).filter((v) => v.length > 0);
-
-  const { data, error } = await supabase
-    .from("opensource_tool_onboarding_drafts")
-    .update({
-      labels: cleaned,
-      labels_completed: cleaned.length > 0,
-      preview_completed: false,
-      validation_completed: false,
-    })
-    .eq("id", draftId)
-    .eq("admin_id", adminId)
-    .select(DRAFT_COLUMNS)
-    .single<OpenSourceToolOnboardingDraftRow>();
-
-  if (error) throw new Error(`Failed to save tool labels: ${error.message}`);
-  return data;
-}
-
-/**
- * Step 4 write. `setup_guide_completed` reflects whether the admin has
- * actually written something — matching `saveToolSetupGuide`'s own doc
- * comment (devtunnel-frontend .../api.ts): "the backend, not this
- * frontend, decides whether the content is enough to mark
- * setupGuideCompleted true".
- */
-export async function saveSetupGuide(
-  supabase: SupabaseClient,
-  adminId: string,
-  draftId: string,
-  content: string,
-): Promise<OpenSourceToolOnboardingDraftRow> {
-  const draft = await requireDraft(supabase, draftId, adminId);
-  if (!draft.url_completed) {
-    throw new ToolOnboardingError(
-      "step_incomplete",
-      "Import a tool URL before writing the setup & usage guide",
-    );
-  }
-
-  const { data, error } = await supabase
-    .from("opensource_tool_onboarding_drafts")
-    .update({
-      setup_guide_content: content,
-      setup_guide_completed: content.trim().length > 0,
-      preview_completed: false,
-      validation_completed: false,
-    })
-    .eq("id", draftId)
-    .eq("admin_id", adminId)
-    .select(DRAFT_COLUMNS)
-    .single<OpenSourceToolOnboardingDraftRow>();
-
-  if (error) throw new Error(`Failed to save the setup & usage guide: ${error.message}`);
-  return data;
-}
-
-/**
- * Step 5 checkpoint. `GET .../:id/preview` calls this once it has loaded
- * the draft — marking `preview_completed` only once Steps 1–4 already
- * are, matching the wizard's own linear step order. Mirrors
- * `markPreviewCompleted` (src/db/projectOnboarding.ts).
- */
-export async function markPreviewCompleted(
-  supabase: SupabaseClient,
-  adminId: string,
-  draftId: string,
-): Promise<OpenSourceToolOnboardingDraftRow> {
-  const draft = await requireDraft(supabase, draftId, adminId);
-  if (
-    !draft.url_completed ||
-    !draft.description_completed ||
-    !draft.labels_completed ||
-    !draft.setup_guide_completed
-  ) {
-    throw new ToolOnboardingError(
-      "step_incomplete",
-      "Complete the URL, description, labels, and setup guide steps before previewing the tool",
-    );
-  }
-  if (draft.preview_completed) return draft;
-
-  const { data, error } = await supabase
-    .from("opensource_tool_onboarding_drafts")
-    .update({ preview_completed: true })
-    .eq("id", draftId)
-    .eq("admin_id", adminId)
-    .select(DRAFT_COLUMNS)
-    .single<OpenSourceToolOnboardingDraftRow>();
-
-  if (error) throw new Error(`Failed to mark preview completed: ${error.message}`);
-  return data;
-}
-
-/**
- * Re-derives validity directly from the draft's actual stored data
- * (never trusts the cached `*_completed` flags alone) — the backend is
- * the sole authority on completion state (rule 10). Mirrors
- * `computeValidation` (src/db/projectOnboarding.ts).
- */
-export function computeValidation(row: OpenSourceToolOnboardingDraftRow): ToolOnboardingValidationResult {
-  const issues: ToolOnboardingValidationIssue[] = [];
-
-  if (!row.url_completed || !row.source_url || !row.source_name) {
-    issues.push({ step: "urlCompleted", message: "Import a valid tool URL" });
-  }
-
-  if (!row.description_completed || !row.description_choice) {
-    issues.push({ step: "descriptionCompleted", message: "Choose how the tool description should be sourced" });
-  } else if (row.description_choice === "CUSTOM" && !row.custom_description?.trim()) {
-    issues.push({ step: "descriptionCompleted", message: "Custom description cannot be empty" });
-  }
-
-  if (!row.labels_completed || !row.labels || row.labels.length === 0) {
-    issues.push({ step: "labelsCompleted", message: "Add at least one audience label" });
-  }
-
-  if (!row.setup_guide_completed || !row.setup_guide_content.trim()) {
-    issues.push({ step: "setupGuideCompleted", message: "Write the setup & usage guide" });
-  }
-
-  if (!row.preview_completed) {
-    issues.push({ step: "previewCompleted", message: "Review the tool preview before continuing" });
-  }
-
-  return { valid: issues.length === 0, issues };
-}
-
-/** Persists the outcome of `POST .../:id/validate` so `/complete` can rely on a fresh flag too. */
-export async function saveValidationResult(
-  supabase: SupabaseClient,
-  adminId: string,
-  draftId: string,
-  valid: boolean,
-): Promise<void> {
-  const { error } = await supabase
-    .from("opensource_tool_onboarding_drafts")
-    .update({ validation_completed: valid })
-    .eq("id", draftId)
-    .eq("admin_id", adminId);
-
-  if (error) throw new Error(`Failed to save validation result: ${error.message}`);
-}
-
-/**
- * Final completion. Delegates the actual create to the atomic
- * `complete_opensource_tool_onboarding` Postgres function (sql/017) so
- * the re-validation, tool insert, and draft update happen in one
- * transaction with the draft row-locked for the duration (rule 26/55/74).
- * Mirrors `completeOnboarding` (src/db/projectOnboarding.ts).
- */
-export async function completeOnboarding(
-  supabase: SupabaseClient,
-  adminId: string,
-  draftId: string,
-): Promise<CreatedOpenSourceTool> {
-  const { data, error } = await supabase.rpc("complete_opensource_tool_onboarding", {
-    p_draft_id: draftId,
-    p_admin_id: adminId,
+const descriptionSchema = z
+  .object({
+    choice: z.enum(["EXISTING", "CUSTOM"]),
+    customDescription: z.string().trim().max(20_000).nullable().optional(),
+  })
+  .refine((val) => val.choice !== "CUSTOM" || !!val.customDescription?.trim(), {
+    message: "Custom description is required when choosing a custom description",
+    path: ["customDescription"],
   });
 
-  if (error) {
-    const message = error.message ?? "";
-    if (message.includes("TOOL_ONBOARDING_NOT_FOUND")) {
-      throw new ToolOnboardingError("not_found", "Onboarding draft not found");
+adminOpenSourceToolOnboarding.patch(
+  "/:id/description",
+  requireAuth,
+  requireAdminRole,
+  requirePermission("admin:opensource-tools:write"),
+  async (c) => {
+    const env = getEnv(c.env);
+    const admin = c.get("user");
+    if (!admin) {
+      return errorResponse(c, 401, "unauthenticated", "Sign-in required");
     }
-    if (message.includes("TOOL_ONBOARDING_ALREADY_COMPLETED")) {
-      throw new ToolOnboardingError("already_completed", "This onboarding draft has already been completed");
-    }
-    if (message.includes("TOOL_ONBOARDING_INCOMPLETE")) {
-      throw new ToolOnboardingError(
-        "step_incomplete",
-        "All onboarding steps must be completed and validated before creating the tool",
-      );
-    }
-    if (message.includes("TOOL_ALREADY_ONBOARDED")) {
-      throw new ToolOnboardingError(
-        "tool_already_onboarded",
-        "This URL has already been onboarded as an open source tool",
-      );
-    }
-    throw new Error(`Failed to complete tool onboarding: ${error.message}`);
-  }
 
-  const row = Array.isArray(data) ? data[0] : data;
-  if (!row) {
-    throw new Error("complete_opensource_tool_onboarding returned no tool row");
-  }
-  return { id: row.id, slug: row.slug, name: row.name };
-}
+    const idResult = uuidSchema.safeParse(c.req.param("id"));
+    if (!idResult.success) return errorResponse(c, 400, "invalid_request", idResult.error.issues[0]!.message);
+
+    const withinLimit = await checkRateLimit(c, {
+      bucket: "admin-tool-onboarding-description",
+      limit: 60,
+      windowSeconds: 60,
+    });
+    if (!withinLimit) return errorResponse(c, 429, "rate_limited", "Too many requests.");
+
+    const bodyResult = descriptionSchema.safeParse(await c.req.json().catch(() => null));
+    if (!bodyResult.success) {
+      return errorResponse(
+        c,
+        400,
+        "invalid_request",
+        bodyResult.error.issues[0]?.message ?? "Invalid request body",
+      );
+    }
+
+    try {
+      const supabase = getSupabase(env);
+      const row = await saveDescription(
+        supabase,
+        admin.id,
+        idResult.data,
+        bodyResult.data.choice,
+        bodyResult.data.customDescription ?? null,
+      );
+      return c.json(toOnboardingDraft(row), 200);
+    } catch (err) {
+      if (err instanceof ToolOnboardingError) return mapOnboardingError(c, err);
+      logger.error("admin_tool_onboarding_description_save_failed", {
+        error: err instanceof Error ? err.message : String(err),
+        requestId: c.get("requestId"),
+      });
+      return errorResponse(c, 500, "internal_error", "Couldn't save the tool description right now");
+    }
+  },
+);
+
+/* ---------------------------------------------------------------------- *
+ * Step 3 — PATCH /admin/opensource-tools/onboarding/:id/labels
+ * ---------------------------------------------------------------------- */
+
+const labelsSchema = z.object({
+  values: z.array(z.string().trim().min(1).max(60)).max(30),
+});
+
+adminOpenSourceToolOnboarding.patch(
+  "/:id/labels",
+  requireAuth,
+  requireAdminRole,
+  requirePermission("admin:opensource-tools:write"),
+  async (c) => {
+    const env = getEnv(c.env);
+    const admin = c.get("user");
+    if (!admin) {
+      return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+    }
+
+    const idResult = uuidSchema.safeParse(c.req.param("id"));
+    if (!idResult.success) return errorResponse(c, 400, "invalid_request", idResult.error.issues[0]!.message);
+
+    const withinLimit = await checkRateLimit(c, {
+      bucket: "admin-tool-onboarding-labels",
+      limit: 60,
+      windowSeconds: 60,
+    });
+    if (!withinLimit) return errorResponse(c, 429, "rate_limited", "Too many requests.");
+
+    const bodyResult = labelsSchema.safeParse(await c.req.json().catch(() => null));
+    if (!bodyResult.success) {
+      return errorResponse(
+        c,
+        400,
+        "invalid_request",
+        bodyResult.error.issues[0]?.message ?? "Invalid request body",
+      );
+    }
+
+    try {
+      const supabase = getSupabase(env);
+      const row = await saveLabels(supabase, admin.id, idResult.data, bodyResult.data.values);
+      return c.json(toOnboardingDraft(row), 200);
+    } catch (err) {
+      if (err instanceof ToolOnboardingError) return mapOnboardingError(c, err);
+      logger.error("admin_tool_onboarding_labels_save_failed", {
+        error: err instanceof Error ? err.message : String(err),
+        requestId: c.get("requestId"),
+      });
+      return errorResponse(c, 500, "internal_error", "Couldn't save the tool labels right now");
+    }
+  },
+);
+
+/* ---------------------------------------------------------------------- *
+ * Step 4 — PATCH /admin/opensource-tools/onboarding/:id/setup-guide
+ * ---------------------------------------------------------------------- */
+
+const setupGuideSchema = z.object({
+  content: z.string().max(50_000),
+});
+
+adminOpenSourceToolOnboarding.patch(
+  "/:id/setup-guide",
+  requireAuth,
+  requireAdminRole,
+  requirePermission("admin:opensource-tools:write"),
+  async (c) => {
+    const env = getEnv(c.env);
+    const admin = c.get("user");
+    if (!admin) {
+      return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+    }
+
+    const idResult = uuidSchema.safeParse(c.req.param("id"));
+    if (!idResult.success) return errorResponse(c, 400, "invalid_request", idResult.error.issues[0]!.message);
+
+    const withinLimit = await checkRateLimit(c, {
+      bucket: "admin-tool-onboarding-setup-guide",
+      limit: 60,
+      windowSeconds: 60,
+    });
+    if (!withinLimit) return errorResponse(c, 429, "rate_limited", "Too many requests.");
+
+    const bodyResult = setupGuideSchema.safeParse(await c.req.json().catch(() => null));
+    if (!bodyResult.success) {
+      return errorResponse(
+        c,
+        400,
+        "invalid_request",
+        bodyResult.error.issues[0]?.message ?? "Invalid request body",
+      );
+    }
+
+    try {
+      const supabase = getSupabase(env);
+      const row = await saveSetupGuide(supabase, admin.id, idResult.data, bodyResult.data.content);
+      return c.json(toOnboardingDraft(row), 200);
+    } catch (err) {
+      if (err instanceof ToolOnboardingError) return mapOnboardingError(c, err);
+      logger.error("admin_tool_onboarding_setup_guide_save_failed", {
+        error: err instanceof Error ? err.message : String(err),
+        requestId: c.get("requestId"),
+      });
+      return errorResponse(c, 500, "internal_error", "Couldn't save the setup & usage guide right now");
+    }
+  },
+);
+
+/* ---------------------------------------------------------------------- *
+ * Step 5 — GET /admin/opensource-tools/onboarding/:id/preview
+ * ---------------------------------------------------------------------- */
+
+adminOpenSourceToolOnboarding.get(
+  "/:id/preview",
+  requireAuth,
+  requireAdminRole,
+  requirePermission("admin:opensource-tools:read"),
+  async (c) => {
+    const env = getEnv(c.env);
+    const admin = c.get("user");
+    if (!admin) {
+      return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+    }
+
+    const idResult = uuidSchema.safeParse(c.req.param("id"));
+    if (!idResult.success) return errorResponse(c, 400, "invalid_request", idResult.error.issues[0]!.message);
+
+    const withinLimit = await checkRateLimit(c, {
+      bucket: "admin-tool-onboarding-preview",
+      limit: 60,
+      windowSeconds: 60,
+    });
+    if (!withinLimit) return errorResponse(c, 429, "rate_limited", "Too many requests.");
+
+    try {
+      const supabase = getSupabase(env);
+      const row = await markPreviewCompleted(supabase, admin.id, idResult.data);
+      return c.json(toOnboardingDraft(row), 200);
+    } catch (err) {
+      if (err instanceof ToolOnboardingError) return mapOnboardingError(c, err);
+      logger.error("admin_tool_onboarding_preview_failed", {
+        error: err instanceof Error ? err.message : String(err),
+        requestId: c.get("requestId"),
+      });
+      return errorResponse(c, 500, "internal_error", "Couldn't load the tool preview right now");
+    }
+  },
+);
+
+/* ---------------------------------------------------------------------- *
+ * POST /admin/opensource-tools/onboarding/:id/validate
+ * ---------------------------------------------------------------------- */
+
+adminOpenSourceToolOnboarding.post(
+  "/:id/validate",
+  requireAuth,
+  requireAdminRole,
+  requirePermission("admin:opensource-tools:write"),
+  async (c) => {
+    const env = getEnv(c.env);
+    const admin = c.get("user");
+    if (!admin) {
+      return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+    }
+
+    const idResult = uuidSchema.safeParse(c.req.param("id"));
+    if (!idResult.success) return errorResponse(c, 400, "invalid_request", idResult.error.issues[0]!.message);
+
+    const withinLimit = await checkRateLimit(c, {
+      bucket: "admin-tool-onboarding-validate",
+      limit: 60,
+      windowSeconds: 60,
+    });
+    if (!withinLimit) return errorResponse(c, 429, "rate_limited", "Too many requests.");
+
+    try {
+      const supabase = getSupabase(env);
+      const draft = await getDraftForAdmin(supabase, idResult.data, admin.id);
+      if (!draft) return errorResponse(c, 404, "onboarding_draft_not_found", "Onboarding draft not found");
+      if (draft.completed_tool_id) {
+        return errorResponse(
+          c,
+          409,
+          "onboarding_already_completed",
+          "This onboarding draft has already been completed",
+        );
+      }
+
+      const result = computeValidation(draft);
+      await saveValidationResult(supabase, admin.id, idResult.data, result.valid);
+      return c.json(result, 200);
+    } catch (err) {
+      logger.error("admin_tool_onboarding_validate_failed", {
+        error: err instanceof Error ? err.message : String(err),
+        requestId: c.get("requestId"),
+      });
+      return errorResponse(c, 500, "internal_error", "Couldn't validate the onboarding draft right now");
+    }
+  },
+);
+
+/* ---------------------------------------------------------------------- *
+ * POST /admin/opensource-tools/onboarding/:id/complete
+ * ---------------------------------------------------------------------- */
+
+adminOpenSourceToolOnboarding.post(
+  "/:id/complete",
+  requireAuth,
+  requireAdminRole,
+  requirePermission("admin:opensource-tools:write"),
+  async (c) => {
+    const env = getEnv(c.env);
+    const admin = c.get("user");
+    if (!admin) {
+      return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+    }
+
+    const idResult = uuidSchema.safeParse(c.req.param("id"));
+    if (!idResult.success) return errorResponse(c, 400, "invalid_request", idResult.error.issues[0]!.message);
+
+    const withinLimit = await checkRateLimit(c, {
+      bucket: "admin-tool-onboarding-complete",
+      limit: 10,
+      windowSeconds: 300,
+    });
+    if (!withinLimit) return errorResponse(c, 429, "rate_limited", "Too many requests.");
+
+    try {
+      const supabase = getSupabase(env);
+      const tool = await completeOnboarding(supabase, admin.id, idResult.data);
+
+      // rule 96: audit important administrative actions. Best-effort —
+      // must never fail a request that already succeeded (same posture
+      // as src/middleware/adminAuth.ts's auditDenied and
+      // src/routes/projectOnboarding.ts's own `/complete` route).
+      recordAdminAudit(supabase, {
+        adminId: admin.id,
+        action: "OPENSOURCE_TOOL_ONBOARDING_COMPLETED",
+        resourceType: "opensource_tool",
+        resourceId: tool.id,
+        result: "SUCCESS",
+        metadata: { draftId: idResult.data, slug: tool.slug },
+      }).catch((auditErr) =>
+        logger.error("admin_audit_write_failed", {
+          error: auditErr instanceof Error ? auditErr.message : String(auditErr),
+          requestId: c.get("requestId"),
+        }),
+      );
+
+      return c.json(tool, 201);
+    } catch (err) {
+      if (err instanceof ToolOnboardingError) return mapOnboardingError(c, err);
+      logger.error("admin_tool_onboarding_complete_failed", {
+        error: err instanceof Error ? err.message : String(err),
+        requestId: c.get("requestId"),
+      });
+      return errorResponse(c, 500, "internal_error", "Couldn't create the tool right now");
+    }
+  },
+);
