@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { buildMetadata } from "@/lib/seo";
-import { SectionMessage } from "@/components/home/section-message";
+import { OpenSourceToolOnboardingWizard } from "@/components/admin/opensource-tool-onboarding/opensource-tool-onboarding-wizard";
 
 export const metadata: Metadata = buildMetadata({
   title: "Add Open Source Tool",
@@ -15,27 +15,18 @@ export const metadata: Metadata = buildMetadata({
  * Source Tool" (see `admin-nav-items.ts`). Where an admin adds a new open
  * source tool to the catalog shown at `/admin/opensource-tools`.
  *
- * Frontend-only placeholder for now: there is no backend route yet to
- * submit a new tool to, so this intentionally doesn't render a form an
- * admin could fill in and lose (Frontend_Development_Rules.txt rule 26 —
- * don't fake functionality that doesn't work yet). Same honest
- * `SectionMessage` degrade the rest of the Admin Portal uses — swap this
- * for a real form (mirroring `ProjectOnboardingWizard`'s first step) once
- * `POST /admin/opensource-tools` exists.
+ * Same shape as `/admin/projects/new` (`AdminProjectOnboardingPage`):
+ * `OpenSourceToolOnboardingWizard` owns all step state and already talks
+ * to the real `POST/PATCH/GET /admin/opensource-tools/onboarding/*`
+ * routes (src/routes/opensourceToolOnboarding.ts, mounted in
+ * routes/admin/index.ts) via `lib/admin/opensource-tool-onboarding/api.ts`
+ * — this file only authenticates the route (via
+ * `admin/(protected)/layout.tsx`) and sets page metadata. Previously this
+ * rendered a `SectionMessage` placeholder because no backend route
+ * existed yet (Frontend_Development_Rules.txt rule 26); that's no longer
+ * true, so the honest-degrade placeholder is retired in favor of the
+ * real wizard.
  */
 export default function AdminAddOpenSourceToolPage() {
-  return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
-      <div className="mb-8">
-        <h1 className="m-0 mb-1 text-xl font-medium text-text">Add open source tool</h1>
-        <p className="m-0 text-sm text-text-muted">
-          Add a new open source tool to the DevTunnel catalog.
-        </p>
-      </div>
-
-      <SectionMessage>
-        Adding open source tools isn&apos;t available yet — check back soon.
-      </SectionMessage>
-    </main>
-  );
+  return <OpenSourceToolOnboardingWizard />;
 }
