@@ -29,6 +29,13 @@ const STATE_FILTERS: { value: StateFilter; label: string }[] = [
  * keeps the same columns: this is a lens on New Issues, not a
  * differently-shaped feature, so an Admin who already knows that page's
  * controls doesn't have to learn a second set here.
+ *
+ * `FilterSelect` (the themed listbox from `components/ui/filter-select`)
+ * has no built-in caption — its trigger shows the selected option's own
+ * label — so each filter here gets its own small visible `<label>`
+ * above it, same idea as the `sr-only` label on the search input but
+ * shown on screen since "State" / "Repository" / etc. aren't otherwise
+ * implied by the selected value alone.
  */
 export function AdminIssuesSinceOnboardingExplorer({ issues }: { issues: AdminNewIssue[] }) {
   const [query, setQuery] = useState("");
@@ -125,58 +132,93 @@ export function AdminIssuesSinceOnboardingExplorer({ issues }: { issues: AdminNe
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <FilterSelect
-            id="admin-issues-since-onboarding-state"
-            label="State"
-            value={state}
-            onChange={(value) => setState(value as StateFilter)}
-            options={STATE_FILTERS}
-          />
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="admin-issues-since-onboarding-state"
+              className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
+            >
+              State
+            </label>
+            <FilterSelect
+              id="admin-issues-since-onboarding-state"
+              value={state}
+              onChange={(value) => setState(value as StateFilter)}
+              options={STATE_FILTERS}
+            />
+          </div>
 
-          <FilterSelect
-            id="admin-issues-since-onboarding-repository"
-            label="Repository"
-            value={repository}
-            onChange={setRepository}
-            options={[
-              { value: "ALL", label: "All repositories" },
-              ...repositoryOptions.map((value) => ({ value, label: value })),
-            ]}
-          />
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="admin-issues-since-onboarding-repository"
+              className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
+            >
+              Repository
+            </label>
+            <FilterSelect
+              id="admin-issues-since-onboarding-repository"
+              value={repository}
+              onChange={setRepository}
+              options={[
+                { value: "ALL", label: "All repositories" },
+                ...repositoryOptions.map((value) => ({ value, label: value })),
+              ]}
+            />
+          </div>
 
-          <FilterSelect
-            id="admin-issues-since-onboarding-author"
-            label="Author"
-            value={author}
-            onChange={setAuthor}
-            options={[
-              { value: "ALL", label: "All authors" },
-              ...authorOptions.map((value) => ({ value, label: `@${value}` })),
-            ]}
-          />
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="admin-issues-since-onboarding-author"
+              className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
+            >
+              Author
+            </label>
+            <FilterSelect
+              id="admin-issues-since-onboarding-author"
+              value={author}
+              onChange={setAuthor}
+              options={[
+                { value: "ALL", label: "All authors" },
+                ...authorOptions.map((value) => ({ value, label: `@${value}` })),
+              ]}
+            />
+          </div>
 
-          <FilterSelect
-            id="admin-issues-since-onboarding-techstack"
-            label="Tech stack"
-            value={techStack}
-            onChange={setTechStack}
-            options={[
-              { value: "ALL", label: "All tech stacks" },
-              ...techStackOptions.map((value) => ({ value, label: value })),
-            ]}
-          />
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="admin-issues-since-onboarding-techstack"
+              className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
+            >
+              Tech stack
+            </label>
+            <FilterSelect
+              id="admin-issues-since-onboarding-techstack"
+              value={techStack}
+              onChange={setTechStack}
+              options={[
+                { value: "ALL", label: "All tech stacks" },
+                ...techStackOptions.map((value) => ({ value, label: value })),
+              ]}
+            />
+          </div>
 
-          <FilterSelect
-            id="admin-issues-since-onboarding-project"
-            label="Project"
-            value={projectSlug}
-            onChange={setProjectSlug}
-            options={[
-              { value: "ALL", label: "All projects" },
-              ...projectOptions.map(([slug, name]) => ({ value: slug, label: name })),
-            ]}
-          />
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="admin-issues-since-onboarding-project"
+              className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
+            >
+              Project
+            </label>
+            <FilterSelect
+              id="admin-issues-since-onboarding-project"
+              value={projectSlug}
+              onChange={setProjectSlug}
+              options={[
+                { value: "ALL", label: "All projects" },
+                ...projectOptions.map(([slug, name]) => ({ value: slug, label: name })),
+              ]}
+            />
+          </div>
         </div>
       </div>
 

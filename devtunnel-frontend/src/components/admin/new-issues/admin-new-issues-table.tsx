@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { AdminTableRow } from "@/components/admin/admin-table-row";
+import { RepoLogo } from "@/components/admin/repo-logo";
 import { IssueIcon } from "@/components/layout/nav-icons";
 import { IgnoreNewIssueButton } from "./ignore-new-issue-button";
 import type { AdminNewIssue } from "@/lib/admin/new-issues/types";
@@ -43,6 +45,9 @@ function formatDate(iso: string): string {
  * - Ignore: `IgnoreNewIssueButton` — removes the issue from this list
  *   without touching GitHub (see that component and
  *   `lib/admin/new-issues/client-api.ts`).
+ *
+ * The whole row also opens the GitHub issue in a new tab on click
+ * (`AdminTableRow`), same destination as the "View" action/link.
  */
 export function AdminNewIssuesTable({ issues }: { issues: AdminNewIssue[] }) {
   return (
@@ -76,8 +81,9 @@ export function AdminNewIssuesTable({ issues }: { issues: AdminNewIssue[] }) {
             const hiddenLabelCount = issue.labels.length - visibleLabels.length;
 
             return (
-              <tr
+              <AdminTableRow
                 key={issue.id}
+                externalHref={issue.url}
                 className="border-b border-border-subtle last:border-b-0 hover:bg-surface/60"
               >
                 {/* Issue # + title + open/closed state */}
@@ -102,7 +108,8 @@ export function AdminNewIssuesTable({ issues }: { issues: AdminNewIssue[] }) {
                 {/* Project (+ repository) */}
                 <td className="px-4 py-3 align-top">
                   <p className="m-0 text-text-secondary">{issue.project.name}</p>
-                  <p className="m-0 mt-0.5 font-mono text-[11px] text-text-faint">
+                  <p className="m-0 mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-text-faint">
+                    <RepoLogo repositoryFullName={issue.project.repositoryFullName} size={14} />
                     {issue.project.repositoryFullName}
                   </p>
                 </td>
@@ -179,7 +186,7 @@ export function AdminNewIssuesTable({ issues }: { issues: AdminNewIssue[] }) {
                     />
                   </div>
                 </td>
-              </tr>
+              </AdminTableRow>
             );
           })}
         </tbody>

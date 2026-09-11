@@ -99,6 +99,13 @@ function projectMatchesTech(project: AdminProjectSummary, tech: string): boolean
  * page), not public content, so filtering client-side after a full
  * server fetch has no crawlability impact
  * (Frontend_Development_Rules.txt rule 18).
+ *
+ * `FilterSelect` (the themed listbox from `components/ui/filter-select`)
+ * has no built-in caption — its trigger shows the selected option's own
+ * label — so each filter here gets its own small visible `<label>`
+ * above it, same idea as the `sr-only` label on the search input but
+ * shown on screen since "Author" / "Tech stack" / "Status" aren't
+ * otherwise implied by the selected value alone.
  */
 export function AdminProjectsExplorer({
   projects,
@@ -177,39 +184,60 @@ export function AdminProjectsExplorer({
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <FilterSelect
-            id="admin-projects-author"
-            label="Author"
-            value={author}
-            onChange={setAuthor}
-            options={[
-              { value: ALL_AUTHORS, label: "All authors" },
-              ...authorOptions.map(([username, displayName]) => ({
-                value: username,
-                label: `${displayName} (@${username})`,
-              })),
-            ]}
-          />
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="admin-projects-author"
+              className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
+            >
+              Author
+            </label>
+            <FilterSelect
+              id="admin-projects-author"
+              value={author}
+              onChange={setAuthor}
+              options={[
+                { value: ALL_AUTHORS, label: "All authors" },
+                ...authorOptions.map(([username, displayName]) => ({
+                  value: username,
+                  label: `${displayName} (@${username})`,
+                })),
+              ]}
+            />
+          </div>
 
-          <FilterSelect
-            id="admin-projects-tech"
-            label="Tech stack"
-            value={tech}
-            onChange={setTech}
-            options={[
-              { value: ALL_TECH, label: "All tech stacks" },
-              ...techOptions.map((value) => ({ value, label: value })),
-            ]}
-          />
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="admin-projects-tech"
+              className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
+            >
+              Tech stack
+            </label>
+            <FilterSelect
+              id="admin-projects-tech"
+              value={tech}
+              onChange={setTech}
+              options={[
+                { value: ALL_TECH, label: "All tech stacks" },
+                ...techOptions.map((value) => ({ value, label: value })),
+              ]}
+            />
+          </div>
 
-          <FilterSelect
-            id="admin-projects-status"
-            label="Status"
-            value={status}
-            onChange={(value) => setStatus(value as StatusFilter)}
-            options={STATUS_FILTERS}
-          />
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="admin-projects-status"
+              className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
+            >
+              Status
+            </label>
+            <FilterSelect
+              id="admin-projects-status"
+              value={status}
+              onChange={(value) => setStatus(value as StatusFilter)}
+              options={STATUS_FILTERS}
+            />
+          </div>
         </div>
       </div>
 

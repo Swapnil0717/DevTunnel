@@ -41,4 +41,46 @@
       scroll-behavior: auto !important;
     }
   }
+
+  /* Custom scrollbar — thin, rounded, dark-surface-matching thumb that
+     turns accent-green on hover/drag. Defined once here (rule 51:
+     "keep SEO/UI logic centralized") so it applies everywhere a
+     scrollable region exists — dropdown listboxes (FilterSelect),
+     onboarding preview panes, description textareas, the admin detail
+     pages, etc. — instead of every component re-implementing its own
+     scrollbar or falling back to the browser's default OS-styled bar,
+     which clashed with the rest of the dark Admin Portal the same way
+     the native `<select>` did (see filter-select.tsx). */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #2a2a2a transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: #2a2a2a;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: #1d9e75;
+  }
+
+  *::-webkit-scrollbar-thumb:active {
+    background-color: #25b586;
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }

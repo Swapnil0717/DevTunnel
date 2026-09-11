@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { GitBranchIcon } from "@/components/layout/nav-icons";
+import { AdminTableRow } from "@/components/admin/admin-table-row";
+import { RepoLogo } from "@/components/admin/repo-logo";
 import { AdminProjectStatusBadge } from "./admin-project-status-badge";
 import { DeleteProjectButton } from "./delete-project-button";
 import type { AdminProjectSummary } from "@/lib/admin/projects/types";
@@ -21,6 +22,10 @@ import type { AdminProjectSummary } from "@/lib/admin/projects/types";
  * - Tasks: All Tasks page (`/admin/tasks`), pre-filtered to this project
  *   via `?project=<slug>` (`AdminTasksExplorer`'s project filter)
  * - Delete: Removes the project
+ *
+ * The whole row also opens the Project Detail page on click
+ * (`AdminTableRow`), same destination as the "View" action/link — a
+ * convenience on top of that real link, not a replacement for it.
  */
 export function AdminProjectsTable({
   projects,
@@ -55,8 +60,9 @@ export function AdminProjectsTable({
 
         <tbody>
           {projects.map((project) => (
-            <tr
+            <AdminTableRow
               key={project.id}
+              href={`/admin/projects/${project.id}`}
               className="border-b border-border-subtle last:border-b-0 hover:bg-surface/60"
             >
               {/* Project */}
@@ -73,9 +79,9 @@ export function AdminProjectsTable({
                   href={project.repositoryUrl}
                   target="_blank"
                   rel="noreferrer noopener"
-                  className="inline-flex items-center gap-1.5 font-mono text-[11.5px] text-text-secondary hover:text-accent"
+                  className="inline-flex items-center gap-2 font-mono text-[11.5px] text-text-secondary hover:text-accent"
                 >
-                  <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
+                  <RepoLogo repositoryFullName={project.repositoryFullName} size={18} />
                   {project.repositoryFullName}
                 </a>
               </td>
@@ -139,7 +145,7 @@ export function AdminProjectsTable({
                   />
                 </div>
               </td>
-            </tr>
+            </AdminTableRow>
           ))}
         </tbody>
       </table>
