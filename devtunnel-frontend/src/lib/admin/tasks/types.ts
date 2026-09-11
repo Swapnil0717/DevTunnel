@@ -99,7 +99,13 @@
    title: string;
    project: AdminTaskProjectRef;
    githubIssue: AdminTaskGithubIssueRef | null;
-   role: DeveloperRole | null;
+   /**
+    * Multi-select — a task can be relevant to more than one role at once
+    * (e.g. Frontend + Docs), same convention as
+    * `lib/admin/task-onboarding/types.ts` `TaskCuration.roles`. Empty
+    * when no role has been curated yet.
+    */
+   roles: DeveloperRole[];
    difficulty: ExperienceLevel | null;
    techStack: string[];
    status: AdminTaskStatus;
@@ -135,7 +141,7 @@
   * derived/GitHub-sourced and have no writable counterpart here.
   */
  export interface AdminTaskUpdatePayload {
-   role?: DeveloperRole;
+   roles?: DeveloperRole[];
    difficulty?: ExperienceLevel;
    customDescription?: string | null;
    status?: AdminTaskStatus;

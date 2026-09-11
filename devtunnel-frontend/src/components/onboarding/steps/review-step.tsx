@@ -71,7 +71,11 @@ export function ReviewStep({ data }: ReviewStepProps) {
         <SummaryTagRow label="Technologies" values={data.technologies} />
         <SummaryRow
           label="Developer role"
-          value={data.developerRole ? DEVELOPER_ROLE_LABEL[data.developerRole] : "Not set"}
+          value={
+            data.developerRoles.length
+              ? data.developerRoles.map((role) => DEVELOPER_ROLE_LABEL[role]).join(", ")
+              : "Not set"
+          }
         />
         <SummaryRow
           label="Experience"

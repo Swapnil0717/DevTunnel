@@ -106,6 +106,14 @@ export function TaskDetailsStep({
     onIssueInformationChange({ ...issueInformation, choice });
   }
 
+  /** Adds/removes a single role from `curation.roles` — same toggle pattern as onboarding's `toggleDeveloperRole`. */
+  function toggleRole(role: DeveloperRole) {
+    const next = curation.roles.includes(role)
+      ? curation.roles.filter((value) => value !== role)
+      : [...curation.roles, role];
+    onCurationChange({ ...curation, roles: next });
+  }
+
   if (!draft.issue) {
     return (
       <p className="m-0 text-[12.5px] text-status-error-label">
@@ -127,13 +135,18 @@ export function TaskDetailsStep({
 
       <section className="mb-6">
         <p className="m-0 mb-2 text-[11px] uppercase tracking-wide text-text-faint">Role</p>
-        <div role="radiogroup" aria-label="Role" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <p className="m-0 mb-2 text-[11.5px] text-text-dim">
+          Select every role this task is relevant to — a task can be both
+          Frontend and Docs, for example.
+        </p>
+        <div role="group" aria-label="Role" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {ROLES.map((role) => (
             <OptionCard
               key={role}
+              multiple
               label={DEVELOPER_ROLE_LABEL[role]}
-              selected={curation.role === role}
-              onSelect={() => onCurationChange({ ...curation, role })}
+              selected={curation.roles.includes(role)}
+              onSelect={() => toggleRole(role)}
             />
           ))}
         </div>

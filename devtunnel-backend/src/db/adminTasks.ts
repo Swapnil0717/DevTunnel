@@ -21,7 +21,7 @@ import type {
  * mapping functions below.
  */
 const LIST_COLUMNS =
-  "id, slug, title, status, role, difficulty, assignee_id, github_issue_number, " +
+  "id, slug, title, status, roles, difficulty, assignee_id, github_issue_number, " +
   "github_issue_url, github_issue_snapshot, custom_description, deleted_at, created_at, " +
   "project_id, project_slug, project_name, project_repo_url, project_github_full_name, " +
   "project_github_author, project_github_owner, project_tech_stack, submission_count";
@@ -127,7 +127,7 @@ function toAdminTaskSummary(row: AdminTaskListRow): AdminTaskSummary {
           },
     },
     githubIssue: toGithubIssueRef(row),
-    role: row.role,
+    roles: row.roles ?? [],
     difficulty: row.difficulty,
     techStack: flattenTechStack(row.project_tech_stack),
     status: row.status,
@@ -303,13 +303,13 @@ export async function updateAdminTask(
   }
 
   const values: {
-    role?: DeveloperRole;
+    roles?: DeveloperRole[];
     difficulty?: ExperienceLevel;
     custom_description?: string | null;
     status?: AdminTaskStatus;
   } = {};
 
-  if (input.role !== undefined) values.role = input.role;
+  if (input.roles !== undefined) values.roles = input.roles;
   if (input.difficulty !== undefined) values.difficulty = input.difficulty;
   if (input.customDescription !== undefined) values.custom_description = input.customDescription;
   if (input.status !== undefined) values.status = input.status;

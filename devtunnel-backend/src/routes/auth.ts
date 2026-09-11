@@ -54,12 +54,14 @@ function sanitizeNextPath(next: string | undefined | null): string {
 
 /**
  * Validation schema for `PATCH /auth/onboarding`. Mirrors `OnboardingData`
- * in devtunnel-frontend/src/lib/onboarding/types.ts. `developerRole`,
- * `experienceLevel`, and `intent` are required (not nullable) because the
- * wizard's own UI (`OnboardingWizard.canContinue`) never lets the user
- * reach the final "Finish setup" step without them — but the backend
- * re-validates independently rather than trusting that (rule 15: never
- * trust frontend validation). `bio`, `skills`, `technologies`, and
+ * in devtunnel-frontend/src/lib/onboarding/types.ts. `developerRoles`,
+ * `experienceLevel`, and `intent` are required (not nullable/empty)
+ * because the wizard's own UI (`OnboardingWizard.canContinue`) never lets
+ * the user reach the final "Finish setup" step without them — but the
+ * backend re-validates independently rather than trusting that (rule 15:
+ * never trust frontend validation). `developerRoles` is multi-select
+ * (`.min(1)` rather than a single required enum) — a contributor can
+ * pick more than one role. `bio`, `skills`, `technologies`, and
  * `interests` are optional/unbounded-by-the-wizard, so they're validated
  * but not required.
  */
@@ -67,14 +69,12 @@ const onboardingSchema = z.object({
   bio: z.string().trim().max(500).optional().default(""),
   skills: z.array(z.string().trim().min(1).max(50)).max(20).optional().default([]),
   technologies: z.array(z.string().trim().min(1).max(50)).max(20).optional().default([]),
-  developerRole: z.enum([
-    "FRONTEND",
-    "BACKEND",
-    "FULL_STACK",
-    "DOCUMENTATION",
-    "TESTING",
-    "DEVOPS",
-  ]),
+  developerRoles: z
+    .array(
+      z.enum(["FRONTEND", "BACKEND", "FULL_STACK", "DOCUMENTATION", "TESTING", "DEVOPS"]),
+    )
+    .min(1, "Select at least one developer role")
+    .max(6),
   experienceLevel: z.enum(["BEGINNER", "INTERMEDIATE", "ADVANCED"]),
   interests: z.array(z.string().trim().min(1).max(50)).max(20).optional().default([]),
   intent: z.enum(["START_PROJECT", "FIND_PROJECT"]),

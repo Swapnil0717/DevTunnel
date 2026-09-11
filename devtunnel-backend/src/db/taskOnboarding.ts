@@ -20,7 +20,7 @@ const DRAFT_COLUMNS =
   "issue_number, github_issue, issue_selected, " +
   "issue_information_choice, custom_description, issue_information_completed, " +
   "tech_stack, tech_stack_loaded, " +
-  "curation_role, curation_difficulty, difficulty_defined, " +
+  "curation_roles, curation_difficulty, difficulty_defined, " +
   "preview_completed, validation_completed, " +
   "completed_task_id, completed_at, created_at, updated_at";
 
@@ -104,7 +104,7 @@ export function toTaskOnboardingDraft(
       : null,
     curation: row.difficulty_defined
       ? {
-          role: row.curation_role as DeveloperRole,
+          roles: (row.curation_roles ?? []) as DeveloperRole[],
           difficulty: row.curation_difficulty as ExperienceLevel,
         }
       : null,
@@ -281,7 +281,7 @@ export async function selectTaskOnboardingProject(
     values.issue_information_completed = false;
     values.tech_stack = null;
     values.tech_stack_loaded = false;
-    values.curation_role = null;
+    values.curation_roles = null;
     values.curation_difficulty = null;
     values.difficulty_defined = false;
     Object.assign(values, RESET_PREVIEW_AND_VALIDATION);
@@ -465,17 +465,19 @@ export async function attachTaskOnboardingTechStack(
 }
 
 /**
- * Step 5 write. `role`/`difficulty` reuse the exact
+ * Step 5 write. `roles`/`difficulty` reuse the exact
  * `DeveloperRole`/`ExperienceLevel` enums `devtunnel.users` already
  * defines (sql/002) — validated by the route's Zod schema
  * (src/routes/taskOnboarding.ts `curationSchema`) before ever reaching
- * here.
+ * here. `roles` is multi-select (sql/019) — a task can be curated for
+ * more than one role at once, mirroring the contributor onboarding
+ * wizard's own multi-select `developer_roles`.
  */
 export async function saveTaskCuration(
   supabase: SupabaseClient,
   adminId: string,
   draftId: string,
-  role: DeveloperRole,
+  roles: DeveloperRole[],
   difficulty: ExperienceLevel,
 ): Promise<TaskOnboardingDraftRow> {
   await requireEditableDraft(supabase, draftId, adminId);
@@ -483,7 +485,7 @@ export async function saveTaskCuration(
   const { data, error } = await supabase
     .from("task_onboarding_drafts")
     .update({
-      curation_role: role,
+      curation_roles: roles,
       curation_difficulty: difficulty,
       difficulty_defined: true,
       ...RESET_PREVIEW_AND_VALIDATION,
@@ -567,7 +569,7 @@ export function computeTaskOnboardingValidation(
     issues.push({ step: "techStackLoaded", message: "Attach the project's tech stack to this task" });
   }
 
-  if (!row.difficulty_defined || !row.curation_role || !row.curation_difficulty) {
+  if (!row.difficulty_defined || !row.curation_roles?.length || !row.curation_difficulty) {
     issues.push({ step: "difficultyDefined", message: "Set a role and difficulty for this task" });
   }
 

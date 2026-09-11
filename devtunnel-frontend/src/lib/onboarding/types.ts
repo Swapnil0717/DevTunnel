@@ -40,7 +40,14 @@ export interface OnboardingData {
   bio: string;
   skills: string[];
   technologies: string[];
-  developerRole: DeveloperRole | null;
+  /**
+   * Multi-select — a contributor can pick more than one role (e.g.
+   * Frontend + Documentation), same convention as a task's `roles`
+   * (lib/admin/task-onboarding/types.ts `TaskCuration`). Empty until at
+   * least one role has been chosen; never assume a single implicit
+   * value.
+   */
+  developerRoles: DeveloperRole[];
   experienceLevel: ExperienceLevel | null;
   interests: string[];
   intent: ContributorIntent | null;
@@ -50,7 +57,7 @@ export const EMPTY_ONBOARDING_DATA: OnboardingData = {
   bio: "",
   skills: [],
   technologies: [],
-  developerRole: null,
+  developerRoles: [],
   experienceLevel: null,
   interests: [],
   intent: null,

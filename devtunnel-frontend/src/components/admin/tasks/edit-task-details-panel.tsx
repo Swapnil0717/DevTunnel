@@ -75,7 +75,7 @@ export function EditTaskDetailsPanel({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [role, setRole] = useState<DeveloperRole | null>(task.role);
+  const [roles, setRoles] = useState<DeveloperRole[]>(task.roles);
   const [difficulty, setDifficulty] = useState<ExperienceLevel | null>(task.difficulty);
   const [status, setStatus] = useState<AdminTaskStatus>(task.status);
   const [useCustomDescription, setUseCustomDescription] = useState(
@@ -86,13 +86,20 @@ export function EditTaskDetailsPanel({
   // Keep the form in sync if the panel is re-mounted with fresh server
   // data (e.g. `router.refresh()` after a save elsewhere on the page).
   useEffect(() => {
-    setRole(task.role);
+    setRoles(task.roles);
     setDifficulty(task.difficulty);
     setStatus(task.status);
     setUseCustomDescription(Boolean(task.customDescription));
     setCustomDescription(task.customDescription ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-sync on a real task id/data change
-  }, [task.id, task.role, task.difficulty, task.status, task.customDescription]);
+  }, [task.id, task.roles, task.difficulty, task.status, task.customDescription]);
+
+  /** Adds/removes a single role from `roles` — same toggle pattern used by onboarding and `TaskDetailsStep`. */
+  function toggleRole(role: DeveloperRole) {
+    setRoles((current) =>
+      current.includes(role) ? current.filter((value) => value !== role) : [...current, role],
+    );
+  }
 
   function startEditing() {
     setError(null);
@@ -100,7 +107,7 @@ export function EditTaskDetailsPanel({
   }
 
   function cancelEditing() {
-    setRole(task.role);
+    setRoles(task.roles);
     setDifficulty(task.difficulty);
     setStatus(task.status);
     setUseCustomDescription(Boolean(task.customDescription));
@@ -114,7 +121,7 @@ export function EditTaskDetailsPanel({
     setError(null);
     try {
       await updateAdminTask(task.id, {
-        role: role ?? undefined,
+        roles: roles.length ? roles : undefined,
         difficulty: difficulty ?? undefined,
         status,
         customDescription: useCustomDescription ? customDescription.trim() || null : null,
@@ -132,7 +139,7 @@ export function EditTaskDetailsPanel({
     }
   }
 
-  const canSave = Boolean(role) && Boolean(difficulty);
+  const canSave = roles.length > 0 && Boolean(difficulty);
 
   const descriptionText =
     useCustomDescription && customDescription.trim()
@@ -164,7 +171,9 @@ export function EditTaskDetailsPanel({
 
         <dl className="m-0 grid grid-cols-1 gap-x-6 gap-y-3 text-[12.5px] sm:grid-cols-[140px_1fr]">
           <dt className="text-text-muted">Role</dt>
-          <dd className="m-0 text-text">{role ? DEVELOPER_ROLE_LABEL[role] : "Not set"}</dd>
+          <dd className="m-0 text-text">
+            {roles.length ? roles.map((option) => DEVELOPER_ROLE_LABEL[option]).join(", ") : "Not set"}
+          </dd>
 
           <dt className="text-text-muted">Difficulty</dt>
           <dd className="m-0 text-text">
@@ -207,13 +216,14 @@ export function EditTaskDetailsPanel({
           <h3 className="m-0 mb-2 font-mono text-[12px] uppercase tracking-wide text-text-muted">
             Role
           </h3>
-          <div role="radiogroup" aria-label="Role" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div role="group" aria-label="Role" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {ROLES.map((option) => (
               <OptionCard
                 key={option}
+                multiple
                 label={DEVELOPER_ROLE_LABEL[option]}
-                selected={role === option}
-                onSelect={() => setRole(option)}
+                selected={roles.includes(option)}
+                onSelect={() => toggleRole(option)}
               />
             ))}
           </div>

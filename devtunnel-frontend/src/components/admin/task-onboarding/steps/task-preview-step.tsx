@@ -57,7 +57,9 @@ export function TaskPreviewStep({ draft }: TaskPreviewStepProps) {
 
             <dt className="text-text-muted">Role</dt>
             <dd className="m-0 text-text">
-              {curation?.role ? DEVELOPER_ROLE_LABEL[curation.role] : "Not set"}
+              {curation?.roles.length
+                ? curation.roles.map((role) => DEVELOPER_ROLE_LABEL[role]).join(", ")
+                : "Not set"}
             </dd>
 
             <dt className="text-text-muted">Difficulty</dt>

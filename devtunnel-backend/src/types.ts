@@ -60,7 +60,7 @@ export type ContributorIntent = "START_PROJECT" | "FIND_PROJECT";
  * Validated payload for `PATCH /auth/onboarding`. Mirrors `OnboardingData`
  * in devtunnel-frontend/src/lib/onboarding/types.ts. Unlike the frontend
  * type (which allows `null` while the wizard is in progress), the fields
- * required by the wizard's own step-gating (`developerRole`,
+ * required by the wizard's own step-gating (`developerRoles`,
  * `experienceLevel`, `intent`) are non-nullable here — see the Zod schema
  * in routes/auth.ts, which is the actual source of truth for what the
  * backend accepts.
@@ -69,7 +69,13 @@ export interface OnboardingData {
   bio: string;
   skills: string[];
   technologies: string[];
-  developerRole: DeveloperRole;
+  /**
+   * Multi-select — mirrors the frontend's `OnboardingData.developerRoles`
+   * (devtunnel-frontend/src/lib/onboarding/types.ts). Non-empty (the Zod
+   * schema in routes/auth.ts enforces `.min(1)`), same non-nullable
+   * posture the single-value field had before.
+   */
+  developerRoles: DeveloperRole[];
   experienceLevel: ExperienceLevel;
   interests: string[];
   intent: ContributorIntent;
@@ -82,7 +88,7 @@ export interface OnboardingData {
  * githubId, no encrypted tokens, no internal flags) is ever included
  * (Backend_Development_Rules.txt rule 9).
  *
- * `skills`/`technologies`/`developerRole`/`experienceLevel`/`interests`/
+ * `skills`/`technologies`/`developerRoles`/`experienceLevel`/`interests`/
  * `intent` are the onboarding wizard's own fields (sql/002) — surfaced
  * here so the profile page can render every field asked for during
  * onboarding, not just bio/skills/technologies as before.
@@ -108,7 +114,7 @@ export interface AuthUser {
   onboardingCompleted: boolean;
   skills: string[];
   technologies: string[];
-  developerRole: DeveloperRole | null;
+  developerRoles: DeveloperRole[];
   experienceLevel: ExperienceLevel | null;
   interests: string[];
   intent: ContributorIntent | null;
@@ -139,7 +145,7 @@ export interface UserRow {
   last_login_at: string | null;
   skills: string[];
   technologies: string[];
-  developer_role: DeveloperRole | null;
+  developer_roles: DeveloperRole[];
   experience_level: ExperienceLevel | null;
   interests: string[];
   intent: ContributorIntent | null;
@@ -493,20 +499,13 @@ export interface AdminProjectDetailExtraRow {
 /**
  * Validated payload for `PATCH /admin/projects/:id` — the two fields
  * Project Onboarding's Step 2 (Description) and Step 3 (Tech Stack)
- * already hand the Admin control over, plus `status`. See
+ * already hand the Admin control over. See
  * src/db/adminProjects.ts `updateAdminProject` for why every other
  * GitHub-sourced field has no writable path here.
- *
- * `status` toggles a project between `ACTIVE` and `ARCHIVED`
- * (`devtunnel.project_status`, sql/006 + sql/019) — the Project Detail
- * page's own action, distinct from Description/Tech Stack editing, but
- * carried through the same `PATCH` endpoint rather than a second route
- * since it's still just one column on the same row.
  */
 export interface AdminProjectUpdatePayload {
   description?: OnboardingDescription;
   techStack?: OnboardingTechStack;
-  status?: AdminProjectStatus;
 }
 
 /**
@@ -625,14 +624,16 @@ export interface TaskIssueInformation {
 
 /**
  * Step 5 result shape — the Admin's role + difficulty curation for this
- * task (admin_workflow.txt section 10 ▸ Step 5 — "Difficulty"). Reuses
- * `DeveloperRole` / `ExperienceLevel` verbatim (see
- * src/routes/taskOnboarding.ts `curationSchema`) rather than a second
- * vocabulary — "Use the exact difficulty values already defined by the
- * current source/schema if they exist."
+ * task (admin_workflow.txt section 10 ▸ Step 5 — "Difficulty"). `roles`
+ * is multi-select — a task can be curated for more than one role at once
+ * (e.g. Frontend + Documentation), same convention as
+ * `OnboardingData.developerRoles`. Reuses `DeveloperRole` / `ExperienceLevel`
+ * verbatim (see src/routes/taskOnboarding.ts `curationSchema`) rather than a
+ * second vocabulary — "Use the exact difficulty values already defined by
+ * the current source/schema if they exist."
  */
 export interface TaskCuration {
-  role: DeveloperRole | null;
+  roles: DeveloperRole[];
   difficulty: ExperienceLevel | null;
 }
 
@@ -691,8 +692,8 @@ export interface TaskOnboardingDraftRow {
   tech_stack: OnboardingTechStack | null;
   tech_stack_loaded: boolean;
 
-  // Step 5 — Difficulty (sql/011)
-  curation_role: DeveloperRole | null;
+  // Step 5 — Difficulty (sql/011, converted to a multi-select array by sql/019)
+  curation_roles: DeveloperRole[] | null;
   curation_difficulty: ExperienceLevel | null;
   difficulty_defined: boolean;
 
@@ -798,7 +799,8 @@ export interface AdminTaskSummary {
   title: string;
   project: AdminTaskProjectRef;
   githubIssue: AdminTaskGithubIssueRef | null;
-  role: DeveloperRole | null;
+  /** Multi-select — mirrors `TaskCuration.roles`. Empty when no role has been curated. */
+  roles: DeveloperRole[];
   difficulty: ExperienceLevel | null;
   techStack: string[];
   status: AdminTaskStatus;
@@ -832,7 +834,7 @@ export interface AdminTaskListRow {
   slug: string | null;
   title: string;
   status: AdminTaskStatus;
-  role: DeveloperRole | null;
+  roles: DeveloperRole[] | null;
   difficulty: ExperienceLevel | null;
   assignee_id: string | null;
   github_issue_number: number | null;
@@ -862,7 +864,7 @@ export interface AdminTaskListRow {
  * applies to projects.
  */
 export interface AdminTaskUpdatePayload {
-  role?: DeveloperRole;
+  roles?: DeveloperRole[];
   difficulty?: ExperienceLevel;
   customDescription?: string | null;
   status?: AdminTaskStatus;

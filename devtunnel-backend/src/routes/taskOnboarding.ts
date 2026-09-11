@@ -511,13 +511,18 @@ adminTaskOnboarding.patch(
  * ---------------------------------------------------------------------- */
 
 /**
- * Reuses `devtunnel.users.developer_role` / `experience_level`'s exact
+ * Reuses `devtunnel.users.developer_roles` / `experience_level`'s exact
  * enum values verbatim (see src/routes/auth.ts `onboardingSchema`) —
  * "Use the exact difficulty values already defined by the current
  * source/schema if they exist" — rather than a second vocabulary.
+ * `roles` is multi-select — a task can be curated for more than one role
+ * at once (e.g. Frontend + Documentation).
  */
 const curationSchema = z.object({
-  role: z.enum(["FRONTEND", "BACKEND", "FULL_STACK", "DOCUMENTATION", "TESTING", "DEVOPS"]),
+  roles: z
+    .array(z.enum(["FRONTEND", "BACKEND", "FULL_STACK", "DOCUMENTATION", "TESTING", "DEVOPS"]))
+    .min(1, "Select at least one role")
+    .max(6),
   difficulty: z.enum(["BEGINNER", "INTERMEDIATE", "ADVANCED"]),
 });
 
@@ -564,7 +569,7 @@ adminTaskOnboarding.patch(
         supabase,
         admin.id,
         draftIdResult.data,
-        bodyResult.data.role,
+        bodyResult.data.roles,
         bodyResult.data.difficulty,
       );
       const project = await loadDraftProject(supabase, updatedDraft.project_id);

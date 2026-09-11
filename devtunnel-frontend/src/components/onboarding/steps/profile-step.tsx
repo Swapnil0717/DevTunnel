@@ -33,6 +33,19 @@ const EXPERIENCE_LEVELS = Object.keys(EXPERIENCE_LEVEL_LABEL) as ExperienceLevel
  * responsive design).
  */
 export function ProfileStep({ user, data, onChange }: ProfileStepProps) {
+  /**
+   * Adds/removes a single role from `data.developerRoles` — the same
+   * add-or-remove-from-array toggle a multi-select checkbox group needs
+   * everywhere it appears (mirrored by `toggleRole` in
+   * `EditTaskDetailsPanel` / `TaskDetailsStep` for a task's own roles).
+   */
+  function toggleDeveloperRole(role: DeveloperRole) {
+    const next = data.developerRoles.includes(role)
+      ? data.developerRoles.filter((value) => value !== role)
+      : [...data.developerRoles, role];
+    onChange({ developerRoles: next });
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3">
@@ -111,18 +124,22 @@ export function ProfileStep({ user, data, onChange }: ProfileStepProps) {
         <p id="developer-role-label" className="mb-2 text-[11.5px] text-text-muted">
           Developer role
         </p>
+        <p className="m-0 mb-2 text-[11px] text-text-faint">
+          Select every role that applies — you can pick more than one.
+        </p>
         <div
-          role="radiogroup"
+          role="group"
           aria-labelledby="developer-role-label"
           className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"
         >
           {DEVELOPER_ROLES.map((role) => (
             <OptionCard
               key={role}
+              multiple
               label={DEVELOPER_ROLE_LABEL[role]}
               description={DEVELOPER_ROLE_DESCRIPTION[role]}
-              selected={data.developerRole === role}
-              onSelect={() => onChange({ developerRole: role })}
+              selected={data.developerRoles.includes(role)}
+              onSelect={() => toggleDeveloperRole(role)}
             />
           ))}
         </div>

@@ -100,8 +100,10 @@ export function OnboardingWizard({ user }: OnboardingWizardProps) {
 
   // Both option groups on the profile step default to nothing selected, so
   // require a real choice before moving on; same for the intent step.
+  // Developer role is now multi-select, so "a real choice" means at
+  // least one role rather than exactly one.
   const canContinue =
-    !(step === 2 && (!data.developerRole || !data.experienceLevel)) &&
+    !(step === 2 && (data.developerRoles.length === 0 || !data.experienceLevel)) &&
     !(step === 3 && !data.intent);
 
   return (

@@ -15,15 +15,28 @@ interface OptionCardProps {
    * unaffected.
    */
   disabled?: boolean;
+  /**
+   * Renders this option as a real `<button role="checkbox">` instead of
+   * `role="radio"` — used wherever more than one choice can be selected
+   * at once (e.g. onboarding's developer role, a task's role/label),
+   * matching the ARIA authoring practice of pairing `role="group"` (not
+   * `role="radiogroup"`) with `role="checkbox"` children so assistive
+   * tech announces "checked"/"not checked" rather than a single-choice
+   * radio state. Defaults to `false` so every existing single-select
+   * call site is unaffected.
+   */
+  multiple?: boolean;
 }
 
 /**
- * Single-select option used for developer role, experience level, and
- * contributor intent (3_devtunnel_onboarding.html). Rendered as a real
- * `<button role="radio">` inside a `role="radiogroup"` container (see call
- * sites) so it's keyboard-operable and announced correctly — never a bare
- * `<div onClick>` standing in for a real control
- * (Frontend_Development_Rules.txt rules 35 & 37).
+ * Option used for developer role, experience level, contributor intent,
+ * and (when `multiple` is set) any multi-select group like task
+ * roles/labels (3_devtunnel_onboarding.html). Rendered as a real
+ * `<button role="radio">` inside a `role="radiogroup"` container, or a
+ * real `<button role="checkbox">` inside a `role="group"` container when
+ * `multiple` is set (see call sites) — so it's keyboard-operable and
+ * announced correctly either way, never a bare `<div onClick>` standing
+ * in for a real control (Frontend_Development_Rules.txt rules 35 & 37).
  *
  * A `disabled` option renders `aria-disabled` (not the native `disabled`
  * attribute) plus `tabIndex={-1}`: it still needs to be readable and
@@ -40,11 +53,12 @@ export function OptionCard({
   selected,
   onSelect,
   disabled = false,
+  multiple = false,
 }: OptionCardProps) {
   return (
     <button
       type="button"
-      role="radio"
+      role={multiple ? "checkbox" : "radio"}
       aria-checked={selected}
       aria-disabled={disabled}
       tabIndex={disabled ? -1 : 0}

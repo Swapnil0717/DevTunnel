@@ -188,7 +188,7 @@ export function TaskOnboardingWizard() {
       : step === 2
         ? Boolean(draft?.issue)
         : step === 3
-          ? Boolean(curation.role) &&
+          ? curation.roles.length > 0 &&
             Boolean(curation.difficulty) &&
             (issueInformation.choice === "EXISTING" ||
               Boolean(issueInformation.customDescription?.trim()))

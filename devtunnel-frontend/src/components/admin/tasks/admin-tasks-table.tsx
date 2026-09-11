@@ -1,6 +1,4 @@
 import Link from "next/link";
-import { AdminTableRow } from "@/components/admin/admin-table-row";
-import { RepoLogo } from "@/components/admin/repo-logo";
 import { IssueIcon } from "@/components/layout/nav-icons";
 import { TechIcon } from "@/components/onboarding/tech-icon";
 import {
@@ -32,9 +30,6 @@ const MAX_VISIBLE_TECH = 3;
  * - Edit: Task Detail page with ?edit=1 (same convention as
  *   `AdminProjectsTable`'s Edit action)
  * - Delete: Removes the DevTunnel task (GitHub issue is unaffected)
- *
- * The whole row also opens the Task Detail page on click
- * (`AdminTableRow`), same destination as the "View" action/link.
  */
 export function AdminTasksTable({ tasks }: { tasks: AdminTaskSummary[] }) {
   return (
@@ -72,9 +67,8 @@ export function AdminTasksTable({ tasks }: { tasks: AdminTaskSummary[] }) {
               task.techStack.length - visibleTech.length;
 
             return (
-              <AdminTableRow
+              <tr
                 key={task.id}
-                href={`/admin/tasks/${task.id}`}
                 className="border-b border-border-subtle last:border-b-0 hover:bg-surface/60"
               >
                 {/* Task */}
@@ -88,8 +82,7 @@ export function AdminTasksTable({ tasks }: { tasks: AdminTaskSummary[] }) {
                     {task.project.name}
                   </p>
 
-                  <p className="m-0 mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-text-faint">
-                    <RepoLogo repositoryFullName={task.project.repositoryFullName} size={14} />
+                  <p className="m-0 mt-0.5 font-mono text-[11px] text-text-faint">
                     {task.project.repositoryFullName}
                   </p>
                 </td>
@@ -113,8 +106,8 @@ export function AdminTasksTable({ tasks }: { tasks: AdminTaskSummary[] }) {
 
                 {/* Role */}
                 <td className="px-4 py-3 text-text-secondary">
-                  {task.role
-                    ? DEVELOPER_ROLE_LABEL[task.role]
+                  {task.roles.length
+                    ? task.roles.map((role) => DEVELOPER_ROLE_LABEL[role]).join(", ")
                     : "—"}
                 </td>
 
@@ -192,7 +185,7 @@ export function AdminTasksTable({ tasks }: { tasks: AdminTaskSummary[] }) {
                     />
                   </div>
                 </td>
-              </AdminTableRow>
+              </tr>
             );
           })}
         </tbody>

@@ -95,13 +95,6 @@ const DIFFICULTY_FILTERS: {
  * page), not public content, so filtering client-side after a full
  * server fetch has no crawlability impact
  * (Frontend_Development_Rules.txt rule 18).
- *
- * `FilterSelect` (the themed listbox from `components/ui/filter-select`)
- * has no built-in caption — its trigger shows the selected option's own
- * label — so each filter here gets its own small visible `<label>`
- * above it, same idea as the `sr-only` label on the search input but
- * shown on screen since "Status" / "Role" / etc. aren't otherwise
- * implied by the selected value alone.
  */
 export function AdminTasksExplorer({
   tasks,
@@ -205,7 +198,7 @@ export function AdminTasksExplorer({
 
       if (
         role !== "ALL" &&
-        task.role !== role
+        !task.roles.includes(role)
       ) {
         return false;
       }
@@ -357,165 +350,116 @@ export function AdminTasksExplorer({
               />
             </div>
 
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor="admin-tasks-status"
-                  className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
-                >
-                  Status
-                </label>
-                <FilterSelect
-                  id="admin-tasks-status"
-                  value={status}
-                  onChange={(value) =>
-                    setStatus(
-                      value as StatusFilter,
-                    )
-                  }
-                  options={STATUS_FILTERS}
-                />
-              </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <FilterSelect
+                id="admin-tasks-status"
+                label="Status"
+                value={status}
+                onChange={(value) =>
+                  setStatus(
+                    value as StatusFilter,
+                  )
+                }
+                options={STATUS_FILTERS}
+              />
 
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor="admin-tasks-role"
-                  className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
-                >
-                  Role
-                </label>
-                <FilterSelect
-                  id="admin-tasks-role"
-                  value={role}
-                  onChange={(value) =>
-                    setRole(value as RoleFilter)
-                  }
-                  options={ROLE_FILTERS}
-                />
-              </div>
+              <FilterSelect
+                id="admin-tasks-role"
+                label="Role"
+                value={role}
+                onChange={(value) =>
+                  setRole(value as RoleFilter)
+                }
+                options={ROLE_FILTERS}
+              />
 
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor="admin-tasks-difficulty"
-                  className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
-                >
-                  Difficulty
-                </label>
-                <FilterSelect
-                  id="admin-tasks-difficulty"
-                  value={difficulty}
-                  onChange={(value) =>
-                    setDifficulty(
-                      value as DifficultyFilter,
-                    )
-                  }
-                  options={DIFFICULTY_FILTERS}
-                />
-              </div>
+              <FilterSelect
+                id="admin-tasks-difficulty"
+                label="Difficulty"
+                value={difficulty}
+                onChange={(value) =>
+                  setDifficulty(
+                    value as DifficultyFilter,
+                  )
+                }
+                options={DIFFICULTY_FILTERS}
+              />
 
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor="admin-tasks-techstack"
-                  className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
-                >
-                  Tech stack
-                </label>
-                <FilterSelect
-                  id="admin-tasks-techstack"
-                  value={techStack}
-                  onChange={setTechStack}
-                  options={[
-                    {
-                      value: "ALL",
-                      label: "All tech stacks",
-                    },
-                    ...techStackOptions.map(
-                      (value) => ({
-                        value,
-                        label: value,
-                      }),
-                    ),
-                  ]}
-                />
-              </div>
+              <FilterSelect
+                id="admin-tasks-techstack"
+                label="Tech stack"
+                value={techStack}
+                onChange={setTechStack}
+                options={[
+                  {
+                    value: "ALL",
+                    label: "All tech stacks",
+                  },
+                  ...techStackOptions.map(
+                    (value) => ({
+                      value,
+                      label: value,
+                    }),
+                  ),
+                ]}
+              />
 
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor="admin-tasks-repository"
-                  className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
-                >
-                  Repository
-                </label>
-                <FilterSelect
-                  id="admin-tasks-repository"
-                  value={repository}
-                  onChange={setRepository}
-                  options={[
-                    {
-                      value: "ALL",
-                      label: "All repositories",
-                    },
-                    ...repositoryOptions.map(
-                      (value) => ({
-                        value,
-                        label: value,
-                      }),
-                    ),
-                  ]}
-                />
-              </div>
+              <FilterSelect
+                id="admin-tasks-repository"
+                label="Repository"
+                value={repository}
+                onChange={setRepository}
+                options={[
+                  {
+                    value: "ALL",
+                    label: "All repositories",
+                  },
+                  ...repositoryOptions.map(
+                    (value) => ({
+                      value,
+                      label: value,
+                    }),
+                  ),
+                ]}
+              />
 
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor="admin-tasks-author"
-                  className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
-                >
-                  Author
-                </label>
-                <FilterSelect
-                  id="admin-tasks-author"
-                  value={author}
-                  onChange={setAuthor}
-                  options={[
-                    {
-                      value: "ALL",
-                      label: "All authors",
-                    },
-                    ...authorOptions.map(
-                      (value) => ({
-                        value,
-                        label: `@${value}`,
-                      }),
-                    ),
-                  ]}
-                />
-              </div>
+              <FilterSelect
+                id="admin-tasks-author"
+                label="Author"
+                value={author}
+                onChange={setAuthor}
+                options={[
+                  {
+                    value: "ALL",
+                    label: "All authors",
+                  },
+                  ...authorOptions.map(
+                    (value) => ({
+                      value,
+                      label: `@${value}`,
+                    }),
+                  ),
+                ]}
+              />
 
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor="admin-tasks-project"
-                  className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
-                >
-                  Project
-                </label>
-                <FilterSelect
-                  id="admin-tasks-project"
-                  value={projectSlug}
-                  onChange={setProjectSlug}
-                  options={[
-                    {
-                      value: "ALL",
-                      label: "All projects",
-                    },
-                    ...projectOptions.map(
-                      ([slug, name]) => ({
-                        value: slug,
-                        label: name,
-                      }),
-                    ),
-                  ]}
-                />
-              </div>
+              <FilterSelect
+                id="admin-tasks-project"
+                label="Project"
+                value={projectSlug}
+                onChange={setProjectSlug}
+                options={[
+                  {
+                    value: "ALL",
+                    label: "All projects",
+                  },
+                  ...projectOptions.map(
+                    ([slug, name]) => ({
+                      value: slug,
+                      label: name,
+                    }),
+                  ),
+                ]}
+              />
             </div>
           </div>
 

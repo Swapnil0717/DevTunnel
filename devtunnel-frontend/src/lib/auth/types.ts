@@ -47,7 +47,7 @@
     */
    skills: string[];
    technologies: string[];
-   developerRole: DeveloperRole | null;
+   developerRoles: DeveloperRole[];
    experienceLevel: ExperienceLevel | null;
    interests: string[];
    intent: ContributorIntent | null;

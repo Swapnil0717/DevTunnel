@@ -72,8 +72,10 @@ const idSchema = z.string().uuid("Invalid task id");
  */
 const updateTaskSchema = z
   .object({
-    role: z
-      .enum(["FRONTEND", "BACKEND", "FULL_STACK", "DOCUMENTATION", "TESTING", "DEVOPS"])
+    roles: z
+      .array(z.enum(["FRONTEND", "BACKEND", "FULL_STACK", "DOCUMENTATION", "TESTING", "DEVOPS"]))
+      .min(1, "Select at least one role")
+      .max(6)
       .optional(),
     difficulty: z.enum(["BEGINNER", "INTERMEDIATE", "ADVANCED"]).optional(),
     customDescription: z.string().trim().max(20_000).nullable().optional(),
@@ -81,7 +83,7 @@ const updateTaskSchema = z
   })
   .refine(
     (val) =>
-      val.role !== undefined ||
+      val.roles !== undefined ||
       val.difficulty !== undefined ||
       val.customDescription !== undefined ||
       val.status !== undefined,
@@ -286,7 +288,7 @@ adminTasks.patch(
     const supabase = getSupabase(env);
 
     const updatePayload: AdminTaskUpdatePayload = {};
-    if (bodyResult.data.role !== undefined) updatePayload.role = bodyResult.data.role;
+    if (bodyResult.data.roles !== undefined) updatePayload.roles = bodyResult.data.roles;
     if (bodyResult.data.difficulty !== undefined) updatePayload.difficulty = bodyResult.data.difficulty;
     if (bodyResult.data.customDescription !== undefined) {
       updatePayload.customDescription = bodyResult.data.customDescription;
