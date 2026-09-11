@@ -6,6 +6,7 @@ import { getAdminProjectDetail } from "@/lib/admin/projects/api";
 import { AdminProjectStatusBadge } from "@/components/admin/projects/admin-project-status-badge";
 import { AdminStatCard } from "@/components/admin/admin-stat-card";
 import { DeleteProjectButton } from "@/components/admin/projects/delete-project-button";
+import { ProjectStatusToggle } from "@/components/admin/projects/project-status-toggle";
 import { EditProjectDetailsPanel } from "@/components/admin/projects/edit-project-details-panel";
 import { EditIcon, GitBranchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
@@ -161,6 +162,11 @@ export default async function AdminProjectDetailPage({
             <EditIcon className="h-3.5 w-3.5 shrink-0" />
             Edit details
           </Link>
+          <ProjectStatusToggle
+            projectId={project.id}
+            projectName={project.name}
+            status={project.status}
+          />
           <DeleteProjectButton
             projectId={project.id}
             projectName={project.name}

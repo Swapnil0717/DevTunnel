@@ -105,14 +105,27 @@ const updateTechStackSchema = z.object({
   packageManager: z.string().min(1).max(60).nullable(),
 });
 
+/**
+ * `status` — toggles a project between `ACTIVE` and `ARCHIVED`
+ * (`devtunnel.project_status`, sql/006 + sql/019). Backs the Project
+ * Detail page's "Archive project" / "Reactivate project" action
+ * (`ProjectStatusToggle`) — a plain enum flip through the same `PATCH`
+ * endpoint used for Description/Tech Stack, not a separate route, since
+ * it's still one column on the same `devtunnel.projects` row.
+ */
 const updateProjectSchema = z
   .object({
     description: updateDescriptionSchema.optional(),
     techStack: updateTechStackSchema.optional(),
+    status: z.enum(["ACTIVE", "ARCHIVED"]).optional(),
   })
-  .refine((val) => val.description !== undefined || val.techStack !== undefined, {
-    message: "Provide at least one field to update (description or techStack)",
-  });
+  .refine(
+    (val) =>
+      val.description !== undefined || val.techStack !== undefined || val.status !== undefined,
+    {
+      message: "Provide at least one field to update (description, techStack, or status)",
+    },
+  );
 
 /**
  * Body validation for `DELETE /admin/projects/:id`. `reason` is optional
@@ -491,6 +504,9 @@ adminProjects.patch(
     }
     if (bodyResult.data.techStack) {
       updatePayload.techStack = bodyResult.data.techStack;
+    }
+    if (bodyResult.data.status) {
+      updatePayload.status = bodyResult.data.status;
     }
 
     try {

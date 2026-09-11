@@ -372,15 +372,18 @@ interface UpdateTargetRow {
  * Applies a partial update to an already-active DevTunnel project —
  * backs `PATCH /admin/projects/:id` (admin_workflow.txt section 22).
  *
- * Deliberately restricted to exactly the two fields Project Onboarding's
- * Step 2 (Description) and Step 3 (Tech Stack) already hand the Admin
- * control over (`AdminProjectUpdatePayload`) — the repository, author,
- * GitHub contributors, name, and every other GitHub-sourced field stay
- * exactly what GitHub reported and have no writable path here, same
- * restriction the onboarding wizard itself enforces on those fields
- * ("Admin should not manually enter Author, GitHub username, repository
- * name, contributors, language, stars, forks, issues — these should come
- * from GitHub").
+ * Restricted to exactly the fields `AdminProjectUpdatePayload` allows:
+ * the two Project Onboarding hands the Admin control over — Step 2
+ * (Description) and Step 3 (Tech Stack) — plus `status`, a plain
+ * `ACTIVE`/`ARCHIVED` flip (`devtunnel.project_status`, sql/006 +
+ * sql/019) for the Project Detail page's "Archive project" /
+ * "Reactivate project" action. The repository, author, GitHub
+ * contributors, name, and every other GitHub-sourced field stay exactly
+ * what GitHub reported and have no writable path here, same restriction
+ * the onboarding wizard itself enforces on those fields ("Admin should
+ * not manually enter Author, GitHub username, repository name,
+ * contributors, language, stars, forks, issues — these should come from
+ * GitHub").
  *
  * Reads the current row first (rather than blind-writing) for two
  * reasons: (1) to give a specific 404/409 instead of a silent no-op when
@@ -436,6 +439,10 @@ export async function updateAdminProject(
 
   if (input.techStack) {
     values.tech_stack = input.techStack;
+  }
+
+  if (input.status) {
+    values.status = input.status;
   }
 
   const { error: updateError } = await supabase

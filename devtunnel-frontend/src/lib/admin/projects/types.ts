@@ -106,9 +106,12 @@
  
  /**
   * `PATCH /admin/projects/:id` (admin_workflow.txt section 22 — Admin
-  * Backend API Map, "Projects"). Deliberately only the two fields Project
-  * Onboarding's Step 2 and Step 3 hand the Admin control over — exactly
-  * what the Project Detail page's edit panel lets an Admin change.
+  * Backend API Map, "Projects"). Covers exactly what the Project Detail
+  * page lets an Admin change: the two fields Project Onboarding's Step 2
+  * and Step 3 hand the Admin control over (`EditProjectDetailsPanel`),
+  * plus `status` — a plain Active/Archived toggle
+  * (`ProjectStatusToggle`), added alongside the original two rather than
+  * as a separate endpoint since it's still one column on the same row.
   * Everything else on `AdminProjectDetail` (name, repository, author,
   * contributors, issue count, README) is GitHub- or backend-derived and
   * has no writable counterpart here, same restriction the onboarding wizard
@@ -121,4 +124,12 @@
  export interface AdminProjectUpdatePayload {
    description?: OnboardingDescription;
    techStack?: OnboardingTechStack;
+   /**
+    * Toggles the project between `ACTIVE` and `ARCHIVED`
+    * (`AdminProjectStatus` above) — the Project Detail page's
+    * "Archive project" / "Reactivate project" action
+    * (`ProjectStatusToggle`), carried through this same payload since
+    * it's still one field on the same `PATCH /admin/projects/:id` call.
+    */
+   status?: AdminProjectStatus;
  }

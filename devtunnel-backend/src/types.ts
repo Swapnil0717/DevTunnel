@@ -493,13 +493,20 @@ export interface AdminProjectDetailExtraRow {
 /**
  * Validated payload for `PATCH /admin/projects/:id` — the two fields
  * Project Onboarding's Step 2 (Description) and Step 3 (Tech Stack)
- * already hand the Admin control over. See
+ * already hand the Admin control over, plus `status`. See
  * src/db/adminProjects.ts `updateAdminProject` for why every other
  * GitHub-sourced field has no writable path here.
+ *
+ * `status` toggles a project between `ACTIVE` and `ARCHIVED`
+ * (`devtunnel.project_status`, sql/006 + sql/019) — the Project Detail
+ * page's own action, distinct from Description/Tech Stack editing, but
+ * carried through the same `PATCH` endpoint rather than a second route
+ * since it's still just one column on the same row.
  */
 export interface AdminProjectUpdatePayload {
   description?: OnboardingDescription;
   techStack?: OnboardingTechStack;
+  status?: AdminProjectStatus;
 }
 
 /**
