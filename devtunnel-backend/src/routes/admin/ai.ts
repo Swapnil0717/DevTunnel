@@ -22,6 +22,24 @@ import {
 } from "../../db/aiDiscovery";
 
 /**
+ * Supabase's `rpc()` rejects with a `PostgrestError`-shaped plain object
+ * (`{ message, code, details, hint }`), not a JS `Error` instance — so
+ * `err instanceof Error` is false for every Postgres exception raised
+ * from our approve_ai_discovered_* functions (AI_PROJECT_NOT_FOUND,
+ * AI_PROJECT_ALREADY_REVIEWED, etc). Without this, `String(err)` on a
+ * plain object degrades to the useless literal "[object Object]",
+ * which breaks both the substring checks below (every case falls
+ * through to a generic 500) and the log line's value for debugging.
+ */
+function extractErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "object" && err !== null && "message" in err && typeof (err as { message: unknown }).message === "string") {
+    return (err as { message: string }).message;
+  }
+  return String(err);
+}
+
+/**
  * Admin — AI Discovery. RBAC permissions `admin:ai:read` / `admin:ai:write`
  * (src/lib/rbac.ts). Mounted at `/admin/ai` in src/routes/admin/index.ts.
  * Backs the already-shipped placeholder pages at
@@ -98,7 +116,7 @@ async function handleApprove(
     });
     return c.json(result);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractErrorMessage(err);
     logger.error("ai_discovery_approve_failed", { kind, id: parsedId.data.id, error: message });
     if (message.includes("NOT_FOUND")) return errorResponse(c, 404, "not_found", "Not found");
     if (message.includes("ALREADY_REVIEWED") || message.includes("ALREADY_ONBOARDED") || message.includes("ALREADY_A_TASK")) {
@@ -127,7 +145,7 @@ async function handleReject(c: any, table: "ai_discovered_projects" | "ai_discov
     });
     return c.json({ id: parsedId.data.id, status: "REJECTED" });
   } catch (err) {
-    logger.error("ai_discovery_reject_failed", { table, id: parsedId.data.id, error: err instanceof Error ? err.message : String(err) });
+    logger.error("ai_discovery_reject_failed", { table, id: parsedId.data.id, error: extractErrorMessage(err) });
     return errorResponse(c, 500, "internal_error", "Failed to reject");
   }
 }
@@ -174,7 +192,7 @@ adminAi.post("/run", requireAuth, requireAdminRole, requirePermission("admin:ai:
     });
     return c.json(summary);
   } catch (err) {
-    logger.error("ai_discovery_manual_run_failed", { error: err instanceof Error ? err.message : String(err) });
+    logger.error("ai_discovery_manual_run_failed", { error: extractErrorMessage(err) });
     return errorResponse(c, 500, "internal_error", "Discovery run failed");
   }
 });

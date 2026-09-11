@@ -28,12 +28,34 @@ interface GeminiPart {
 }
 
 interface GeminiContent {
-  role: "user" | "model" | "function";
+  role: "user" | "model";
   parts: GeminiPart[];
 }
 
 const GEMINI_API = "https://generativelanguage.googleapis.com/v1beta/models";
 const MAX_TURNS = 12;
+const MAX_RATE_LIMIT_RETRIES = 3;
+
+/** Sleeps for `ms` milliseconds. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Gemini's 429 body embeds a hint like "Please retry in 16.9s" inside the
+ * message string (there's no structured retry-after field on this
+ * endpoint). Pulls that out so we can back off for roughly the right
+ * amount of time instead of guessing. Falls back to `fallbackMs` if the
+ * body doesn't contain the hint (e.g. a non-quota 429).
+ */
+function parseRetryDelayMs(body: string, fallbackMs: number): number {
+  const match = body.match(/retry in ([\d.]+)s/i);
+  if (!match) return fallbackMs;
+  const seconds = Number.parseFloat(match[1]);
+  if (Number.isNaN(seconds)) return fallbackMs;
+  // Add a small buffer so we don't race the quota window resetting.
+  return Math.ceil(seconds * 1000) + 250;
+}
 
 /**
  * Runs an agentic loop: sends `systemPrompt` + `userPrompt`, lets Gemini
@@ -54,26 +76,41 @@ export async function runGeminiAgent(
   const contents: GeminiContent[] = [{ role: "user", parts: [{ text: userPrompt }] }];
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
-    const res = await fetch(`${GEMINI_API}/${env.GEMINI_MODEL}:generateContent?key=${env.GEMINI_API_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents,
-        tools: tools.length ? [{ functionDeclarations: tools }] : undefined,
-        generationConfig: { temperature: 0.4 },
-      }),
-    });
+    let data: { candidates?: Array<{ content: { role: string; parts: GeminiPart[] }; finishReason?: string }> } | undefined;
 
-    if (!res.ok) {
+    for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
+      const res = await fetch(`${GEMINI_API}/${env.GEMINI_MODEL}:generateContent?key=${env.GEMINI_API_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents,
+          tools: tools.length ? [{ functionDeclarations: tools }] : undefined,
+          generationConfig: { temperature: 0.4 },
+        }),
+      });
+
+      if (res.ok) {
+        data = await res.json();
+        break;
+      }
+
       const body = await res.text().catch(() => "");
+
+      if (res.status === 429 && attempt < MAX_RATE_LIMIT_RETRIES) {
+        const delayMs = parseRetryDelayMs(body, 2 ** attempt * 1000);
+        logger.warn("gemini_rate_limited_retrying", { turn, attempt, delayMs });
+        await sleep(delayMs);
+        continue;
+      }
+
       logger.error("gemini_request_failed", { status: res.status, body: body.slice(0, 500), turn });
       throw new Error(`Gemini API ${res.status}`);
     }
 
-    const data = (await res.json()) as {
-      candidates?: Array<{ content: { role: string; parts: GeminiPart[] }; finishReason?: string }>;
-    };
+    if (!data) {
+      throw new Error("Gemini API request failed after retries");
+    }
 
     const candidate = data.candidates?.[0];
     if (!candidate) {
@@ -99,7 +136,7 @@ export async function runGeminiAgent(
       }
       functionResponseParts.push({ functionResponse: { name: call.name, response: { result } } });
     }
-    contents.push({ role: "function", parts: functionResponseParts });
+    contents.push({ role: "user", parts: functionResponseParts });
   }
 
   throw new Error("Gemini agent exceeded max turns without a final answer");
