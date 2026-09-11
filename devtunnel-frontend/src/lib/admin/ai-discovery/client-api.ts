@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "@/lib/config";
+import type { AiDiscoveryRunSummary } from "./types";
 
 export class AiDiscoveryApiError extends Error {
   status: number;
@@ -27,7 +28,14 @@ export async function rejectAiDiscoveredItem(kind: Kind, id: string): Promise<vo
   if (!res.ok) throw new AiDiscoveryApiError(`Failed to reject (${res.status})`, res.status);
 }
 
-export async function triggerAiDiscoveryRun(): Promise<{ projectsProposed: number; toolsProposed: number; tasksProposed: number }> {
+/**
+ * `POST /admin/ai/run` — same work the daily cron does
+ * (devtunnel-backend/src/index.ts `scheduled`), useful for testing or
+ * topping up today's quota without waiting for the cron. Safe to call
+ * repeatedly — the backend's daily counters mean it only ever fills
+ * whatever's left of today's quota.
+ */
+export async function triggerAiDiscoveryRun(): Promise<AiDiscoveryRunSummary> {
   const res = await fetch(`${API_BASE_URL}/admin/ai/run`, {
     method: "POST",
     credentials: "include",

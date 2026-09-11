@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { buildMetadata } from "@/lib/seo";
 import { SectionMessage } from "@/components/home/section-message";
-import { getAiConfirmationQueue } from "@/lib/admin/ai-discovery/api";
+import { getAiConfirmationQueue, getAiDiscoveryStatus } from "@/lib/admin/ai-discovery/api";
 import { AiDiscoveryQueue } from "@/components/admin/ai-discovery/ai-discovery-queue";
+import { AiDiscoveryStatusPanel } from "@/components/admin/ai-discovery/ai-discovery-status-panel";
 import { splitSetupGuideBullets } from "@/lib/admin/ai-discovery/setup-guide";
 
 export const metadata: Metadata = buildMetadata({
@@ -13,7 +14,7 @@ export const metadata: Metadata = buildMetadata({
 });
 
 export default async function AdminAiConfirmationPage() {
-  const result = await getAiConfirmationQueue();
+  const [result, statusResult] = await Promise.all([getAiConfirmationQueue(), getAiDiscoveryStatus()]);
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
@@ -23,6 +24,8 @@ export default async function AdminAiConfirmationPage() {
           Review and confirm AI-proposed projects, tools, and tasks before they go live.
         </p>
       </div>
+
+      <AiDiscoveryStatusPanel initialCounters={statusResult.status === "ok" ? statusResult.data : null} />
 
       {result.status === "error" && <SectionMessage>Couldn&apos;t load the confirmation queue right now.</SectionMessage>}
       {result.status === "empty" && <SectionMessage>Nothing is awaiting confirmation right now.</SectionMessage>}

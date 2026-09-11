@@ -60,7 +60,7 @@ SESSION_TTL_DAYS = "30"
 
 # Gemini model used by the AI Discovery agent (src/lib/gemini.ts). Not a
 # secret — the key that authenticates against it is (GEMINI_API_KEY).
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.6-flash"
 
 # ---------------------------------------------------------------------------
 # AI Discovery cron trigger — runs the daily project/tool/task discovery
@@ -86,7 +86,7 @@ SUPABASE_URL = "https://bdxnvouuyfjryuncxkfx.supabase.co"
 SUPABASE_DB_SCHEMA = "devtunnel"
 GITHUB_CLIENT_ID = "Iv23liqdlxwKp3dunpZN" # same GitHub App as production for now; split later if needed
 SESSION_TTL_DAYS = "30"
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.6-flash"
 
 [[env.staging.kv_namespaces]]
 binding = "RATE_LIMIT_KV"

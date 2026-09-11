@@ -66,3 +66,19 @@ export interface AiConfirmationQueue {
   tools: AiDiscoveredTool[];
   tasks: AiDiscoveredTask[];
 }
+
+/**
+ * Response body of `POST /admin/ai/run` (devtunnel-backend/src/types.ts
+ * `AiDiscoveryRunSummary`). `candidatesDropped` counts candidates the
+ * agent evaluated but did not save — duplicates or ones that failed
+ * validation (see the backend type's own doc comment) — distinct from
+ * `errors`, which is for run-level failures, not per-candidate rejections.
+ */
+export interface AiDiscoveryRunSummary {
+  date: string;
+  projectsProposed: number;
+  toolsProposed: number;
+  tasksProposed: number;
+  candidatesDropped: number;
+  errors: string[];
+}
