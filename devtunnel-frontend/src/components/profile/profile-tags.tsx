@@ -34,7 +34,8 @@ const ROLE_LABEL: Record<AuthUser["role"], string> = {
 export function ProfileTags({ user }: { user: AuthUser }) {
   const tech = [...(user.skills ?? []), ...(user.technologies ?? [])];
   const interests = user.interests ?? [];
-  const hasIdentityTags = Boolean(user.developerRole || user.experienceLevel);
+  const developerRoles = user.developerRoles ?? [];
+  const hasIdentityTags = Boolean(developerRoles.length > 0 || user.experienceLevel);
   const showMaintainerBadge = user.isMaintainer && user.role !== "MAINTAINER" && user.role !== "ADMIN";
 
   return (
@@ -50,11 +51,14 @@ export function ProfileTags({ user }: { user: AuthUser }) {
           </span>
         ) : null}
 
-        {user.developerRole ? (
-          <span className="rounded-md border border-accent bg-surface-selected px-2.5 py-1 text-[11px] text-status-success-label">
-            {DEVELOPER_ROLE_LABEL[user.developerRole]}
+        {developerRoles.map((role) => (
+          <span
+            key={role}
+            className="rounded-md border border-accent bg-surface-selected px-2.5 py-1 text-[11px] text-status-success-label"
+          >
+            {DEVELOPER_ROLE_LABEL[role]}
           </span>
-        ) : null}
+        ))}
 
         {user.experienceLevel ? (
           <span className="rounded-md border border-border bg-surface-raised px-2.5 py-1 text-[11px] text-text-muted">

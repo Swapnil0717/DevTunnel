@@ -94,8 +94,16 @@ where role is not null
 -- devtunnel.admin_task_list — recreated to surface `roles` instead of the
 -- old singular `role` column (see sql/013 for the view's full original
 -- header/rationale, unchanged here beyond this one column).
+--
+-- Uses DROP + CREATE rather than CREATE OR REPLACE VIEW: Postgres refuses
+-- to rename an existing view output column ("role" -> "roles") via
+-- CREATE OR REPLACE, since that changes the column list in place
+-- (error 42P16). ALTER VIEW ... RENAME COLUMN is the other option, but
+-- since the view body is changing too, drop/recreate is simpler here.
 -- ---------------------------------------------------------------------------
-create or replace view devtunnel.admin_task_list as
+drop view if exists devtunnel.admin_task_list;
+
+create view devtunnel.admin_task_list as
 select
   t.id                     as id,
   t.slug                   as slug,
