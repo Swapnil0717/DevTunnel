@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { SearchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
+import { FilterSelect } from "@/components/ui/filter-select";
 import { AdminOpenSourceToolsGrid } from "./admin-opensource-tools-grid";
 import type { AdminToolSummary } from "@/lib/admin/opensource-tools/types";
 
@@ -48,6 +49,11 @@ function collectLabelOptions(tools: AdminToolSummary[]): string[] {
  * - Primary language — Step 1's resolved `primaryLanguage`.
  * - Label — Step 3's free-form role/field tags.
  *
+ * Both render via `FilterSelect` (components/ui/filter-select.tsx)
+ * rather than a plain `<select>` — a native listbox popup always renders
+ * with the OS/browser's own light styling regardless of the page's dark
+ * theme, which looked visibly out of place here.
+ *
  * Search matches name, source URL, fetched description, primary
  * language and labels — every field the grid card or its tooltip could
  * plausibly be searched by.
@@ -63,6 +69,22 @@ export function AdminOpenSourceToolsExplorer({ tools }: { tools: AdminToolSummar
 
   const languageOptions = useMemo(() => collectLanguageOptions(tools), [tools]);
   const labelOptions = useMemo(() => collectLabelOptions(tools), [tools]);
+
+  const languageSelectOptions = useMemo(
+    () => [
+      { value: ALL_LANGUAGES, label: "All languages" },
+      ...languageOptions.map((value) => ({ value, label: value })),
+    ],
+    [languageOptions],
+  );
+
+  const labelSelectOptions = useMemo(
+    () => [
+      { value: ALL_LABELS, label: "All labels" },
+      ...labelOptions.map((value) => ({ value, label: value })),
+    ],
+    [labelOptions],
+  );
 
   const filteredTools = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -124,20 +146,12 @@ export function AdminOpenSourceToolsExplorer({ tools }: { tools: AdminToolSummar
             >
               Language
             </label>
-            <select
+            <FilterSelect
               id="admin-opensource-tools-language"
-              name="admin-opensource-tools-language"
               value={language}
-              onChange={(event) => setLanguage(event.target.value)}
-              className="rounded-[8px] border border-border bg-surface px-2.5 py-2 text-[12.5px] text-text focus:outline-none focus:ring-2 focus:ring-accent/40"
-            >
-              <option value={ALL_LANGUAGES}>All languages</option>
-              {languageOptions.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
+              onChange={setLanguage}
+              options={languageSelectOptions}
+            />
           </div>
 
           <div className="flex items-center gap-2">
@@ -147,20 +161,12 @@ export function AdminOpenSourceToolsExplorer({ tools }: { tools: AdminToolSummar
             >
               Label
             </label>
-            <select
+            <FilterSelect
               id="admin-opensource-tools-label"
-              name="admin-opensource-tools-label"
               value={label}
-              onChange={(event) => setLabel(event.target.value)}
-              className="rounded-[8px] border border-border bg-surface px-2.5 py-2 text-[12.5px] text-text focus:outline-none focus:ring-2 focus:ring-accent/40"
-            >
-              <option value={ALL_LABELS}>All labels</option>
-              {labelOptions.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
+              onChange={setLabel}
+              options={labelSelectOptions}
+            />
           </div>
         </div>
       </div>

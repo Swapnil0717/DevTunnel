@@ -6,11 +6,19 @@ import type { AdminToolSummary } from "@/lib/admin/opensource-tools/types";
 
 /**
  * One square box on the `/admin/opensource-tools` grid — logo, the
- * tool's name below it, then a row of View / Edit / Delete actions.
- * Clicking the logo or the name opens the tool (same detail page as
- * "View"), same "the primary click target opens the item" convention
- * `AdminProjectsTable`'s row-as-link would use if this were a table
- * instead of a card grid.
+ * tool's name, its fetched description, then a row of View / Edit /
+ * Delete actions. Clicking the logo or the name opens the tool (same
+ * detail page as "View"), same "the primary click target opens the
+ * item" convention `AdminProjectsTable`'s row-as-link would use if this
+ * were a table instead of a card grid.
+ *
+ * `fetchedDescription` is what Step 1 of onboarding resolved from the
+ * source repo (`AdminToolSummary`, sql/017's `fetched_description`
+ * column) — shown as-is, `line-clamp`-ed rather than truncated with an
+ * arbitrary character cut, same as the name above it. A tool onboarded
+ * before a description was ever resolved has no fallback text invented
+ * for it (Frontend_Development_Rules.txt rule 58) — the row is just
+ * omitted.
  *
  * - View → `/admin/opensource-tools/:id`
  * - Edit → `/admin/opensource-tools/:id?edit=1`, opening
@@ -28,11 +36,17 @@ export function AdminOpenSourceToolCard({ tool }: { tool: AdminToolSummary }) {
         href={detailHref}
         className="flex flex-col items-center gap-2.5 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
-        <OpenSourceToolLogo name={tool.name} sourceUrl={tool.sourceUrl} size={56} />
+        <OpenSourceToolLogo name={tool.name} sourceUrl={tool.sourceUrl} size={88} />
         <span className="line-clamp-2 text-[13px] font-medium leading-tight text-text">
           {tool.name}
         </span>
       </Link>
+
+      {tool.fetchedDescription ? (
+        <p className="mt-1 line-clamp-2 text-[11.5px] leading-snug text-text-secondary">
+          {tool.fetchedDescription}
+        </p>
+      ) : null}
 
       {tool.primaryLanguage ? (
         <span className="mt-1.5 rounded-full border border-tag-tech-border bg-tag-tech-bg px-2 py-0.5 text-[10.5px] text-tag-tech-text">

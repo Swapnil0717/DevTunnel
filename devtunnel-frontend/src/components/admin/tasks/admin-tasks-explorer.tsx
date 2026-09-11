@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { SearchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
+import { FilterSelect } from "@/components/ui/filter-select";
 import { AdminTasksTable } from "./admin-tasks-table";
 import { AdminDeletedTasksTable } from "./admin-deleted-tasks-table";
 import {
@@ -486,53 +487,6 @@ export function AdminTasksExplorer({
           )}
         </>
       )}
-    </div>
-  );
-}
-
-function FilterSelect({
-  id,
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: {
-    value: string;
-    label: string;
-  }[];
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <label
-        htmlFor={id}
-        className="whitespace-nowrap text-[11.5px] font-medium text-text-faint"
-      >
-        {label}
-      </label>
-
-      <select
-        id={id}
-        name={id}
-        value={value}
-        onChange={(event) =>
-          onChange(event.target.value)
-        }
-        className="max-w-[160px] rounded-[8px] border border-border bg-surface px-2.5 py-2 text-[12.5px] text-text focus:outline-none focus:ring-2 focus:ring-accent/40"
-      >
-        {options.map((option) => (
-          <option
-            key={option.value}
-            value={option.value}
-          >
-            {option.label}
-          </option>
-        ))}
-      </select>
     </div>
   );
 }

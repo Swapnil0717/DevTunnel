@@ -65,7 +65,7 @@ export function DescriptionStep({ source, value, onChange }: DescriptionStepProp
           <>
             <p className="m-0 mb-1 text-[11px] uppercase tracking-wide text-text-faint">README</p>
             <div className="max-h-[220px] overflow-y-auto rounded-md border border-border-subtle bg-surface-raised p-3">
-              <MarkdownReadme content={source.readme} />
+              <MarkdownReadme content={source.readme} sourceUrl={source.url} />
             </div>
           </>
         ) : null}

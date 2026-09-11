@@ -61,6 +61,24 @@ function parseNewIssueId(id: string): { projectId: string; issueNumber: number }
 }
 
 /**
+ * Query validation for `GET /admin/new-issues` (rules 14–15: every input
+ * is validated server-side). Same shape and bounds as `listQuerySchema` in
+ * src/routes/admin/projects.ts / activity.ts — `limit` capped to bound
+ * response size, `before` a cursor that must already look like a real
+ * timestamp before it's used to filter anything.
+ *
+ * Unlike those two, `before` is compared against `AdminNewIssue.updatedAt`
+ * (a GitHub-reported timestamp, always `Z`-suffixed UTC — see
+ * `githubIssueSchema` in src/lib/githubRepo.ts) rather than a Postgres
+ * `timestamptz` column, but the two formats are both valid ISO 8601
+ * datetimes, so the same Zod check applies unchanged.
+ */
+const listQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  before: z.string().datetime({ offset: true }).optional(),
+});
+
+/**
  * `GET /admin/new-issues` (admin_workflow.txt section 16 ▸ Backend;
  * section 22 — Admin Backend API Map).
  *
@@ -91,6 +109,26 @@ function parseNewIssueId(id: string): { projectId: string; issueNumber: number }
  * the project list itself, or the admin's own GitHub token) still
  * surfaces as a 500, since at that point nothing could be computed at
  * all.
+ *
+ * Pagination (rule 21/40/41/108): `limit`/`before` and the `X-Next-Cursor`
+ * response header work exactly like `GET /admin/projects` and
+ * `GET /admin/tasks` — but applied **in memory**, over the already-
+ * computed, already-sorted `newIssues` array, rather than as a database
+ * `WHERE`/`LIMIT` clause. There's no table row to page through here: the
+ * full result has to be assembled from a live cross-project GitHub scan
+ * before it can even be sorted, so paginating the *output* never reduces
+ * the GitHub work this endpoint does on any given call — every page still
+ * costs the same full scan the rate limit above already accounts for.
+ * What pagination buys here is exactly the other half of rule 108: a
+ * bounded response body. Without it, an installation with many active
+ * projects (each contributing up to `fetchRepositoryIssues`'s own 50-item
+ * page) could return several thousand issues in one JSON payload; with
+ * it, the frontend gets a capped first page and a cursor for the rest,
+ * the same shape it already knows how to consume from the other admin
+ * list endpoints. `before` is matched against `updatedAt` with a strict
+ * `<` comparison, the same keyset semantics (and the same accepted
+ * edge case of two items sharing an identical cursor value) as the
+ * `created_at`-keyed endpoints.
  */
 adminNewIssues.get(
   "/",
@@ -110,7 +148,8 @@ adminNewIssues.get(
     // Scanning every active project's GitHub repository on every call is
     // the single most expensive read in this admin backend — rate limited
     // more tightly than a plain database list (rule 42: protect expensive
-    // endpoints).
+    // endpoints). This limit applies per call regardless of page size —
+    // see the pagination note above.
     const withinLimit = await checkRateLimit(c, {
       bucket: "admin-new-issues-list",
       limit: 20,
@@ -118,6 +157,19 @@ adminNewIssues.get(
     });
     if (!withinLimit) {
       return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+    }
+
+    const parsed = listQuerySchema.safeParse({
+      limit: c.req.query("limit"),
+      before: c.req.query("before"),
+    });
+    if (!parsed.success) {
+      return errorResponse(
+        c,
+        400,
+        "invalid_query",
+        parsed.error.issues[0]?.message ?? "Invalid query parameters",
+      );
     }
 
     try {
@@ -182,10 +234,28 @@ adminNewIssues.get(
       // Newest-updated-first across every project, matching
       // `fetchRepositoryIssues`'s own per-repository ordering
       // (`sort=updated&direction=desc`) now that results from multiple
-      // repositories have been merged into one list.
+      // repositories have been merged into one list. Pagination below
+      // depends on this already being in strict `updatedAt desc` order.
       newIssues.sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : a.updatedAt < b.updatedAt ? 1 : 0));
 
-      return c.json(newIssues, 200);
+      // In-memory keyset pagination over the computed list — see this
+      // route's own doc comment for why this can't be pushed down into
+      // the GitHub scan itself. `before` drops everything at or after the
+      // given cursor (strict `<`, same semantics `.lt("created_at", ...)`
+      // gives the database-backed list endpoints), then the page is
+      // capped at `limit` with one extra check to know whether another
+      // page remains, exactly like `listAdminProjects` /
+      // `listAdminTasks`.
+      const { limit, before } = parsed.data;
+      const afterCursor = before ? newIssues.filter((issue) => issue.updatedAt < before) : newIssues;
+      const hasMore = afterCursor.length > limit;
+      const page = hasMore ? afterCursor.slice(0, limit) : afterCursor;
+
+      if (hasMore) {
+        c.header("X-Next-Cursor", page[page.length - 1]!.updatedAt);
+      }
+
+      return c.json(page, 200);
     } catch (err) {
       logger.error("admin_new_issues_list_failed", {
         error: err instanceof Error ? err.message : String(err),

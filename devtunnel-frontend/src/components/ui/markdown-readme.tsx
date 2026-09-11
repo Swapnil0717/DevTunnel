@@ -7,6 +7,15 @@ import type { Schema } from "hast-util-sanitize";
 
 interface MarkdownReadmeProps {
   content: string;
+  /**
+   * The repo's `sourceUrl`/`fullName` origin (e.g.
+   * `https://github.com/owner/repo`), when the caller has one. Used only
+   * to resolve README-relative image paths — see `resolveImageSrc`
+   * below. Omit when unavailable (e.g. a GitHub issue body, which never
+   * carries repo-relative image paths); absolute image URLs render
+   * exactly as before either way.
+   */
+  sourceUrl?: string | null;
 }
 
 /**
@@ -71,150 +80,202 @@ function toPixels(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-const components: Components = {
-  h1: (props: any) => (
-    <h1
-      style={props.align ? { textAlign: props.align } : undefined}
-      className="mb-3 mt-6 border-b border-border-subtle pb-2 text-[19px] font-semibold text-text first:mt-0"
-    >
-      {props.children}
-    </h1>
-  ),
-  h2: (props: any) => (
-    <h2
-      style={props.align ? { textAlign: props.align } : undefined}
-      className="mb-2.5 mt-6 border-b border-border-subtle pb-2 text-[16px] font-semibold text-text first:mt-0"
-    >
-      {props.children}
-    </h2>
-  ),
-  h3: (props: any) => (
-    <h3
-      style={props.align ? { textAlign: props.align } : undefined}
-      className="mb-2 mt-5 text-[14px] font-semibold text-text first:mt-0"
-    >
-      {props.children}
-    </h3>
-  ),
-  h4: (props: any) => (
-    <h4
-      style={props.align ? { textAlign: props.align } : undefined}
-      className="mb-1.5 mt-4 text-[13px] font-semibold text-text first:mt-0"
-    >
-      {props.children}
-    </h4>
-  ),
-  p: (props: any) => (
-    <p
-      style={props.align ? { textAlign: props.align } : undefined}
-      className="m-0 mb-3 text-[13px] leading-[1.65] text-text-secondary last:mb-0"
-    >
-      {props.children}
-    </p>
-  ),
-  a: ({ href, children }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer noopener"
-      className="text-accent underline underline-offset-2 hover:text-accent/80"
-    >
-      {children}
-    </a>
-  ),
-  strong: ({ children }) => <strong className="font-semibold text-text">{children}</strong>,
-  em: ({ children }) => <em className="italic">{children}</em>,
-  del: ({ children }) => <del className="text-text-faint">{children}</del>,
-  // GitHub READMEs use `<sub>` under contributor avatars purely for a
-  // smaller caption, not literal subscript positioning — render it as a
-  // small label rather than the browser's default vertical-shifted look.
-  sub: ({ children }) => <span className="block text-[12.5px] text-text">{children}</span>,
-  ul: ({ children }) => (
-    <ul className="m-0 mb-3 list-disc space-y-1 pl-5 text-[13px] leading-[1.65] text-text-secondary last:mb-0">
-      {children}
-    </ul>
-  ),
-  ol: ({ children }) => (
-    <ol className="m-0 mb-3 list-decimal space-y-1 pl-5 text-[13px] leading-[1.65] text-text-secondary last:mb-0">
-      {children}
-    </ol>
-  ),
-  li: ({ children, className }) => {
-    // remark-gfm marks task-list items with this class; strip the
-    // default bullet so the checkbox stands in for it, GitHub-style.
-    const isTaskItem = className?.includes("task-list-item");
-    return <li className={isTaskItem ? "list-none" : undefined}>{children}</li>;
-  },
-  input: ({ checked }) => (
-    <input
-      type="checkbox"
-      checked={!!checked}
-      disabled
-      readOnly
-      className="mr-1.5 -translate-y-px accent-accent"
-    />
-  ),
-  blockquote: ({ children }) => (
-    <blockquote className="m-0 mb-3 border-l-[3px] border-border pl-3 text-[13px] italic text-text-muted last:mb-0">
-      {children}
-    </blockquote>
-  ),
-  hr: () => <hr className="my-5 border-border-subtle" />,
-  img: ({ src, alt, width, height }) => (
-    // eslint-disable-next-line @next/next/no-img-element -- README images
-    // (logos, badges, contributor avatars) are arbitrary external URLs
-    // from GitHub content, not local static assets `next/image` can
-    // optimize.
-    <img
-      src={typeof src === "string" ? src : undefined}
-      alt={alt ?? ""}
-      width={toPixels(width)}
-      height={toPixels(height)}
-      className="inline-block max-w-full rounded-sm align-middle"
-    />
-  ),
-  code: ({ className, children }) => {
-    // remark marks fenced code blocks with a `language-*` className;
-    // plain `inline code` has none — style those two cases differently,
-    // same distinction GitHub draws.
-    const isBlock = !!className;
-    if (isBlock) {
-      return <code className={className}>{children}</code>;
+/**
+ * A GitHub README's Markdown source lives at the repo root, so any
+ * image path in it that isn't already absolute (`.github/images/logo.svg`,
+ * `./docs/screenshot.png`, `/assets/banner.png`) is meant to be resolved
+ * against the repo's own file tree — the same resolution GitHub itself
+ * does when it renders a README on a repo's homepage.
+ *
+ * Rendered as plain Markdown text with no repo context, that relative
+ * path instead resolves against *this app's* current URL — which is how
+ * a README image ends up requested as
+ * `/admin/opensource-tools/.github/images/react-starter.svg` against our
+ * own Next.js server (a guaranteed 404, and a spurious one at that,
+ * logged on every render of that tool's detail page).
+ *
+ * The fix: rewrite it to the repo's raw file content instead, via
+ * GitHub's `/raw/HEAD/` alias — `HEAD` always resolves to whatever the
+ * repo's actual default branch is, so this needs only `owner/repo` from
+ * `sourceUrl`, never a stored default-branch column
+ * (`devtunnel.opensource_tools`, sql/017, has none — rule 58: don't add
+ * schema a feature doesn't need when an existing GitHub alias already
+ * covers it).
+ *
+ * Absolute URLs (`http(s)://...`) and non-file schemes (`data:`,
+ * `mailto:`) are returned unchanged — only bare repo-relative paths are
+ * rewritten. Returns `src` unchanged if `sourceUrl` isn't a GitHub repo
+ * URL or can't be parsed, same as before this fix existed.
+ */
+function resolveImageSrc(src: string, sourceUrl?: string | null): string {
+  if (!sourceUrl || /^[a-z][a-z0-9+.-]*:/i.test(src)) {
+    // Already absolute (has a scheme: http:, https:, data:, mailto:, ...) —
+    // nothing to resolve.
+    return src;
+  }
+
+  try {
+    const parsed = new URL(sourceUrl);
+    if (parsed.hostname !== "github.com" && parsed.hostname !== "www.github.com") {
+      return src;
     }
-    return (
-      <code className="rounded border border-border-subtle bg-bg px-1.5 py-0.5 font-mono text-[12px] text-text-secondary">
+
+    const [owner, repo] = parsed.pathname.split("/").filter(Boolean);
+    if (!owner || !repo) return src;
+
+    const cleanedPath = src.replace(/^\.?\//, "");
+    return `https://github.com/${owner}/${repo}/raw/HEAD/${cleanedPath}`;
+  } catch {
+    return src;
+  }
+}
+
+function buildComponents(sourceUrl?: string | null): Components {
+  return {
+    h1: (props: any) => (
+      <h1
+        style={props.align ? { textAlign: props.align } : undefined}
+        className="mb-3 mt-6 border-b border-border-subtle pb-2 text-[19px] font-semibold text-text first:mt-0"
+      >
+        {props.children}
+      </h1>
+    ),
+    h2: (props: any) => (
+      <h2
+        style={props.align ? { textAlign: props.align } : undefined}
+        className="mb-2.5 mt-6 border-b border-border-subtle pb-2 text-[16px] font-semibold text-text first:mt-0"
+      >
+        {props.children}
+      </h2>
+    ),
+    h3: (props: any) => (
+      <h3
+        style={props.align ? { textAlign: props.align } : undefined}
+        className="mb-2 mt-5 text-[14px] font-semibold text-text first:mt-0"
+      >
+        {props.children}
+      </h3>
+    ),
+    h4: (props: any) => (
+      <h4
+        style={props.align ? { textAlign: props.align } : undefined}
+        className="mb-1.5 mt-4 text-[13px] font-semibold text-text first:mt-0"
+      >
+        {props.children}
+      </h4>
+    ),
+    p: (props: any) => (
+      <p
+        style={props.align ? { textAlign: props.align } : undefined}
+        className="m-0 mb-3 text-[13px] leading-[1.65] text-text-secondary last:mb-0"
+      >
+        {props.children}
+      </p>
+    ),
+    a: ({ href, children }) => (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="text-accent underline underline-offset-2 hover:text-accent/80"
+      >
         {children}
-      </code>
-    );
-  },
-  pre: ({ children }) => (
-    <pre className="m-0 mb-3 overflow-x-auto rounded-md border border-border-subtle bg-bg p-3 font-mono text-[12px] leading-[1.6] text-text-secondary last:mb-0">
-      {children}
-    </pre>
-  ),
-  table: ({ children }) => (
-    <div className="mb-3 overflow-x-auto last:mb-0">
-      <table className="w-full border-collapse text-[12.5px]">{children}</table>
-    </div>
-  ),
-  thead: ({ children }) => <thead className="border-b border-border">{children}</thead>,
-  th: ({ children, align }) => (
-    <th
-      style={toCellStyle(align)}
-      className="border border-border-subtle px-3 py-1.5 text-left font-semibold text-text"
-    >
-      {children}
-    </th>
-  ),
-  td: ({ children, align }) => (
-    <td
-      style={toCellStyle(align)}
-      className="border border-border-subtle px-3 py-1.5 text-text-secondary"
-    >
-      {children}
-    </td>
-  ),
-};
+      </a>
+    ),
+    strong: ({ children }) => <strong className="font-semibold text-text">{children}</strong>,
+    em: ({ children }) => <em className="italic">{children}</em>,
+    del: ({ children }) => <del className="text-text-faint">{children}</del>,
+    // GitHub READMEs use `<sub>` under contributor avatars purely for a
+    // smaller caption, not literal subscript positioning — render it as a
+    // small label rather than the browser's default vertical-shifted look.
+    sub: ({ children }) => <span className="block text-[12.5px] text-text">{children}</span>,
+    ul: ({ children }) => (
+      <ul className="m-0 mb-3 list-disc space-y-1 pl-5 text-[13px] leading-[1.65] text-text-secondary last:mb-0">
+        {children}
+      </ul>
+    ),
+    ol: ({ children }) => (
+      <ol className="m-0 mb-3 list-decimal space-y-1 pl-5 text-[13px] leading-[1.65] text-text-secondary last:mb-0">
+        {children}
+      </ol>
+    ),
+    li: ({ children, className }) => {
+      // remark-gfm marks task-list items with this class; strip the
+      // default bullet so the checkbox stands in for it, GitHub-style.
+      const isTaskItem = className?.includes("task-list-item");
+      return <li className={isTaskItem ? "list-none" : undefined}>{children}</li>;
+    },
+    input: ({ checked }) => (
+      <input
+        type="checkbox"
+        checked={!!checked}
+        disabled
+        readOnly
+        className="mr-1.5 -translate-y-px accent-accent"
+      />
+    ),
+    blockquote: ({ children }) => (
+      <blockquote className="m-0 mb-3 border-l-[3px] border-border pl-3 text-[13px] italic text-text-muted last:mb-0">
+        {children}
+      </blockquote>
+    ),
+    hr: () => <hr className="my-5 border-border-subtle" />,
+    img: ({ src, alt, width, height }) => (
+      // eslint-disable-next-line @next/next/no-img-element -- README images
+      // (logos, badges, contributor avatars) are arbitrary external URLs
+      // from GitHub content, not local static assets `next/image` can
+      // optimize.
+      <img
+        src={typeof src === "string" ? resolveImageSrc(src, sourceUrl) : undefined}
+        alt={alt ?? ""}
+        width={toPixels(width)}
+        height={toPixels(height)}
+        className="inline-block max-w-full rounded-sm align-middle"
+      />
+    ),
+    code: ({ className, children }) => {
+      // remark marks fenced code blocks with a `language-*` className;
+      // plain `inline code` has none — style those two cases differently,
+      // same distinction GitHub draws.
+      const isBlock = !!className;
+      if (isBlock) {
+        return <code className={className}>{children}</code>;
+      }
+      return (
+        <code className="rounded border border-border-subtle bg-bg px-1.5 py-0.5 font-mono text-[12px] text-text-secondary">
+          {children}
+        </code>
+      );
+    },
+    pre: ({ children }) => (
+      <pre className="m-0 mb-3 overflow-x-auto rounded-md border border-border-subtle bg-bg p-3 font-mono text-[12px] leading-[1.6] text-text-secondary last:mb-0">
+        {children}
+      </pre>
+    ),
+    table: ({ children }) => (
+      <div className="mb-3 overflow-x-auto last:mb-0">
+        <table className="w-full border-collapse text-[12.5px]">{children}</table>
+      </div>
+    ),
+    thead: ({ children }) => <thead className="border-b border-border">{children}</thead>,
+    th: ({ children, align }) => (
+      <th
+        style={toCellStyle(align)}
+        className="border border-border-subtle px-3 py-1.5 text-left font-semibold text-text"
+      >
+        {children}
+      </th>
+    ),
+    td: ({ children, align }) => (
+      <td
+        style={toCellStyle(align)}
+        className="border border-border-subtle px-3 py-1.5 text-text-secondary"
+      >
+        {children}
+      </td>
+    ),
+  };
+}
 
 /**
  * GFM table alignment includes `"char"` (align on a delimiter character,
@@ -232,13 +293,13 @@ function toCellStyle(align: string | null | undefined): CSSProperties | undefine
   return undefined;
 }
 
-export function MarkdownReadme({ content }: MarkdownReadmeProps) {
+export function MarkdownReadme({ content, sourceUrl }: MarkdownReadmeProps) {
   return (
     <div className="min-w-0">
       <Markdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw, [rehypeSanitize, readmeSanitizeSchema]]}
-        components={components}
+        components={buildComponents(sourceUrl)}
       >
         {content}
       </Markdown>

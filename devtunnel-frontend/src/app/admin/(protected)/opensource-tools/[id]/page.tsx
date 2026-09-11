@@ -160,7 +160,7 @@ export default async function AdminOpenSourceToolDetailPage({
         </h2>
         <div className="max-h-[420px] overflow-y-auto rounded-md border border-border-subtle bg-surface-raised p-4">
           {tool.readme ? (
-            <MarkdownReadme content={tool.readme} />
+            <MarkdownReadme content={tool.readme} sourceUrl={tool.sourceUrl} />
           ) : (
             <p className="m-0 text-[12px] text-text-faint">No README found.</p>
           )}

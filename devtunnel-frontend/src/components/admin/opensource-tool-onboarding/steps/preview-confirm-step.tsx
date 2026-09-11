@@ -125,7 +125,7 @@ export function PreviewConfirmStep({
                 README
               </p>
               <div className="max-h-[180px] overflow-y-auto rounded-md border border-border-subtle bg-surface-raised p-3">
-                <MarkdownReadme content={source.readme} />
+                <MarkdownReadme content={source.readme} sourceUrl={source.url} />
               </div>
             </>
           ) : null}

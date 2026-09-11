@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { SearchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
+import { FilterSelect } from "@/components/ui/filter-select";
 import { AdminProjectsTable } from "./admin-projects-table";
 import type { AdminProjectStatus, AdminProjectSummary } from "@/lib/admin/projects/types";
 
@@ -177,73 +178,38 @@ export function AdminProjectsExplorer({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <label
-              htmlFor="admin-projects-author"
-              className="whitespace-nowrap text-[11.5px] font-medium text-text-faint"
-            >
-              Author
-            </label>
-            <select
-              id="admin-projects-author"
-              name="admin-projects-author"
-              value={author}
-              onChange={(event) => setAuthor(event.target.value)}
-              className="rounded-[8px] border border-border bg-surface px-2.5 py-2 text-[12.5px] text-text focus:outline-none focus:ring-2 focus:ring-accent/40"
-            >
-              <option value={ALL_AUTHORS}>All authors</option>
-              {authorOptions.map(([username, displayName]) => (
-                <option key={username} value={username}>
-                  {displayName} (@{username})
-                </option>
-              ))}
-            </select>
-          </div>
+          <FilterSelect
+            id="admin-projects-author"
+            label="Author"
+            value={author}
+            onChange={setAuthor}
+            options={[
+              { value: ALL_AUTHORS, label: "All authors" },
+              ...authorOptions.map(([username, displayName]) => ({
+                value: username,
+                label: `${displayName} (@${username})`,
+              })),
+            ]}
+          />
 
-          <div className="flex items-center gap-2">
-            <label
-              htmlFor="admin-projects-tech"
-              className="whitespace-nowrap text-[11.5px] font-medium text-text-faint"
-            >
-              Tech stack
-            </label>
-            <select
-              id="admin-projects-tech"
-              name="admin-projects-tech"
-              value={tech}
-              onChange={(event) => setTech(event.target.value)}
-              className="rounded-[8px] border border-border bg-surface px-2.5 py-2 text-[12.5px] text-text focus:outline-none focus:ring-2 focus:ring-accent/40"
-            >
-              <option value={ALL_TECH}>All tech stacks</option>
-              {techOptions.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FilterSelect
+            id="admin-projects-tech"
+            label="Tech stack"
+            value={tech}
+            onChange={setTech}
+            options={[
+              { value: ALL_TECH, label: "All tech stacks" },
+              ...techOptions.map((value) => ({ value, label: value })),
+            ]}
+          />
 
-          <div className="flex items-center gap-2">
-            <label
-              htmlFor="admin-projects-status"
-              className="whitespace-nowrap text-[11.5px] font-medium text-text-faint"
-            >
-              Status
-            </label>
-            <select
-              id="admin-projects-status"
-              name="admin-projects-status"
-              value={status}
-              onChange={(event) => setStatus(event.target.value as StatusFilter)}
-              className="rounded-[8px] border border-border bg-surface px-2.5 py-2 text-[12.5px] text-text focus:outline-none focus:ring-2 focus:ring-accent/40"
-            >
-              {STATUS_FILTERS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FilterSelect
+            id="admin-projects-status"
+            label="Status"
+            value={status}
+            onChange={(value) => setStatus(value as StatusFilter)}
+            options={STATUS_FILTERS}
+          />
         </div>
       </div>
 
