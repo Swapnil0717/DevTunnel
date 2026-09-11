@@ -59,6 +59,11 @@ import type { UserRole } from "../types";
  *   POST  /admin/opensource-tools/onboarding/:id/validate            -> admin:opensource-tools:write
  *   POST  /admin/opensource-tools/onboarding/:id/complete            -> admin:opensource-tools:write
  *
+ *   GET    /admin/opensource-tools        -> admin:opensource-tools:read
+ *   GET    /admin/opensource-tools/:id    -> admin:opensource-tools:read
+ *   PATCH  /admin/opensource-tools/:id    -> admin:opensource-tools:write
+ *   DELETE /admin/opensource-tools/:id    -> admin:opensource-tools:delete
+ *
  * `admin:tasks:read` / `admin:tasks:write` back admin_workflow.txt section
  * 10's Task Onboarding wizard (today: Step 1 — "Project Selection", Step 2
  * — "Select Existing Issue", Step 3 — "Issue Information", Step 4 —
@@ -120,6 +125,15 @@ import type { UserRole } from "../types";
  * distinction), so a narrower admin role could plausibly manage one
  * without the other later, the same reasoning `admin:tasks:*` already
  * gets its own pair rather than folding into `admin:projects:*`.
+ *
+ * That same read/write pair is reused, unmodified, by
+ * `/admin/opensource-tools` (src/routes/admin/opensourceTools.ts) — the
+ * already-published-catalog sibling of the onboarding wizard above, same
+ * relationship `/admin/tasks` has with `/admin/tasks/onboarding`.
+ * `admin:opensource-tools:delete` is its own, narrower permission — not
+ * folded into `:write` — for the exact reason `admin:projects:delete` is
+ * kept separate from `admin:projects:write`: different blast radius, and
+ * a narrower admin role could plausibly get one without the other later.
  */
 export const ADMIN_PERMISSIONS = [
   "admin:projects:read",
@@ -139,6 +153,7 @@ export const ADMIN_PERMISSIONS = [
   "admin:activity:read",
   "admin:opensource-tools:read",
   "admin:opensource-tools:write",
+  "admin:opensource-tools:delete",
 ] as const;
 
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];

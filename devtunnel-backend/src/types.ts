@@ -1085,3 +1085,87 @@ export interface OpenSourceToolRow {
   created_at: string;
   updated_at: string;
 }
+
+export interface OpenSourceToolRow {
+  id: string;
+  slug: string;
+  name: string;
+  source_url: string;
+  fetched_description: string | null;
+  readme: string | null;
+  primary_language: string | null;
+  description_source: DescriptionChoice;
+  custom_description: string | null;
+  labels: string[];
+  setup_guide: string;
+  created_by: string;
+  onboarding_draft_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/* -------------------------------------------------------------------------
+ * Admin — Open Source Tools (already-published catalog, as opposed to the
+ * onboarding wizard above). `/admin/opensource-tools`,
+ * `/admin/opensource-tools/:id` (src/routes/admin/opensourceTools.ts) —
+ * a sibling of `/admin/opensource-tools/onboarding`, the same relationship
+ * `AdminProjectSummary`/`AdminProjectDetail` above have with Project
+ * Onboarding's own draft shapes.
+ *
+ * Every interface below is written to match, field-for-field, the
+ * already-shipped frontend contract in
+ * devtunnel-frontend/src/lib/admin/opensource-tools/types.ts — same
+ * "frontend is the source of truth for this not-yet-speced screen"
+ * convention that file's own header documents, and the same one
+ * sql/017's header comment points back to.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * A single card on the `/admin/opensource-tools` grid. Field-for-field
+ * match with `AdminToolSummary` (devtunnel-frontend/src/lib/admin/
+ * opensource-tools/types.ts) — every field maps 1:1 to an
+ * `devtunnel.opensource_tools` column (sql/017), camelCased.
+ */
+export interface AdminToolSummary {
+  id: string;
+  slug: string;
+  name: string;
+  sourceUrl: string;
+  fetchedDescription: string | null;
+  primaryLanguage: string | null;
+  labels: string[];
+  createdAt: string;
+}
+
+/**
+ * `GET /admin/opensource-tools/:id` response. Field-for-field match with
+ * `AdminToolDetail` (same frontend file) — extends the grid summary with
+ * the remaining onboarding-authored fields the detail page shows/edits:
+ * the imported README (never edited here — same "repository fields
+ * locked" restriction `AdminProjectDetail`'s `githubDescription`/`readme`
+ * carry for projects), the Step 2 description choice, and the Step 4
+ * setup guide.
+ */
+export interface AdminToolDetail extends AdminToolSummary {
+  readme: string | null;
+  descriptionChoice: DescriptionChoice;
+  customDescription: string | null;
+  setupGuide: string;
+}
+
+/**
+ * Validated payload for `PATCH /admin/opensource-tools/:id` — field-for-
+ * field match with `AdminToolUpdatePayload` (same frontend file).
+ * Deliberately only the fields Steps 2–4 of onboarding already hand the
+ * Admin control over (description, labels, setup guide) — `sourceUrl`,
+ * `fetchedDescription`, `primaryLanguage`, and `readme` stay exactly what
+ * onboarding's Step 1 import resolved and have no writable path here,
+ * same restriction `AdminProjectUpdatePayload` applies to GitHub-derived
+ * project fields.
+ */
+export interface AdminToolUpdatePayload {
+  descriptionChoice?: DescriptionChoice;
+  customDescription?: string | null;
+  labels?: string[];
+  setupGuide?: string;
+}
