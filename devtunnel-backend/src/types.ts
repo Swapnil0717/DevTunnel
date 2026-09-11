@@ -25,12 +25,22 @@
   SUPABASE_DB_SCHEMA: string;
   GITHUB_CLIENT_ID: string;
   SESSION_TTL_DAYS: string;
+  // Model used by the AI Discovery agent (src/lib/gemini.ts). Not a
+  // secret — the key that authenticates against it is GEMINI_API_KEY below.
+  GEMINI_MODEL: string;
 
   // --- Secrets (wrangler secret put / .dev.vars) ---
   GITHUB_CLIENT_SECRET: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   SESSION_HMAC_SECRET: string;
   GITHUB_TOKEN_ENCRYPTION_KEY: string;
+  // Gemini API key — free tier, from https://aistudio.google.com/apikey.
+  // Powers the AI Discovery agent (src/lib/aiDiscoveryAgent.ts).
+  GEMINI_API_KEY: string;
+  // A GitHub Personal Access Token this backend controls (not a user's
+  // OAuth token), used only by src/lib/githubDiscovery.ts to search
+  // GitHub server-side at the AI Discovery agent's own initiative.
+  GITHUB_DISCOVERY_TOKEN: string;
 }
 
 /** Values attached to the Hono context by middleware. */
@@ -940,15 +950,6 @@ export interface AdminNewIssue {
   updatedAt: string;
 }
 
-// ============================================================================
-// INSERT INTO: devtunnel-backend/src/types.ts
-// WHERE: immediately after the `CreatedProject` interface (ends the
-//        "Admin — Project Onboarding" section, line ~301) and before
-//        `ProjectOnboardingDraftRow` — i.e. as its own new section right
-//        after the project-onboarding block ends at line 345 in the
-//        current file. Paste the whole block below there.
-// ============================================================================
-
 /* ----------------------------------------------------------------------
  * Admin — Open Source Tool Onboarding (`/admin/opensource-tools/new`).
  *
@@ -1095,24 +1096,6 @@ export interface OpenSourceToolRow {
   updated_at: string;
 }
 
-export interface OpenSourceToolRow {
-  id: string;
-  slug: string;
-  name: string;
-  source_url: string;
-  fetched_description: string | null;
-  readme: string | null;
-  primary_language: string | null;
-  description_source: DescriptionChoice;
-  custom_description: string | null;
-  labels: string[];
-  setup_guide: string;
-  created_by: string;
-  onboarding_draft_id: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
 /* -------------------------------------------------------------------------
  * Admin — Open Source Tools (already-published catalog, as opposed to the
  * onboarding wizard above). `/admin/opensource-tools`,
@@ -1177,4 +1160,121 @@ export interface AdminToolUpdatePayload {
   customDescription?: string | null;
   labels?: string[];
   setupGuide?: string;
+}
+
+/* -------------------------------------------------------------------------
+ * Admin — AI Discovery (sql/020_add_ai_discovery.sql, extended by
+ * sql/021_add_ai_discovery_authored_fields.sql).
+ * ---------------------------------------------------------------------- */
+
+export type AiDiscoveryStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type AiDiscoveryDifficulty = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
+
+export interface AiDiscoveryCounters {
+  discoveryDate: string;
+  projectsBeginner: number;
+  projectsIntermediate: number;
+  projectsAdvanced: number;
+  toolsFound: number;
+  toolCategoriesFound: string[];
+  tasksFound: number;
+  projectsRemaining: { beginner: number; intermediate: number; advanced: number };
+  toolCategoriesRemaining: string[];
+}
+
+export interface AiDiscoveredProject {
+  id: string;
+  discoveryDate: string;
+  repositoryUrl: string;
+  githubOwner: string;
+  githubRepoName: string;
+  githubFullName: string;
+  /** Raw GitHub API fact — never Gemini's own wording. */
+  githubDescription: string | null;
+  readme: string | null;
+  primaryLanguage: string | null;
+  stars: number;
+  forks: number;
+  openIssues: number;
+  techStack: OnboardingTechStack;
+  /** Gemini-authored, short and simple — see aiDiscoveryAgent.ts prompt. */
+  description: string;
+  /** Gemini's pick from PROJECT_CATEGORIES (db/aiDiscovery.ts) — never a made-up value. */
+  category: string;
+  difficulty: AiDiscoveryDifficulty;
+  aiReasoning: string;
+  status: AiDiscoveryStatus;
+  createdAt: string;
+}
+
+export interface AiDiscoveredTool {
+  id: string;
+  discoveryDate: string;
+  sourceUrl: string;
+  name: string;
+  /** Raw GitHub API fact — never Gemini's own wording. */
+  fetchedDescription: string | null;
+  readme: string | null;
+  primaryLanguage: string | null;
+  category: string;
+  labels: string[];
+  /** Gemini-authored, short and simple. */
+  description: string;
+  /** Gemini-authored, short, in bullet points — grounded in the real README. */
+  setupGuide: string;
+  aiReasoning: string;
+  status: AiDiscoveryStatus;
+  createdAt: string;
+}
+
+export interface AiDiscoveredTask {
+  id: string;
+  discoveryDate: string;
+  projectId: string;
+  projectName: string;
+  projectSlug: string;
+  issueNumber: number;
+  issueTitle: string;
+  issueUrl: string;
+  issueBody: string | null;
+  issueLabels: string[];
+  githubAuthor: OnboardingGithubIdentity | null;
+  /** Gemini's pick — only from DeveloperRole's existing values. */
+  suggestedRoles: DeveloperRole[];
+  /** Gemini's pick — only from ExperienceLevel's existing values, or null. */
+  suggestedDifficulty: ExperienceLevel | null;
+  /** Gemini-authored, short — what a contributor would actually do. */
+  taskSummary: string;
+  /** Admin-facing only: why this issue was picked. Never shown as the task's public description. */
+  aiReasoning: string;
+  status: AiDiscoveryStatus;
+  createdAt: string;
+}
+
+export interface AiConfirmationQueue {
+  projects: AiDiscoveredProject[];
+  tools: AiDiscoveredTool[];
+  tasks: AiDiscoveredTask[];
+}
+
+/**
+ * Response body of `POST /admin/ai/run`. Mirrors the widened return type
+ * of `triggerAiDiscoveryRun` in
+ * devtunnel-frontend/src/lib/admin/ai-discovery/client-api.ts.
+ *
+ * `candidatesDropped` counts discovery candidates (project/tool/task)
+ * that the agent evaluated but did not propose — e.g. duplicates of an
+ * already-onboarded/queued item, or candidates that failed validation
+ * (rule 37/38: never fabricate a value, so a dropped candidate is simply
+ * not written to `AiDiscoveredProject`/`Tool`/`Task` and only counted
+ * here). Distinct from `errors`, which is for run-level failures (a
+ * fetch/API error), not per-candidate rejections.
+ */
+export interface AiDiscoveryRunSummary {
+  date: string;
+  projectsProposed: number;
+  toolsProposed: number;
+  tasksProposed: number;
+  candidatesDropped: number;
+  errors: string[];
 }

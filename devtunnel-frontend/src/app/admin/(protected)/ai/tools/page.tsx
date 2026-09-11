@@ -1,28 +1,20 @@
 import type { Metadata } from "next";
 import { buildMetadata } from "@/lib/seo";
 import { SectionMessage } from "@/components/home/section-message";
+import { getAiDiscoveredTools } from "@/lib/admin/ai-discovery/api";
+import { AiDiscoveryQueue } from "@/components/admin/ai-discovery/ai-discovery-queue";
+import { splitSetupGuideBullets } from "@/lib/admin/ai-discovery/setup-guide";
 
 export const metadata: Metadata = buildMetadata({
   title: "AI Added Tools",
   description: "Open source tools DevTunnel's AI has proposed adding to the platform.",
   path: "/admin/ai/tools",
-  // Private application UI, never public content (Frontend_Development_Rules.txt rule 18).
   noIndex: true,
 });
 
-/**
- * `/admin/ai/tools` — AI section, "AI Added Tools" (see
- * `admin-nav-items.ts`). Lists open source tools an AI agent has proposed
- * adding to the Open Source Tools catalog, ahead of an admin reviewing and
- * confirming them (see `/admin/ai/confirmation`).
- *
- * Frontend-only placeholder for now: there is no backend route yet for
- * listing AI-proposed tools. Same honest one-`SectionMessage` degrade the
- * rest of the Admin Portal uses instead of a fake or empty table
- * (Frontend_Development_Rules.txt rule 26) — swap this for a real
- * fetch + table once `GET /admin/ai/tools` exists.
- */
-export default function AdminAiToolsPage() {
+export default async function AdminAiToolsPage() {
+  const result = await getAiDiscoveredTools("PENDING");
+
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
       <div className="mb-8">
@@ -32,7 +24,22 @@ export default function AdminAiToolsPage() {
         </p>
       </div>
 
-      <SectionMessage>AI added tools aren&apos;t available yet — check back soon.</SectionMessage>
+      {result.status === "error" && <SectionMessage>Couldn&apos;t load AI-proposed tools right now.</SectionMessage>}
+      {result.status === "empty" && <SectionMessage>No AI-proposed tools awaiting review.</SectionMessage>}
+      {result.status === "ok" && (
+        <AiDiscoveryQueue
+          kind="tools"
+          items={result.data.map((t) => ({
+            id: t.id,
+            title: t.name,
+            subtitle: `${t.category} · ${t.description || t.fetchedDescription || "No description"}`,
+            meta: [t.primaryLanguage ?? "—", ...t.labels],
+            details: splitSetupGuideBullets(t.setupGuide),
+            reasoning: t.aiReasoning,
+            url: t.sourceUrl,
+          }))}
+        />
+      )}
     </main>
   );
 }

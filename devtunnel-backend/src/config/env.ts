@@ -11,9 +11,18 @@ const envSchema = z.object({
   SUPABASE_DB_SCHEMA: z.string().min(1),
   GITHUB_CLIENT_ID: z.string().min(1),
   SESSION_TTL_DAYS: z.string().regex(/^\d+$/),
+  GEMINI_MODEL: z.string().min(1),
   GITHUB_CLIENT_SECRET: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   SESSION_HMAC_SECRET: z.string().min(16, "SESSION_HMAC_SECRET must be at least 16 characters"),
+  // Powers the AI Discovery agent (src/lib/gemini.ts). Free-tier key from
+  // https://aistudio.google.com/apikey — never logged, never returned to
+  // any client.
+  GEMINI_API_KEY: z.string().min(1),
+  // A GitHub Personal Access Token this backend controls (not a user's
+  // OAuth token), used only by src/lib/githubDiscovery.ts to search
+  // GitHub server-side at the AI Discovery agent's own initiative.
+  GITHUB_DISCOVERY_TOKEN: z.string().min(1),
   // Encrypts each user's stored GitHub user-to-server access/refresh
   // token at rest (src/lib/crypto.ts encryptSecret/decryptSecret,
   // src/db/githubTokens.ts). This is NOT a GitHub credential — it's a

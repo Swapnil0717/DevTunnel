@@ -58,6 +58,21 @@ GITHUB_CLIENT_ID = "Iv23liqdlxwKp3dunpZN"
 # How long a session stays valid before the user must sign in again.
 SESSION_TTL_DAYS = "30"
 
+# Gemini model used by the AI Discovery agent (src/lib/gemini.ts). Not a
+# secret — the key that authenticates against it is (GEMINI_API_KEY).
+GEMINI_MODEL = "gemini-2.5-flash"
+
+# ---------------------------------------------------------------------------
+# AI Discovery cron trigger — runs the daily project/tool/task discovery
+# agent (src/lib/aiDiscoveryAgent.ts) once a day at 03:00 UTC, after most
+# US/EU GitHub activity has settled. The agent is idempotent per UTC date
+# (devtunnel.ai_discovery_daily_counters), so an earlier manual
+# POST /admin/ai/run the same day just tops up whatever quota is left
+# instead of double-running.
+# ---------------------------------------------------------------------------
+[triggers]
+crons = ["0 3 * * *"]
+
 # ---------------------------------------------------------------------------
 # Per-environment overrides. Deploy with `wrangler deploy --env staging`.
 # ---------------------------------------------------------------------------
@@ -71,6 +86,7 @@ SUPABASE_URL = "https://bdxnvouuyfjryuncxkfx.supabase.co"
 SUPABASE_DB_SCHEMA = "devtunnel"
 GITHUB_CLIENT_ID = "Iv23liqdlxwKp3dunpZN" # same GitHub App as production for now; split later if needed
 SESSION_TTL_DAYS = "30"
+GEMINI_MODEL = "gemini-2.5-flash"
 
 [[env.staging.kv_namespaces]]
 binding = "RATE_LIMIT_KV"

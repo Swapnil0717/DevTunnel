@@ -6,6 +6,7 @@ import { adminProjects } from "./projects";
 import { adminTasks } from "./tasks";
 import { adminNewIssues } from "./newIssues";
 import { adminOpenSourceTools } from "./opensourceTools";
+import { adminAi } from "./ai";
 import { adminProjectOnboarding } from "../projectOnboarding";
 import { adminTaskOnboarding } from "../taskOnboarding";
 import { adminOpenSourceToolOnboarding } from "../opensourceToolOnboarding";
@@ -48,7 +49,11 @@ import { adminOpenSourceToolOnboarding } from "../opensourceToolOnboarding";
  * decision — see devtunnel-frontend's page at
  * `src/app/admin/(protected)/tasks/new-issues/page.tsx`), and this mount
  * point matches the already-shipped
- * `lib/admin/new-issues/api.ts`/`client-api.ts` contract exactly. Future
+ * `lib/admin/new-issues/api.ts`/`client-api.ts` contract exactly.
+ * `/admin/ai` (src/routes/admin/ai.ts) is mounted the same way as a plain
+ * top-level sibling — it has no `:id`-shaped routes of its own to collide
+ * with, and matches the already-shipped
+ * `lib/admin/ai-discovery/api.ts`/`client-api.ts` contract. Future
  * admin modules (`/admin/github`, ...) get their own file in this
  * directory and are mounted here the same way.
  */
@@ -63,3 +68,4 @@ admin.route("/tasks/onboarding", adminTaskOnboarding);
 admin.route("/opensource-tools/onboarding", adminOpenSourceToolOnboarding);
 admin.route("/opensource-tools", adminOpenSourceTools);
 admin.route("/new-issues", adminNewIssues);
+admin.route("/ai", adminAi);

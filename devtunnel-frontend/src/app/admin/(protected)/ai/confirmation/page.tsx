@@ -1,30 +1,20 @@
 import type { Metadata } from "next";
 import { buildMetadata } from "@/lib/seo";
 import { SectionMessage } from "@/components/home/section-message";
+import { getAiConfirmationQueue } from "@/lib/admin/ai-discovery/api";
+import { AiDiscoveryQueue } from "@/components/admin/ai-discovery/ai-discovery-queue";
+import { splitSetupGuideBullets } from "@/lib/admin/ai-discovery/setup-guide";
 
 export const metadata: Metadata = buildMetadata({
   title: "Confirmation by Admin",
   description: "Review queue for AI-proposed projects, tools, and tasks awaiting admin approval.",
   path: "/admin/ai/confirmation",
-  // Private application UI, never public content (Frontend_Development_Rules.txt rule 18).
   noIndex: true,
 });
 
-/**
- * `/admin/ai/confirmation` — AI section, "Confirmation by Admin" (see
- * `admin-nav-items.ts`). The single review queue where an admin approves
- * or rejects everything the AI has proposed across AI Added Projects, AI
- * Added Tools, and AI Added Tasks, rather than confirming from three
- * separate pages.
- *
- * Frontend-only placeholder for now: there is no backend route yet for
- * a combined AI review queue. Same honest one-`SectionMessage` degrade
- * the rest of the Admin Portal uses instead of a fake or empty table
- * (Frontend_Development_Rules.txt rule 26) — swap this for a real
- * fetch + approve/reject table once `GET /admin/ai/confirmation` (or
- * equivalent) exists.
- */
-export default function AdminAiConfirmationPage() {
+export default async function AdminAiConfirmationPage() {
+  const result = await getAiConfirmationQueue();
+
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
       <div className="mb-8">
@@ -34,7 +24,55 @@ export default function AdminAiConfirmationPage() {
         </p>
       </div>
 
-      <SectionMessage>Nothing is awaiting confirmation yet — check back soon.</SectionMessage>
+      {result.status === "error" && <SectionMessage>Couldn&apos;t load the confirmation queue right now.</SectionMessage>}
+      {result.status === "empty" && <SectionMessage>Nothing is awaiting confirmation right now.</SectionMessage>}
+      {result.status === "ok" && (
+        <div className="flex flex-col gap-8">
+          <section>
+            <h2 className="mb-3 text-sm font-medium text-text-muted">Projects ({result.data.projects.length})</h2>
+            <AiDiscoveryQueue
+              kind="projects"
+              items={result.data.projects.map((p) => ({
+                id: p.id,
+                title: p.githubFullName,
+                subtitle: p.description || p.githubDescription || "No description",
+                meta: [p.category, p.difficulty, p.primaryLanguage ?? "—", `★ ${p.stars}`],
+                reasoning: p.aiReasoning,
+                url: p.repositoryUrl,
+              }))}
+            />
+          </section>
+          <section>
+            <h2 className="mb-3 text-sm font-medium text-text-muted">Tools ({result.data.tools.length})</h2>
+            <AiDiscoveryQueue
+              kind="tools"
+              items={result.data.tools.map((t) => ({
+                id: t.id,
+                title: t.name,
+                subtitle: `${t.category} · ${t.description || t.fetchedDescription || "No description"}`,
+                meta: [t.primaryLanguage ?? "—"],
+                details: splitSetupGuideBullets(t.setupGuide),
+                reasoning: t.aiReasoning,
+                url: t.sourceUrl,
+              }))}
+            />
+          </section>
+          <section>
+            <h2 className="mb-3 text-sm font-medium text-text-muted">Tasks ({result.data.tasks.length})</h2>
+            <AiDiscoveryQueue
+              kind="tasks"
+              items={result.data.tasks.map((t) => ({
+                id: t.id,
+                title: `#${t.issueNumber} ${t.issueTitle}`,
+                subtitle: `${t.projectName} · ${t.taskSummary || "No summary"}`,
+                meta: [...t.issueLabels, ...t.suggestedRoles],
+                reasoning: t.aiReasoning,
+                url: t.issueUrl,
+              }))}
+            />
+          </section>
+        </div>
+      )}
     </main>
   );
 }

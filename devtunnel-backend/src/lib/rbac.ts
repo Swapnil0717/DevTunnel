@@ -64,6 +64,19 @@ import type { UserRole } from "../types";
  *   PATCH  /admin/opensource-tools/:id    -> admin:opensource-tools:write
  *   DELETE /admin/opensource-tools/:id    -> admin:opensource-tools:delete
  *
+ *   GET    /admin/ai/status               -> admin:ai:read
+ *   GET    /admin/ai/projects             -> admin:ai:read
+ *   GET    /admin/ai/tools                -> admin:ai:read
+ *   GET    /admin/ai/tasks                -> admin:ai:read
+ *   GET    /admin/ai/confirmation         -> admin:ai:read
+ *   POST   /admin/ai/projects/:id/approve -> admin:ai:write
+ *   POST   /admin/ai/projects/:id/reject  -> admin:ai:write
+ *   POST   /admin/ai/tools/:id/approve    -> admin:ai:write
+ *   POST   /admin/ai/tools/:id/reject     -> admin:ai:write
+ *   POST   /admin/ai/tasks/:id/approve    -> admin:ai:write
+ *   POST   /admin/ai/tasks/:id/reject     -> admin:ai:write
+ *   POST   /admin/ai/run                  -> admin:ai:write
+ *
  * `admin:tasks:read` / `admin:tasks:write` back admin_workflow.txt section
  * 10's Task Onboarding wizard (today: Step 1 — "Project Selection", Step 2
  * — "Select Existing Issue", Step 3 — "Issue Information", Step 4 —
@@ -134,6 +147,17 @@ import type { UserRole } from "../types";
  * folded into `:write` — for the exact reason `admin:projects:delete` is
  * kept separate from `admin:projects:write`: different blast radius, and
  * a narrower admin role could plausibly get one without the other later.
+ *
+ * `admin:ai:read` / `admin:ai:write` back the AI Discovery module
+ * (src/routes/admin/ai.ts, src/lib/aiDiscoveryAgent.ts). Its own pair
+ * rather than reuse of `admin:projects:*`/`admin:tasks:*`/
+ * `admin:opensource-tools:*`, for the same reason those three each got
+ * their own pair instead of sharing one: AI Discovery spans all three
+ * resource types (candidate projects, tools, *and* tasks) plus a fourth
+ * action none of those existing permissions cover — approving/rejecting
+ * an AI-authored candidate and triggering a live Gemini/GitHub run
+ * (`admin:ai:write`) is a materially different blast radius than editing
+ * an already-onboarded project or task.
  */
 export const ADMIN_PERMISSIONS = [
   "admin:projects:read",
@@ -154,6 +178,8 @@ export const ADMIN_PERMISSIONS = [
   "admin:opensource-tools:read",
   "admin:opensource-tools:write",
   "admin:opensource-tools:delete",
+  "admin:ai:read",
+  "admin:ai:write",
 ] as const;
 
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
