@@ -80,7 +80,51 @@ export const DISCOVERY_TOOLS: GeminiFunctionDeclaration[] = [
   },
 ];
 
-export function buildDiscoveryDispatcher(env: ValidatedEnv) {
+/** `owner/repo` (lowercased) -> full README text, shared across one discovery run. */
+export type ReadmeCache = Map<string, string>;
+
+export function readmeCacheKey(owner: string, repo: string): string {
+  return `${owner}/${repo}`.toLowerCase();
+}
+
+/**
+ * Returns the README for owner/repo, preferring whatever's already in
+ * `readmeCache` (populated by a `get_github_readme` tool call during this
+ * same run) over hitting GitHub again. Falls back to a direct fetch — and
+ * caches that too — so a candidate whose README Gemini never explicitly
+ * re-fetched right before answering still gets one attached. Never
+ * throws: a fetch failure here just means `readme` stays null on the
+ * candidate, exactly like any other optional field GitHub didn't have.
+ */
+export async function getReadmeWithCache(
+  env: ValidatedEnv,
+  readmeCache: ReadmeCache,
+  owner: string,
+  repo: string,
+): Promise<string | null> {
+  const key = readmeCacheKey(owner, repo);
+  const cached = readmeCache.get(key);
+  if (cached) return cached;
+
+  try {
+    const readme = await getRepositoryReadme(env, owner, repo);
+    if (readme) readmeCache.set(key, readme);
+    return readme;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Builds the tool dispatcher Gemini's agent loop calls into. When a
+ * `readmeCache` is supplied, every real `get_github_readme` result is
+ * recorded into it as a side effect — this is what lets
+ * aiDiscoveryAgent.ts attach the README it already fetched during
+ * discovery to the candidate it ends up inserting, instead of either
+ * discarding it (the previous behavior) or re-fetching it a second time
+ * for the same repo.
+ */
+export function buildDiscoveryDispatcher(env: ValidatedEnv, readmeCache?: ReadmeCache) {
   return async (name: string, args: Record<string, unknown>): Promise<unknown> => {
     switch (name) {
       case "search_github_repositories": {
@@ -109,7 +153,12 @@ export function buildDiscoveryDispatcher(env: ValidatedEnv) {
         };
       }
       case "get_github_readme": {
-        const readme = await getRepositoryReadme(env, String(args.owner), String(args.repo));
+        const owner = String(args.owner);
+        const repo = String(args.repo);
+        const readme = await getRepositoryReadme(env, owner, repo);
+        if (readme && readmeCache) {
+          readmeCache.set(readmeCacheKey(owner, repo), readme);
+        }
         return { readme: readme ?? "" };
       }
       case "search_github_issues": {

@@ -1,7 +1,7 @@
 import type { ValidatedEnv } from "../config/env";
 import { getSupabase } from "./supabase";
 import { parseGeminiJson, runGeminiAgent } from "./gemini";
-import { DISCOVERY_TOOLS, buildDiscoveryDispatcher } from "./aiDiscoveryTools";
+import { DISCOVERY_TOOLS, buildDiscoveryDispatcher, getReadmeWithCache, type ReadmeCache } from "./aiDiscoveryTools";
 import {
   validateProjectCandidate,
   validateToolCandidate,
@@ -65,6 +65,15 @@ import type { AiDiscoveryRunSummary, DeveloperRole, ExperienceLevel } from "../t
  * ---------------------------------------------------------------------------
  */
 
+/** Extracts { owner, repo } from a github.com repo URL, or null for anything else (never guessed). */
+function parseGithubOwnerRepo(url: string): { owner: string; repo: string } | null {
+  const match = url.match(/^https:\/\/github\.com\/([^/\s]+)\/([^/\s]+?)\/?$/i);
+  const owner = match?.[1];
+  const repo = match?.[2];
+  if (!owner || !repo) return null;
+  return { owner, repo: repo.replace(/\.git$/i, "") };
+}
+
 const SYSTEM_PROMPT = `You are DevTunnel's open-source discovery agent. DevTunnel is a platform that
 connects contributors with beginner/intermediate/advanced-friendly open source
 projects. You have tools to search real GitHub data — you must never invent a
@@ -85,7 +94,7 @@ matching exactly the schema described in the user message.`;
 // Projects — 7/day: 3 beginner, 3 intermediate, 1 advanced.
 // ---------------------------------------------------------------------------
 
-async function runProjectDiscovery(env: ValidatedEnv): Promise<{ proposed: number; dropped: number; errors: string[] }> {
+async function runProjectDiscovery(env: ValidatedEnv, readmeCache: ReadmeCache): Promise<{ proposed: number; dropped: number; errors: string[] }> {
   const supabase = getSupabase(env);
   const errors: string[] = [];
   const counters = await getTodayCounters(supabase);
@@ -155,7 +164,7 @@ Return exactly ${totalNeeded} candidates total, matching the needed counts per d
 
   let candidates: ProjectCandidateInput[] = [];
   try {
-    const dispatch = buildDiscoveryDispatcher(env);
+    const dispatch = buildDiscoveryDispatcher(env, readmeCache);
     const raw = await runGeminiAgent(env, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
     const parsed = parseGeminiJson<{ candidates: ProjectCandidateInput[] }>(raw);
     candidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];
@@ -184,9 +193,13 @@ Return exactly ${totalNeeded} candidates total, matching the needed counts per d
       url: string;
       owner: string;
       repo: string;
+      stars: number;
+      forks: number;
+      openIssues: number;
       difficulty: "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
       category: string;
       description: string;
+      reasoning: string;
       techStack: { languages: string[]; frameworks: string[]; libraries: string[] };
     };
 
@@ -202,13 +215,21 @@ Return exactly ${totalNeeded} candidates total, matching the needed counts per d
     }
 
     try {
+      // Attach the real README this run already read (or, failing that,
+      // fetch it directly) — this is the same content the admin will see
+      // once approved (sql/020's approve_ai_discovered_project copies this
+      // column straight into devtunnel.projects), so it must be the real
+      // thing, never left empty just because Gemini's JSON reply doesn't
+      // carry free text this long.
+      const readme = await getReadmeWithCache(env, readmeCache, candidate.owner, candidate.repo);
+
       await insertDiscoveredProject(supabase, {
         repositoryUrl: candidate.url,
         githubOwner: candidate.owner,
         githubRepoName: candidate.repo,
         githubFullName: candidate.fullName,
         githubDescription: (candidate.githubDescription as string | null) ?? null,
-        readme: null,
+        readme,
         primaryLanguage: (candidate.primaryLanguage as string | null) ?? null,
         stars: candidate.stars,
         forks: candidate.forks,
@@ -249,7 +270,7 @@ Return exactly ${totalNeeded} candidates total, matching the needed counts per d
 // Tools — 7/day, exactly one per category.
 // ---------------------------------------------------------------------------
 
-async function runToolDiscovery(env: ValidatedEnv): Promise<{ proposed: number; dropped: number; errors: string[] }> {
+async function runToolDiscovery(env: ValidatedEnv, readmeCache: ReadmeCache): Promise<{ proposed: number; dropped: number; errors: string[] }> {
   const supabase = getSupabase(env);
   const errors: string[] = [];
   const counters = await getTodayCounters(supabase);
@@ -261,6 +282,11 @@ async function runToolDiscovery(env: ValidatedEnv): Promise<{ proposed: number; 
   let proposed = 0;
   let dropped = 0;
 
+  // One category at a time, fully finished (proposed/dropped/inserted)
+  // before the next category's conversation even starts — this phase
+  // itself only ever begins once project discovery has fully finished
+  // (see runDailyDiscovery), so nothing here overlaps with another
+  // phase's work either.
   for (const category of counters.toolCategoriesRemaining) {
     const prompt = `Find ONE excellent open source developer tool for DevTunnel's tools
 catalog in this exact category: "${category}".
@@ -302,7 +328,7 @@ Reply with ONLY this JSON and nothing else:
 }`;
 
     try {
-      const dispatch = buildDiscoveryDispatcher(env);
+      const dispatch = buildDiscoveryDispatcher(env, readmeCache);
       const raw = await runGeminiAgent(env, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
       const candidateRaw = parseGeminiJson<ToolCandidateInput>(raw);
 
@@ -327,12 +353,20 @@ Reply with ONLY this JSON and nothing else:
         dropped += 1;
         continue;
       }
+      exclude.add(key);
+
+      // Same real-README attachment as projects: prefer what this
+      // conversation already fetched, fall back to a direct fetch. Only
+      // attempted for github.com sources — a tool's sourceUrl doesn't
+      // have to be GitHub-hosted, and this pipeline never guesses.
+      const ownerRepo = parseGithubOwnerRepo(candidate.sourceUrl);
+      const readme = ownerRepo ? await getReadmeWithCache(env, readmeCache, ownerRepo.owner, ownerRepo.repo) : null;
 
       await insertDiscoveredTool(supabase, {
         sourceUrl: candidate.sourceUrl,
         name: candidate.name,
         fetchedDescription: (candidate.fetchedDescription as string | null) ?? null,
-        readme: null,
+        readme,
         primaryLanguage: (candidate.primaryLanguage as string | null) ?? null,
         category,
         labels: candidate.labels,
@@ -341,7 +375,6 @@ Reply with ONLY this JSON and nothing else:
         aiReasoning: candidate.reasoning,
       });
       await bumpCounters(supabase, { tools: 1, toolCategory: category });
-      exclude.add(key);
       proposed += 1;
     } catch (err) {
       logger.error("ai_tool_discovery_failed", { category, error: err instanceof Error ? err.message : String(err) });
@@ -370,6 +403,10 @@ async function runTaskDiscovery(env: ValidatedEnv): Promise<{ proposed: number; 
 
   const projects = await listOnboardedProjects(supabase);
 
+  // One onboarded project at a time, fully finished before the next
+  // starts — this is also the first phase runDailyDiscovery runs, so
+  // every issue gets proposed before a single project or tool candidate
+  // does.
   for (const project of projects) {
     try {
       const alreadyKnown = await listExistingTaskIssueNumbers(supabase, project.id);
@@ -482,28 +519,41 @@ Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
 
 // ---------------------------------------------------------------------------
 // Entry point — called by the daily cron trigger and by the manual
-// POST /admin/ai/run endpoint. Runs all three phases; one phase failing
-// never aborts the others.
+// POST /admin/ai/run endpoint. Runs all three phases strictly one at a
+// time, in this order: issues (tasks) -> projects -> tools. Each phase
+// runs fully to completion — including every item inside it, one at a
+// time — before the next phase starts. One phase failing never aborts
+// the others (each is wrapped in its own .catch below).
 // ---------------------------------------------------------------------------
 export async function runDailyDiscovery(env: ValidatedEnv): Promise<AiDiscoveryRunSummary> {
   const errors: string[] = [];
   logger.info("ai_discovery_run_started");
 
-  const projectsResult = await runProjectDiscovery(env).catch((err) => {
+  // Deliberately sequential and in this exact order — issues, then
+  // projects, then tools — one phase runs to completion (every category /
+  // every project / every candidate handled one at a time within it) before
+  // the next one is even started. Nothing here runs concurrently with
+  // anything else in the run.
+  const tasksResult = await runTaskDiscovery(env).catch((err) => {
+    errors.push("task_discovery_crashed");
+    logger.error("ai_discovery_task_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
+    return { proposed: 0, dropped: 0, errors: [] };
+  });
+
+  // Shared across the project and tool phases (task candidates don't
+  // carry a README) so a repo that comes up in both never gets fetched
+  // from GitHub twice in the same run.
+  const readmeCache: ReadmeCache = new Map();
+
+  const projectsResult = await runProjectDiscovery(env, readmeCache).catch((err) => {
     errors.push("project_discovery_crashed");
     logger.error("ai_discovery_project_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
     return { proposed: 0, dropped: 0, errors: [] };
   });
 
-  const toolsResult = await runToolDiscovery(env).catch((err) => {
+  const toolsResult = await runToolDiscovery(env, readmeCache).catch((err) => {
     errors.push("tool_discovery_crashed");
     logger.error("ai_discovery_tool_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
-    return { proposed: 0, dropped: 0, errors: [] };
-  });
-
-  const tasksResult = await runTaskDiscovery(env).catch((err) => {
-    errors.push("task_discovery_crashed");
-    logger.error("ai_discovery_task_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
     return { proposed: 0, dropped: 0, errors: [] };
   });
 
