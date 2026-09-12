@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   triggerAiProjectDiscoveryRun,
@@ -35,6 +35,15 @@ const COPY = {
   },
 } as const;
 
+/** `12s`, `1m 05s`, etc. — kept short since it updates once a second. */
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes === 0) return `${seconds}s`;
+  return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+}
+
 /**
  * Sits above the queue on the AI Added Projects / AI Added Tools / AI
  * Added Tasks admin pages (devtunnel-frontend .../ai/{projects,tools,tasks}).
@@ -46,16 +55,44 @@ const COPY = {
  * a time (see runTaskDiscovery in the backend), converting eligible
  * issues into task candidates. Shares the same dedup guarantees as a
  * full run, so it's safe to click repeatedly.
+ *
+ * A run can take anywhere from a few seconds to well over a minute
+ * (the tasks phase in particular walks every onboarded project's issues
+ * one at a time), so a running elapsed-time readout sits under the
+ * button — separate from the static "Finding open source projects…"
+ * label — so it's visible the run is still progressing rather than
+ * stuck. It ticks every second off a `Date.now()` start reference
+ * (not a plain counter) so it stays accurate even if the tab is
+ * backgrounded and timers get throttled, and it's cleared as soon as
+ * the run settles either way.
  */
 export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
   const router = useRouter();
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastRun, setLastRun] = useState<AiDiscoveryRunSummary | null>(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [lastRunDurationMs, setLastRunDurationMs] = useState<number | null>(null);
+  const runStartedAtRef = useRef<number | null>(null);
   const copy = COPY[kind];
+
+  useEffect(() => {
+    if (!isRunning) return;
+
+    const intervalId = setInterval(() => {
+      if (runStartedAtRef.current !== null) {
+        setElapsedMs(Date.now() - runStartedAtRef.current);
+      }
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [isRunning]);
 
   async function handleRun() {
     setError(null);
+    setLastRunDurationMs(null);
+    runStartedAtRef.current = Date.now();
+    setElapsedMs(0);
     setIsRunning(true);
     try {
       const summary =
@@ -71,6 +108,10 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
     } catch {
       setError(copy.error);
     } finally {
+      if (runStartedAtRef.current !== null) {
+        setLastRunDurationMs(Date.now() - runStartedAtRef.current);
+      }
+      runStartedAtRef.current = null;
       setIsRunning(false);
     }
   }
@@ -95,11 +136,19 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
         {isRunning ? copy.running : copy.idle}
       </button>
 
+      {isRunning ? (
+        <p className="m-0 mt-2 text-[12px] text-text-faint" aria-live="polite">
+          Running for {formatElapsed(elapsedMs)}…
+        </p>
+      ) : null}
+
       {error ? <p className="m-0 mt-3 text-[12px] text-status-error-label">{error}</p> : null}
 
       {lastRun && !error ? (
         <div className="mt-3 rounded-[8px] border border-status-success-border bg-status-success-bg p-3">
-          <p className="m-0 text-[12.5px] font-medium text-status-success-label">Run complete</p>
+          <p className="m-0 text-[12.5px] font-medium text-status-success-label">
+            Run complete{lastRunDurationMs !== null ? ` in ${formatElapsed(lastRunDurationMs)}` : ""}
+          </p>
           <p className="m-0 mt-1 text-[12px] text-status-success-text">
             {copy.noun(proposedCount ?? 0)} proposed
             {lastRun.candidatesDropped > 0

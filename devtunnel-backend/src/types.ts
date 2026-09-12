@@ -1269,12 +1269,23 @@ export interface AiConfirmationQueue {
  * not written to `AiDiscoveredProject`/`Tool`/`Task` and only counted
  * here). Distinct from `errors`, which is for run-level failures (a
  * fetch/API error), not per-candidate rejections.
+ *
+ * `projectsQuotaExhausted`/`toolsQuotaExhausted` are true only when
+ * today's 7/day quota for that kind was already fully used up *before*
+ * this run even started — the "Add AI projects/tools" button was
+ * clicked with nothing left to find today. This is distinct from a run
+ * that used up the rest of the quota just now, which is a normal
+ * successful completion (`proposed > 0`), not a limit-hit state. Tasks
+ * have no daily quota (see runTaskDiscovery's doc comment), so both
+ * flags are always `false` on a tasks-only run.
  */
-export interface AiDiscoveryRunSummary {
+ export interface AiDiscoveryRunSummary {
   date: string;
   projectsProposed: number;
   toolsProposed: number;
   tasksProposed: number;
   candidatesDropped: number;
   errors: string[];
+  projectsQuotaExhausted: boolean;
+  toolsQuotaExhausted: boolean;
 }
