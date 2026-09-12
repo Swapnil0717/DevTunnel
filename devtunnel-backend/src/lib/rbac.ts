@@ -155,7 +155,7 @@ import type { UserRole } from "../types";
  * their own pair instead of sharing one: AI Discovery spans all three
  * resource types (candidate projects, tools, *and* tasks) plus a fourth
  * action none of those existing permissions cover — approving/rejecting
- * an AI-authored candidate and triggering a live Gemini/GitHub run
+ * an AI-authored candidate and triggering a live Groq/GitHub run
  * (`admin:ai:write`) is a materially different blast radius than editing
  * an already-onboarded project or task.
  */

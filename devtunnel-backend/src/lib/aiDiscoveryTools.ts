@@ -1,5 +1,5 @@
 import type { ValidatedEnv } from "../config/env";
-import type { GeminiFunctionDeclaration } from "./gemini";
+import type { GroqFunctionDeclaration } from "./groq";
 import {
   getRepository,
   getRepositoryOpenIssues,
@@ -10,13 +10,13 @@ import {
 } from "./githubDiscovery";
 
 /**
- * Every function Gemini is allowed to call during discovery. Gemini
- * decides what to search for and how many times — this file only
+ * Every function the discovery model is allowed to call during
+ * discovery. The model decides what to search for and how many times — this file only
  * declares the surface and executes real GitHub API calls; it never
  * fabricates a result (rule 37/38 applied to an AI's tool use, not just
  * the database).
  */
-export const DISCOVERY_TOOLS: GeminiFunctionDeclaration[] = [
+export const DISCOVERY_TOOLS: GroqFunctionDeclaration[] = [
   {
     name: "search_github_repositories",
     description:
@@ -91,8 +91,8 @@ export function readmeCacheKey(owner: string, repo: string): string {
  * Returns the README for owner/repo, preferring whatever's already in
  * `readmeCache` (populated by a `get_github_readme` tool call during this
  * same run) over hitting GitHub again. Falls back to a direct fetch — and
- * caches that too — so a candidate whose README Gemini never explicitly
- * re-fetched right before answering still gets one attached. Never
+ * caches that too — so a candidate whose README the model never
+ * explicitly re-fetched right before answering still gets one attached. Never
  * throws: a fetch failure here just means `readme` stays null on the
  * candidate, exactly like any other optional field GitHub didn't have.
  */
@@ -116,7 +116,7 @@ export async function getReadmeWithCache(
 }
 
 /**
- * Builds the tool dispatcher Gemini's agent loop calls into. When a
+ * Builds the tool dispatcher Groq's agent loop calls into. When a
  * `readmeCache` is supplied, every real `get_github_readme` result is
  * recorded into it as a side effect — this is what lets
  * aiDiscoveryAgent.ts attach the README it already fetched during

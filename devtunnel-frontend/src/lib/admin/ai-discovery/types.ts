@@ -68,14 +68,8 @@ export interface AiConfirmationQueue {
 }
 
 /**
- * Response body of `POST /admin/ai/run` (devtunnel-backend/src/types.ts
- * `AiDiscoveryRunSummary`). `candidatesDropped` counts candidates the
- * agent evaluated but did not save — duplicates or ones that failed
- * validation (see the backend type's own doc comment) — distinct from
- * `errors`, which is for run-level failures, not per-candidate rejections.
- *
- * `geminiQuotaExceeded` is true when the run stopped early because the
- * shared Gemini free-tier daily budget ran out partway through — the
+ * `groqQuotaExceeded` is true when the run stopped early because the
+ * shared Groq free-tier daily budget ran out partway through — the
  * run button shows a distinct "limit hit" banner for this, separate
  * from the generic error state.
  */
@@ -86,21 +80,26 @@ export interface AiDiscoveryRunSummary {
   tasksProposed: number;
   candidatesDropped: number;
   errors: string[];
-  geminiQuotaExceeded: boolean;
+  groqQuotaExceeded: boolean;
 }
 
 /**
- * Response body of `GET /admin/ai/gemini-quota` (devtunnel-backend
- * `GeminiQuotaSnapshot`) — how much of the shared Gemini request budget
- * is left this minute and today. Backs `GeminiQuotaPanel`.
+ * Response body of `GET /admin/ai/groq-quota` (devtunnel-backend
+ * `GroqQuotaSnapshot`) — how much of the shared Groq request/token
+ * budget is left this minute and today. Backs `GroqQuotaPanel`.
  */
-export interface GeminiQuotaSnapshot {
+export interface GroqQuotaSnapshot {
   limitPerMinute: number;
   usedThisMinute: number;
   remainingThisMinute: number;
   limitPerDay: number;
   usedToday: number;
   remainingToday: number;
-  /** ISO timestamp of the next UTC midnight, when the daily counter resets. */
+  tokenLimitPerMinute: number;
+  tokensUsedThisMinute: number;
+  tokensRemainingThisMinute: number;
+  tokenLimitPerDay: number;
+  tokensUsedToday: number;
+  tokensRemainingToday: number;
   dailyResetsAt: string;
 }

@@ -25,18 +25,18 @@
   SUPABASE_DB_SCHEMA: string;
   GITHUB_CLIENT_ID: string;
   SESSION_TTL_DAYS: string;
-  // Model used by the AI Discovery agent (src/lib/gemini.ts). Not a
-  // secret — the key that authenticates against it is GEMINI_API_KEY below.
-  GEMINI_MODEL: string;
+  // Model used by the AI Discovery agent (src/lib/groq.ts). Not a
+  // secret — the key that authenticates against it is GROQ_API_KEY below.
+  GROQ_MODEL: string;
 
   // --- Secrets (wrangler secret put / .dev.vars) ---
   GITHUB_CLIENT_SECRET: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   SESSION_HMAC_SECRET: string;
   GITHUB_TOKEN_ENCRYPTION_KEY: string;
-  // Gemini API key — free tier, from https://aistudio.google.com/apikey.
+  // Groq API key — free tier, from https://console.groq.com/keys.
   // Powers the AI Discovery agent (src/lib/aiDiscoveryAgent.ts).
-  GEMINI_API_KEY: string;
+  GROQ_API_KEY: string;
   // A GitHub Personal Access Token this backend controls (not a user's
   // OAuth token), used only by src/lib/githubDiscovery.ts to search
   // GitHub server-side at the AI Discovery agent's own initiative.
@@ -1189,7 +1189,7 @@ export interface AiDiscoveredProject {
   githubOwner: string;
   githubRepoName: string;
   githubFullName: string;
-  /** Raw GitHub API fact — never Gemini's own wording. */
+  /** Raw GitHub API fact — never Groq's own wording. */
   githubDescription: string | null;
   readme: string | null;
   primaryLanguage: string | null;
@@ -1197,9 +1197,9 @@ export interface AiDiscoveredProject {
   forks: number;
   openIssues: number;
   techStack: OnboardingTechStack;
-  /** Gemini-authored, short and simple — see aiDiscoveryAgent.ts prompt. */
+  /** Groq-authored, short and simple — see aiDiscoveryAgent.ts prompt. */
   description: string;
-  /** Gemini's pick from PROJECT_CATEGORIES (db/aiDiscovery.ts) — never a made-up value. */
+  /** Groq's pick from PROJECT_CATEGORIES (db/aiDiscovery.ts) — never a made-up value. */
   category: string;
   difficulty: AiDiscoveryDifficulty;
   aiReasoning: string;
@@ -1212,15 +1212,15 @@ export interface AiDiscoveredTool {
   discoveryDate: string;
   sourceUrl: string;
   name: string;
-  /** Raw GitHub API fact — never Gemini's own wording. */
+  /** Raw GitHub API fact — never Groq's own wording. */
   fetchedDescription: string | null;
   readme: string | null;
   primaryLanguage: string | null;
   category: string;
   labels: string[];
-  /** Gemini-authored, short and simple. */
+  /** Groq-authored, short and simple. */
   description: string;
-  /** Gemini-authored, short, in bullet points — grounded in the real README. */
+  /** Groq-authored, short, in bullet points — grounded in the real README. */
   setupGuide: string;
   aiReasoning: string;
   status: AiDiscoveryStatus;
@@ -1239,11 +1239,11 @@ export interface AiDiscoveredTask {
   issueBody: string | null;
   issueLabels: string[];
   githubAuthor: OnboardingGithubIdentity | null;
-  /** Gemini's pick — only from DeveloperRole's existing values. */
+  /** Groq's pick — only from DeveloperRole's existing values. */
   suggestedRoles: DeveloperRole[];
-  /** Gemini's pick — only from ExperienceLevel's existing values, or null. */
+  /** Groq's pick — only from ExperienceLevel's existing values, or null. */
   suggestedDifficulty: ExperienceLevel | null;
-  /** Gemini-authored, short — what a contributor would actually do. */
+  /** Groq-authored, short — what a contributor would actually do. */
   taskSummary: string;
   /** Admin-facing only: why this issue was picked. Never shown as the task's public description. */
   aiReasoning: string;
@@ -1270,13 +1270,13 @@ export interface AiConfirmationQueue {
  * here). Distinct from `errors`, which is for run-level failures (a
  * fetch/API error), not per-candidate rejections.
  *
- * `geminiQuotaExceeded` is true when this run stopped early because the
- * shared Gemini free-tier daily budget (18 requests/day, rationed under
- * Google's real 20/day cap by src/lib/geminiQuota.ts) ran out partway
- * through — distinct from a run that simply had nothing left to find
- * today (a normal, successful completion with `proposed === 0` and this
- * flag `false`). The frontend uses this flag to show a "limit hit" state
- * rather than a generic error.
+ * `groqQuotaExceeded` is true when this run stopped early because the
+ * shared Groq free-tier daily budget (rationed under Groq's real
+ * 1,000-request / 200,000-token daily caps by src/lib/groqQuota.ts) ran
+ * out partway through — distinct from a run that simply had nothing left
+ * to find today (a normal, successful completion with `proposed === 0`
+ * and this flag `false`). The frontend uses this flag to show a "limit
+ * hit" state rather than a generic error.
  */
  export interface AiDiscoveryRunSummary {
   date: string;
@@ -1285,23 +1285,30 @@ export interface AiConfirmationQueue {
   tasksProposed: number;
   candidatesDropped: number;
   errors: string[];
-  geminiQuotaExceeded: boolean;
+  groqQuotaExceeded: boolean;
 }
 
 /**
- * Response body of `GET /admin/ai/gemini-quota` — a read-only snapshot of
- * the shared Gemini request budget (src/lib/geminiQuota.ts), independent
- * of any particular discovery run. Backs the quota panel on every AI
- * admin page (devtunnel-frontend GeminiQuotaSnapshot mirrors this
+ * Response body of `GET /admin/ai/groq-quota` — a read-only snapshot of
+ * the shared Groq request/token budget (src/lib/groqQuota.ts),
+ * independent of any particular discovery run. Backs the quota panel on
+ * every AI admin page (devtunnel-frontend GroqQuotaSnapshot mirrors this
  * field-for-field).
  */
-export interface GeminiQuotaSnapshot {
+export interface GroqQuotaSnapshot {
   limitPerMinute: number;
   usedThisMinute: number;
   remainingThisMinute: number;
   limitPerDay: number;
   usedToday: number;
   remainingToday: number;
+  /** Groq's binding constraint for this agent's workload — see groqQuota.ts. */
+  tokenLimitPerMinute: number;
+  tokensUsedThisMinute: number;
+  tokensRemainingThisMinute: number;
+  tokenLimitPerDay: number;
+  tokensUsedToday: number;
+  tokensRemainingToday: number;
   /** ISO timestamp of the next UTC midnight, when the daily counter resets. */
   dailyResetsAt: string;
 }

@@ -9,7 +9,7 @@ import {
 } from "@/lib/admin/ai-discovery/client-api";
 import type { AiDiscoveryRunSummary } from "@/lib/admin/ai-discovery/types";
 import { SparkleIcon } from "@/components/layout/nav-icons";
-import { GeminiQuotaPanel } from "@/components/admin/ai-discovery/gemini-quota-panel";
+import { GroqQuotaPanel } from "@/components/admin/ai-discovery/groq-quota-panel";
 
 interface AiDiscoveryRunButtonProps {
   kind: "projects" | "tools" | "tasks";
@@ -36,17 +36,8 @@ const COPY = {
   },
 } as const;
 
-/**
- * Shown instead of the normal "run complete" summary when the run
- * stopped early because the shared Gemini daily request budget ran out
- * (`AiDiscoveryRunSummary.geminiQuotaExceeded`) — distinct from a plain
- * error, since nothing actually failed, there's just nothing left to
- * spend until the budget resets (see `GeminiQuotaPanel` above the
- * button for exactly when that is).
- */
-const QUOTA_EXCEEDED_MESSAGE = "Today's Gemini request limit was hit partway through this run. It'll pick back up once the budget resets.";
+const QUOTA_EXCEEDED_MESSAGE = "Today's Groq budget was hit partway through this run. It'll pick back up once the budget resets.";
 
-/** `12s`, `1m 05s`, etc. — kept short since it updates once a second. */
 function formatElapsed(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
@@ -55,33 +46,6 @@ function formatElapsed(ms: number): string {
   return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
 }
 
-/**
- * Sits above the queue on the AI Added Projects / AI Added Tools / AI
- * Added Tasks admin pages (devtunnel-frontend .../ai/{projects,tools,tasks}).
- * Unlike AiDiscoveryStatusPanel (which runs all three discovery phases
- * from the Confirmation page), this triggers only the single phase
- * named by `kind` — POST /admin/ai/{projects,tools,tasks}/run — so an
- * admin can top up just the queue they're looking at. The "tasks" kind
- * walks every onboarded DevTunnel project's open issues one project at
- * a time (see runTaskDiscovery in the backend), converting eligible
- * issues into task candidates. Shares the same dedup guarantees as a
- * full run, so it's safe to click repeatedly.
- *
- * A run can take anywhere from a few seconds to well over a minute
- * (the tasks phase in particular walks every onboarded project's issues
- * one at a time), so a running elapsed-time readout sits under the
- * button — separate from the static "Finding open source projects…"
- * label — so it's visible the run is still progressing rather than
- * stuck. It ticks every second off a `Date.now()` start reference
- * (not a plain counter) so it stays accurate even if the tab is
- * backgrounded and timers get throttled, and it's cleared as soon as
- * the run settles either way.
- *
- * Renders `GeminiQuotaPanel` above the button so the admin can see the
- * shared request budget before clicking, and bumps its `refreshKey`
- * after every run so the panel reflects that run's usage immediately
- * instead of waiting for its own poll interval.
- */
 export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
   const router = useRouter();
   const [isRunning, setIsRunning] = useState(false);
@@ -95,13 +59,11 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
 
   useEffect(() => {
     if (!isRunning) return;
-
     const intervalId = setInterval(() => {
       if (runStartedAtRef.current !== null) {
         setElapsedMs(Date.now() - runStartedAtRef.current);
       }
     }, 1000);
-
     return () => clearInterval(intervalId);
   }, [isRunning]);
 
@@ -119,8 +81,6 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
             ? await triggerAiToolDiscoveryRun()
             : await triggerAiTaskDiscoveryRun();
       setLastRun(summary);
-      // New PENDING candidates land in the server-fetched list below —
-      // refresh so the page picks them up without a manual reload.
       router.refresh();
     } catch {
       setError(copy.error);
@@ -130,9 +90,6 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
       }
       runStartedAtRef.current = null;
       setIsRunning(false);
-      // A run always spends at least one Gemini request (even a run that
-      // finds nothing still made the initial call), so the panel above is
-      // now stale — force it to refetch instead of waiting up to 30s.
       setQuotaRefreshKey((k) => k + 1);
     }
   }
@@ -147,7 +104,7 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
 
   return (
     <div className="mb-8">
-      <GeminiQuotaPanel refreshKey={quotaRefreshKey} />
+      <GroqQuotaPanel refreshKey={quotaRefreshKey} />
 
       <button
         type="button"
@@ -167,9 +124,9 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
 
       {error ? <p className="m-0 mt-3 text-[12px] text-status-error-label">{error}</p> : null}
 
-      {lastRun && !error && lastRun.geminiQuotaExceeded ? (
+      {lastRun && !error && lastRun.groqQuotaExceeded ? (
         <div className="mt-3 rounded-[8px] border border-status-error-border bg-status-error-bg p-3">
-          <p className="m-0 text-[12.5px] font-medium text-status-error-label">Gemini request limit hit</p>
+          <p className="m-0 text-[12.5px] font-medium text-status-error-label">Groq budget limit hit</p>
           <p className="m-0 mt-1 text-[12px] text-status-error-text">{QUOTA_EXCEEDED_MESSAGE}</p>
           {proposedCount ? (
             <p className="m-0 mt-1 text-[12px] text-status-error-text">
@@ -179,7 +136,7 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
         </div>
       ) : null}
 
-      {lastRun && !error && !lastRun.geminiQuotaExceeded ? (
+      {lastRun && !error && !lastRun.groqQuotaExceeded ? (
         <div className="mt-3 rounded-[8px] border border-status-success-border bg-status-success-bg p-3">
           <p className="m-0 text-[12.5px] font-medium text-status-success-label">
             Run complete{lastRunDurationMs !== null ? ` in ${formatElapsed(lastRunDurationMs)}` : ""}

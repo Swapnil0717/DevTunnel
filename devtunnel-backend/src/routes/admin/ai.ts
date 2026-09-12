@@ -9,7 +9,7 @@ import { errorResponse } from "../../lib/response";
 import { logger } from "../../lib/logger";
 import { recordAdminAudit } from "../../db/adminAudit";
 import { runDailyDiscovery, runProjectDiscoveryOnly, runToolDiscoveryOnly, runTaskDiscoveryOnly } from "../../lib/aiDiscoveryAgent";
-import { getGeminiQuotaSnapshot } from "../../lib/geminiQuota";
+import { getGroqQuotaSnapshot } from "../../lib/groqQuota";
 import {
   approveDiscoveredProject,
   approveDiscoveredTask,
@@ -22,16 +22,6 @@ import {
   rejectDiscoveredItem,
 } from "../../db/aiDiscovery";
 
-/**
- * Supabase's `rpc()` rejects with a `PostgrestError`-shaped plain object
- * (`{ message, code, details, hint }`), not a JS `Error` instance — so
- * `err instanceof Error` is false for every Postgres exception raised
- * from our approve_ai_discovered_* functions (AI_PROJECT_NOT_FOUND,
- * AI_PROJECT_ALREADY_REVIEWED, etc). Without this, `String(err)` on a
- * plain object degrades to the useless literal "[object Object]",
- * which breaks both the substring checks below (every case falls
- * through to a generic 500) and the log line's value for debugging.
- */
 function extractErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (typeof err === "object" && err !== null && "message" in err && typeof (err as { message: unknown }).message === "string") {
@@ -40,12 +30,6 @@ function extractErrorMessage(err: unknown): string {
   return String(err);
 }
 
-/**
- * Admin — AI Discovery. RBAC permissions `admin:ai:read` / `admin:ai:write`
- * (src/lib/rbac.ts). Mounted at `/admin/ai` in src/routes/admin/index.ts.
- * Backs the already-shipped placeholder pages at
- * devtunnel-frontend/src/app/admin/(protected)/ai/{projects,tasks,tools,confirmation}.
- */
 export const adminAi = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 const statusQuery = z.object({
@@ -95,14 +79,14 @@ adminAi.get("/confirmation", requireAuth, requireAdminRole, requirePermission("a
 });
 
 /**
- * Read-only snapshot of the shared Gemini request budget
- * (src/lib/geminiQuota.ts) — how many requests are left this minute and
- * today, independent of any particular discovery run. Backs the quota
- * panel shown on every AI admin page. Never reserves or spends budget —
- * safe to poll freely.
+ * Read-only snapshot of the shared Groq request/token budget
+ * (src/lib/groqQuota.ts) — how many requests and tokens are left this
+ * minute and today, independent of any particular discovery run. Backs
+ * the quota panel shown on every AI admin page. Never reserves or spends
+ * budget — safe to poll freely.
  */
-adminAi.get("/gemini-quota", requireAuth, requireAdminRole, requirePermission("admin:ai:read"), async (c) => {
-  const snapshot = await getGeminiQuotaSnapshot(c.env.RATE_LIMIT_KV);
+adminAi.get("/groq-quota", requireAuth, requireAdminRole, requirePermission("admin:ai:read"), async (c) => {
+  const snapshot = await getGroqQuotaSnapshot(c.env.RATE_LIMIT_KV);
   return c.json(snapshot);
 });
 
@@ -184,12 +168,6 @@ adminAi.post("/tasks/:id/reject", requireAuth, requireAdminRole, requirePermissi
   handleReject(c, "ai_discovered_tasks"),
 );
 
-/**
- * Manual trigger — same work the daily cron does (src/index.ts
- * `scheduled`), useful for testing or topping up quota without waiting
- * for 03:00 UTC. The daily counters make this safe to call repeatedly —
- * it only ever fills whatever's left of today's quota.
- */
 adminAi.post("/run", requireAuth, requireAdminRole, requirePermission("admin:ai:write"), async (c) => {
   const env = getEnv(c.env);
   const user = c.get("user");
@@ -210,12 +188,6 @@ adminAi.post("/run", requireAuth, requireAdminRole, requirePermission("admin:ai:
   }
 });
 
-/**
- * Scoped manual trigger — runs ONLY the project-discovery phase. Backs
- * the "Add AI projects" button on the AI Added Projects admin page.
- * Same quota/dedup guarantees as POST /admin/ai/run, just narrowed to
- * one phase.
- */
 adminAi.post("/projects/run", requireAuth, requireAdminRole, requirePermission("admin:ai:write"), async (c) => {
   const env = getEnv(c.env);
   const user = c.get("user");
@@ -236,12 +208,6 @@ adminAi.post("/projects/run", requireAuth, requireAdminRole, requirePermission("
   }
 });
 
-/**
- * Scoped manual trigger — runs ONLY the tool-discovery phase. Backs the
- * "Add AI tools" button on the AI Added Tools admin page. Same
- * quota/dedup guarantees as POST /admin/ai/run, just narrowed to one
- * phase.
- */
 adminAi.post("/tools/run", requireAuth, requireAdminRole, requirePermission("admin:ai:write"), async (c) => {
   const env = getEnv(c.env);
   const user = c.get("user");
@@ -262,12 +228,6 @@ adminAi.post("/tools/run", requireAuth, requireAdminRole, requirePermission("adm
   }
 });
 
-/**
- * Scoped manual trigger — runs ONLY the task-discovery phase (walks
- * every onboarded project's open issues one by one). Backs the "Add AI
- * tasks" button on the AI Added Tasks admin page. Same dedup
- * guarantees as POST /admin/ai/run, just narrowed to one phase.
- */
 adminAi.post("/tasks/run", requireAuth, requireAdminRole, requirePermission("admin:ai:write"), async (c) => {
   const env = getEnv(c.env);
   const user = c.get("user");

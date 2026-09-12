@@ -1,7 +1,7 @@
 import type { ValidatedEnv } from "../config/env";
 import { getSupabase } from "./supabase";
-import { parseGeminiJson, runGeminiAgent } from "./gemini";
-import { GeminiQuotaExceededError } from "./geminiQuota";
+import { parseGroqJson, runGroqAgent } from "./groq";
+import { GroqQuotaExceededError } from "./groqQuota";
 import { DISCOVERY_TOOLS, buildDiscoveryDispatcher, getReadmeWithCache, type ReadmeCache } from "./aiDiscoveryTools";
 import {
   validateProjectCandidate,
@@ -31,12 +31,12 @@ import type { AiDiscoveryRunSummary, DeveloperRole, ExperienceLevel } from "../t
  * ---------------------------------------------------------------------------
  * Contract this whole module holds itself to (matches the 5-point spec):
  *
- * 1. Search GitHub itself, autonomously — Gemini decides what to search
+ * 1. Search GitHub itself, autonomously — the model decides what to search
  *    for and how many times, via the real tool calls in aiDiscoveryTools.ts.
  *    It never sees a shortcut to fabricate a result; every fact in a
  *    candidate traces back to a tool_use response.
  *
- * 2. Fill in every field itself — Gemini authors description/setup
+ * 2. Fill in every field itself — the model authors description/setup
  *    guide/task summary from real source material, and picks
  *    role/difficulty/category ONLY from the fixed enums this file hands
  *    it in the prompt.
@@ -170,12 +170,12 @@ Return exactly ${totalNeeded} candidates total, matching the needed counts per d
   let candidates: ProjectCandidateInput[] = [];
   try {
     const dispatch = buildDiscoveryDispatcher(env, readmeCache);
-    const raw = await runGeminiAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
-    const parsed = parseGeminiJson<{ candidates: ProjectCandidateInput[] }>(raw);
+    const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
+    const parsed = parseGroqJson<{ candidates: ProjectCandidateInput[] }>(raw);
     candidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];
   } catch (err) {
-    if (err instanceof GeminiQuotaExceededError) {
-      // Daily Gemini budget is gone — stop here, no candidates were ever
+    if (err instanceof GroqQuotaExceededError) {
+      // Daily Groq budget is gone — stop here, no candidates were ever
       // produced for this call, so there's nothing to insert. This is
       // not a run-level error (no entry in `errors`); the run summary's
       // own `quotaExceeded` flag is what the frontend surfaces instead.
@@ -232,7 +232,7 @@ Return exactly ${totalNeeded} candidates total, matching the needed counts per d
       // fetch it directly) — this is the same content the admin will see
       // once approved (sql/020's approve_ai_discovered_project copies this
       // column straight into devtunnel.projects), so it must be the real
-      // thing, never left empty just because Gemini's JSON reply doesn't
+      // thing, never left empty just because the model's JSON reply doesn't
       // carry free text this long.
       const readme = await getReadmeWithCache(env, readmeCache, candidate.owner, candidate.repo);
 
@@ -347,8 +347,8 @@ Reply with ONLY this JSON and nothing else:
 
     try {
       const dispatch = buildDiscoveryDispatcher(env, readmeCache);
-      const raw = await runGeminiAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
-      const candidateRaw = parseGeminiJson<ToolCandidateInput>(raw);
+      const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
+      const candidateRaw = parseGroqJson<ToolCandidateInput>(raw);
 
       const problems = validateToolCandidate(candidateRaw);
       if (problems.length > 0) {
@@ -395,8 +395,8 @@ Reply with ONLY this JSON and nothing else:
       await bumpCounters(supabase, { tools: 1, toolCategory: category });
       proposed += 1;
     } catch (err) {
-      if (err instanceof GeminiQuotaExceededError) {
-        // Daily Gemini budget is gone mid-loop — stop trying further
+      if (err instanceof GroqQuotaExceededError) {
+        // Daily Groq budget is gone mid-loop — stop trying further
         // categories this run (they'd all fail the same way) rather than
         // burning a run-level "error" entry per remaining category.
         logger.warn("ai_tool_discovery_quota_exceeded", { category, reason: err.reason });
@@ -416,7 +416,7 @@ Reply with ONLY this JSON and nothing else:
 // No numeric daily cap (per spec: "address all the issues that are
 // related to projects that are in devtunnel"), but still deduplicated and
 // run with a sane per-project ceiling so one huge repo can't blow the
-// Gemini/GitHub budget for the day.
+// Groq/GitHub budget for the day.
 // ---------------------------------------------------------------------------
 
 const MAX_ISSUES_PER_PROJECT = 15;
@@ -490,8 +490,8 @@ Reply with ONLY this JSON and nothing else:
 Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
 
       const dispatch = buildDiscoveryDispatcher(env);
-      const raw = await runGeminiAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
-      const parsed = parseGeminiJson<{ candidates: TaskCandidateInput[] }>(raw);
+      const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
+      const parsed = parseGroqJson<{ candidates: TaskCandidateInput[] }>(raw);
       const candidates = Array.isArray(parsed.candidates) ? parsed.candidates.slice(0, MAX_ISSUES_PER_PROJECT) : [];
 
       for (const c of candidates) {
@@ -539,8 +539,8 @@ Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
         }
       }
     } catch (err) {
-      if (err instanceof GeminiQuotaExceededError) {
-        // Daily Gemini budget is gone mid-loop — stop walking further
+      if (err instanceof GroqQuotaExceededError) {
+        // Daily Groq budget is gone mid-loop — stop walking further
         // projects this run (they'd all fail the same way) rather than
         // burning a run-level "error" entry per remaining project.
         logger.warn("ai_task_discovery_quota_exceeded", { project: project.githubFullName, reason: err.reason });
@@ -578,7 +578,7 @@ export async function runDailyDiscovery(env: ValidatedEnv, kv: KVNamespace): Pro
     return { proposed: 0, dropped: 0, errors: [], quotaExceeded: false };
   });
 
-  // Once the daily Gemini budget is gone, every remaining phase would
+  // Once the daily Groq budget is gone, every remaining phase would
   // fail identically — skip them outright instead of burning tool calls
   // on requests we already know will be quota-rejected.
   if (tasksResult.quotaExceeded) {
@@ -589,7 +589,7 @@ export async function runDailyDiscovery(env: ValidatedEnv, kv: KVNamespace): Pro
       tasksProposed: tasksResult.proposed,
       candidatesDropped: tasksResult.dropped,
       errors: [...errors, ...tasksResult.errors],
-      geminiQuotaExceeded: true,
+      groqQuotaExceeded: true,
     };
     logger.info("ai_discovery_run_finished_quota_exceeded", summary as unknown as Record<string, unknown>);
     return summary;
@@ -621,7 +621,7 @@ export async function runDailyDiscovery(env: ValidatedEnv, kv: KVNamespace): Pro
     tasksProposed: tasksResult.proposed,
     candidatesDropped: projectsResult.dropped + toolsResult.dropped + tasksResult.dropped,
     errors: [...errors, ...projectsResult.errors, ...toolsResult.errors, ...tasksResult.errors],
-    geminiQuotaExceeded: projectsResult.quotaExceeded || toolsResult.quotaExceeded,
+    groqQuotaExceeded: projectsResult.quotaExceeded || toolsResult.quotaExceeded,
   };
 
   logger.info("ai_discovery_run_finished", summary as unknown as Record<string, unknown>);
@@ -651,7 +651,7 @@ export async function runProjectDiscoveryOnly(env: ValidatedEnv, kv: KVNamespace
     tasksProposed: 0,
     candidatesDropped: projectsResult.dropped,
     errors: projectsResult.errors,
-    geminiQuotaExceeded: projectsResult.quotaExceeded,
+    groqQuotaExceeded: projectsResult.quotaExceeded,
   };
 
   logger.info("ai_discovery_projects_run_finished", summary as unknown as Record<string, unknown>);
@@ -679,7 +679,7 @@ export async function runToolDiscoveryOnly(env: ValidatedEnv, kv: KVNamespace): 
     tasksProposed: 0,
     candidatesDropped: toolsResult.dropped,
     errors: toolsResult.errors,
-    geminiQuotaExceeded: toolsResult.quotaExceeded,
+    groqQuotaExceeded: toolsResult.quotaExceeded,
   };
 
   logger.info("ai_discovery_tools_run_finished", summary as unknown as Record<string, unknown>);
@@ -708,7 +708,7 @@ export async function runTaskDiscoveryOnly(env: ValidatedEnv, kv: KVNamespace): 
     tasksProposed: tasksResult.proposed,
     candidatesDropped: tasksResult.dropped,
     errors: tasksResult.errors,
-    geminiQuotaExceeded: tasksResult.quotaExceeded,
+    groqQuotaExceeded: tasksResult.quotaExceeded,
   };
 
   logger.info("ai_discovery_tasks_run_finished", summary as unknown as Record<string, unknown>);

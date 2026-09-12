@@ -26,11 +26,11 @@ export const TOOL_CATEGORIES = [
 ] as const;
 
 /**
- * Fixed vocabulary for `AiDiscoveredProject.category` — Gemini picks
+ * Fixed vocabulary for `AiDiscoveredProject.category` — the discovery agent picks
  * exactly one of these per project (see aiDiscoveryAgent.ts's prompt).
  * Unlike TOOL_CATEGORIES this has no per-day quota attached to it; it
  * exists purely so "category" is a controlled value, never a freeform
- * string Gemini invents on the spot.
+ * string it invents on the spot.
  */
 export const PROJECT_CATEGORIES = [
   "CLI Tool",

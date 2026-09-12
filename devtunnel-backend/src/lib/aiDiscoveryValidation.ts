@@ -3,7 +3,7 @@ import { PROJECT_CATEGORIES } from "../db/aiDiscovery";
 /**
  * "Save one complete, ready-to-approve record" (spec point 3).
  *
- * Every candidate Gemini proposes is validated here BEFORE it is ever
+ * Every candidate the discovery agent proposes is validated here BEFORE it is ever
  * passed to an insert function. A candidate that fails any check here is
  * dropped in full by the caller — never partially inserted, never
  * patched with a placeholder or a "closest guess" value. This is the one

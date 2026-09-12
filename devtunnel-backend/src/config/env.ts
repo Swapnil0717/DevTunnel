@@ -11,14 +11,18 @@ const envSchema = z.object({
   SUPABASE_DB_SCHEMA: z.string().min(1),
   GITHUB_CLIENT_ID: z.string().min(1),
   SESSION_TTL_DAYS: z.string().regex(/^\d+$/),
-  GEMINI_MODEL: z.string().min(1),
+  // Powers the AI Discovery agent (src/lib/groq.ts). Must be a plain
+  // chat-completion model that supports custom tool calling — NOT
+  // groq/compound or groq/compound-mini, which only support Groq's own
+  // built-in tools. "openai/gpt-oss-120b" is the current default.
+  GROQ_MODEL: z.string().min(1),
   GITHUB_CLIENT_SECRET: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   SESSION_HMAC_SECRET: z.string().min(16, "SESSION_HMAC_SECRET must be at least 16 characters"),
-  // Powers the AI Discovery agent (src/lib/gemini.ts). Free-tier key from
-  // https://aistudio.google.com/apikey — never logged, never returned to
-  // any client.
-  GEMINI_API_KEY: z.string().min(1),
+  // Powers the AI Discovery agent (src/lib/groq.ts). Free-tier key from
+  // https://console.groq.com/keys — never logged, never returned to any
+  // client.
+  GROQ_API_KEY: z.string().min(1),
   // A GitHub Personal Access Token this backend controls (not a user's
   // OAuth token), used only by src/lib/githubDiscovery.ts to search
   // GitHub server-side at the AI Discovery agent's own initiative.
