@@ -1,5 +1,6 @@
 import type { ValidatedEnv } from "../config/env";
 import { logger } from "./logger";
+import { reserveGeminiRequest } from "./geminiQuota";
 
 /**
  * Minimal Gemini function-calling client. Calls the REST API directly
@@ -33,7 +34,10 @@ interface GeminiContent {
 }
 
 const GEMINI_API = "https://generativelanguage.googleapis.com/v1beta/models";
-const MAX_TURNS = 12;
+// Lowered from 12 -> 6: fewer turns per agent conversation means fewer
+// physical Gemini calls per discovery task, which matters a lot more now
+// that every call is rationed against an 18/day budget (see geminiQuota.ts).
+const MAX_TURNS = 6;
 const MAX_RATE_LIMIT_RETRIES = 3;
 
 /** Sleeps for `ms` milliseconds. */
@@ -68,6 +72,7 @@ function parseRetryDelayMs(body: string, fallbackMs: number): number {
  */
 export async function runGeminiAgent(
   env: ValidatedEnv,
+  kv: KVNamespace,
   systemPrompt: string,
   userPrompt: string,
   tools: GeminiFunctionDeclaration[],
@@ -79,6 +84,13 @@ export async function runGeminiAgent(
     let data: { candidates?: Array<{ content: { role: string; parts: GeminiPart[] }; finishReason?: string }> } | undefined;
 
     for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
+      // Reserve budget for this exact physical call BEFORE making it.
+      // Throws GeminiQuotaExceededError("rpd", ...) immediately (no
+      // retry) once today's daily budget is gone — callers (aiDiscoveryAgent.ts)
+      // catch that specifically and stop early instead of treating it as
+      // a generic failure to retry.
+      await reserveGeminiRequest(kv);
+
       const res = await fetch(`${GEMINI_API}/${env.GEMINI_MODEL}:generateContent?key=${env.GEMINI_API_KEY}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -1,6 +1,7 @@
 import type { ValidatedEnv } from "../config/env";
 import { getSupabase } from "./supabase";
 import { parseGeminiJson, runGeminiAgent } from "./gemini";
+import { GeminiQuotaExceededError } from "./geminiQuota";
 import { DISCOVERY_TOOLS, buildDiscoveryDispatcher, getReadmeWithCache, type ReadmeCache } from "./aiDiscoveryTools";
 import {
   validateProjectCandidate,
@@ -94,14 +95,18 @@ matching exactly the schema described in the user message.`;
 // Projects — 7/day: 3 beginner, 3 intermediate, 1 advanced.
 // ---------------------------------------------------------------------------
 
-async function runProjectDiscovery(env: ValidatedEnv, readmeCache: ReadmeCache): Promise<{ proposed: number; dropped: number; errors: string[] }> {
+async function runProjectDiscovery(
+  env: ValidatedEnv,
+  kv: KVNamespace,
+  readmeCache: ReadmeCache,
+): Promise<{ proposed: number; dropped: number; errors: string[]; quotaExceeded: boolean }> {
   const supabase = getSupabase(env);
   const errors: string[] = [];
   const counters = await getTodayCounters(supabase);
   const need = counters.projectsRemaining;
   const totalNeeded = need.beginner + need.intermediate + need.advanced;
   if (totalNeeded === 0) {
-    return { proposed: 0, dropped: 0, errors };
+    return { proposed: 0, dropped: 0, errors, quotaExceeded: false };
   }
 
   // Point 5: dedup against the real published table AND our own pending/
@@ -165,13 +170,21 @@ Return exactly ${totalNeeded} candidates total, matching the needed counts per d
   let candidates: ProjectCandidateInput[] = [];
   try {
     const dispatch = buildDiscoveryDispatcher(env, readmeCache);
-    const raw = await runGeminiAgent(env, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
+    const raw = await runGeminiAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
     const parsed = parseGeminiJson<{ candidates: ProjectCandidateInput[] }>(raw);
     candidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];
   } catch (err) {
+    if (err instanceof GeminiQuotaExceededError) {
+      // Daily Gemini budget is gone — stop here, no candidates were ever
+      // produced for this call, so there's nothing to insert. This is
+      // not a run-level error (no entry in `errors`); the run summary's
+      // own `quotaExceeded` flag is what the frontend surfaces instead.
+      logger.warn("ai_project_discovery_quota_exceeded", { reason: err.reason });
+      return { proposed: 0, dropped: 0, errors, quotaExceeded: true };
+    }
     logger.error("ai_project_discovery_failed", { error: err instanceof Error ? err.message : String(err) });
     errors.push("project_discovery_agent_error");
-    return { proposed: 0, dropped: 0, errors };
+    return { proposed: 0, dropped: 0, errors, quotaExceeded: false };
   }
 
   const remaining = { ...need };
@@ -263,24 +276,29 @@ Return exactly ${totalNeeded} candidates total, matching the needed counts per d
     }
   }
 
-  return { proposed, dropped, errors };
+  return { proposed, dropped, errors, quotaExceeded: false };
 }
 
 // ---------------------------------------------------------------------------
 // Tools — 7/day, exactly one per category.
 // ---------------------------------------------------------------------------
 
-async function runToolDiscovery(env: ValidatedEnv, readmeCache: ReadmeCache): Promise<{ proposed: number; dropped: number; errors: string[] }> {
+async function runToolDiscovery(
+  env: ValidatedEnv,
+  kv: KVNamespace,
+  readmeCache: ReadmeCache,
+): Promise<{ proposed: number; dropped: number; errors: string[]; quotaExceeded: boolean }> {
   const supabase = getSupabase(env);
   const errors: string[] = [];
   const counters = await getTodayCounters(supabase);
   if (counters.toolCategoriesRemaining.length === 0) {
-    return { proposed: 0, dropped: 0, errors };
+    return { proposed: 0, dropped: 0, errors, quotaExceeded: false };
   }
 
   const exclude = await listExistingToolUrls(supabase);
   let proposed = 0;
   let dropped = 0;
+  let quotaExceeded = false;
 
   // One category at a time, fully finished (proposed/dropped/inserted)
   // before the next category's conversation even starts — this phase
@@ -329,7 +347,7 @@ Reply with ONLY this JSON and nothing else:
 
     try {
       const dispatch = buildDiscoveryDispatcher(env, readmeCache);
-      const raw = await runGeminiAgent(env, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
+      const raw = await runGeminiAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
       const candidateRaw = parseGeminiJson<ToolCandidateInput>(raw);
 
       const problems = validateToolCandidate(candidateRaw);
@@ -377,12 +395,20 @@ Reply with ONLY this JSON and nothing else:
       await bumpCounters(supabase, { tools: 1, toolCategory: category });
       proposed += 1;
     } catch (err) {
+      if (err instanceof GeminiQuotaExceededError) {
+        // Daily Gemini budget is gone mid-loop — stop trying further
+        // categories this run (they'd all fail the same way) rather than
+        // burning a run-level "error" entry per remaining category.
+        logger.warn("ai_tool_discovery_quota_exceeded", { category, reason: err.reason });
+        quotaExceeded = true;
+        break;
+      }
       logger.error("ai_tool_discovery_failed", { category, error: err instanceof Error ? err.message : String(err) });
       errors.push(`tool_discovery_failed:${category}`);
     }
   }
 
-  return { proposed, dropped, errors };
+  return { proposed, dropped, errors, quotaExceeded };
 }
 
 // ---------------------------------------------------------------------------
@@ -395,11 +421,15 @@ Reply with ONLY this JSON and nothing else:
 
 const MAX_ISSUES_PER_PROJECT = 15;
 
-async function runTaskDiscovery(env: ValidatedEnv): Promise<{ proposed: number; dropped: number; errors: string[] }> {
+async function runTaskDiscovery(
+  env: ValidatedEnv,
+  kv: KVNamespace,
+): Promise<{ proposed: number; dropped: number; errors: string[]; quotaExceeded: boolean }> {
   const supabase = getSupabase(env);
   const errors: string[] = [];
   let proposed = 0;
   let dropped = 0;
+  let quotaExceeded = false;
 
   const projects = await listOnboardedProjects(supabase);
 
@@ -460,7 +490,7 @@ Reply with ONLY this JSON and nothing else:
 Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
 
       const dispatch = buildDiscoveryDispatcher(env);
-      const raw = await runGeminiAgent(env, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
+      const raw = await runGeminiAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
       const parsed = parseGeminiJson<{ candidates: TaskCandidateInput[] }>(raw);
       const candidates = Array.isArray(parsed.candidates) ? parsed.candidates.slice(0, MAX_ISSUES_PER_PROJECT) : [];
 
@@ -509,12 +539,20 @@ Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
         }
       }
     } catch (err) {
+      if (err instanceof GeminiQuotaExceededError) {
+        // Daily Gemini budget is gone mid-loop — stop walking further
+        // projects this run (they'd all fail the same way) rather than
+        // burning a run-level "error" entry per remaining project.
+        logger.warn("ai_task_discovery_quota_exceeded", { project: project.githubFullName, reason: err.reason });
+        quotaExceeded = true;
+        break;
+      }
       logger.error("ai_task_discovery_failed", { project: project.githubFullName, error: err instanceof Error ? err.message : String(err) });
       errors.push(`task_discovery_failed:${project.githubFullName}`);
     }
   }
 
-  return { proposed, dropped, errors };
+  return { proposed, dropped, errors, quotaExceeded };
 }
 
 // ---------------------------------------------------------------------------
@@ -525,7 +563,7 @@ Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
 // time — before the next phase starts. One phase failing never aborts
 // the others (each is wrapped in its own .catch below).
 // ---------------------------------------------------------------------------
-export async function runDailyDiscovery(env: ValidatedEnv): Promise<AiDiscoveryRunSummary> {
+export async function runDailyDiscovery(env: ValidatedEnv, kv: KVNamespace): Promise<AiDiscoveryRunSummary> {
   const errors: string[] = [];
   logger.info("ai_discovery_run_started");
 
@@ -534,28 +572,47 @@ export async function runDailyDiscovery(env: ValidatedEnv): Promise<AiDiscoveryR
   // every project / every candidate handled one at a time within it) before
   // the next one is even started. Nothing here runs concurrently with
   // anything else in the run.
-  const tasksResult = await runTaskDiscovery(env).catch((err) => {
+  const tasksResult = await runTaskDiscovery(env, kv).catch((err) => {
     errors.push("task_discovery_crashed");
     logger.error("ai_discovery_task_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
-    return { proposed: 0, dropped: 0, errors: [] };
+    return { proposed: 0, dropped: 0, errors: [], quotaExceeded: false };
   });
+
+  // Once the daily Gemini budget is gone, every remaining phase would
+  // fail identically — skip them outright instead of burning tool calls
+  // on requests we already know will be quota-rejected.
+  if (tasksResult.quotaExceeded) {
+    const summary: AiDiscoveryRunSummary = {
+      date: new Date().toISOString().slice(0, 10),
+      projectsProposed: 0,
+      toolsProposed: 0,
+      tasksProposed: tasksResult.proposed,
+      candidatesDropped: tasksResult.dropped,
+      errors: [...errors, ...tasksResult.errors],
+      geminiQuotaExceeded: true,
+    };
+    logger.info("ai_discovery_run_finished_quota_exceeded", summary as unknown as Record<string, unknown>);
+    return summary;
+  }
 
   // Shared across the project and tool phases (task candidates don't
   // carry a README) so a repo that comes up in both never gets fetched
   // from GitHub twice in the same run.
   const readmeCache: ReadmeCache = new Map();
 
-  const projectsResult = await runProjectDiscovery(env, readmeCache).catch((err) => {
+  const projectsResult = await runProjectDiscovery(env, kv, readmeCache).catch((err) => {
     errors.push("project_discovery_crashed");
     logger.error("ai_discovery_project_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
-    return { proposed: 0, dropped: 0, errors: [] };
+    return { proposed: 0, dropped: 0, errors: [], quotaExceeded: false };
   });
 
-  const toolsResult = await runToolDiscovery(env, readmeCache).catch((err) => {
-    errors.push("tool_discovery_crashed");
-    logger.error("ai_discovery_tool_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
-    return { proposed: 0, dropped: 0, errors: [] };
-  });
+  const toolsResult = projectsResult.quotaExceeded
+    ? { proposed: 0, dropped: 0, errors: [] as string[], quotaExceeded: true }
+    : await runToolDiscovery(env, kv, readmeCache).catch((err) => {
+        errors.push("tool_discovery_crashed");
+        logger.error("ai_discovery_tool_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
+        return { proposed: 0, dropped: 0, errors: [], quotaExceeded: false };
+      });
 
   const summary: AiDiscoveryRunSummary = {
     date: new Date().toISOString().slice(0, 10),
@@ -564,6 +621,7 @@ export async function runDailyDiscovery(env: ValidatedEnv): Promise<AiDiscoveryR
     tasksProposed: tasksResult.proposed,
     candidatesDropped: projectsResult.dropped + toolsResult.dropped + tasksResult.dropped,
     errors: [...errors, ...projectsResult.errors, ...toolsResult.errors, ...tasksResult.errors],
+    geminiQuotaExceeded: projectsResult.quotaExceeded || toolsResult.quotaExceeded,
   };
 
   logger.info("ai_discovery_run_finished", summary as unknown as Record<string, unknown>);
@@ -578,12 +636,12 @@ export async function runDailyDiscovery(env: ValidatedEnv): Promise<AiDiscoveryR
  * it only ever fills whatever's left of today's project quota. Tools
  * and tasks are left untouched.
  */
-export async function runProjectDiscoveryOnly(env: ValidatedEnv): Promise<AiDiscoveryRunSummary> {
+export async function runProjectDiscoveryOnly(env: ValidatedEnv, kv: KVNamespace): Promise<AiDiscoveryRunSummary> {
   logger.info("ai_discovery_projects_run_started");
   const readmeCache: ReadmeCache = new Map();
-  const projectsResult = await runProjectDiscovery(env, readmeCache).catch((err) => {
+  const projectsResult = await runProjectDiscovery(env, kv, readmeCache).catch((err) => {
     logger.error("ai_discovery_project_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
-    return { proposed: 0, dropped: 0, errors: ["project_discovery_crashed"] };
+    return { proposed: 0, dropped: 0, errors: ["project_discovery_crashed"], quotaExceeded: false };
   });
 
   const summary: AiDiscoveryRunSummary = {
@@ -593,6 +651,7 @@ export async function runProjectDiscoveryOnly(env: ValidatedEnv): Promise<AiDisc
     tasksProposed: 0,
     candidatesDropped: projectsResult.dropped,
     errors: projectsResult.errors,
+    geminiQuotaExceeded: projectsResult.quotaExceeded,
   };
 
   logger.info("ai_discovery_projects_run_finished", summary as unknown as Record<string, unknown>);
@@ -605,12 +664,12 @@ export async function runProjectDiscoveryOnly(env: ValidatedEnv): Promise<AiDisc
  * (devtunnel-frontend .../ai/tools). Same quota/dedup guarantees as
  * runProjectDiscoveryOnly above, mirrored for tools.
  */
-export async function runToolDiscoveryOnly(env: ValidatedEnv): Promise<AiDiscoveryRunSummary> {
+export async function runToolDiscoveryOnly(env: ValidatedEnv, kv: KVNamespace): Promise<AiDiscoveryRunSummary> {
   logger.info("ai_discovery_tools_run_started");
   const readmeCache: ReadmeCache = new Map();
-  const toolsResult = await runToolDiscovery(env, readmeCache).catch((err) => {
+  const toolsResult = await runToolDiscovery(env, kv, readmeCache).catch((err) => {
     logger.error("ai_discovery_tool_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
-    return { proposed: 0, dropped: 0, errors: ["tool_discovery_crashed"] };
+    return { proposed: 0, dropped: 0, errors: ["tool_discovery_crashed"], quotaExceeded: false };
   });
 
   const summary: AiDiscoveryRunSummary = {
@@ -620,6 +679,7 @@ export async function runToolDiscoveryOnly(env: ValidatedEnv): Promise<AiDiscove
     tasksProposed: 0,
     candidatesDropped: toolsResult.dropped,
     errors: toolsResult.errors,
+    geminiQuotaExceeded: toolsResult.quotaExceeded,
   };
 
   logger.info("ai_discovery_tools_run_finished", summary as unknown as Record<string, unknown>);
@@ -634,11 +694,11 @@ export async function runToolDiscoveryOnly(env: ValidatedEnv): Promise<AiDiscove
  * quota to share, just per-project dedup, so it's safe to call
  * repeatedly. Projects and tools are left untouched.
  */
-export async function runTaskDiscoveryOnly(env: ValidatedEnv): Promise<AiDiscoveryRunSummary> {
+export async function runTaskDiscoveryOnly(env: ValidatedEnv, kv: KVNamespace): Promise<AiDiscoveryRunSummary> {
   logger.info("ai_discovery_tasks_run_started");
-  const tasksResult = await runTaskDiscovery(env).catch((err) => {
+  const tasksResult = await runTaskDiscovery(env, kv).catch((err) => {
     logger.error("ai_discovery_task_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
-    return { proposed: 0, dropped: 0, errors: ["task_discovery_crashed"] };
+    return { proposed: 0, dropped: 0, errors: ["task_discovery_crashed"], quotaExceeded: false };
   });
 
   const summary: AiDiscoveryRunSummary = {
@@ -648,6 +708,7 @@ export async function runTaskDiscoveryOnly(env: ValidatedEnv): Promise<AiDiscove
     tasksProposed: tasksResult.proposed,
     candidatesDropped: tasksResult.dropped,
     errors: tasksResult.errors,
+    geminiQuotaExceeded: tasksResult.quotaExceeded,
   };
 
   logger.info("ai_discovery_tasks_run_finished", summary as unknown as Record<string, unknown>);
