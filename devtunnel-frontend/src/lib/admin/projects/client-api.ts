@@ -71,3 +71,23 @@ export async function updateAdminProject(
 
   return (await res.json()) as AdminProjectDetail;
 }
+
+/**
+ * `POST /admin/projects/:id/refresh-readme` — the Project Detail edit
+ * panel's "Fetch latest README" action (`EditProjectDetailsPanel`).
+ * Re-pulls the README straight from GitHub; returns the full refreshed
+ * `AdminProjectDetail`, same round-trip contract `updateAdminProject`
+ * already uses.
+ */
+export async function refreshAdminProjectReadme(id: string): Promise<AdminProjectDetail> {
+  const res = await fetch(`${API_BASE_URL}/admin/projects/${id}/refresh-readme`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    throw new AdminProjectsApiError(`Failed to refresh README (${res.status})`, res.status);
+  }
+
+  return (await res.json()) as AdminProjectDetail;
+}

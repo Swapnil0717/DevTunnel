@@ -10,13 +10,17 @@ import { errorResponse } from "../../lib/response";
 import { logger } from "../../lib/logger";
 import {
   AdminOpenSourceToolDeleteError,
+  AdminOpenSourceToolRefreshError,
   AdminOpenSourceToolUpdateError,
   deleteAdminOpenSourceTool,
+  getAdminOpenSourceToolById,
   getAdminOpenSourceToolDetailById,
   listAdminOpenSourceTools,
+  refreshOpenSourceToolReadme,
   updateAdminOpenSourceTool,
 } from "../../db/adminOpenSourceTools";
 import { recordAdminAudit } from "../../db/adminAudit";
+import { ToolSourceError } from "../../lib/toolSource";
 
 /**
  * Admin — Open Source Tools (the already-published catalog, as opposed to
@@ -331,6 +335,103 @@ adminOpenSourceTools.patch(
       }
 
       return errorResponse(c, 500, "internal_error", "Couldn't update this tool right now");
+    }
+  },
+);
+
+/**
+ * Maps a `ToolSourceError` (src/lib/toolSource.ts) to the standard error
+ * envelope — same mapping `src/routes/opensourceToolOnboarding.ts`
+ * already uses for the same error type (rule 20).
+ */
+function mapToolSourceError(c: Parameters<typeof errorResponse>[0], err: ToolSourceError) {
+  switch (err.reason) {
+    case "not_found":
+      return errorResponse(c, 404, "tool_source_not_found", err.message);
+    case "invalid_url":
+      return errorResponse(c, 400, "invalid_tool_url", err.message);
+    case "unsupported_content":
+      return errorResponse(c, 422, "tool_source_unsupported", err.message);
+    default:
+      return errorResponse(c, 502, "tool_source_unavailable", err.message);
+  }
+}
+
+/**
+ * `POST /admin/opensource-tools/:id/refresh-readme` — Tool Detail edit
+ * panel's "Fetch latest README" action
+ * (`EditOpenSourceToolDetailsPanel`). Re-pulls the README from the
+ * tool's own `source_url` and overwrites the stored copy — everything
+ * else onboarding Step 1 resolved (fetched description, primary
+ * language) is untouched.
+ *
+ * Uses `requirePermission("admin:opensource-tools:write")` — same
+ * permission `PATCH /admin/opensource-tools/:id` requires, since this is
+ * still a write to the same row, just sourced from the tool's URL
+ * instead of the request body.
+ */
+adminOpenSourceTools.post(
+  "/:id/refresh-readme",
+  requireAuth,
+  requireAdminRole,
+  requirePermission("admin:opensource-tools:write"),
+  async (c) => {
+    const env = getEnv(c.env);
+    const user = c.get("user")!;
+
+    const idResult = idSchema.safeParse(c.req.param("id"));
+    if (!idResult.success) {
+      return errorResponse(c, 400, "invalid_request", idResult.error.issues[0]!.message);
+    }
+
+    const withinLimit = await checkRateLimit(c, {
+      bucket: "admin-opensource-tools-refresh-readme",
+      limit: 20,
+      windowSeconds: 60,
+    });
+    if (!withinLimit) {
+      return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+    }
+
+    const supabase = getSupabase(env);
+
+    try {
+      const existing = await getAdminOpenSourceToolById(supabase, idResult.data);
+      if (!existing) {
+        return errorResponse(c, 404, "opensource_tool_not_found", "Open source tool not found");
+      }
+
+      const tool = await refreshOpenSourceToolReadme(supabase, idResult.data, existing.sourceUrl);
+
+      // Best-effort audit trail (rule 96), same convention as
+      // `PATCH /:id` above.
+      try {
+        await recordAdminAudit(supabase, {
+          adminId: user.id,
+          action: "ADMIN_OPENSOURCE_TOOL_README_REFRESHED",
+          resourceType: "opensource_tool",
+          resourceId: tool.id,
+          result: "SUCCESS",
+          metadata: { slug: tool.slug },
+        });
+      } catch (auditErr) {
+        logger.error("admin_audit_write_failed", {
+          error: auditErr instanceof Error ? auditErr.message : String(auditErr),
+          requestId: c.get("requestId"),
+        });
+      }
+
+      return c.json(tool, 200);
+    } catch (err) {
+      if (err instanceof ToolSourceError) return mapToolSourceError(c, err);
+      if (err instanceof AdminOpenSourceToolRefreshError) {
+        return errorResponse(c, 404, "opensource_tool_not_found", "Open source tool not found");
+      }
+      logger.error("admin_opensource_tool_refresh_readme_failed", {
+        error: err instanceof Error ? err.message : String(err),
+        requestId: c.get("requestId"),
+      });
+      return errorResponse(c, 500, "internal_error", "Couldn't refresh the README right now");
     }
   },
 );

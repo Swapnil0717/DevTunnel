@@ -8,6 +8,7 @@ import { TagInput } from "@/components/onboarding/tag-input";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
 import {
   AdminOpenSourceToolsApiError,
+  refreshAdminOpenSourceToolReadme,
   updateAdminOpenSourceTool,
 } from "@/lib/admin/opensource-tools/client-api";
 import type { AdminToolDetail } from "@/lib/admin/opensource-tools/types";
@@ -53,6 +54,8 @@ export function EditOpenSourceToolDetailsPanel({
   const [isEditing, setIsEditing] = useState(startInEditMode);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isRefreshingReadme, setIsRefreshingReadme] = useState(false);
+  const [refreshReadmeError, setRefreshReadmeError] = useState<string | null>(null);
 
   const [descriptionChoice, setDescriptionChoice] = useState<ToolDescriptionChoice>(
     tool.descriptionChoice,
@@ -105,6 +108,23 @@ export function EditOpenSourceToolDetailsPanel({
       );
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleRefreshReadme() {
+    setIsRefreshingReadme(true);
+    setRefreshReadmeError(null);
+    try {
+      await refreshAdminOpenSourceToolReadme(tool.id);
+      router.refresh();
+    } catch (err) {
+      setRefreshReadmeError(
+        err instanceof AdminOpenSourceToolsApiError
+          ? "Couldn't fetch the latest README. Try again."
+          : "Something went wrong. Check your connection and try again.",
+      );
+    } finally {
+      setIsRefreshingReadme(false);
     }
   }
 
@@ -249,6 +269,22 @@ export function EditOpenSourceToolDetailsPanel({
               selected={descriptionChoice === "CUSTOM"}
               onSelect={() => setDescriptionChoice("CUSTOM")}
             />
+          </div>
+
+          <div className="mt-3 flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleRefreshReadme}
+              disabled={isRefreshingReadme}
+              className="rounded-md border border-border bg-surface px-3 py-1.5 text-[12px] font-medium text-text-muted transition-colors hover:bg-surface-raised hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {isRefreshingReadme ? "Fetching…" : "Fetch latest README from source"}
+            </button>
+            {refreshReadmeError ? (
+              <span role="alert" className="text-[11.5px] text-status-error-label">
+                {refreshReadmeError}
+              </span>
+            ) : null}
           </div>
 
           {descriptionChoice === "CUSTOM" ? (

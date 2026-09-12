@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminToolDetail, AdminToolSummary, AdminToolUpdatePayload } from "../types";
+import { resolveToolSource } from "../lib/toolSource";
 
 /**
  * Explicit column list for `GET /admin/opensource-tools` — never
@@ -241,6 +242,52 @@ export async function updateAdminOpenSourceTool(
   if (error) throw new Error(`Failed to update open source tool: ${error.message}`);
   if (!data) {
     throw new AdminOpenSourceToolUpdateError("not_found", "Open source tool not found");
+  }
+
+  return toAdminToolDetail(data);
+}
+
+/**
+ * Errors `refreshOpenSourceToolReadme` raises, kept distinct from a
+ * generic thrown `Error` — same pattern as `AdminOpenSourceToolUpdateError`
+ * (rule 20).
+ */
+export class AdminOpenSourceToolRefreshError extends Error {
+  code: "not_found";
+  constructor(code: AdminOpenSourceToolRefreshError["code"], message: string) {
+    super(message);
+    this.name = "AdminOpenSourceToolRefreshError";
+    this.code = code;
+  }
+}
+
+/**
+ * Re-fetches a tool's README from its own `source_url` and overwrites
+ * the stored `readme` column — backs the Tool Detail edit panel's
+ * "Fetch latest README" action. Reuses `resolveToolSource` (src/lib/
+ * toolSource.ts), the same resolver Open Source Tool Onboarding Step 1
+ * uses, but only ever writes back the `readme` field it returns —
+ * `fetchedDescription`/`primaryLanguage`/`sourceUrl` stay exactly what
+ * onboarding originally resolved, the same "source fields locked"
+ * restriction `updateAdminOpenSourceTool`'s own doc comment describes.
+ */
+export async function refreshOpenSourceToolReadme(
+  supabase: SupabaseClient,
+  id: string,
+  sourceUrl: string,
+): Promise<AdminToolDetail> {
+  const resolved = await resolveToolSource(sourceUrl);
+
+  const { data, error } = await supabase
+    .from("opensource_tools")
+    .update({ readme: resolved.readme })
+    .eq("id", id)
+    .select(`${LIST_COLUMNS}, ${DETAIL_EXTRA_COLUMNS}`)
+    .maybeSingle<OpenSourceToolDetailRow>();
+
+  if (error) throw new Error(`Failed to refresh tool README: ${error.message}`);
+  if (!data) {
+    throw new AdminOpenSourceToolRefreshError("not_found", "Open source tool not found");
   }
 
   return toAdminToolDetail(data);

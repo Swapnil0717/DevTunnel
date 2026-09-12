@@ -8,6 +8,7 @@ import { TagInput } from "@/components/onboarding/tag-input";
 import { TechIcon } from "@/components/onboarding/tech-icon";
 import {
   AdminProjectsApiError,
+  refreshAdminProjectReadme,
   updateAdminProject,
 } from "@/lib/admin/projects/client-api";
 import type { AdminProjectDetail } from "@/lib/admin/projects/types";
@@ -105,6 +106,8 @@ export function EditProjectDetailsPanel({
   const [isEditing, setIsEditing] = useState(startInEditMode);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isRefreshingReadme, setIsRefreshingReadme] = useState(false);
+  const [refreshReadmeError, setRefreshReadmeError] = useState<string | null>(null);
 
   const [description, setDescription] = useState<OnboardingDescription>(
     project.description ?? DEFAULT_DESCRIPTION,
@@ -156,6 +159,23 @@ export function EditProjectDetailsPanel({
       );
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleRefreshReadme() {
+    setIsRefreshingReadme(true);
+    setRefreshReadmeError(null);
+    try {
+      await refreshAdminProjectReadme(project.id);
+      router.refresh();
+    } catch (err) {
+      setRefreshReadmeError(
+        err instanceof AdminProjectsApiError
+          ? "Couldn't fetch the latest README. Try again."
+          : "Something went wrong. Check your connection and try again.",
+      );
+    } finally {
+      setIsRefreshingReadme(false);
     }
   }
 
@@ -279,6 +299,22 @@ export function EditProjectDetailsPanel({
               selected={description.choice === "CUSTOM"}
               onSelect={() => selectDescriptionChoice("CUSTOM")}
             />
+          </div>
+
+          <div className="mt-3 flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleRefreshReadme}
+              disabled={isRefreshingReadme}
+              className="rounded-md border border-border bg-surface px-3 py-1.5 text-[12px] font-medium text-text-muted transition-colors hover:bg-surface-raised hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {isRefreshingReadme ? "Fetching…" : "Fetch latest README from GitHub"}
+            </button>
+            {refreshReadmeError ? (
+              <span role="alert" className="text-[11.5px] text-status-error-label">
+                {refreshReadmeError}
+              </span>
+            ) : null}
           </div>
 
           {description.choice === "CUSTOM" ? (

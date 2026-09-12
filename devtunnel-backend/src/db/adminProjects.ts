@@ -9,6 +9,7 @@ import type {
   DeleteAdminProjectResult,
   OnboardingTechStack,
 } from "../types";
+import { fetchRepositoryReadme } from "../lib/githubRepo";
 
 /**
  * Explicit column list for the detail-only fields — selected from
@@ -300,6 +301,45 @@ export async function getProjectGithubRepoRef(
   if (!owner || !repo) return null;
 
   return { owner, repo };
+}
+
+/**
+ * Re-fetches a project's README straight from GitHub and overwrites the
+ * stored `readme` column — backs the Project Detail edit panel's "Fetch
+ * latest README" action. Never touches `github_description`,
+ * `tech_stack`, or anything else Step 1 originally imported; this
+ * refreshes exactly the one field that can silently drift out of date
+ * after the repository's default branch changes post-import.
+ *
+ * Reuses `getProjectGithubRepoRef`'s `{ owner, repo }` coordinates
+ * (never a client-supplied URL — rule 15) and `fetchRepositoryReadme`
+ * (src/lib/githubRepo.ts), the same helper Project Onboarding Step 1
+ * already uses. A repository with no README is a legitimate state, not
+ * an error — `readme` is written as `null`, same as at import time.
+ */
+export async function refreshProjectReadme(
+  supabase: SupabaseClient,
+  accessToken: string | null,
+  repoRef: { owner: string; repo: string },
+  projectId: string,
+): Promise<AdminProjectDetail> {
+  const readme = await fetchRepositoryReadme(accessToken, repoRef.owner, repoRef.repo);
+
+  const { error: updateError } = await supabase
+    .from("projects")
+    .update({ readme })
+    .eq("id", projectId)
+    .is("deleted_at", null);
+
+  if (updateError) throw new Error(`Failed to refresh project README: ${updateError.message}`);
+
+  const detail = await getAdminProjectDetailById(supabase, projectId);
+  if (!detail) {
+    // Raced with a concurrent soft-delete between the write above and
+    // this read — same handling as `updateAdminProject`.
+    throw new AdminProjectUpdateError("not_found", "Project not found");
+  }
+  return detail;
 }
 
 /** Row shape for `getProjectTechStack` below — never `select("*")` (rule 23). */

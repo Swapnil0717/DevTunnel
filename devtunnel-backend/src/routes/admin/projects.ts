@@ -17,6 +17,7 @@ import {
   getProjectGithubRepoRef,
   getProjectTechStack,
   listAdminProjects,
+  refreshProjectReadme,
   updateAdminProject,
 } from "../../db/adminProjects";
 import { recordAdminAudit } from "../../db/adminAudit";
@@ -569,6 +570,91 @@ adminProjects.patch(
       }
 
       return errorResponse(c, 500, "internal_error", "Couldn't update this project right now");
+    }
+  },
+);
+
+/**
+ * `POST /admin/projects/:id/refresh-readme` — Project Detail edit
+ * panel's "Fetch latest README" action (`EditProjectDetailsPanel`).
+ * Re-pulls the repository's current README from GitHub and overwrites
+ * the stored copy — everything else Project Onboarding Step 1 imported
+ * (name, description, contributors, stars, forks, issues) is untouched;
+ * this is the one field that can go stale between import and today
+ * without the admin re-running onboarding.
+ *
+ * Uses `requirePermission("admin:projects:write")` — same permission
+ * `PATCH /admin/projects/:id` requires, since this is still a write to
+ * the same row, just sourced from GitHub instead of the request body.
+ */
+adminProjects.post(
+  "/:id/refresh-readme",
+  requireAuth,
+  requireAdminRole,
+  requirePermission("admin:projects:write"),
+  async (c) => {
+    const env = getEnv(c.env);
+    const admin = c.get("user");
+    if (!admin) {
+      // requireAuth + requireAdminRole already guarantee this — kept for
+      // type safety, same pattern used throughout this file.
+      return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+    }
+
+    const idResult = idSchema.safeParse(c.req.param("id"));
+    if (!idResult.success) {
+      return errorResponse(c, 400, "invalid_request", idResult.error.issues[0]!.message);
+    }
+
+    const withinLimit = await checkRateLimit(c, {
+      bucket: "admin-projects-refresh-readme",
+      limit: 20,
+      windowSeconds: 60,
+    });
+    if (!withinLimit) {
+      return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+    }
+
+    const supabase = getSupabase(env);
+
+    try {
+      const repoRef = await getProjectGithubRepoRef(supabase, idResult.data);
+      if (!repoRef) {
+        return errorResponse(c, 404, "project_not_found", "Project not found");
+      }
+
+      const accessToken = await getValidGithubAccessToken(supabase, env, admin.id);
+      const project = await refreshProjectReadme(supabase, accessToken, repoRef, idResult.data);
+
+      // Best-effort audit trail (rule 96), same convention as
+      // `PATCH /:id` above.
+      try {
+        await recordAdminAudit(supabase, {
+          adminId: admin.id,
+          action: "ADMIN_PROJECT_README_REFRESHED",
+          resourceType: "project",
+          resourceId: project.id,
+          result: "SUCCESS",
+          metadata: { slug: project.slug },
+        });
+      } catch (auditErr) {
+        logger.error("admin_audit_write_failed", {
+          error: auditErr instanceof Error ? auditErr.message : String(auditErr),
+          requestId: c.get("requestId"),
+        });
+      }
+
+      return c.json(project, 200);
+    } catch (err) {
+      if (err instanceof GitHubRepoError) return mapGithubError(c, err);
+      if (err instanceof AdminProjectUpdateError) {
+        return errorResponse(c, 404, "project_not_found", "Project not found");
+      }
+      logger.error("admin_project_refresh_readme_failed", {
+        error: err instanceof Error ? err.message : String(err),
+        requestId: c.get("requestId"),
+      });
+      return errorResponse(c, 500, "internal_error", "Couldn't refresh the README right now");
     }
   },
 );

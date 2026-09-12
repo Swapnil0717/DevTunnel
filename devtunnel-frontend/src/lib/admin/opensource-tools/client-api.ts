@@ -58,3 +58,22 @@ export async function updateAdminOpenSourceTool(
 
   return (await res.json()) as AdminToolDetail;
 }
+
+/**
+ * `POST /admin/opensource-tools/:id/refresh-readme` — the Tool Detail
+ * edit panel's "Fetch latest README" action
+ * (`EditOpenSourceToolDetailsPanel`). Re-pulls the README from the
+ * tool's `sourceUrl`; returns the full refreshed `AdminToolDetail`.
+ */
+export async function refreshAdminOpenSourceToolReadme(id: string): Promise<AdminToolDetail> {
+  const res = await fetch(`${API_BASE_URL}/admin/opensource-tools/${id}/refresh-readme`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    throw new AdminOpenSourceToolsApiError(`Failed to refresh README (${res.status})`, res.status);
+  }
+
+  return (await res.json()) as AdminToolDetail;
+}
