@@ -1,6 +1,6 @@
 import type { ValidatedEnv } from "../config/env";
 import { logger } from "./logger";
-import { reserveGroqRequest, estimateTokens } from "./groqQuota";
+import { reserveGroqRequest, estimateTokens, GROQ_TPM_LIMIT } from "./groqQuota";
 
 /**
  * Minimal Groq function-calling client (OpenAI-compatible
@@ -54,11 +54,18 @@ interface GroqMessage {
 }
 
 const GROQ_API = "https://api.groq.com/openai/v1/chat/completions";
-// Kept low for the same reason the old Gemini client kept MAX_TURNS at 6:
-// every turn re-sends the full growing conversation, and Groq's TPM cap
-// on tool-calling models (8K on openai/gpt-oss-120b) is the binding
-// constraint, not request count.
-const MAX_TURNS = 6;
+// Raised from 6: with the 6,500 TPM budget (groqQuota.ts) now the binding
+// constraint post-Groq-migration, a turn whose payload doesn't fit the
+// current minute window has to wait out almost a full minute
+// (groq_quota_minute_wait) before it can proceed. At 6 turns that wait
+// alone ate most of a run's time budget and still weren't enough turns
+// to gather real data (search -> confirm -> readme, per candidate)
+// before hitting "Groq agent exceeded max turns without a final answer".
+// 12 gives the agent room to actually finish even when several turns
+// each cost a ~60s wait. Paired with the SYSTEM_PROMPT guidance below to
+// use turns more efficiently (batch tool calls, skip redundant confirms)
+// rather than just brute-forcing more turns at the same inefficiency.
+const MAX_TURNS = 12;
 const MAX_RATE_LIMIT_RETRIES = 3;
 
 /** Sleeps for `ms` milliseconds. */
@@ -125,6 +132,25 @@ export async function runGroqAgent(
     // estimate this request's token footprint so the reservation can wait
     // out a tight minute window instead of firing straight into a 429.
     const estimatedTokens = estimateTokens(requestBody);
+
+    // Diagnostic only — fires when a request is unexpectedly close to or
+    // over the entire TPM budget, so we can see WHICH part is oversized
+    // (system prompt vs. a specific message vs. the tools schema) instead
+    // of guessing from the total alone. Logs lengths only, never content.
+    if (estimatedTokens > GROQ_TPM_LIMIT * 0.5) {
+      logger.warn("groq_request_size_breakdown", {
+        turn,
+        estimatedTokens,
+        limit: GROQ_TPM_LIMIT,
+        toolsSchemaChars: JSON.stringify(groqTools).length,
+        messageCharsByIndex: messages.map((m, i) => ({
+          index: i,
+          role: m.role,
+          contentChars: typeof m.content === "string" ? m.content.length : 0,
+          toolCallsChars: m.tool_calls ? JSON.stringify(m.tool_calls).length : 0,
+        })),
+      });
+    }
 
     for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
       // Reserve budget for this exact physical call BEFORE making it.

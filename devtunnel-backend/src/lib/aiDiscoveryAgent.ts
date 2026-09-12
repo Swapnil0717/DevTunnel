@@ -89,7 +89,17 @@ listed in the requested JSON schema is required — a candidate with a field
 you can't confidently fill in should simply be left out of your response
 entirely, rather than filled with a guess or an empty string. When you are
 done, reply with ONLY a single JSON value (no markdown fences, no prose)
-matching exactly the schema described in the user message.`;
+matching exactly the schema described in the user message.
+
+You have a limited number of conversation turns to finish this task, and each
+turn is expensive (rate-limited), so use them efficiently: whenever you need
+several pieces of real data, request multiple tool calls together in the same
+turn rather than one call per turn. Do not call get_github_repository just to
+re-confirm stats (stars, forks, language, description) that
+search_github_repositories already gave you for that exact repository —
+reuse those values and only call get_github_repository when you need details
+it didn't already return. Move on once you have enough real information for
+a candidate instead of gathering more than the required fields need.`;
 
 // ---------------------------------------------------------------------------
 // Projects — 7/day: 3 beginner, 3 intermediate, 1 advanced.
@@ -122,12 +132,17 @@ simple, approachable codebase, moderate star count. "Advanced" = larger,
 architecturally complex, requires real domain expertise to contribute to.
 
 Do NOT propose any of these repositories (already on DevTunnel or already
-proposed today) — full_name values, case-insensitive:
-${JSON.stringify(Array.from(exclude).slice(0, 500))}
+proposed today) — full_name values, case-insensitive. This is a hint, not
+the full list — every candidate you return is still checked against the
+complete list before anything is saved, so it's fine if a repo you were
+never told about here turns out to be a duplicate:
+${JSON.stringify(Array.from(exclude).slice(0, 80))}
 
 For each candidate:
-1. Use search_github_repositories to find real candidates, and
-   get_github_repository to confirm exact stats.
+1. Use search_github_repositories to find real candidates — its results
+   already include stars, forks, language, and description, so only call
+   get_github_repository afterward if you still need something it didn't
+   return.
 2. Use get_github_readme to actually read the README.
 3. Write "description": a SHORT, SIMPLE summary of what the project does —
    1-2 plain sentences, based only on the README/repo description you just
@@ -310,8 +325,9 @@ async function runToolDiscovery(
 catalog in this exact category: "${category}".
 
 Do NOT propose any of these tool URLs (already listed or already proposed
-today):
-${JSON.stringify(Array.from(exclude).slice(0, 500))}
+today). This is a hint, not the full list — every candidate is still
+checked against the complete list before anything is saved:
+${JSON.stringify(Array.from(exclude).slice(0, 80))}
 
 1. Use search_github_repositories to find a real, actively maintained,
    well-regarded open source tool for this category.

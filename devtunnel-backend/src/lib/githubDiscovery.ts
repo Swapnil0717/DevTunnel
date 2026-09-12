@@ -73,11 +73,29 @@ export interface GithubSearchIssueItem {
   repository_url: string;
 }
 
-/** GitHub's `/search/issues` — used by task discovery. */
-export async function searchIssues(env: ValidatedEnv, query: string, perPage = 20): Promise<GithubSearchIssueItem[]> {
+/**
+ * GitHub's `/search/issues` — used by task discovery. `perPage` is kept
+ * small (not GitHub's usual default of 20-30) because every issue this
+ * returns gets resent in full on every subsequent Groq turn as part of
+ * the growing conversation history — 20 issues at the old body-truncation
+ * length alone exceeded the entire 6,500 TPM per-minute budget
+ * (groqQuota.ts), which is what caused ai_project_discovery_quota_exceeded
+ * runs that produced zero candidates. 8 is comfortably under budget even
+ * stacked with other tool results earlier in the same run.
+ *
+ * GitHub's `/search/issues` endpoint 422s any query missing `is:issue` or
+ * `is:pull-request` — the model doesn't reliably remember to include
+ * this, so every omission burned a whole turn on a 422 and, seen enough
+ * times in one run, exhausted MAX_TURNS before a final answer ever came
+ * back (ai_project_discovery_failed: "Groq agent exceeded max turns").
+ * Enforced here instead of only in the tool description, so a malformed
+ * query from the model can never actually reach GitHub as an error.
+ */
+export async function searchIssues(env: ValidatedEnv, query: string, perPage = 8): Promise<GithubSearchIssueItem[]> {
+  const qualifiedQuery = /\bis:(issue|pull-request)\b/i.test(query) ? query : `${query} is:issue`;
   const data = await githubGet<{ items: GithubSearchIssueItem[] }>(
     env,
-    `/search/issues?q=${encodeURIComponent(query)}&sort=created&order=desc&per_page=${perPage}`,
+    `/search/issues?q=${encodeURIComponent(qualifiedQuery)}&sort=created&order=desc&per_page=${perPage}`,
   );
   // Search /issues also returns PRs; filter those out.
   return (data?.items ?? []).filter((i) => !i.pull_request);
@@ -107,7 +125,11 @@ export async function getRepositoryReadme(env: ValidatedEnv, owner: string, repo
     // atob is available in the Workers runtime (nodejs_compat).
     const binary = atob(data.content.replace(/\n/g, ""));
     const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
-    return new TextDecoder("utf-8").decode(bytes).slice(0, 6000);
+    // Shrunk from 6000: a single README this size, stacked with a few
+    // tool results already in the conversation, could push one Groq
+    // turn's request past the 6,500 TPM budget (groqQuota.ts) on its
+    // own. 4000 chars (~1,150 estimated tokens) leaves more headroom.
+    return new TextDecoder("utf-8").decode(bytes).slice(0, 4000);
   } catch {
     return null;
   }
@@ -126,12 +148,16 @@ export interface GithubRepoIssue {
   pull_request?: unknown;
 }
 
-/** Open issues for one repo, used by task discovery when a repo has few issues to search-index. */
+/**
+ * Open issues for one repo, used by task discovery when a repo has few
+ * issues to search-index. Same TPM-budget reasoning as searchIssues
+ * above applies to `perPage` here.
+ */
 export async function getRepositoryOpenIssues(
   env: ValidatedEnv,
   owner: string,
   repo: string,
-  perPage = 20,
+  perPage = 8,
 ): Promise<GithubRepoIssue[]> {
   const data = await githubGet<GithubRepoIssue[]>(
     env,

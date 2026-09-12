@@ -57,7 +57,7 @@ export const DISCOVERY_TOOLS: GroqFunctionDeclaration[] = [
   {
     name: "search_github_issues",
     description:
-      "Search GitHub issues using GitHub's search syntax (e.g. 'repo:owner/name is:issue is:open label:\"good first issue\"'). Returns up to 20 real open issues with title, body, labels, and author.",
+      "Search GitHub issues using GitHub's search syntax. The query MUST include 'is:issue' (e.g. 'repo:owner/name is:issue is:open label:\"good first issue\"') — GitHub rejects queries missing 'is:issue' or 'is:pull-request'. Returns up to 8 real open issues with title, body, labels, and author.",
     parameters: {
       type: "object",
       properties: {
@@ -163,11 +163,14 @@ export function buildDiscoveryDispatcher(env: ValidatedEnv, readmeCache?: Readme
       }
       case "search_github_issues": {
         const items = await searchIssues(env, String(args.query));
+        // Body truncation shrunk from 1500: at the old length, a full
+        // page of results alone could exceed the entire Groq TPM budget
+        // (see searchIssues' perPage comment in githubDiscovery.ts).
         return items.map((i) => ({
           number: i.number,
           title: i.title,
           url: i.html_url,
-          body: (i.body ?? "").slice(0, 1500),
+          body: (i.body ?? "").slice(0, 600),
           labels: normalizeLabels(i.labels),
           author: i.user ? { username: i.user.login, avatarUrl: i.user.avatar_url, profileUrl: i.user.html_url } : null,
           repositoryUrl: i.repository_url,
@@ -179,7 +182,7 @@ export function buildDiscoveryDispatcher(env: ValidatedEnv, readmeCache?: Readme
           number: i.number,
           title: i.title,
           url: i.html_url,
-          body: (i.body ?? "").slice(0, 1500),
+          body: (i.body ?? "").slice(0, 600),
           labels: normalizeLabels(i.labels),
           author: i.user ? { username: i.user.login, avatarUrl: i.user.avatar_url, profileUrl: i.user.html_url } : null,
         }));

@@ -122,6 +122,21 @@ async function incrementCounter(kv: KVNamespace, key: string, amount: number, tt
  * TPD is gone for the day — the caller must stop rather than retry.
  */
 export async function reserveGroqRequest(kv: KVNamespace, estimatedTokens: number, maxWaitAttempts = 2): Promise<void> {
+  // A request this large can never fit, even against a fully empty
+  // minute window — waiting out attempts below would just burn ~2
+  // minutes before failing anyway. This is what an over-sized
+  // conversation payload (e.g. an oversized tool result appended to
+  // history) looks like; fail immediately with a distinct log so it's
+  // obvious this is a payload-size problem, not ordinary rate limiting.
+  if (estimatedTokens > GROQ_TPM_LIMIT) {
+    // Logged as requestSizeEstimate, not estimatedTokens — logger.ts
+    // redacts any field name containing "token" (to catch real secrets),
+    // which would otherwise hide this harmless number right when it's
+    // most useful for debugging an oversized-prompt failure like this one.
+    logger.error("groq_request_exceeds_tpm_budget", { requestSizeEstimate: estimatedTokens, limit: GROQ_TPM_LIMIT });
+    throw new GroqQuotaExceededError("tpm", msUntilNextMinuteWindow());
+  }
+
   const rpdKey = `groq:rpd:${todayKey()}`;
   const tpdKey = `groq:tpd:${todayKey()}`;
 
