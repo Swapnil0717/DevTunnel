@@ -9,6 +9,7 @@ import { errorResponse } from "../../lib/response";
 import { logger } from "../../lib/logger";
 import { recordAdminAudit } from "../../db/adminAudit";
 import { runDailyDiscovery, runProjectDiscoveryOnly, runToolDiscoveryOnly, runTaskDiscoveryOnly } from "../../lib/aiDiscoveryAgent";
+import { getGeminiQuotaSnapshot } from "../../lib/geminiQuota";
 import {
   approveDiscoveredProject,
   approveDiscoveredTask,
@@ -91,6 +92,18 @@ adminAi.get("/confirmation", requireAuth, requireAdminRole, requirePermission("a
   const supabase = getSupabase(env);
   const queue = await getConfirmationQueue(supabase);
   return c.json(queue);
+});
+
+/**
+ * Read-only snapshot of the shared Gemini request budget
+ * (src/lib/geminiQuota.ts) — how many requests are left this minute and
+ * today, independent of any particular discovery run. Backs the quota
+ * panel shown on every AI admin page. Never reserves or spends budget —
+ * safe to poll freely.
+ */
+adminAi.get("/gemini-quota", requireAuth, requireAdminRole, requirePermission("admin:ai:read"), async (c) => {
+  const snapshot = await getGeminiQuotaSnapshot(c.env.RATE_LIMIT_KV);
+  return c.json(snapshot);
 });
 
 async function handleApprove(
@@ -181,7 +194,7 @@ adminAi.post("/run", requireAuth, requireAdminRole, requirePermission("admin:ai:
   const env = getEnv(c.env);
   const user = c.get("user");
   try {
-    const summary = await runDailyDiscovery(env);
+    const summary = await runDailyDiscovery(env, c.env.RATE_LIMIT_KV);
     await recordAdminAudit(getSupabase(env), {
       adminId: user.id,
       action: "AI_DISCOVERY_MANUAL_RUN",
@@ -207,7 +220,7 @@ adminAi.post("/projects/run", requireAuth, requireAdminRole, requirePermission("
   const env = getEnv(c.env);
   const user = c.get("user");
   try {
-    const summary = await runProjectDiscoveryOnly(env);
+    const summary = await runProjectDiscoveryOnly(env, c.env.RATE_LIMIT_KV);
     await recordAdminAudit(getSupabase(env), {
       adminId: user.id,
       action: "AI_DISCOVERY_MANUAL_RUN_PROJECTS",
@@ -233,7 +246,7 @@ adminAi.post("/tools/run", requireAuth, requireAdminRole, requirePermission("adm
   const env = getEnv(c.env);
   const user = c.get("user");
   try {
-    const summary = await runToolDiscoveryOnly(env);
+    const summary = await runToolDiscoveryOnly(env, c.env.RATE_LIMIT_KV);
     await recordAdminAudit(getSupabase(env), {
       adminId: user.id,
       action: "AI_DISCOVERY_MANUAL_RUN_TOOLS",
@@ -259,7 +272,7 @@ adminAi.post("/tasks/run", requireAuth, requireAdminRole, requirePermission("adm
   const env = getEnv(c.env);
   const user = c.get("user");
   try {
-    const summary = await runTaskDiscoveryOnly(env);
+    const summary = await runTaskDiscoveryOnly(env, c.env.RATE_LIMIT_KV);
     await recordAdminAudit(getSupabase(env), {
       adminId: user.id,
       action: "AI_DISCOVERY_MANUAL_RUN_TASKS",

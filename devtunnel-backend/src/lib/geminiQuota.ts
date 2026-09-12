@@ -1,4 +1,5 @@
 import { logger } from "./logger";
+import type { GeminiQuotaSnapshot } from "../types";
 
 /**
  * Governs every outbound call to the Gemini API against Google's free-tier
@@ -50,18 +51,6 @@ export class GeminiQuotaExceededError extends Error {
     this.reason = reason;
     this.retryAfterMs = retryAfterMs;
   }
-}
-
-/** Read-only snapshot for the admin frontend's quota panel — mirrors devtunnel-frontend's GeminiQuotaSnapshot type field-for-field. */
-export interface GeminiQuotaSnapshot {
-  limitPerMinute: number;
-  usedThisMinute: number;
-  remainingThisMinute: number;
-  limitPerDay: number;
-  usedToday: number;
-  remainingToday: number;
-  /** ISO timestamp of the next UTC midnight, when the daily counter resets. */
-  dailyResetsAt: string;
 }
 
 function todayKey(): string {

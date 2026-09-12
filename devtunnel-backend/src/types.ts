@@ -1270,14 +1270,13 @@ export interface AiConfirmationQueue {
  * here). Distinct from `errors`, which is for run-level failures (a
  * fetch/API error), not per-candidate rejections.
  *
- * `projectsQuotaExhausted`/`toolsQuotaExhausted` are true only when
- * today's 7/day quota for that kind was already fully used up *before*
- * this run even started — the "Add AI projects/tools" button was
- * clicked with nothing left to find today. This is distinct from a run
- * that used up the rest of the quota just now, which is a normal
- * successful completion (`proposed > 0`), not a limit-hit state. Tasks
- * have no daily quota (see runTaskDiscovery's doc comment), so both
- * flags are always `false` on a tasks-only run.
+ * `geminiQuotaExceeded` is true when this run stopped early because the
+ * shared Gemini free-tier daily budget (18 requests/day, rationed under
+ * Google's real 20/day cap by src/lib/geminiQuota.ts) ran out partway
+ * through — distinct from a run that simply had nothing left to find
+ * today (a normal, successful completion with `proposed === 0` and this
+ * flag `false`). The frontend uses this flag to show a "limit hit" state
+ * rather than a generic error.
  */
  export interface AiDiscoveryRunSummary {
   date: string;
@@ -1286,6 +1285,23 @@ export interface AiConfirmationQueue {
   tasksProposed: number;
   candidatesDropped: number;
   errors: string[];
-  projectsQuotaExhausted: boolean;
-  toolsQuotaExhausted: boolean;
+  geminiQuotaExceeded: boolean;
+}
+
+/**
+ * Response body of `GET /admin/ai/gemini-quota` — a read-only snapshot of
+ * the shared Gemini request budget (src/lib/geminiQuota.ts), independent
+ * of any particular discovery run. Backs the quota panel on every AI
+ * admin page (devtunnel-frontend GeminiQuotaSnapshot mirrors this
+ * field-for-field).
+ */
+export interface GeminiQuotaSnapshot {
+  limitPerMinute: number;
+  usedThisMinute: number;
+  remainingThisMinute: number;
+  limitPerDay: number;
+  usedToday: number;
+  remainingToday: number;
+  /** ISO timestamp of the next UTC midnight, when the daily counter resets. */
+  dailyResetsAt: string;
 }

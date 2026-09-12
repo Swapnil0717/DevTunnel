@@ -37,7 +37,7 @@ export default {
    */
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(
-      runDailyDiscovery(getEnv(env)).catch((err) => {
+      runDailyDiscovery(getEnv(env), env.RATE_LIMIT_KV).catch((err) => {
         logger.error("ai_discovery_scheduled_run_failed", { error: err instanceof Error ? err.message : String(err) });
       }),
     );

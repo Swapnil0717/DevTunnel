@@ -73,6 +73,11 @@ export interface AiConfirmationQueue {
  * agent evaluated but did not save — duplicates or ones that failed
  * validation (see the backend type's own doc comment) — distinct from
  * `errors`, which is for run-level failures, not per-candidate rejections.
+ *
+ * `geminiQuotaExceeded` is true when the run stopped early because the
+ * shared Gemini free-tier daily budget ran out partway through — the
+ * run button shows a distinct "limit hit" banner for this, separate
+ * from the generic error state.
  */
 export interface AiDiscoveryRunSummary {
   date: string;
@@ -81,4 +86,21 @@ export interface AiDiscoveryRunSummary {
   tasksProposed: number;
   candidatesDropped: number;
   errors: string[];
+  geminiQuotaExceeded: boolean;
+}
+
+/**
+ * Response body of `GET /admin/ai/gemini-quota` (devtunnel-backend
+ * `GeminiQuotaSnapshot`) — how much of the shared Gemini request budget
+ * is left this minute and today. Backs `GeminiQuotaPanel`.
+ */
+export interface GeminiQuotaSnapshot {
+  limitPerMinute: number;
+  usedThisMinute: number;
+  remainingThisMinute: number;
+  limitPerDay: number;
+  usedToday: number;
+  remainingToday: number;
+  /** ISO timestamp of the next UTC midnight, when the daily counter resets. */
+  dailyResetsAt: string;
 }

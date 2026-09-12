@@ -3,6 +3,7 @@ import { buildMetadata } from "@/lib/seo";
 import { SectionMessage } from "@/components/home/section-message";
 import { getAiConfirmationQueue } from "@/lib/admin/ai-discovery/api";
 import { AiDiscoveryQueue } from "@/components/admin/ai-discovery/ai-discovery-queue";
+import { GeminiQuotaPanel } from "@/components/admin/ai-discovery/gemini-quota-panel";
 import { splitSetupGuideBullets } from "@/lib/admin/ai-discovery/setup-guide";
 
 export const metadata: Metadata = buildMetadata({
@@ -25,6 +26,8 @@ export default async function AdminAiConfirmationPage() {
           all at once.
         </p>
       </div>
+
+      <GeminiQuotaPanel />
 
       {result.status === "error" && <SectionMessage>Couldn&apos;t load the confirmation queue right now.</SectionMessage>}
       {result.status === "empty" && <SectionMessage>Nothing is awaiting confirmation right now.</SectionMessage>}

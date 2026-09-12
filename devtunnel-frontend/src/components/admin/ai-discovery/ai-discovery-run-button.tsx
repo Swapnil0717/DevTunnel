@@ -9,6 +9,7 @@ import {
 } from "@/lib/admin/ai-discovery/client-api";
 import type { AiDiscoveryRunSummary } from "@/lib/admin/ai-discovery/types";
 import { SparkleIcon } from "@/components/layout/nav-icons";
+import { GeminiQuotaPanel } from "@/components/admin/ai-discovery/gemini-quota-panel";
 
 interface AiDiscoveryRunButtonProps {
   kind: "projects" | "tools" | "tasks";
@@ -34,6 +35,16 @@ const COPY = {
     error: "Couldn't run task discovery. Try again.",
   },
 } as const;
+
+/**
+ * Shown instead of the normal "run complete" summary when the run
+ * stopped early because the shared Gemini daily request budget ran out
+ * (`AiDiscoveryRunSummary.geminiQuotaExceeded`) — distinct from a plain
+ * error, since nothing actually failed, there's just nothing left to
+ * spend until the budget resets (see `GeminiQuotaPanel` above the
+ * button for exactly when that is).
+ */
+const QUOTA_EXCEEDED_MESSAGE = "Today's Gemini request limit was hit partway through this run. It'll pick back up once the budget resets.";
 
 /** `12s`, `1m 05s`, etc. — kept short since it updates once a second. */
 function formatElapsed(ms: number): string {
@@ -65,6 +76,11 @@ function formatElapsed(ms: number): string {
  * (not a plain counter) so it stays accurate even if the tab is
  * backgrounded and timers get throttled, and it's cleared as soon as
  * the run settles either way.
+ *
+ * Renders `GeminiQuotaPanel` above the button so the admin can see the
+ * shared request budget before clicking, and bumps its `refreshKey`
+ * after every run so the panel reflects that run's usage immediately
+ * instead of waiting for its own poll interval.
  */
 export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
   const router = useRouter();
@@ -73,6 +89,7 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
   const [lastRun, setLastRun] = useState<AiDiscoveryRunSummary | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [lastRunDurationMs, setLastRunDurationMs] = useState<number | null>(null);
+  const [quotaRefreshKey, setQuotaRefreshKey] = useState(0);
   const runStartedAtRef = useRef<number | null>(null);
   const copy = COPY[kind];
 
@@ -113,6 +130,10 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
       }
       runStartedAtRef.current = null;
       setIsRunning(false);
+      // A run always spends at least one Gemini request (even a run that
+      // finds nothing still made the initial call), so the panel above is
+      // now stale — force it to refetch instead of waiting up to 30s.
+      setQuotaRefreshKey((k) => k + 1);
     }
   }
 
@@ -126,6 +147,8 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
 
   return (
     <div className="mb-8">
+      <GeminiQuotaPanel refreshKey={quotaRefreshKey} />
+
       <button
         type="button"
         onClick={handleRun}
@@ -144,7 +167,19 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
 
       {error ? <p className="m-0 mt-3 text-[12px] text-status-error-label">{error}</p> : null}
 
-      {lastRun && !error ? (
+      {lastRun && !error && lastRun.geminiQuotaExceeded ? (
+        <div className="mt-3 rounded-[8px] border border-status-error-border bg-status-error-bg p-3">
+          <p className="m-0 text-[12.5px] font-medium text-status-error-label">Gemini request limit hit</p>
+          <p className="m-0 mt-1 text-[12px] text-status-error-text">{QUOTA_EXCEEDED_MESSAGE}</p>
+          {proposedCount ? (
+            <p className="m-0 mt-1 text-[12px] text-status-error-text">
+              {copy.noun(proposedCount)} were still proposed before the limit was hit.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {lastRun && !error && !lastRun.geminiQuotaExceeded ? (
         <div className="mt-3 rounded-[8px] border border-status-success-border bg-status-success-bg p-3">
           <p className="m-0 text-[12.5px] font-medium text-status-success-label">
             Run complete{lastRunDurationMs !== null ? ` in ${formatElapsed(lastRunDurationMs)}` : ""}

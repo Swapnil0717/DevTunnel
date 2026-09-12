@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "@/lib/config";
-import type { AiDiscoveryRunSummary } from "./types";
+import type { AiDiscoveryRunSummary, GeminiQuotaSnapshot } from "./types";
 
 export class AiDiscoveryApiError extends Error {
   status: number;
@@ -84,5 +84,20 @@ export async function triggerAiTaskDiscoveryRun(): Promise<AiDiscoveryRunSummary
     credentials: "include",
   });
   if (!res.ok) throw new AiDiscoveryApiError(`Failed to trigger run (${res.status})`, res.status);
+  return res.json();
+}
+
+/**
+ * `GET /admin/ai/gemini-quota` — how much of the shared Gemini request
+ * budget is left this minute and today. Read-only, never reserves or
+ * spends budget, so it's safe to call on mount and after every run.
+ * Backs `GeminiQuotaPanel`.
+ */
+export async function getGeminiQuota(): Promise<GeminiQuotaSnapshot> {
+  const res = await fetch(`${API_BASE_URL}/admin/ai/gemini-quota`, {
+    method: "GET",
+    credentials: "include",
+  });
+  if (!res.ok) throw new AiDiscoveryApiError(`Failed to load Gemini quota (${res.status})`, res.status);
   return res.json();
 }
