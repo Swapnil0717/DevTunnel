@@ -8,7 +8,7 @@ import { requireAdminRole, requirePermission } from "../../middleware/adminAuth"
 import { errorResponse } from "../../lib/response";
 import { logger } from "../../lib/logger";
 import { recordAdminAudit } from "../../db/adminAudit";
-import { runDailyDiscovery } from "../../lib/aiDiscoveryAgent";
+import { runDailyDiscovery, runProjectDiscoveryOnly, runToolDiscoveryOnly, runTaskDiscoveryOnly } from "../../lib/aiDiscoveryAgent";
 import {
   approveDiscoveredProject,
   approveDiscoveredTask,
@@ -193,6 +193,84 @@ adminAi.post("/run", requireAuth, requireAdminRole, requirePermission("admin:ai:
     return c.json(summary);
   } catch (err) {
     logger.error("ai_discovery_manual_run_failed", { error: extractErrorMessage(err) });
+    return errorResponse(c, 500, "internal_error", "Discovery run failed");
+  }
+});
+
+/**
+ * Scoped manual trigger — runs ONLY the project-discovery phase. Backs
+ * the "Add AI projects" button on the AI Added Projects admin page.
+ * Same quota/dedup guarantees as POST /admin/ai/run, just narrowed to
+ * one phase.
+ */
+adminAi.post("/projects/run", requireAuth, requireAdminRole, requirePermission("admin:ai:write"), async (c) => {
+  const env = getEnv(c.env);
+  const user = c.get("user");
+  try {
+    const summary = await runProjectDiscoveryOnly(env);
+    await recordAdminAudit(getSupabase(env), {
+      adminId: user.id,
+      action: "AI_DISCOVERY_MANUAL_RUN_PROJECTS",
+      resourceType: "ai_discovery",
+      resourceId: null,
+      result: "SUCCESS",
+      metadata: summary as unknown as Record<string, unknown>,
+    });
+    return c.json(summary);
+  } catch (err) {
+    logger.error("ai_discovery_manual_run_projects_failed", { error: extractErrorMessage(err) });
+    return errorResponse(c, 500, "internal_error", "Discovery run failed");
+  }
+});
+
+/**
+ * Scoped manual trigger — runs ONLY the tool-discovery phase. Backs the
+ * "Add AI tools" button on the AI Added Tools admin page. Same
+ * quota/dedup guarantees as POST /admin/ai/run, just narrowed to one
+ * phase.
+ */
+adminAi.post("/tools/run", requireAuth, requireAdminRole, requirePermission("admin:ai:write"), async (c) => {
+  const env = getEnv(c.env);
+  const user = c.get("user");
+  try {
+    const summary = await runToolDiscoveryOnly(env);
+    await recordAdminAudit(getSupabase(env), {
+      adminId: user.id,
+      action: "AI_DISCOVERY_MANUAL_RUN_TOOLS",
+      resourceType: "ai_discovery",
+      resourceId: null,
+      result: "SUCCESS",
+      metadata: summary as unknown as Record<string, unknown>,
+    });
+    return c.json(summary);
+  } catch (err) {
+    logger.error("ai_discovery_manual_run_tools_failed", { error: extractErrorMessage(err) });
+    return errorResponse(c, 500, "internal_error", "Discovery run failed");
+  }
+});
+
+/**
+ * Scoped manual trigger — runs ONLY the task-discovery phase (walks
+ * every onboarded project's open issues one by one). Backs the "Add AI
+ * tasks" button on the AI Added Tasks admin page. Same dedup
+ * guarantees as POST /admin/ai/run, just narrowed to one phase.
+ */
+adminAi.post("/tasks/run", requireAuth, requireAdminRole, requirePermission("admin:ai:write"), async (c) => {
+  const env = getEnv(c.env);
+  const user = c.get("user");
+  try {
+    const summary = await runTaskDiscoveryOnly(env);
+    await recordAdminAudit(getSupabase(env), {
+      adminId: user.id,
+      action: "AI_DISCOVERY_MANUAL_RUN_TASKS",
+      resourceType: "ai_discovery",
+      resourceId: null,
+      result: "SUCCESS",
+      metadata: summary as unknown as Record<string, unknown>,
+    });
+    return c.json(summary);
+  } catch (err) {
+    logger.error("ai_discovery_manual_run_tasks_failed", { error: extractErrorMessage(err) });
     return errorResponse(c, 500, "internal_error", "Discovery run failed");
   }
 });

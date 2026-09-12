@@ -570,4 +570,88 @@ export async function runDailyDiscovery(env: ValidatedEnv): Promise<AiDiscoveryR
   return summary;
 }
 
+/**
+ * Scoped entry point — runs ONLY the project-discovery phase, for the
+ * "Add AI projects" button on the AI Added Projects admin page
+ * (devtunnel-frontend .../ai/projects). Shares the same daily quota and
+ * dedup logic as runDailyDiscovery, so it's safe to call repeatedly —
+ * it only ever fills whatever's left of today's project quota. Tools
+ * and tasks are left untouched.
+ */
+export async function runProjectDiscoveryOnly(env: ValidatedEnv): Promise<AiDiscoveryRunSummary> {
+  logger.info("ai_discovery_projects_run_started");
+  const readmeCache: ReadmeCache = new Map();
+  const projectsResult = await runProjectDiscovery(env, readmeCache).catch((err) => {
+    logger.error("ai_discovery_project_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
+    return { proposed: 0, dropped: 0, errors: ["project_discovery_crashed"] };
+  });
+
+  const summary: AiDiscoveryRunSummary = {
+    date: new Date().toISOString().slice(0, 10),
+    projectsProposed: projectsResult.proposed,
+    toolsProposed: 0,
+    tasksProposed: 0,
+    candidatesDropped: projectsResult.dropped,
+    errors: projectsResult.errors,
+  };
+
+  logger.info("ai_discovery_projects_run_finished", summary as unknown as Record<string, unknown>);
+  return summary;
+}
+
+/**
+ * Scoped entry point — runs ONLY the tool-discovery phase, for the
+ * "Add AI tools" button on the AI Added Tools admin page
+ * (devtunnel-frontend .../ai/tools). Same quota/dedup guarantees as
+ * runProjectDiscoveryOnly above, mirrored for tools.
+ */
+export async function runToolDiscoveryOnly(env: ValidatedEnv): Promise<AiDiscoveryRunSummary> {
+  logger.info("ai_discovery_tools_run_started");
+  const readmeCache: ReadmeCache = new Map();
+  const toolsResult = await runToolDiscovery(env, readmeCache).catch((err) => {
+    logger.error("ai_discovery_tool_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
+    return { proposed: 0, dropped: 0, errors: ["tool_discovery_crashed"] };
+  });
+
+  const summary: AiDiscoveryRunSummary = {
+    date: new Date().toISOString().slice(0, 10),
+    projectsProposed: 0,
+    toolsProposed: toolsResult.proposed,
+    tasksProposed: 0,
+    candidatesDropped: toolsResult.dropped,
+    errors: toolsResult.errors,
+  };
+
+  logger.info("ai_discovery_tools_run_finished", summary as unknown as Record<string, unknown>);
+  return summary;
+}
+
+/**
+ * Scoped entry point — runs ONLY the task-discovery phase, for the
+ * "Add AI tasks" button on the AI Added Tasks admin page
+ * (devtunnel-frontend .../ai/tasks). Walks every onboarded project's
+ * open issues one at a time (see runTaskDiscovery above) — no daily
+ * quota to share, just per-project dedup, so it's safe to call
+ * repeatedly. Projects and tools are left untouched.
+ */
+export async function runTaskDiscoveryOnly(env: ValidatedEnv): Promise<AiDiscoveryRunSummary> {
+  logger.info("ai_discovery_tasks_run_started");
+  const tasksResult = await runTaskDiscovery(env).catch((err) => {
+    logger.error("ai_discovery_task_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
+    return { proposed: 0, dropped: 0, errors: ["task_discovery_crashed"] };
+  });
+
+  const summary: AiDiscoveryRunSummary = {
+    date: new Date().toISOString().slice(0, 10),
+    projectsProposed: 0,
+    toolsProposed: 0,
+    tasksProposed: tasksResult.proposed,
+    candidatesDropped: tasksResult.dropped,
+    errors: tasksResult.errors,
+  };
+
+  logger.info("ai_discovery_tasks_run_finished", summary as unknown as Record<string, unknown>);
+  return summary;
+}
+
 export { TOOL_CATEGORIES, PROJECT_CATEGORIES };

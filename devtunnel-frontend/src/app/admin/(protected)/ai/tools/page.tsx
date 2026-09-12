@@ -3,6 +3,7 @@ import { buildMetadata } from "@/lib/seo";
 import { SectionMessage } from "@/components/home/section-message";
 import { getAiDiscoveredTools } from "@/lib/admin/ai-discovery/api";
 import { AiDiscoveryQueue } from "@/components/admin/ai-discovery/ai-discovery-queue";
+import { AiDiscoveryRunButton } from "@/components/admin/ai-discovery/ai-discovery-run-button";
 import { splitSetupGuideBullets } from "@/lib/admin/ai-discovery/setup-guide";
 
 export const metadata: Metadata = buildMetadata({
@@ -23,6 +24,8 @@ export default async function AdminAiToolsPage() {
           Open source tools DevTunnel&apos;s AI has proposed adding to the catalog, awaiting review.
         </p>
       </div>
+
+      <AiDiscoveryRunButton kind="tools" />
 
       {result.status === "error" && <SectionMessage>Couldn&apos;t load AI-proposed tools right now.</SectionMessage>}
       {result.status === "empty" && <SectionMessage>No AI-proposed tools awaiting review.</SectionMessage>}

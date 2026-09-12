@@ -3,6 +3,7 @@ import { buildMetadata } from "@/lib/seo";
 import { SectionMessage } from "@/components/home/section-message";
 import { getAiDiscoveredProjects } from "@/lib/admin/ai-discovery/api";
 import { AiDiscoveryQueue } from "@/components/admin/ai-discovery/ai-discovery-queue";
+import { AiDiscoveryRunButton } from "@/components/admin/ai-discovery/ai-discovery-run-button";
 
 export const metadata: Metadata = buildMetadata({
   title: "AI Added Projects",
@@ -22,6 +23,8 @@ export default async function AdminAiProjectsPage() {
           Projects DevTunnel&apos;s AI has proposed adding to the platform, awaiting review.
         </p>
       </div>
+
+      <AiDiscoveryRunButton kind="projects" />
 
       {result.status === "error" && <SectionMessage>Couldn&apos;t load AI-proposed projects right now.</SectionMessage>}
       {result.status === "empty" && <SectionMessage>No AI-proposed projects awaiting review.</SectionMessage>}

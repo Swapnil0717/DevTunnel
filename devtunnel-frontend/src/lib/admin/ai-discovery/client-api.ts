@@ -43,3 +43,46 @@ export async function triggerAiDiscoveryRun(): Promise<AiDiscoveryRunSummary> {
   if (!res.ok) throw new AiDiscoveryApiError(`Failed to trigger run (${res.status})`, res.status);
   return res.json();
 }
+
+/**
+ * `POST /admin/ai/projects/run` — same idea as triggerAiDiscoveryRun,
+ * scoped to only the project-discovery phase. Backs the "Add AI
+ * projects" button on the AI Added Projects admin page.
+ */
+export async function triggerAiProjectDiscoveryRun(): Promise<AiDiscoveryRunSummary> {
+  const res = await fetch(`${API_BASE_URL}/admin/ai/projects/run`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) throw new AiDiscoveryApiError(`Failed to trigger run (${res.status})`, res.status);
+  return res.json();
+}
+
+/**
+ * `POST /admin/ai/tools/run` — same idea as triggerAiDiscoveryRun,
+ * scoped to only the tool-discovery phase. Backs the "Add AI tools"
+ * button on the AI Added Tools admin page.
+ */
+export async function triggerAiToolDiscoveryRun(): Promise<AiDiscoveryRunSummary> {
+  const res = await fetch(`${API_BASE_URL}/admin/ai/tools/run`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) throw new AiDiscoveryApiError(`Failed to trigger run (${res.status})`, res.status);
+  return res.json();
+}
+
+/**
+ * `POST /admin/ai/tasks/run` — same idea as triggerAiDiscoveryRun,
+ * scoped to only the task-discovery phase (walks every onboarded
+ * project's open issues one by one). Backs the "Add AI tasks" button
+ * on the AI Added Tasks admin page.
+ */
+export async function triggerAiTaskDiscoveryRun(): Promise<AiDiscoveryRunSummary> {
+  const res = await fetch(`${API_BASE_URL}/admin/ai/tasks/run`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) throw new AiDiscoveryApiError(`Failed to trigger run (${res.status})`, res.status);
+  return res.json();
+}

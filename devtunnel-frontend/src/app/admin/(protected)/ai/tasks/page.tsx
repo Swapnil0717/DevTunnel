@@ -3,6 +3,7 @@ import { buildMetadata } from "@/lib/seo";
 import { SectionMessage } from "@/components/home/section-message";
 import { getAiDiscoveredTasks } from "@/lib/admin/ai-discovery/api";
 import { AiDiscoveryQueue } from "@/components/admin/ai-discovery/ai-discovery-queue";
+import { AiDiscoveryRunButton } from "@/components/admin/ai-discovery/ai-discovery-run-button";
 
 export const metadata: Metadata = buildMetadata({
   title: "AI Added Tasks",
@@ -22,6 +23,8 @@ export default async function AdminAiTasksPage() {
           Tasks DevTunnel&apos;s AI has proposed creating for onboarded projects, awaiting review.
         </p>
       </div>
+
+      <AiDiscoveryRunButton kind="tasks" />
 
       {result.status === "error" && <SectionMessage>Couldn&apos;t load AI-proposed tasks right now.</SectionMessage>}
       {result.status === "empty" && <SectionMessage>No AI-proposed tasks awaiting review.</SectionMessage>}
