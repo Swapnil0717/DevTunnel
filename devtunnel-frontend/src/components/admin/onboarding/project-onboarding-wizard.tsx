@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/layout/logo";
+import { LoadingPanel, Spinner } from "@/components/ui/spinner";
 import { StepIndicator } from "@/components/onboarding/step-indicator";
 import {
   completeOnboarding,
@@ -41,32 +42,6 @@ const DEFAULT_DESCRIPTION: OnboardingDescription = {
   customDescription: null,
 };
 
-/**
- * `/admin/projects/new` — Project Onboarding wizard
- * (admin_workflow.txt, section 6 — "Project Onboarding", the workflow the
- * spec calls "the most important Admin workflow").
- *
- * Mirrors the shape of the contributor-side `OnboardingWizard`
- * (components/onboarding/onboarding-wizard.tsx) deliberately — same
- * sidebar + step-rail layout, same `StepIndicator`, same
- * Back/Continue footer — so an Admin who has already been through the
- * contributor onboarding flow recognizes the pattern immediately. The
- * content is entirely different: 5 mandatory steps (Repository →
- * Description → Tech Stack → Preview → Validation) instead of 4, and
- * every step here persists to a **backend onboarding draft** as it goes
- * (`admin_workflow.txt` section 24 — "Do not let the frontend determine
- * whether onboarding is complete. Backend should maintain the state.")
- * rather than only being submitted once at the very end.
- *
- * `draft.steps` (the backend's own completion flags) is what actually
- * gates whether "Create / Import Project" can be pressed on Step 5 — this
- * component's local `step` number only controls which step is currently
- * *visible*, never whether the project is allowed to be created.
- *
- * Nothing here assumes a project row exists until `completeOnboarding`
- * returns — per section 6, "The project does not exist as an active
- * DevTunnel project before this point."
- */
 export function ProjectOnboardingWizard() {
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<ProjectOnboardingDraft | null>(null);
@@ -88,9 +63,6 @@ export function ProjectOnboardingWizard() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [createdProject, setCreatedProject] = useState<CreatedProject | null>(null);
 
-  // Step 3 entry: auto-detect the tech stack from the repository the
-  // instant the Admin arrives here, so the fields are pre-filled rather
-  // than blank ("the default values must come from repository analysis").
   useEffect(() => {
     if (step !== 3 || !draft || draft.techStack) return;
     setIsDetectingTechStack(true);
@@ -106,12 +78,6 @@ export function ProjectOnboardingWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run on step/draft id change
   }, [step, draft?.id]);
 
-  // Step 4 entry: always re-fetch the preview from the backend so it
-  // reflects exactly what's stored, not accumulated local state. Also
-  // updates `draft` (not just `previewDraft`) since this call is what
-  // marks `preview_completed` true on the backend — Step 5's checklist
-  // reads `draft.steps`, so without this it would still show Preview as
-  // incomplete even after a successful fetch.
   useEffect(() => {
     if (step !== 4 || !draft) return;
     setIsLoadingPreview(true);
@@ -124,9 +90,6 @@ export function ProjectOnboardingWizard() {
       .finally(() => setIsLoadingPreview(false));
   }, [step, draft?.id]);
 
-  // Step 5 entry: run final validation immediately so the checklist and
-  // any blocking issues are visible before the Admin even reaches for the
-  // Create button.
   useEffect(() => {
     if (step !== 5 || !draft) return;
     setIsValidating(true);
@@ -223,9 +186,6 @@ export function ProjectOnboardingWizard() {
 
   return (
     <main className="flex min-h-screen w-full flex-col bg-bg lg:flex-row">
-      {/* Sidebar: logo + vertical step rail on laptop; collapses to a
-          compact top strip with the horizontal step bar on mobile
-          (Frontend_Development_Rules.txt rule 33 — mobile-first). */}
       <aside className="flex flex-shrink-0 flex-col gap-6 border-b border-border-subtle px-4 py-5 sm:px-6 lg:w-[320px] lg:justify-between lg:gap-0 lg:border-b-0 lg:border-r lg:px-10 lg:py-12 xl:w-[380px]">
         <div className="flex items-center justify-between lg:block">
           <Logo asLink={false} />
@@ -256,7 +216,6 @@ export function ProjectOnboardingWizard() {
         </p>
       </aside>
 
-      {/* Content column */}
       <div className="flex flex-1 items-center justify-center px-4 py-6 sm:px-6 sm:py-10 lg:px-16 lg:py-14 xl:px-20">
         <div className="flex w-full max-w-[720px] flex-col gap-6 sm:gap-8">
           <div className="flex-1">
@@ -285,7 +244,7 @@ export function ProjectOnboardingWizard() {
             )}
             {step === 4 &&
               (isLoadingPreview || !previewDraft ? (
-                <p className="m-0 text-[12.5px] text-text-dim">Loading preview…</p>
+                <LoadingPanel label="Loading preview…" />
               ) : (
                 <PreviewStep draft={previewDraft} />
               ))}
@@ -334,9 +293,16 @@ export function ProjectOnboardingWizard() {
                   type="button"
                   onClick={goNext}
                   disabled={!canContinue || isSavingStep}
-                  className="rounded-md bg-text px-5 py-2 text-[13px] font-medium text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex items-center gap-2 rounded-md bg-text px-5 py-2 text-[13px] font-medium text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {isSavingStep ? "Saving…" : "Continue"}
+                  {isSavingStep ? (
+                    <>
+                      <Spinner size={13} />
+                      Saving…
+                    </>
+                  ) : (
+                    "Continue"
+                  )}
                 </button>
               ) : null}
             </div>

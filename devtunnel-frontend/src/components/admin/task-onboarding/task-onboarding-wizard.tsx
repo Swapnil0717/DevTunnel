@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/layout/logo";
 import { StepIndicator } from "@/components/onboarding/step-indicator";
+import { InlineLoading, LoadingPanel, Spinner } from "@/components/ui/spinner";
 import {
   attachTechStack,
   completeTaskOnboarding,
@@ -38,33 +39,6 @@ const STEP_DESCRIPTIONS = [
   "Confirm and create the task.",
 ];
 
-/**
- * `/admin/tasks/new` — Task Onboarding wizard (admin_workflow.txt,
- * section 10 — "Create Task — Task Onboarding", the mandatory flow the
- * "Create Task" button starts).
- *
- * Deliberately mirrors `ProjectOnboardingWizard`'s shape — same sidebar +
- * step-rail layout, same `StepIndicator`, same Back/Continue footer — so
- * an Admin who has already run Project Onboarding recognizes the pattern
- * immediately. The step *count* differs from the spec's literal 7-step
- * list (Project → Existing Issue → Issue Information → Tech Stack →
- * Difficulty → Preview → Validation): Issue Information, Tech Stack, and
- * Difficulty are one screen here (`TaskDetailsStep`) rather than three,
- * matching section 29's own "Important UI implementation detail" —
- * "onboarding steps do not necessarily need to be N separate URL pages…
- * A better implementation is a single wizard" — while every one of the
- * backend's individual persistence calls (`saveIssueInformation`,
- * `attachTechStack`, `saveCuration`) still fires exactly as the spec's
- * API map describes, so `draft.steps` still gates completion at the same
- * granularity section 25 defines.
- *
- * `draft.steps` — the backend's own completion flags — is what actually
- * gates whether "Create Task" can be pressed on the final step; this
- * component's local `step` number only controls which step is currently
- * *visible*. Nothing here assumes a task exists until `completeTaskOnboarding`
- * returns — per section 12, the task only "becomes available" once
- * validation and creation both succeed.
- */
 export function TaskOnboardingWizard() {
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<TaskOnboardingDraft | null>(null);
@@ -88,11 +62,6 @@ export function TaskOnboardingWizard() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [createdTask, setCreatedTask] = useState<CreatedTask | null>(null);
 
-  // Step 4 entry (Preview): always re-fetch from the backend so it
-  // reflects exactly what's stored, not accumulated local state. Also
-  // updates `draft` since this call is what marks `previewCompleted` true
-  // server-side — the Validation step's checklist reads `draft.steps`, so
-  // without this it would still show Preview as incomplete.
   useEffect(() => {
     if (step !== 4 || !draft) return;
     setIsLoadingPreview(true);
@@ -105,9 +74,6 @@ export function TaskOnboardingWizard() {
       .finally(() => setIsLoadingPreview(false));
   }, [step, draft?.id]);
 
-  // Step 5 entry (Validation): run final validation immediately so the
-  // checklist and any blocking issues are visible before the Admin
-  // reaches for the Create button.
   useEffect(() => {
     if (step !== 5 || !draft) return;
     setIsValidating(true);
@@ -196,9 +162,6 @@ export function TaskOnboardingWizard() {
 
   return (
     <main className="flex min-h-screen w-full flex-col bg-bg lg:flex-row">
-      {/* Sidebar: logo + vertical step rail on laptop; collapses to a
-          compact top strip with the horizontal step bar on mobile
-          (Frontend_Development_Rules.txt rule 33 — mobile-first). */}
       <aside className="flex flex-shrink-0 flex-col gap-6 border-b border-border-subtle px-4 py-5 sm:px-6 lg:w-[320px] lg:justify-between lg:gap-0 lg:border-b-0 lg:border-r lg:px-10 lg:py-12 xl:w-[380px]">
         <div className="flex items-center justify-between lg:block">
           <Logo asLink={false} />
@@ -228,7 +191,6 @@ export function TaskOnboardingWizard() {
         </p>
       </aside>
 
-      {/* Content column */}
       <div className="flex flex-1 items-center justify-center px-4 py-6 sm:px-6 sm:py-10 lg:px-16 lg:py-14 xl:px-20">
         <div className="flex w-full max-w-[720px] flex-col gap-6 sm:gap-8">
           <div className="flex-1">
@@ -257,7 +219,7 @@ export function TaskOnboardingWizard() {
             )}
             {step === 4 &&
               (isLoadingPreview || !previewDraft ? (
-                <p className="m-0 text-[12.5px] text-text-dim">Loading preview…</p>
+                <LoadingPanel label="Loading preview…" />
               ) : (
                 <TaskPreviewStep draft={previewDraft} />
               ))}
@@ -306,9 +268,16 @@ export function TaskOnboardingWizard() {
                   type="button"
                   onClick={goNext}
                   disabled={!canContinue || isSavingStep}
-                  className="rounded-md bg-text px-5 py-2 text-[13px] font-medium text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex items-center gap-2 rounded-md bg-text px-5 py-2 text-[13px] font-medium text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {isSavingStep ? "Saving…" : "Continue"}
+                  {isSavingStep ? (
+                    <>
+                      <Spinner size={13} />
+                      Saving…
+                    </>
+                  ) : (
+                    "Continue"
+                  )}
                 </button>
               ) : null}
             </div>

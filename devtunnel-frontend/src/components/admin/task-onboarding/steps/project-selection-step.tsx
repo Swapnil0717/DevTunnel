@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { SearchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
+import { InlineLoading } from "@/components/ui/spinner";
 import {
   fetchOnboardingProjects,
   selectOnboardingProject,
@@ -15,18 +16,6 @@ interface ProjectSelectionStepProps {
   onSelected: (draft: TaskOnboardingDraft) => void;
 }
 
-/**
- * Step 1 of Task Onboarding — "Project Selection" (admin_workflow.txt,
- * "Step 1 — Project Selection").
- *
- * "Searchable project selector" over `GET /admin/tasks/onboarding/projects`
- * — "Only active/eligible DevTunnel projects should be selectable", so
- * this renders exactly what that endpoint returns rather than the full
- * `/admin/projects` list. Picking a project calls
- * `POST /admin/tasks/onboarding`, which is what actually creates the
- * draft server-side; nothing before that point has a `draft.id` to carry
- * into later steps.
- */
 export function ProjectSelectionStep({ draft, onSelected }: ProjectSelectionStepProps) {
   const [projects, setProjects] = useState<TaskOnboardingProjectOption[] | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -101,7 +90,7 @@ export function ProjectSelectionStep({ draft, onSelected }: ProjectSelectionStep
           Projects aren&apos;t available right now — check back soon.
         </SectionMessage>
       ) : !projects ? (
-        <p className="m-0 text-[12.5px] text-text-dim">Loading projects…</p>
+        <InlineLoading label="Loading projects…" />
       ) : filteredProjects.length === 0 ? (
         <SectionMessage>
           {projects.length === 0

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { approveAiDiscoveredItem, rejectAiDiscoveredItem } from "@/lib/admin/ai-discovery/client-api";
+import { Spinner } from "@/components/ui/spinner";
 
 type Kind = "projects" | "tools" | "tasks";
 
@@ -11,7 +12,6 @@ interface Item {
   subtitle: string;
   meta: string[];
   reasoning: string;
-  /** Optional short bullet list (e.g. a tool's setup guide) rendered under the description. */
   details?: string[];
   url: string;
 }
@@ -19,10 +19,12 @@ interface Item {
 export function AiDiscoveryQueue({ kind, items }: { kind: Kind; items: Item[] }) {
   const [localItems, setLocalItems] = useState(items);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<"approve" | "reject" | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handle(id: string, action: "approve" | "reject") {
     setPendingId(id);
+    setPendingAction(action);
     startTransition(async () => {
       try {
         if (action === "approve") await approveAiDiscoveredItem(kind, id);
@@ -30,6 +32,7 @@ export function AiDiscoveryQueue({ kind, items }: { kind: Kind; items: Item[] })
         setLocalItems((prev) => prev.filter((i) => i.id !== id));
       } finally {
         setPendingId(null);
+        setPendingAction(null);
       }
     });
   }
@@ -71,16 +74,22 @@ export function AiDiscoveryQueue({ kind, items }: { kind: Kind; items: Item[] })
                 type="button"
                 disabled={isPending && pendingId === item.id}
                 onClick={() => handle(item.id, "approve")}
-                className="rounded-md bg-green-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-md bg-green-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
               >
+                {isPending && pendingId === item.id && pendingAction === "approve" ? (
+                  <Spinner size={13} />
+                ) : null}
                 Approve
               </button>
               <button
                 type="button"
                 disabled={isPending && pendingId === item.id}
                 onClick={() => handle(item.id, "reject")}
-                className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-text disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-text disabled:opacity-50"
               >
+                {isPending && pendingId === item.id && pendingAction === "reject" ? (
+                  <Spinner size={13} />
+                ) : null}
                 Reject
               </button>
             </div>

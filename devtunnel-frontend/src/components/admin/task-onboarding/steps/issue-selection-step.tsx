@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { SectionMessage } from "@/components/home/section-message";
 import { IssueIcon } from "@/components/layout/nav-icons";
 import { GithubLoginButton } from "@/components/auth/github-login-button";
+import { InlineLoading } from "@/components/ui/spinner";
 import {
   fetchProjectIssues,
   selectIssue,
@@ -16,36 +17,13 @@ interface IssueSelectionStepProps {
   onSelected: (draft: TaskOnboardingDraft) => void;
 }
 
-/**
- * Distinguishes "your GitHub connection expired, reconnect" (backend
- * status 401 — `github_reauth_required`) from every other load failure
- * (network hiccup, GitHub genuinely slow/down). The two need different
- * recovery actions: reconnecting fixes the first, retrying fixes the
- * second — a single boolean can't tell the admin which one to do.
- */
 type LoadFailure = "unauthorized" | "unknown";
 
-/**
- * Step 2 of Task Onboarding — "Select Existing Issue" (admin_workflow.txt,
- * "Step 2 — Select Existing Issue").
- *
- * Fetches `GET /admin/projects/:id/github/issues` for the project chosen
- * in Step 1 and renders exactly the columns the spec calls for: "Issue #,
- * Issue Title, Issue State, Labels, Created, Updated." Picking one calls
- * `PATCH .../issue` — "The Admin should not need to manually type an
- * issue number if it already exists on GitHub," so there is no free-text
- * issue-number field anywhere on this screen.
- */
 export function IssueSelectionStep({ draft, onSelected }: IssueSelectionStepProps) {
   const [issues, setIssues] = useState<GithubIssueSummary[] | null>(null);
   const [loadError, setLoadError] = useState<LoadFailure | null>(null);
   const [selectingNumber, setSelectingNumber] = useState<number | null>(null);
   const [selectError, setSelectError] = useState<string | null>(null);
-  // Bumping this re-runs the fetch below without needing draft.project to
-  // change — lets "Try again" recover from a transient failure (e.g. a
-  // slow GitHub response) instead of leaving the admin stuck on the
-  // "aren't available right now" message with no way forward but going
-  // back to Step 1 and re-selecting the project.
   const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
@@ -134,7 +112,7 @@ export function IssueSelectionStep({ draft, onSelected }: IssueSelectionStepProp
           </button>
         </div>
       ) : !issues ? (
-        <p className="m-0 text-[12.5px] text-text-dim">Loading issues…</p>
+        <InlineLoading label="Loading issues…" />
       ) : issues.length === 0 ? (
         <SectionMessage>No open GitHub issues found for this repository.</SectionMessage>
       ) : (

@@ -1,4 +1,5 @@
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
+import { Spinner } from "@/components/ui/spinner";
 import type {
   CreatedOpenSourceTool,
   ToolOnboardingDraft,
@@ -24,32 +25,6 @@ const CHECKLIST: { key: keyof ToolOnboardingStepState; label: string }[] = [
   { key: "previewCompleted", label: "Preview" },
 ];
 
-/**
- * Step 5 of Open Source Tool Onboarding — "Preview & Confirm".
- *
- * A single combined step by design (the original request asked for one
- * "preview and confirmation" page, unlike Project Onboarding's separate
- * Preview and Validation steps) — read-only project summary at the top,
- * the same backend-authoritative checklist pattern as
- * `ValidationStep` (components/admin/onboarding/steps/validation-step.tsx)
- * underneath, and the create action at the bottom.
- *
- * Renders straight from `draft` as re-fetched via `GET .../preview`
- * (`OpenSourceToolOnboardingWizard`'s preview-loading effect), never
- * from stale local state, so what the Admin approves here is guaranteed
- * to match what the backend actually has stored
- * (Frontend_Development_Rules.txt rule 47 — don't fake freshness).
- * Editing happens by going Back to the relevant step, not inline here.
- *
- * The checklist reflects `draft.steps` exactly as returned by the
- * backend — never a locally-computed guess (admin_workflow.txt section
- * 24: "Do not let the frontend determine whether onboarding is
- * complete. Backend should maintain the state."). "Add tool" calls
- * `POST .../complete`, which the backend is specified to reject outright
- * if any step isn't actually done — this component surfaces that
- * rejection as `createError` rather than assuming the click always
- * succeeds.
- */
 export function PreviewConfirmStep({
   draft,
   validation,
@@ -212,8 +187,9 @@ export function PreviewConfirmStep({
         type="button"
         onClick={onCreate}
         disabled={!allStepsDone || isValidating || isCreating}
-        className="rounded-md bg-accent px-5 py-2.5 text-[13px] font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex items-center gap-2 rounded-md bg-accent px-5 py-2.5 text-[13px] font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
       >
+        {isValidating || isCreating ? <Spinner size={13} /> : null}
         {isValidating ? "Validating…" : isCreating ? "Adding tool…" : "Add tool"}
       </button>
     </div>

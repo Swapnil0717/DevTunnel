@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Spinner } from "@/components/ui/spinner";
 import {
   AdminProjectsApiError,
   updateAdminProject,
@@ -14,30 +15,6 @@ interface ProjectStatusToggleProps {
   status: AdminProjectStatus;
 }
 
-/**
- * Project Detail page (`/admin/projects/:id`) action that flips a
- * project between `ACTIVE` and `ARCHIVED` via `PATCH /admin/projects/:id`
- * (`updateAdminProject`, `AdminProjectUpdatePayload.status`) — the same
- * status the Projects table/detail page's `AdminProjectStatusBadge`
- * already displays, now editable rather than a fixed value the backend
- * alone could ever change.
- *
- * A native `window.confirm` guards the request, same convention as
- * `DeleteProjectButton` — this codebase has no dialog/modal component to
- * reuse yet, and a plain confirm is fully keyboard- and screen-reader-
- * accessible without adding one just for a single state-changing action
- * (Frontend_Development_Rules.txt rule 34).
- *
- * Archiving never touches GitHub or deletes anything — it only flips the
- * `devtunnel.projects.status` column (sql/006 + sql/019), same
- * "DevTunnel-only, repository untouched" framing `DeleteProjectButton`
- * already uses for its own action.
- *
- * On failure the button surfaces an inline message and re-enables itself
- * rather than leaving the admin looking at a dead button
- * (Frontend_Development_Rules.txt rule 26), same pattern as
- * `DeleteProjectButton`/`LogoutButton`.
- */
 export function ProjectStatusToggle({
   projectId,
   projectName,
@@ -94,6 +71,7 @@ export function ProjectStatusToggle({
           status === "ACTIVE" ? activeClasses : archivedClasses
         }`}
       >
+        {isSaving ? <Spinner size={13} /> : null}
         {isSaving ? savingLabel : actionLabel}
       </button>
       {error ? <p className="m-0 text-[12px] text-status-error-label">{error}</p> : null}

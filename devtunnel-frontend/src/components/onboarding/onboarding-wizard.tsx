@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Logo } from "@/components/layout/logo";
+import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/lib/auth/use-auth";
 import type { AuthUser } from "@/lib/auth/types";
 import { OnboardingApiError, submitOnboarding } from "@/lib/onboarding/api";
@@ -28,33 +29,6 @@ interface OnboardingWizardProps {
   user: AuthUser;
 }
 
-/**
- * User onboarding flow (devtunnel_workflow.txt, Module C1 — Authentication:
- * "User onboarding" screen).
- *
- * Reached either because the backend's OAuth callback redirect included
- * `next=/onboarding`, or because OAuthCallbackView / (protected)/home's
- * own first-sign-in check (lib/onboarding/needs-onboarding.ts) sent the
- * person here — see those files for how "is this a new user?" is
- * determined on the frontend without any new backend work. Finishing here
- * always continues on to /home, same as anyone who never needed
- * onboarding in the first place.
- *
- * Layout: a two-column split on laptop/desktop — a fixed sidebar (logo +
- * vertical step rail with labels) on the left, the active step's content
- * in a constrained-width column on the right — collapsing to a single
- * stacked column with a compact horizontal step bar on mobile
- * (Frontend_Development_Rules.txt rule 33: mobile-first responsive
- * design; this is the "mobile-first" base, widened via `lg:` rather than
- * the other way around).
- *
- * The content column is vertically centered (`items-center`) so short
- * steps (Welcome) don't sit stranded near the top with a wall of empty
- * space above the Back/Continue footer. This is safe for the longer
- * steps too — once a step's content is taller than the available
- * height, flexbox has nothing left to center into, so it just renders
- * from the top like normal.
- */
 export function OnboardingWizard({ user }: OnboardingWizardProps) {
   const router = useRouter();
   const { refreshUser } = useAuth();
@@ -82,10 +56,6 @@ export function OnboardingWizard({ user }: OnboardingWizardProps) {
     setSubmitError(null);
     try {
       await submitOnboarding(data);
-      // Backend sets `onboarding_completed = true` as part of this same
-      // request (devtunnel-backend/src/db/users.ts, completeOnboarding),
-      // so refreshing here is enough for needsOnboarding(user) to read
-      // `false` from here on — no client-side flag needed.
       await refreshUser();
       router.push(DEFAULT_DESTINATION);
     } catch (error) {
@@ -98,18 +68,12 @@ export function OnboardingWizard({ user }: OnboardingWizardProps) {
     }
   }
 
-  // Both option groups on the profile step default to nothing selected, so
-  // require a real choice before moving on; same for the intent step.
-  // Developer role is now multi-select, so "a real choice" means at
-  // least one role rather than exactly one.
   const canContinue =
     !(step === 2 && (data.developerRoles.length === 0 || !data.experienceLevel)) &&
     !(step === 3 && !data.intent);
 
   return (
     <main className="flex min-h-screen w-full flex-col bg-bg lg:flex-row">
-      {/* Sidebar: logo + vertical step rail on laptop; collapses to a
-          compact top strip with the horizontal step bar on mobile. */}
       <aside className="flex flex-shrink-0 flex-col gap-6 border-b border-border-subtle px-4 py-5 sm:px-6 lg:w-[320px] lg:justify-between lg:gap-0 lg:border-b-0 lg:border-r lg:px-10 lg:py-12 xl:w-[380px]">
         <div className="flex items-center justify-between lg:block">
           <Logo />
@@ -138,8 +102,6 @@ export function OnboardingWizard({ user }: OnboardingWizardProps) {
         </p>
       </aside>
 
-      {/* Content column — vertically centered so short steps don't sit
-          stranded near the top of a tall column. */}
       <div className="flex flex-1 items-center justify-center px-4 py-6 sm:px-6 sm:py-10 lg:px-16 lg:py-14 xl:px-20">
         <div className="flex w-full max-w-[720px] flex-col gap-6 sm:gap-8">
           <div className="flex-1">
@@ -179,8 +141,9 @@ export function OnboardingWizard({ user }: OnboardingWizardProps) {
                 type="button"
                 onClick={handleFinish}
                 disabled={isSubmitting}
-                className="rounded-md bg-text px-5 py-2 text-[13px] font-medium text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+                className="flex items-center gap-2 rounded-md bg-text px-5 py-2 text-[13px] font-medium text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
               >
+                {isSubmitting ? <Spinner size={13} /> : null}
                 {isSubmitting ? "Saving…" : "Finish setup"}
               </button>
             )}

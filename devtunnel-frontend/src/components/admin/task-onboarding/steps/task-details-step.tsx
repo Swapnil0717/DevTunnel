@@ -11,6 +11,7 @@ import {
   type DeveloperRole,
   type ExperienceLevel,
 } from "@/lib/onboarding/types";
+import { InlineLoading } from "@/components/ui/spinner";
 import type { OnboardingTechStack } from "@/lib/admin/project-onboarding/types";
 import type {
   IssueInformationChoice,
@@ -25,7 +26,6 @@ interface TaskDetailsStepProps {
   onIssueInformationChange: (next: TaskIssueInformation) => void;
   curation: TaskCuration;
   onCurationChange: (next: TaskCuration) => void;
-  /** Reported up so the wizard can attach the tech stack (`attachTechStack`) once it's fetched. */
   onTechStackLoaded: (techStack: OnboardingTechStack) => void;
 }
 
@@ -60,22 +60,6 @@ function TechRow({ label, values }: { label: string; values: string[] }) {
   );
 }
 
-/**
- * Step 3 of Task Onboarding — combines the spec's "Step 3 — Issue
- * Information" (role + difficulty + optional custom description) with
- * the read-only outputs of "Step 3 — Issue Information ▸ fetched fields"
- * and "Step 4 — Fetch Project Tech Stack", all on one screen.
- *
- * Curation inputs (role, difficulty, custom description) live at the
- * top; the original, unmodifiable GitHub issue information (description,
- * author, labels, dates) and the project's already-validated tech stack
- * are shown read-only below them — "Do not modify the original GitHub
- * issue" and "Do not re-analyze the repository unnecessarily." On entry,
- * this component fetches the project's tech stack once
- * (`fetchProjectTechStack`) and reports it up via `onTechStackLoaded`,
- * which the wizard persists with `attachTechStack`
- * ("Attach to Task Onboarding").
- */
 export function TaskDetailsStep({
   draft,
   issueInformation,
@@ -106,7 +90,6 @@ export function TaskDetailsStep({
     onIssueInformationChange({ ...issueInformation, choice });
   }
 
-  /** Adds/removes a single role from `curation.roles` — same toggle pattern as onboarding's `toggleDeveloperRole`. */
   function toggleRole(role: DeveloperRole) {
     const next = curation.roles.includes(role)
       ? curation.roles.filter((value) => value !== role)
@@ -261,7 +244,7 @@ export function TaskDetailsStep({
           Repository tech stack
         </p>
         {isLoadingTechStack ? (
-          <p className="m-0 text-[12.5px] text-text-dim">Loading tech stack…</p>
+          <InlineLoading label="Loading tech stack…" />
         ) : techStackError ? (
           <p className="m-0 text-[12.5px] text-status-error-label">
             Couldn&apos;t load the project&apos;s tech stack.

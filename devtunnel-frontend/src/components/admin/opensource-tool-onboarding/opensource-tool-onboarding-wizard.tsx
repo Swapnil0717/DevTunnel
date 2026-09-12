@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/layout/logo";
 import { StepIndicator } from "@/components/onboarding/step-indicator";
+import { LoadingPanel, Spinner } from "@/components/ui/spinner";
 import {
   completeToolOnboarding,
   fetchToolOnboardingPreview,
@@ -45,37 +46,6 @@ const DEFAULT_LABELS: OnboardingToolLabels = { values: [] };
 
 const DEFAULT_SETUP_GUIDE: OnboardingToolSetupGuide = { content: "" };
 
-/**
- * `/admin/opensource-tools/new` — Open Source Tool Onboarding wizard
- * ("Add Open Source Tool" in `admin-nav-items.ts`).
- *
- * Mirrors `ProjectOnboardingWizard` (components/admin/onboarding/) on
- * purpose — same sidebar + step-rail layout, same `StepIndicator`, same
- * Back/Continue footer — so an Admin who already knows Project
- * Onboarding recognizes this flow immediately. 5 steps: Tool URL →
- * Description → Labels → Setup & Usage → Preview & Confirm — one
- * combined final step rather than Project Onboarding's separate Preview
- * and Validation steps, per the original request for a single "preview
- * and confirmation" page. No Tech Stack step — an "open source tool"
- * listing doesn't need contributor-facing tech-stack detection the way
- * a full onboarded project does. Setup & Usage exists precisely because
- * a fetched README (Step 1) documents the project, not necessarily "how
- * a contributor gets this running today" — so that's written by the
- * Admin directly rather than derived from anything fetched.
- *
- * Same "persist as you go" convention as Project Onboarding
- * (admin_workflow.txt section 24 — the backend, not this component,
- * owns whether a step is complete): every step is saved to the draft
- * the moment the Admin presses Continue, and `draft` is always replaced
- * with whatever the backend returns. `draft.steps` (the backend's own
- * completion flags) is what actually gates whether "Add tool" can be
- * pressed on Step 5 — this component's local `step` number only
- * controls which step is currently *visible*, never whether the tool is
- * allowed to be created.
- *
- * Nothing here assumes a catalog row exists until `completeToolOnboarding`
- * returns — the tool is not live in the catalog before that point.
- */
 export function OpenSourceToolOnboardingWizard() {
   const [step, setStep] = useState(1);
   const [draft, setDraft] = useState<ToolOnboardingDraft | null>(null);
@@ -97,14 +67,6 @@ export function OpenSourceToolOnboardingWizard() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [createdTool, setCreatedTool] = useState<CreatedOpenSourceTool | null>(null);
 
-  // Step 5 entry: always re-fetch the preview from the backend so it
-  // reflects exactly what's stored, not accumulated local state — then
-  // immediately run final validation, since this step combines preview
-  // and confirmation into one page. Also updates `draft` (not just
-  // `previewDraft`), since the preview call is what marks
-  // `previewCompleted` true on the backend — the checklist reads
-  // `draft.steps`, so without this it would still show Preview as
-  // incomplete even after a successful fetch.
   useEffect(() => {
     if (step !== 5 || !draft || createdTool) return;
     setIsLoadingPreview(true);
@@ -292,7 +254,7 @@ export function OpenSourceToolOnboardingWizard() {
 
             {step === 5 &&
               (isLoadingPreview || !previewDraft ? (
-                <p className="m-0 text-[12.5px] text-text-dim">Loading preview…</p>
+                <LoadingPanel label="Loading preview…" />
               ) : (
                 <PreviewConfirmStep
                   draft={previewDraft}
@@ -338,9 +300,16 @@ export function OpenSourceToolOnboardingWizard() {
                   type="button"
                   onClick={goNext}
                   disabled={!canContinue || isSavingStep}
-                  className="rounded-md bg-text px-5 py-2 text-[13px] font-medium text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex items-center gap-2 rounded-md bg-text px-5 py-2 text-[13px] font-medium text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {isSavingStep ? "Saving…" : "Continue"}
+                  {isSavingStep ? (
+                    <>
+                      <Spinner size={13} />
+                      Saving…
+                    </>
+                  ) : (
+                    "Continue"
+                  )}
                 </button>
               ) : null}
             </div>

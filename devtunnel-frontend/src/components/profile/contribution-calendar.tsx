@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/layout/nav-icons";
 import { GithubLoginButton } from "@/components/auth/github-login-button";
+import { LoadingPanel } from "@/components/ui/spinner";
 import {
   fetchContributionMonth,
   fetchDevTunnelContributionMonth,
@@ -34,12 +35,6 @@ function monthLabel(month: string): string {
   return MONTH_LABEL_FORMATTER.format(new Date(Date.UTC(Number(yearStr), Number(monthStr) - 1, 1)));
 }
 
-/**
- * Maps a raw contribution count to one of 5 intensity levels for the
- * `contrib-{0..4}` color scale. Bucketed relative to the highest day in
- * *this* month's own data (the same approach GitHub's own graph uses),
- * not against any fixed/invented thresholds.
- */
 function levelFor(count: number, maxCount: number): 0 | 1 | 2 | 3 | 4 {
   if (count <= 0 || maxCount <= 0) return 0;
   const ratio = count / maxCount;
@@ -60,34 +55,9 @@ const LEVEL_CLASSES: Record<0 | 1 | 2 | 3 | 4, string> = {
 type Status = "loading" | "ready" | "error" | "no-github" | "reauth-required";
 
 export interface ContributionCalendarProps {
-  /**
-   * Which system this calendar's "green squares" come from. Both render
-   * through the exact same grid UI (5_devtunnel_profile_page.html) — only
-   * the data source and its failure modes differ. `github` can be
-   * unlinked or have an expired authorization (GithubLoginButton
-   * fallback below); `devtunnel` activity is always queryable for a
-   * signed-in user and simply reads as an honest all-zero month when
-   * they have no DevTunnel-native activity yet — there's no "connect an
-   * account" step for your own DevTunnel history.
-   */
   source: "github" | "devtunnel";
 }
 
-/**
- * GitHub-style monthly contribution calendar for the profile page's
- * "Contribution history" tab. Renders one calendar month at a time with
- * prev/next arrows, backed by real data from either:
- *  - `GET /users/me/contributions` (source="github", devtunnel-backend
- *    src/routes/contributions.ts, using the signed-in user's own GitHub
- *    authorization — src/db/githubTokens.ts), or
- *  - `GET /users/me/contributions/devtunnel` (source="devtunnel",
- *    devtunnel-backend src/routes/devtunnelStats.ts, the user's own
- *    DevTunnel-native activity — sql/004_add_devtunnel_contributions.sql).
- *
- * `profile-tabs.tsx` renders one of each side by side so a contributor
- * can see their GitHub activity next to what they've done through
- * DevTunnel itself.
- */
 export function ContributionCalendar({ source }: ContributionCalendarProps) {
   const [month, setMonth] = useState<string>(() => currentMonthUTC());
   const [data, setData] = useState<BaseContributionMonth | null>(null);
@@ -199,7 +169,7 @@ export function ContributionCalendar({ source }: ContributionCalendarProps) {
             {errorMessage ?? "Couldn't load contribution data right now."}
           </p>
         ) : status === "loading" && !data ? (
-          <p className="py-6 text-center text-[12.5px] text-text-dim">Loading contribution history…</p>
+          <LoadingPanel label="Loading contribution history…" className="py-6" />
         ) : data ? (
           <div className="-mx-3 overflow-x-auto overflow-y-hidden px-3 sm:mx-0 sm:overflow-visible sm:px-0">
             <div
@@ -207,11 +177,6 @@ export function ContributionCalendar({ source }: ContributionCalendarProps) {
               role="img"
               aria-label={`${data.totalContributions} contributions in ${monthLabel(data.month)}`}
             >
-              {/* Every weekday labeled (Sun..Sat, top to bottom) — one label
-                  per row, matching the day squares beside it row-for-row,
-                  since each week.days[i] is that weekday. Two-letter
-                  abbreviations (Su/Mo/Tu/We/Th/Fr/Sa) so Sunday and
-                  Saturday don't both collapse to the same single "S". */}
               <div className="flex shrink-0 flex-col gap-1 pr-2" aria-hidden="true">
                 {WEEKDAY_LABELS.map((label) => (
                   <span
@@ -226,23 +191,8 @@ export function ContributionCalendar({ source }: ContributionCalendarProps) {
               {data.weeks.map((week, weekIndex) => (
                 <div key={weekIndex} className="flex flex-col gap-1">
                   {week.days.map((day) => {
-                    // Derived from `day.date` itself rather than trusting
-                    // `day.inMonth` alone: if a backend/cache payload ever
-                    // comes back without that flag (e.g. an older cached
-                    // shape), `day.inMonth` reads as `undefined` for every
-                    // day, and `!day.inMonth` would then be true across the
-                    // whole grid — silently rendering it as entirely empty
-                    // placeholders despite a correct, non-zero month total.
-                    // Falling back to a same-month date check keeps a
-                    // shape mismatch from blanking the whole calendar.
                     const inMonth = day.inMonth ?? day.date.startsWith(data.month);
                     if (!inMonth) {
-                      // Spillover day from the adjacent month, kept only so
-                      // this week stays a full 7-day row and every other
-                      // day in it lines up with its correct weekday — not
-                      // part of the month being viewed, so render it as an
-                      // empty, non-interactive placeholder instead of a
-                      // real (and misleading) contribution square.
                       return (
                         <div
                           key={day.date}

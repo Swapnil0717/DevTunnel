@@ -3,6 +3,7 @@
 import { useId } from "react";
 import { TagInput } from "@/components/onboarding/tag-input";
 import { TechIcon } from "@/components/onboarding/tech-icon";
+import { InlineLoading } from "@/components/ui/spinner";
 import type { OnboardingTechStack } from "@/lib/admin/project-onboarding/types";
 
 interface TechStackStepProps {
@@ -17,20 +18,6 @@ interface TechStackField {
   placeholder: string;
 }
 
-/**
- * Step 3 of Project Onboarding — "Project Tech Stack"
- * (admin_workflow.txt, "Step 3 — Project Tech Stack").
- *
- * On entry, `ProjectOnboardingWizard` calls `detectTechStack` so every
- * field here starts pre-filled from repository analysis (dependency
- * files, config, source structure) — never a blank form the Admin fills
- * in from scratch. "The Admin should be able to review and correct
- * detected values... but the default values must come from repository
- * analysis" is exactly what this component does: each category renders
- * as an editable `TagInput` (chip add/remove) seeded with the detected
- * list, reusing the same chip control the contributor onboarding wizard
- * uses for its Technologies field rather than inventing a second one.
- */
 const FIELDS: TechStackField[] = [
   { key: "languages", label: "Language", placeholder: "e.g. TypeScript" },
   { key: "frontend", label: "Frontend", placeholder: "e.g. React" },
@@ -58,7 +45,7 @@ export function TechStackStep({ value, onChange, isDetecting }: TechStackStepPro
       </p>
 
       {isDetecting ? (
-        <p className="m-0 mb-5 text-[12.5px] text-text-dim">Analyzing repository…</p>
+        <InlineLoading label="Analyzing repository…" className="mb-5" />
       ) : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
