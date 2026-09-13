@@ -3,6 +3,7 @@
 // `lib/admin/tasks/client-api.ts`. Kept out of `./api.ts`, which imports
 // `next/headers` and can only ever run in a Server Component.
 import { API_BASE_URL } from "@/lib/config";
+import type { AdminNewIssue } from "./types";
 
 export class AdminNewIssuesApiError extends Error {
   status: number;
@@ -43,4 +44,51 @@ export async function ignoreAdminNewIssue(id: string): Promise<void> {
   if (!res.ok) {
     throw new AdminNewIssuesApiError(`Failed to ignore issue (${res.status})`, res.status);
   }
+}
+
+export interface AdminNewIssuesSyncSummary {
+  issueCount: number;
+  projectCount: number;
+}
+
+/**
+ * "Sync all issues" button on `/admin/tasks/new-issues` and
+ * `/admin/tasks/new-issues/since-onboarding` (`SyncAllIssuesButton`).
+ *
+ * Walks `GET /admin/new-issues`'s keyset pagination (`limit`/`before`,
+ * `X-Next-Cursor`) from the browser — the same walk
+ * `lib/admin/fetch-all-pages.ts` does server-side for the initial page
+ * load — so the button can report back a real count of issues and
+ * distinct projects found by this scan, then the caller triggers
+ * `router.refresh()` to pull that same fresh data into the server-
+ * rendered page.
+ */
+export async function syncAllAdminNewIssues(): Promise<AdminNewIssuesSyncSummary> {
+  let before: string | undefined;
+  let issueCount = 0;
+  const projectIds = new Set<string>();
+  let pages = 0;
+
+  do {
+    const query = new URLSearchParams({ limit: "100" });
+    if (before) query.set("before", before);
+
+    const res = await fetch(`${API_BASE_URL}/admin/new-issues?${query.toString()}`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      throw new AdminNewIssuesApiError(`Failed to sync issues (${res.status})`, res.status);
+    }
+
+    const page = (await res.json()) as AdminNewIssue[];
+    issueCount += page.length;
+    for (const issue of page) projectIds.add(issue.project.id);
+
+    before = res.headers.get("X-Next-Cursor") ?? undefined;
+    pages += 1;
+  } while (before && pages < 200);
+
+  return { issueCount, projectCount: projectIds.size };
 }

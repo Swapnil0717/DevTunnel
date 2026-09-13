@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { SearchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
 import { FilterSelect } from "@/components/ui/filter-select";
+import { PagePaginationControls } from "@/components/admin/page-pagination-controls";
+import { usePagePagination } from "@/lib/admin/use-page-pagination";
 import { AdminIssuesSinceOnboardingTable } from "./admin-issues-since-onboarding-table";
 import type { AdminNewIssue } from "@/lib/admin/new-issues/types";
 import type { GithubIssueState } from "@/lib/admin/task-onboarding/types";
@@ -18,24 +20,12 @@ const STATE_FILTERS: { value: StateFilter; label: string }[] = [
 
 /**
  * Client-side filter bar for `/admin/tasks/new-issues/since-onboarding`.
- *
- * Same convention as `AdminNewIssuesExplorer`: one already-fetched (and,
+ * Same convention as `AdminNewIssuesExplorer`: one fully-fetched (and,
  * for this page, already date-filtered by
  * `getAdminNewIssuesSinceOnboarding`) list narrowed further in the
- * browser — never a second fabricated data source
- * (Frontend_Development_Rules.txt rule 58). The search/state/repository/
- * author/tech-stack/project filters are identical to the plain New
- * Issues page for the same reason `AdminIssuesSinceOnboardingTable`
- * keeps the same columns: this is a lens on New Issues, not a
- * differently-shaped feature, so an Admin who already knows that page's
- * controls doesn't have to learn a second set here.
- *
- * `FilterSelect` (the themed listbox from `components/ui/filter-select`)
- * has no built-in caption — its trigger shows the selected option's own
- * label — so each filter here gets its own small visible `<label>`
- * above it, same idea as the `sr-only` label on the search input but
- * shown on screen since "State" / "Repository" / etc. aren't otherwise
- * implied by the selected value alone.
+ * browser, then paginated 20-per-page (`usePagePagination`,
+ * `PagePaginationControls`) — never a second fabricated data source
+ * (Frontend_Development_Rules.txt rule 58).
  */
 export function AdminIssuesSinceOnboardingExplorer({ issues }: { issues: AdminNewIssue[] }) {
   const [query, setQuery] = useState("");
@@ -110,6 +100,8 @@ export function AdminIssuesSinceOnboardingExplorer({ issues }: { issues: AdminNe
     author !== "ALL" ||
     techStack !== "ALL" ||
     projectSlug !== "ALL";
+
+  const paged = usePagePagination(filteredIssues);
 
   return (
     <div>
@@ -222,11 +214,6 @@ export function AdminIssuesSinceOnboardingExplorer({ issues }: { issues: AdminNe
         </div>
       </div>
 
-      <p className="mb-3 text-[11.5px] text-text-faint" aria-live="polite">
-        Showing {filteredIssues.length} of {issues.length} issue
-        {issues.length === 1 ? "" : "s"}
-      </p>
-
       {filteredIssues.length === 0 ? (
         <SectionMessage>
           {hasActiveFilters
@@ -234,7 +221,18 @@ export function AdminIssuesSinceOnboardingExplorer({ issues }: { issues: AdminNe
             : "No new GitHub issues have appeared since these projects were added to DevTunnel."}
         </SectionMessage>
       ) : (
-        <AdminIssuesSinceOnboardingTable issues={filteredIssues} />
+        <>
+          <AdminIssuesSinceOnboardingTable issues={paged.pageItems} />
+          <PagePaginationControls
+            page={paged.page}
+            totalPages={paged.totalPages}
+            onPageChange={paged.setPage}
+            rangeStart={paged.rangeStart}
+            rangeEnd={paged.rangeEnd}
+            totalItems={paged.totalItems}
+            itemLabel="issue"
+          />
+        </>
       )}
     </div>
   );

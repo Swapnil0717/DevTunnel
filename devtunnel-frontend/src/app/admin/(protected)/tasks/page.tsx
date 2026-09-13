@@ -4,10 +4,6 @@ import { buildMetadata } from "@/lib/seo";
 import { getAdminTasks } from "@/lib/admin/tasks/api";
 import { AdminTasksExplorer } from "@/components/admin/tasks/admin-tasks-explorer";
 import { SectionMessage } from "@/components/home/section-message";
-import { CursorPaginationControls } from "@/components/admin/cursor-pagination-controls";
-import { nextPageHref, parseCursorStack, prevPageHref } from "@/lib/admin/cursor-pagination";
-
-const BASE_PATH = "/admin/tasks";
 
 export const metadata: Metadata = buildMetadata({
   title: "Tasks",
@@ -24,7 +20,7 @@ interface AdminTasksPageProps {
    * than opening a separate `/admin/projects/:id/tasks` route that isn't
    * part of the spec's page list (section 29).
    */
-  searchParams?: { project?: string; before?: string; stack?: string };
+  searchParams?: { project?: string };
 }
 
 /**
@@ -36,19 +32,12 @@ interface AdminTasksPageProps {
  * (section 13 ▸ Frontend; section 14 — "People Doing Tasks"), plus a
  * "Deleted in DevTunnel" view (section 15) — all handled by
  * `AdminTasksExplorer`, which layers search + filters (difficulty, role,
- * tech stack, author, GitHub repository, project, status) on top of one
- * `GET /admin/tasks` fetch.
- *
- * That endpoint isn't built on the backend yet (see
- * `lib/admin/tasks/api.ts`), so — same convention as the Projects page —
- * a failed or empty fetch degrades to one honest `SectionMessage`
- * instead of a fabricated table or a blank page
- * (Frontend_Development_Rules.txt rule 58).
+ * tech stack, author, GitHub repository, project, status) and 20-per-
+ * page numbered pagination on top of one fully-fetched `GET /admin/tasks`
+ * list (`getAdminTasks` walks the backend's keyset pagination in full).
  */
 export default async function AdminTasksPage({ searchParams }: AdminTasksPageProps) {
-  const result = await getAdminTasks({ before: searchParams?.before });
-  const stack = parseCursorStack(searchParams ?? {});
-  const extraParams = { project: searchParams?.project };
+  const result = await getAdminTasks();
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
@@ -78,19 +67,7 @@ export default async function AdminTasksPage({ searchParams }: AdminTasksPagePro
           .
         </SectionMessage>
       ) : (
-        <>
-          <AdminTasksExplorer tasks={result.data} initialProjectSlug={searchParams?.project ?? "ALL"} />
-          <CursorPaginationControls
-            hasPrevious={Boolean(searchParams?.before)}
-            hasNext={Boolean(result.nextCursor)}
-            prevHref={prevPageHref(BASE_PATH, stack, extraParams)}
-            nextHref={
-              result.nextCursor
-                ? nextPageHref(BASE_PATH, searchParams?.before, stack, result.nextCursor, extraParams)
-                : "#"
-            }
-          />
-        </>
+        <AdminTasksExplorer tasks={result.data} initialProjectSlug={searchParams?.project ?? "ALL"} />
       )}
     </main>
   );

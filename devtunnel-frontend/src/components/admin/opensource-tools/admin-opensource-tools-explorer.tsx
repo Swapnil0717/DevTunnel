@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { SearchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
 import { FilterSelect } from "@/components/ui/filter-select";
+import { PagePaginationControls } from "@/components/admin/page-pagination-controls";
+import { usePagePagination } from "@/lib/admin/use-page-pagination";
 import { AdminOpenSourceToolsGrid } from "./admin-opensource-tools-grid";
 import type { AdminToolSummary } from "@/lib/admin/opensource-tools/types";
 
@@ -35,32 +37,11 @@ function collectLabelOptions(tools: AdminToolSummary[]): string[] {
 
 /**
  * Client-side search + filter bar for `/admin/opensource-tools`. With
- * every tool already fetched server-side in one
- * `GET /admin/opensource-tools` call (`lib/admin/opensource-tools/api.ts`),
- * narrowing the list in the browser is a plain UX improvement, not a new
- * data source — nothing here fabricates a field the backend doesn't
- * already return (Frontend_Development_Rules.txt rule 58). Same split
- * `AdminProjectsExplorer` makes: this owns filter state, and hands the
- * filtered list to a plain presentational grid.
- *
- * Two filters, built only from fields recorded during tool onboarding
- * (`lib/admin/opensource-tool-onboarding/types.ts`) — the task asked for
- * filtering "based on the fields we ask during tool onboarding only":
- * - Primary language — Step 1's resolved `primaryLanguage`.
- * - Label — Step 3's free-form role/field tags.
- *
- * Both render via `FilterSelect` (components/ui/filter-select.tsx)
- * rather than a plain `<select>` — a native listbox popup always renders
- * with the OS/browser's own light styling regardless of the page's dark
- * theme, which looked visibly out of place here.
- *
- * Search matches name, source URL, fetched description, primary
- * language and labels — every field the grid card or its tooltip could
- * plausibly be searched by.
- *
- * This is authenticated Admin application UI (`noIndex: true` on the
- * page), not public content, so filtering client-side after a full
- * server fetch has no crawlability impact (rule 18).
+ * every tool fully fetched server-side (`lib/admin/opensource-tools/api.ts`),
+ * narrowing the list in the browser and then paginating it 20-per-page
+ * (`usePagePagination`, `PagePaginationControls`) is a plain UX
+ * improvement, not a new data source (Frontend_Development_Rules.txt
+ * rule 58).
  */
 export function AdminOpenSourceToolsExplorer({ tools }: { tools: AdminToolSummary[] }) {
   const [query, setQuery] = useState("");
@@ -119,6 +100,8 @@ export function AdminOpenSourceToolsExplorer({ tools }: { tools: AdminToolSummar
   const hasActiveFilters =
     query.trim().length > 0 || language !== ALL_LANGUAGES || label !== ALL_LABELS;
 
+  const paged = usePagePagination(filteredTools);
+
   return (
     <div>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
@@ -171,11 +154,6 @@ export function AdminOpenSourceToolsExplorer({ tools }: { tools: AdminToolSummar
         </div>
       </div>
 
-      <p className="mb-3 text-[11.5px] text-text-faint" aria-live="polite">
-        Showing {filteredTools.length} of {tools.length} tool
-        {tools.length === 1 ? "" : "s"}
-      </p>
-
       {filteredTools.length === 0 ? (
         <SectionMessage>
           {hasActiveFilters
@@ -183,7 +161,18 @@ export function AdminOpenSourceToolsExplorer({ tools }: { tools: AdminToolSummar
             : "No open source tools have been added yet."}
         </SectionMessage>
       ) : (
-        <AdminOpenSourceToolsGrid tools={filteredTools} />
+        <>
+          <AdminOpenSourceToolsGrid tools={paged.pageItems} />
+          <PagePaginationControls
+            page={paged.page}
+            totalPages={paged.totalPages}
+            onPageChange={paged.setPage}
+            rangeStart={paged.rangeStart}
+            rangeEnd={paged.rangeEnd}
+            totalItems={paged.totalItems}
+            itemLabel="tool"
+          />
+        </>
       )}
     </div>
   );

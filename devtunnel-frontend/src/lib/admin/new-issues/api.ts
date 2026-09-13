@@ -1,6 +1,6 @@
-// Server Component only — reads request cookies, don't import from client code.
-import { cookies } from "next/headers";
-import { API_BASE_URL } from "@/lib/config";
+// Server Component only — this fetches through fetchAllAdminPages,
+// which reads request cookies; don't import from client code.
+import { fetchAllAdminPages } from "@/lib/admin/fetch-all-pages";
 import type { AdminNewIssue } from "./types";
 
 /**
@@ -15,47 +15,26 @@ import type { AdminNewIssue } from "./types";
  * The spec also lists `GET /admin/projects/:id/new-issues` for a
  * per-project scoped view, but section 29's final page list only names
  * one route for this page (`/admin/tasks/new-issues`, A15) — so this
- * fetches one page of the cross-project list and lets
- * `AdminNewIssuesExplorer` narrow it by project client-side, the same
- * division of labor `AdminTasksExplorer` already uses for its own
- * project filter.
+ * fetches the full cross-project list and lets `AdminNewIssuesExplorer`
+ * narrow it by project client-side, the same division of labor
+ * `AdminTasksExplorer` already uses for its own project filter.
  *
  * The backend's `GET /admin/new-issues` is itself keyset-paginated
  * (`limit`/`before`, `X-Next-Cursor` response header — see that route's
- * own doc comment), so this forwards an optional `before` cursor and
- * surfaces `nextCursor` back to the caller. The page component pairs
- * this with `lib/admin/cursor-pagination.ts` to render real
- * Previous/Next controls instead of silently truncating the list to
- * whatever the first page happens to contain.
+ * own doc comment). `fetchAllAdminPages` walks every page of it and
+ * returns the complete result, so `AdminNewIssuesExplorer` can filter it
+ * and then page through 20-at-a-time with real numbered "Page 1 of N"
+ * controls, instead of silently truncating the list to whatever the
+ * first backend page happened to contain.
  */
 type AdminNewIssuesResult =
-  | { status: "ok"; data: AdminNewIssue[]; nextCursor: string | null }
+  | { status: "ok"; data: AdminNewIssue[] }
   | { status: "empty" }
   | { status: "error" };
 
-export async function getAdminNewIssues(params?: { before?: string }): Promise<AdminNewIssuesResult> {
-  try {
-    const query = new URLSearchParams();
-    if (params?.before) query.set("before", params.before);
-    const qs = query.toString();
-
-    const res = await fetch(`${API_BASE_URL}/admin/new-issues${qs ? `?${qs}` : ""}`, {
-      headers: { cookie: cookies().toString() },
-      cache: "no-store",
-    });
-
-    if (!res.ok) {
-      return { status: "error" };
-    }
-
-    const data = (await res.json()) as AdminNewIssue[];
-
-    if (Array.isArray(data) && data.length === 0 && !params?.before) {
-      return { status: "empty" };
-    }
-
-    return { status: "ok", data, nextCursor: res.headers.get("X-Next-Cursor") };
-  } catch {
-    return { status: "error" };
-  }
+export async function getAdminNewIssues(): Promise<AdminNewIssuesResult> {
+  const result = await fetchAllAdminPages<AdminNewIssue>("/admin/new-issues");
+  if (result.status === "error") return { status: "error" };
+  if (result.status === "empty") return { status: "empty" };
+  return { status: "ok", data: result.data };
 }

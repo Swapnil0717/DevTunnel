@@ -3,9 +3,8 @@ import Link from "next/link";
 import { buildMetadata } from "@/lib/seo";
 import { getAdminNewIssuesSinceOnboarding } from "@/lib/admin/new-issues/since-onboarding-api";
 import { AdminIssuesSinceOnboardingExplorer } from "@/components/admin/new-issues/admin-issues-since-onboarding-explorer";
+import { SyncAllIssuesButton } from "@/components/admin/new-issues/sync-all-issues-button";
 import { SectionMessage } from "@/components/home/section-message";
-import { CursorPaginationControls } from "@/components/admin/cursor-pagination-controls";
-import { nextPageHref, parseCursorStack, prevPageHref } from "@/lib/admin/cursor-pagination";
 
 export const metadata: Metadata = buildMetadata({
   title: "Issues Since Onboarding",
@@ -15,15 +14,19 @@ export const metadata: Metadata = buildMetadata({
   noIndex: true,
 });
 
-const BASE_PATH = "/admin/tasks/new-issues/since-onboarding";
-
-export default async function AdminIssuesSinceOnboardingPage({
-  searchParams,
-}: {
-  searchParams: { before?: string; stack?: string };
-}) {
-  const result = await getAdminNewIssuesSinceOnboarding({ before: searchParams.before });
-  const stack = parseCursorStack(searchParams);
+/**
+ * `/admin/tasks/new-issues/since-onboarding` — a date-filtered lens on
+ * the same New Issues list (`getAdminNewIssuesSinceOnboarding` fetches
+ * and filters the fully-walked `GET /admin/new-issues` result, no
+ * separate backend route). Search/filters and 20-per-page numbered
+ * pagination are handled by `AdminIssuesSinceOnboardingExplorer`.
+ *
+ * `SyncAllIssuesButton` triggers the same live GitHub re-scan as the
+ * plain New Issues page — this view is just a narrower slice of that
+ * same data.
+ */
+export default async function AdminIssuesSinceOnboardingPage() {
+  const result = await getAdminNewIssuesSinceOnboarding();
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
@@ -35,12 +38,15 @@ export default async function AdminIssuesSinceOnboardingPage({
             and aren&apos;t onboarded as a DevTunnel task yet.
           </p>
         </div>
-        <Link
-          href="/admin/tasks/new"
-          className="inline-flex shrink-0 items-center rounded-[8px] bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground hover:bg-accent/90"
-        >
-          Create task
-        </Link>
+        <div className="flex flex-wrap items-start gap-3">
+          <SyncAllIssuesButton />
+          <Link
+            href="/admin/tasks/new"
+            className="inline-flex shrink-0 items-center rounded-[8px] bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground hover:bg-accent/90"
+          >
+            Create task
+          </Link>
+        </div>
       </div>
 
       {result.status === "error" ? (
@@ -50,17 +56,7 @@ export default async function AdminIssuesSinceOnboardingPage({
           No new GitHub issues have appeared since these projects were added to DevTunnel.
         </SectionMessage>
       ) : (
-        <>
-          <AdminIssuesSinceOnboardingExplorer issues={result.data} />
-          <CursorPaginationControls
-            hasPrevious={Boolean(searchParams.before)}
-            hasNext={Boolean(result.nextCursor)}
-            prevHref={prevPageHref(BASE_PATH, stack)}
-            nextHref={
-              result.nextCursor ? nextPageHref(BASE_PATH, searchParams.before, stack, result.nextCursor) : "#"
-            }
-          />
-        </>
+        <AdminIssuesSinceOnboardingExplorer issues={result.data} />
       )}
     </main>
   );

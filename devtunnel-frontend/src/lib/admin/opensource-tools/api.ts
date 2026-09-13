@@ -1,6 +1,7 @@
 // Server Component only — reads request cookies, don't import from client code.
 import { cookies } from "next/headers";
 import { API_BASE_URL } from "@/lib/config";
+import { fetchAllAdminPages } from "@/lib/admin/fetch-all-pages";
 import type { AdminToolDetail, AdminToolSummary } from "./types";
 
 /**
@@ -13,42 +14,24 @@ import type { AdminToolDetail, AdminToolSummary } from "./types";
  * (Frontend_Development_Rules.txt rule 26).
  */
 type AdminOpenSourceToolsResult =
-  | { status: "ok"; data: AdminToolSummary[]; nextCursor: string | null }
+  | { status: "ok"; data: AdminToolSummary[] }
   | { status: "empty" }
   | { status: "error" };
 
 /**
  * `GET /admin/opensource-tools` is keyset-paginated on the backend
  * (`limit`/`before`, `X-Next-Cursor` response header, mirroring
- * `GET /admin/projects`). This forwards an optional `before` cursor and
- * returns `nextCursor` so the page can render real Previous/Next
- * controls instead of only ever showing the first page's worth of tools.
+ * `GET /admin/projects`). `fetchAllAdminPages` walks every page and
+ * hands back the complete list, so `AdminOpenSourceToolsExplorer` can
+ * filter it and then page through the result 20-at-a-time with real
+ * numbered "Page 1 of N" controls, instead of only ever showing the
+ * first backend page's worth of tools.
  */
-export async function getAdminOpenSourceTools(params?: { before?: string }): Promise<AdminOpenSourceToolsResult> {
-  try {
-    const query = new URLSearchParams();
-    if (params?.before) query.set("before", params.before);
-    const qs = query.toString();
-
-    const res = await fetch(`${API_BASE_URL}/admin/opensource-tools${qs ? `?${qs}` : ""}`, {
-      headers: { cookie: cookies().toString() },
-      cache: "no-store",
-    });
-
-    if (!res.ok) {
-      return { status: "error" };
-    }
-
-    const data = (await res.json()) as AdminToolSummary[];
-
-    if (Array.isArray(data) && data.length === 0 && !params?.before) {
-      return { status: "empty" };
-    }
-
-    return { status: "ok", data, nextCursor: res.headers.get("X-Next-Cursor") };
-  } catch {
-    return { status: "error" };
-  }
+export async function getAdminOpenSourceTools(): Promise<AdminOpenSourceToolsResult> {
+  const result = await fetchAllAdminPages<AdminToolSummary>("/admin/opensource-tools");
+  if (result.status === "error") return { status: "error" };
+  if (result.status === "empty") return { status: "empty" };
+  return { status: "ok", data: result.data };
 }
 
 /**

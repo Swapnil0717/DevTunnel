@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { SearchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
 import { FilterSelect } from "@/components/ui/filter-select";
+import { PagePaginationControls } from "@/components/admin/page-pagination-controls";
+import { usePagePagination } from "@/lib/admin/use-page-pagination";
 import { AdminTasksTable } from "./admin-tasks-table";
 import { AdminDeletedTasksTable } from "./admin-deleted-tasks-table";
 import {
@@ -62,39 +64,12 @@ const DIFFICULTY_FILTERS: {
 /**
  * Client-side filter bar for `/admin/tasks` (admin_workflow.txt, section
  * 13 — Task Page: "Show all DevTunnel tasks") plus the section 15
- * "Deleted in DevTunnel" view, both driven by one already-fetched
- * `GET /admin/tasks` list (`lib/admin/tasks/api.ts`) — narrowing it in
- * the browser is a UX improvement on top of one real data source, never
- * a second fabricated one (Frontend_Development_Rules.txt rule 58).
- *
- * Filters, matching what the requester asked for beyond section 13's
- * base table — level of difficulty, role, tech stack, author, GitHub
- * repository:
- * - Search — matches task title, project name, GitHub repository,
- *   issue title, and both the project's author and the GitHub issue's
- *   author (username or display name).
- * - Status — the fixed `AdminTaskStatus` enum, same convention as
- *   `AdminProjectsExplorer`'s status select.
- * - Role / Difficulty — the fixed `DeveloperRole` / `ExperienceLevel`
- *   enums already defined in `lib/onboarding/types.ts`, not a second
- *   taxonomy invented here.
- * - Tech stack / Repository / Author — option lists are *derived from
- *   the fetched tasks themselves* (`useMemo` below), never a hardcoded
- *   guess at what values might exist (rule 58).
- *
- * "Deleted in DevTunnel" (section 15) is modeled as a toggle rather than
- * a separate route: same underlying `GET /admin/tasks` list, split
- * client-side on `deletedAt`, and rendered through the dedicated
- * `AdminDeletedTasksTable` (Issue #, Issue Title, Project, Deleted At,
- * Deletion Status — section 15's own column list, not the active-tasks
- * table's columns) — a deleted task's GitHub issue still exists, so it
- * has nothing meaningful to show for Role/Difficulty/Contributors/
- * Submissions.
- *
- * This is authenticated Admin application UI (`noIndex: true` on the
- * page), not public content, so filtering client-side after a full
- * server fetch has no crawlability impact
- * (Frontend_Development_Rules.txt rule 18).
+ * "Deleted in DevTunnel" view, both driven by one fully-fetched
+ * `GET /admin/tasks` list (`lib/admin/tasks/api.ts`). Each of the two
+ * tabs (active tasks / deleted tasks) is filtered, then paginated
+ * independently at 20-per-page (`usePagePagination`) with its own
+ * numbered "Page 1 of N" controls, so switching tabs never carries over
+ * the other tab's page number.
  */
 export function AdminTasksExplorer({
   tasks,
@@ -281,6 +256,9 @@ export function AdminTasksExplorer({
     author !== "ALL" ||
     projectSlug !== "ALL";
 
+  const pagedActive = usePagePagination(filteredTasks);
+  const pagedDeleted = usePagePagination(deletedTasks);
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-border-subtle pb-3">
@@ -319,9 +297,20 @@ export function AdminTasksExplorer({
             their GitHub issue remained.
           </SectionMessage>
         ) : (
-          <AdminDeletedTasksTable
-            tasks={deletedTasks}
-          />
+          <>
+            <AdminDeletedTasksTable
+              tasks={pagedDeleted.pageItems}
+            />
+            <PagePaginationControls
+              page={pagedDeleted.page}
+              totalPages={pagedDeleted.totalPages}
+              onPageChange={pagedDeleted.setPage}
+              rangeStart={pagedDeleted.rangeStart}
+              rangeEnd={pagedDeleted.rangeEnd}
+              totalItems={pagedDeleted.totalItems}
+              itemLabel="deleted task"
+            />
+          </>
         )
       ) : (
         <>
@@ -512,17 +501,6 @@ export function AdminTasksExplorer({
             </div>
           </div>
 
-          <p
-            className="mb-3 text-[11.5px] text-text-faint"
-            aria-live="polite"
-          >
-            Showing {filteredTasks.length} of{" "}
-            {activeTasks.length} task
-            {activeTasks.length === 1
-              ? ""
-              : "s"}
-          </p>
-
           {filteredTasks.length === 0 ? (
             <SectionMessage>
               {hasActiveFilters
@@ -530,9 +508,20 @@ export function AdminTasksExplorer({
                 : "No tasks have been onboarded yet."}
             </SectionMessage>
           ) : (
-            <AdminTasksTable
-              tasks={filteredTasks}
-            />
+            <>
+              <AdminTasksTable
+                tasks={pagedActive.pageItems}
+              />
+              <PagePaginationControls
+                page={pagedActive.page}
+                totalPages={pagedActive.totalPages}
+                onPageChange={pagedActive.setPage}
+                rangeStart={pagedActive.rangeStart}
+                rangeEnd={pagedActive.rangeEnd}
+                totalItems={pagedActive.totalItems}
+                itemLabel="task"
+              />
+            </>
           )}
         </>
       )}

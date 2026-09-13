@@ -1,6 +1,7 @@
 // Server Component only — reads request cookies, don't import from client code.
 import { cookies } from "next/headers";
 import { API_BASE_URL } from "@/lib/config";
+import { fetchAllAdminPages } from "@/lib/admin/fetch-all-pages";
 import type { AdminProjectDetail, AdminProjectSummary } from "./types";
 
 /**
@@ -12,42 +13,23 @@ import type { AdminProjectDetail, AdminProjectSummary } from "./types";
  * one honest `SectionMessage`, never a blank/broken page.
  */
 type AdminProjectsResult =
-  | { status: "ok"; data: AdminProjectSummary[]; nextCursor: string | null }
+  | { status: "ok"; data: AdminProjectSummary[] }
   | { status: "empty" }
   | { status: "error" };
 
 /**
  * `GET /admin/projects` is keyset-paginated on the backend (`limit`/
- * `before`, `X-Next-Cursor` response header). This forwards an optional
- * `before` cursor and returns `nextCursor` so the page can render real
- * Previous/Next controls (`components/admin/cursor-pagination-controls`)
- * instead of only ever showing the first page's worth of projects.
+ * `before`, `X-Next-Cursor` response header). `fetchAllAdminPages` walks
+ * every page and hands back the complete list, so `AdminProjectsExplorer`
+ * can filter it and then page through the result 20-at-a-time with real
+ * numbered "Page 1 of N" controls (`PagePaginationControls`), rather
+ * than only ever being able to show the first backend page's projects.
  */
-export async function getAdminProjects(params?: { before?: string }): Promise<AdminProjectsResult> {
-  try {
-    const query = new URLSearchParams();
-    if (params?.before) query.set("before", params.before);
-    const qs = query.toString();
-
-    const res = await fetch(`${API_BASE_URL}/admin/projects${qs ? `?${qs}` : ""}`, {
-      headers: { cookie: cookies().toString() },
-      cache: "no-store",
-    });
-
-    if (!res.ok) {
-      return { status: "error" };
-    }
-
-    const data = (await res.json()) as AdminProjectSummary[];
-
-    if (Array.isArray(data) && data.length === 0 && !params?.before) {
-      return { status: "empty" };
-    }
-
-    return { status: "ok", data, nextCursor: res.headers.get("X-Next-Cursor") };
-  } catch {
-    return { status: "error" };
-  }
+export async function getAdminProjects(): Promise<AdminProjectsResult> {
+  const result = await fetchAllAdminPages<AdminProjectSummary>("/admin/projects");
+  if (result.status === "error") return { status: "error" };
+  if (result.status === "empty") return { status: "empty" };
+  return { status: "ok", data: result.data };
 }
 
 /**

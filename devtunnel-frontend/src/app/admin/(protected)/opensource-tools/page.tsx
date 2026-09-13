@@ -4,8 +4,6 @@ import { buildMetadata } from "@/lib/seo";
 import { getAdminOpenSourceTools } from "@/lib/admin/opensource-tools/api";
 import { AdminOpenSourceToolsExplorer } from "@/components/admin/opensource-tools/admin-opensource-tools-explorer";
 import { SectionMessage } from "@/components/home/section-message";
-import { CursorPaginationControls } from "@/components/admin/cursor-pagination-controls";
-import { nextPageHref, parseCursorStack, prevPageHref } from "@/lib/admin/cursor-pagination";
 
 export const metadata: Metadata = buildMetadata({
   title: "Open Source Tools",
@@ -18,36 +16,14 @@ export const metadata: Metadata = buildMetadata({
 /**
  * `/admin/opensource-tools` — "All Open Source Tools" in
  * `admin-nav-items.ts`. Shows every open source tool currently in the
- * DevTunnel catalog as a grid of square boxes (logo, name, then
- * View / Edit / Delete), with a search bar and filters built only from
- * fields recorded during tool onboarding (primary language, labels) —
- * same split `/admin/projects` makes between this server-fetching page
- * and `AdminProjectsExplorer`'s client-side search/filter layer.
- *
- * Previously this route rendered `OpenSourceToolOnboardingWizard` — the
- * same component `/admin/opensource-tools/new` renders — because no
- * listing screen existed yet. That duplication is retired now that this
- * is a real listing page; adding a tool lives at
- * `/admin/opensource-tools/new` only, linked from the "Add tool" button
- * below (rule 11 — don't create orphan pages; rule 56 — this route
- * already exists and the wizard was never a documented spec URL of its
- * own, so nothing publicly indexed is broken by the swap).
- *
- * `GET /admin/opensource-tools` isn't built on the backend yet (see
- * `lib/admin/opensource-tools/api.ts` — only the six onboarding-wizard
- * routes are mounted under `/admin/opensource-tools/onboarding` so far),
- * so a failed or empty fetch degrades to one honest `SectionMessage`
- * instead of a fabricated grid or a blank page (rule 58).
+ * DevTunnel catalog as a grid, with a search bar, filters, and 20-per-
+ * page numbered pagination (`AdminOpenSourceToolsExplorer`) layered on
+ * top of one fully-fetched `GET /admin/opensource-tools` list
+ * (`getAdminOpenSourceTools` walks the backend's keyset pagination in
+ * full).
  */
-const BASE_PATH = "/admin/opensource-tools";
-
-export default async function AdminOpenSourceToolsPage({
-  searchParams,
-}: {
-  searchParams: { before?: string; stack?: string };
-}) {
-  const result = await getAdminOpenSourceTools({ before: searchParams.before });
-  const stack = parseCursorStack(searchParams);
+export default async function AdminOpenSourceToolsPage() {
+  const result = await getAdminOpenSourceTools();
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
@@ -79,17 +55,7 @@ export default async function AdminOpenSourceToolsPage({
           .
         </SectionMessage>
       ) : (
-        <>
-          <AdminOpenSourceToolsExplorer tools={result.data} />
-          <CursorPaginationControls
-            hasPrevious={Boolean(searchParams.before)}
-            hasNext={Boolean(result.nextCursor)}
-            prevHref={prevPageHref(BASE_PATH, stack)}
-            nextHref={
-              result.nextCursor ? nextPageHref(BASE_PATH, searchParams.before, stack, result.nextCursor) : "#"
-            }
-          />
-        </>
+        <AdminOpenSourceToolsExplorer tools={result.data} />
       )}
     </main>
   );

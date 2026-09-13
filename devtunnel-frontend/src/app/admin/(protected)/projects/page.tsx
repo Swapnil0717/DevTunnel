@@ -5,8 +5,6 @@ import { getAdminProjects } from "@/lib/admin/projects/api";
 import { AdminProjectsExplorer } from "@/components/admin/projects/admin-projects-explorer";
 import { SyncAllProjectsGithubDataButton } from "@/components/admin/projects/sync-all-projects-github-data-button";
 import { SectionMessage } from "@/components/home/section-message";
-import { CursorPaginationControls } from "@/components/admin/cursor-pagination-controls";
-import { nextPageHref, parseCursorStack, prevPageHref } from "@/lib/admin/cursor-pagination";
 
 export const metadata: Metadata = buildMetadata({
   title: "Projects",
@@ -20,25 +18,16 @@ export const metadata: Metadata = buildMetadata({
  * `/admin/projects` — Admin Portal Master Coding Specification, section 4
  * — Projects Page (A3 in the final page list, section 29).
  *
- * "Show all projects currently available on DevTunnel." Fetches
- * `GET /admin/projects` server-side (section 22 — Admin Backend API Map)
- * and hands the full list to `AdminProjectsExplorer`, which adds a
- * client-side search + status filter on top of the section-4 table.
- * That endpoint isn't built on the backend yet (see
- * `lib/admin/projects/api.ts`), so — same convention as the dashboard's
- * stat cards and traction chart — a failed or empty fetch degrades to
- * one honest `SectionMessage` instead of a fabricated table or a blank
- * page (Frontend_Development_Rules.txt rule 58).
+ * "Show all projects currently available on DevTunnel." Fetches every
+ * page of `GET /admin/projects` server-side (`getAdminProjects` walks
+ * the backend's own keyset pagination in full) and hands the complete
+ * list to `AdminProjectsExplorer`, which layers a client-side search +
+ * status filter on top of the section-4 table, then paginates the
+ * (filtered) result 20-per-page with numbered "Page 1 of N" controls
+ * instead of the backend's raw cursor.
  */
-const BASE_PATH = "/admin/projects";
-
-export default async function AdminProjectsPage({
-  searchParams,
-}: {
-  searchParams: { before?: string; stack?: string };
-}) {
-  const result = await getAdminProjects({ before: searchParams.before });
-  const stack = parseCursorStack(searchParams);
+export default async function AdminProjectsPage() {
+  const result = await getAdminProjects();
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
@@ -73,17 +62,7 @@ export default async function AdminProjectsPage({
           .
         </SectionMessage>
       ) : (
-        <>
-          <AdminProjectsExplorer projects={result.data} />
-          <CursorPaginationControls
-            hasPrevious={Boolean(searchParams.before)}
-            hasNext={Boolean(result.nextCursor)}
-            prevHref={prevPageHref(BASE_PATH, stack)}
-            nextHref={
-              result.nextCursor ? nextPageHref(BASE_PATH, searchParams.before, stack, result.nextCursor) : "#"
-            }
-          />
-        </>
+        <AdminProjectsExplorer projects={result.data} />
       )}
     </main>
   );

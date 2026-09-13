@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { SearchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
 import { FilterSelect } from "@/components/ui/filter-select";
+import { PagePaginationControls } from "@/components/admin/page-pagination-controls";
+import { usePagePagination } from "@/lib/admin/use-page-pagination";
 import { AdminNewIssuesTable } from "./admin-new-issues-table";
 import type { AdminNewIssue } from "@/lib/admin/new-issues/types";
 import type { GithubIssueState } from "@/lib/admin/task-onboarding/types";
@@ -18,38 +20,12 @@ const STATE_FILTERS: { value: StateFilter; label: string }[] = [
 
 /**
  * Client-side filter bar for `/admin/tasks/new-issues` (admin_workflow.txt
- * section 16 — "New Issues Section"), driven by one already-fetched
+ * section 16 — "New Issues Section"), driven by the fully-fetched
  * `GET /admin/new-issues` list (`lib/admin/new-issues/api.ts`) —
- * narrowing it in the browser is a UX improvement on top of one real
- * data source, never a second fabricated one
+ * narrowed here, then paginated 20-per-page (`usePagePagination`,
+ * `PagePaginationControls`) — never a second fabricated data source
  * (Frontend_Development_Rules.txt rule 58). Same convention as
  * `AdminTasksExplorer`.
- *
- * Filters, matching what was asked for — GitHub repository, author,
- * issuer, tech stack — plus the project the issue belongs to and its
- * GitHub state:
- * - Search — matches issue title, issue number, project name, GitHub
- *   repository, issue author (username or display name), and labels.
- * - Repository / Project / Author — option lists are *derived from the
- *   fetched issues themselves* (`useMemo` below), never a hardcoded
- *   guess at what values might exist (rule 58).
- * - Tech stack — derived the same way, from each issue's project's own
- *   already-validated tech stack (`AdminNewIssueProjectRef.techStack`),
- *   since a GitHub issue doesn't carry a tech stack of its own.
- * - State — the fixed `GithubIssueState` enum already defined for Task
- *   Onboarding's own issue list, not a second taxonomy invented here.
- *
- * This is authenticated Admin application UI (`noIndex: true` on the
- * page), not public content, so filtering client-side after a full
- * server fetch has no crawlability impact
- * (Frontend_Development_Rules.txt rule 18).
- *
- * `FilterSelect` (the themed listbox from `components/ui/filter-select`)
- * has no built-in caption — its trigger shows the selected option's own
- * label — so each filter here gets its own small visible `<label>`
- * above it, same idea as the `sr-only` label on the search input but
- * shown on screen since "State" / "Repository" / etc. aren't otherwise
- * implied by the selected value alone.
  */
 export function AdminNewIssuesExplorer({ issues }: { issues: AdminNewIssue[] }) {
   const [query, setQuery] = useState("");
@@ -124,6 +100,8 @@ export function AdminNewIssuesExplorer({ issues }: { issues: AdminNewIssue[] }) 
     author !== "ALL" ||
     techStack !== "ALL" ||
     projectSlug !== "ALL";
+
+  const paged = usePagePagination(filteredIssues);
 
   return (
     <div>
@@ -236,11 +214,6 @@ export function AdminNewIssuesExplorer({ issues }: { issues: AdminNewIssue[] }) 
         </div>
       </div>
 
-      <p className="mb-3 text-[11.5px] text-text-faint" aria-live="polite">
-        Showing {filteredIssues.length} of {issues.length} issue
-        {issues.length === 1 ? "" : "s"}
-      </p>
-
       {filteredIssues.length === 0 ? (
         <SectionMessage>
           {hasActiveFilters
@@ -248,7 +221,18 @@ export function AdminNewIssuesExplorer({ issues }: { issues: AdminNewIssue[] }) 
             : "No new GitHub issues right now — everything is either already onboarded as a task or ignored."}
         </SectionMessage>
       ) : (
-        <AdminNewIssuesTable issues={filteredIssues} />
+        <>
+          <AdminNewIssuesTable issues={paged.pageItems} />
+          <PagePaginationControls
+            page={paged.page}
+            totalPages={paged.totalPages}
+            onPageChange={paged.setPage}
+            rangeStart={paged.rangeStart}
+            rangeEnd={paged.rangeEnd}
+            totalItems={paged.totalItems}
+            itemLabel="issue"
+          />
+        </>
       )}
     </div>
   );

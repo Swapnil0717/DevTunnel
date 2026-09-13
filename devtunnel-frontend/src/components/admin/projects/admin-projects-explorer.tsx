@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { SearchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
 import { FilterSelect } from "@/components/ui/filter-select";
+import { PagePaginationControls } from "@/components/admin/page-pagination-controls";
+import { usePagePagination } from "@/lib/admin/use-page-pagination";
 import { AdminProjectsTable } from "./admin-projects-table";
 import type { AdminProjectStatus, AdminProjectSummary } from "@/lib/admin/projects/types";
 
@@ -69,43 +71,12 @@ function projectMatchesTech(project: AdminProjectSummary, tech: string): boolean
 /**
  * Client-side filter bar for `/admin/projects` (admin_workflow.txt,
  * section 4 — Projects Page: "Show all projects currently available on
- * DevTunnel"). The spec doesn't call out filtering explicitly, but with
- * every project already fetched server-side in one `GET /admin/projects`
- * call (`lib/admin/projects/api.ts`), narrowing that list in the browser
- * is a plain UX improvement — not a new data source, so nothing here
- * fabricates fields the backend doesn't already return
+ * DevTunnel"). The full project list is fetched server-side
+ * (`lib/admin/projects/api.ts`), narrowed here by search/author/tech
+ * stack/status, then paginated 20-per-page (`usePagePagination`) with
+ * numbered "Page 1 of N" controls (`PagePaginationControls`) — never a
+ * new data source, just a browser-side view over one real fetch
  * (Frontend_Development_Rules.txt rule 58).
- *
- * Four filters, matching data the table/detail view already carries:
- * - Search — matches project name, GitHub repository, and author
- *   (username or display name).
- * - Author — exact match on GitHub username. Options are built from the
- *   authors actually present in `projects`, never a separate user list
- *   fetch, so there's never an author option with zero matching rows.
- * - Tech stack — matches any of the onboarding-recorded tech-stack
- *   categories (`AdminProjectSummary.techStack`). Options are likewise
- *   derived from the projects on the page.
- * - Status — matches the exact `AdminProjectStatus` values the table's
- *   status badge already recognizes (`AdminProjectStatusBadge`), so a
- *   filter option is never offered for a status the UI can't otherwise
- *   display.
- *
- * Kept as a small client component wrapping the existing, still
- * server-rendered-by-default `AdminProjectsTable` rather than folding
- * filter state into the table itself, so the table stays a plain
- * presentational component driven entirely by its `projects` prop.
- *
- * This is authenticated Admin application UI (`noIndex: true` on the
- * page), not public content, so filtering client-side after a full
- * server fetch has no crawlability impact
- * (Frontend_Development_Rules.txt rule 18).
- *
- * `FilterSelect` (the themed listbox from `components/ui/filter-select`)
- * has no built-in caption — its trigger shows the selected option's own
- * label — so each filter here gets its own small visible `<label>`
- * above it, same idea as the `sr-only` label on the search input but
- * shown on screen since "Author" / "Tech stack" / "Status" aren't
- * otherwise implied by the selected value alone.
  */
 export function AdminProjectsExplorer({
   projects,
@@ -164,6 +135,8 @@ export function AdminProjectsExplorer({
 
   const hasActiveFilters =
     query.trim().length > 0 || status !== "ALL" || author !== ALL_AUTHORS || tech !== ALL_TECH;
+
+  const paged = usePagePagination(filteredProjects);
 
   return (
     <div>
@@ -241,11 +214,6 @@ export function AdminProjectsExplorer({
         </div>
       </div>
 
-      <p className="mb-3 text-[11.5px] text-text-faint" aria-live="polite">
-        Showing {filteredProjects.length} of {projects.length} project
-        {projects.length === 1 ? "" : "s"}
-      </p>
-
       {filteredProjects.length === 0 ? (
         <SectionMessage>
           {hasActiveFilters
@@ -253,7 +221,18 @@ export function AdminProjectsExplorer({
             : "No projects have been onboarded yet."}
         </SectionMessage>
       ) : (
-        <AdminProjectsTable projects={filteredProjects} />
+        <>
+          <AdminProjectsTable projects={paged.pageItems} />
+          <PagePaginationControls
+            page={paged.page}
+            totalPages={paged.totalPages}
+            onPageChange={paged.setPage}
+            rangeStart={paged.rangeStart}
+            rangeEnd={paged.rangeEnd}
+            totalItems={paged.totalItems}
+            itemLabel="project"
+          />
+        </>
       )}
     </div>
   );

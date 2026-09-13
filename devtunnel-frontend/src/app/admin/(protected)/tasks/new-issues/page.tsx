@@ -3,9 +3,8 @@ import Link from "next/link";
 import { buildMetadata } from "@/lib/seo";
 import { getAdminNewIssues } from "@/lib/admin/new-issues/api";
 import { AdminNewIssuesExplorer } from "@/components/admin/new-issues/admin-new-issues-explorer";
+import { SyncAllIssuesButton } from "@/components/admin/new-issues/sync-all-issues-button";
 import { SectionMessage } from "@/components/home/section-message";
-import { CursorPaginationControls } from "@/components/admin/cursor-pagination-controls";
-import { nextPageHref, parseCursorStack, prevPageHref } from "@/lib/admin/cursor-pagination";
 
 export const metadata: Metadata = buildMetadata({
   title: "All Issue",
@@ -22,33 +21,22 @@ export const metadata: Metadata = buildMetadata({
  *
  * Purpose (section 16): show GitHub issues that are present on GitHub
  * **and** not currently covered by DevTunnel — section 9's "New Issue
- * Detection" algorithm ("Compare Issue IDs… GitHub Issue exists in
- * DevTunnel? NO → New Issue"). This is explicitly *not* a project-health
- * system (section 16), so nothing here surfaces repository health, code
- * quality, or similar metrics the spec removes from Admin entirely
- * (section 1).
+ * Detection" algorithm. Each issue shows Issue #, Issue Title, Project,
+ * GitHub Author, Labels, Created, Updated, with View / Create Task /
+ * Ignore actions, search/filters, and 20-per-page numbered pagination
+ * (`AdminNewIssuesExplorer`) layered on top of one fully-fetched
+ * `GET /admin/new-issues` list (`getAdminNewIssues` walks the backend's
+ * keyset pagination in full).
  *
- * Each issue shows Issue #, Issue Title, Project, GitHub Author, Labels,
- * Created, Updated, with View / Create Task / Ignore actions
- * (`AdminNewIssuesExplorer` / `AdminNewIssuesTable`), plus search and
- * filters by repository, author, tech stack, and project layered on top
- * of the one `GET /admin/new-issues` fetch.
- *
- * That endpoint isn't built on the backend yet (see
- * `lib/admin/new-issues/api.ts`), so — same convention as the Tasks and
- * Projects pages — a failed or empty fetch degrades to one honest
- * `SectionMessage` instead of a fabricated table or a blank page
- * (Frontend_Development_Rules.txt rule 26/58).
+ * `SyncAllIssuesButton` re-runs that same live, cross-project GitHub
+ * scan on demand and reports a summary before refreshing the page —
+ * this list is already always fresh on every server render, so the
+ * button's value is giving the Admin an explicit "pull the latest
+ * GitHub state now" action with visible feedback, the same posture
+ * `SyncAllProjectsGithubDataButton` takes on the Projects page.
  */
-const BASE_PATH = "/admin/tasks/new-issues";
-
-export default async function AdminNewIssuesPage({
-  searchParams,
-}: {
-  searchParams: { before?: string; stack?: string };
-}) {
-  const result = await getAdminNewIssues({ before: searchParams.before });
-  const stack = parseCursorStack(searchParams);
+export default async function AdminNewIssuesPage() {
+  const result = await getAdminNewIssues();
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
@@ -60,12 +48,15 @@ export default async function AdminNewIssuesPage({
             DevTunnel tasks yet.
           </p>
         </div>
-        <Link
-          href="/admin/tasks/new"
-          className="inline-flex shrink-0 items-center rounded-[8px] bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground hover:bg-accent/90"
-        >
-          Create task
-        </Link>
+        <div className="flex flex-wrap items-start gap-3">
+          <SyncAllIssuesButton />
+          <Link
+            href="/admin/tasks/new"
+            className="inline-flex shrink-0 items-center rounded-[8px] bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground hover:bg-accent/90"
+          >
+            Create task
+          </Link>
+        </div>
       </div>
 
       {result.status === "error" ? (
@@ -76,17 +67,7 @@ export default async function AdminNewIssuesPage({
           ignored.
         </SectionMessage>
       ) : (
-        <>
-          <AdminNewIssuesExplorer issues={result.data} />
-          <CursorPaginationControls
-            hasPrevious={Boolean(searchParams.before)}
-            hasNext={Boolean(result.nextCursor)}
-            prevHref={prevPageHref(BASE_PATH, stack)}
-            nextHref={
-              result.nextCursor ? nextPageHref(BASE_PATH, searchParams.before, stack, result.nextCursor) : "#"
-            }
-          />
-        </>
+        <AdminNewIssuesExplorer issues={result.data} />
       )}
     </main>
   );
