@@ -18,8 +18,15 @@ const PROJECT_QUOTA = { beginner: 3, intermediate: 3, advanced: 1 } as const;
 /**
  * How many tools get proposed per day, total — see `TOOL_CATEGORIES`
  * below for why this is smaller than the category list's length.
+ *
+ * Exported (not just module-local) because aiDiscoveryAgent.ts's
+ * cross-registration reconciliation step (see listPublishedProjectsFor
+ * Reconciliation/listPublishedToolsForReconciliation below) needs to
+ * compute how much of today's shared tools budget is left after
+ * `getTodayCounters` has already been read once, without re-deriving
+ * the constant.
  */
-const TOOL_DAILY_QUOTA = 7;
+export const TOOL_DAILY_QUOTA = 7;
 
 /**
  * Fixed vocabulary for `AiDiscoveredTool.category`, and the full pool
@@ -83,7 +90,9 @@ function shuffled<T>(items: readonly T[]): T[] {
   const copy = [...items];
   for (let i = copy.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
+    const tmp = copy[i];
+    copy[i] = copy[j] as T;
+    copy[j] = tmp as T;
   }
   return copy;
 }
@@ -178,6 +187,123 @@ export async function listExistingToolUrls(supabase: SupabaseClient): Promise<Se
   for (const r of onboarded.data ?? []) urls.add(r.source_url.toLowerCase());
   for (const r of pending.data ?? []) urls.add(r.source_url.toLowerCase());
   return urls;
+}
+
+/**
+ * Extracts a normalized, lowercase "owner/repo" key from a GitHub repo
+ * URL, or null for anything that isn't a plain github.com repo URL
+ * (self-hosted tool sites, GitLab, etc. have no project equivalent to
+ * cross-register). Deliberately duplicated (not imported) from
+ * aiDiscoveryAgent.ts's parseGithubOwnerRepo — this db/ module stays
+ * framework-agnostic and free of lib/ imports; the two are kept in sync
+ * by the same regex shape and are covered by the same "never guessed"
+ * rule: a URL that doesn't match cleanly yields null, never a best-effort
+ * guess.
+ */
+function githubKeyFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const match = url.match(/^https:\/\/github\.com\/([^/\s]+)\/([^/\s]+?)\/?$/i);
+  const owner = match?.[1];
+  const repo = match?.[2];
+  if (!owner || !repo) return null;
+  return `${owner}/${repo.replace(/\.git$/i, "")}`.toLowerCase();
+}
+
+/**
+ * ---------------------------------------------------------------------------
+ * Cross-registration reconciliation (Phase 0, ahead of fresh GitHub search
+ * in both runProjectDiscovery and runToolDiscovery — see
+ * aiDiscoveryAgent.ts). Priority order per product spec:
+ *   1. Every published open source tool that's GitHub-hosted must also
+ *      exist as a project candidate.
+ *   2. Every published project must also exist as a tool candidate.
+ *   3. Only once both gaps are closed (or today's quota runs out) does
+ *      the agent fall through to searching GitHub for something new.
+ *
+ * These two functions only ever READ the real published catalog tables
+ * (`devtunnel.projects`, `devtunnel.opensource_tools`) — never the
+ * `ai_discovered_*` queue, never the manual onboarding draft tables —
+ * matching the same read boundary listOnboardedProjects/
+ * listExistingProjectFullNames already hold themselves to.
+ * ---------------------------------------------------------------------------
+ */
+
+export interface PublishedProjectForReconciliation {
+  /** Normalized, lowercase "owner/repo" — the key reconciliation diffs on. */
+  fullName: string;
+  name: string;
+  repositoryUrl: string;
+  description: string | null;
+  readme: string | null;
+  primaryLanguage: string | null;
+}
+
+/** Every ACTIVE, GitHub-linked published project — source data for "project → tool" gaps. */
+export async function listPublishedProjectsForReconciliation(
+  supabase: SupabaseClient,
+): Promise<PublishedProjectForReconciliation[]> {
+  const { data, error } = await supabase
+    .from("projects")
+    .select("name, repo_url, github_full_name, github_description, custom_description, readme, primary_language")
+    .eq("status", "ACTIVE")
+    .not("github_full_name", "is", null);
+  if (error) throw error;
+
+  const out: PublishedProjectForReconciliation[] = [];
+  for (const r of data ?? []) {
+    const fullName = (r.github_full_name as string | null)?.toLowerCase();
+    if (!fullName) continue;
+    out.push({
+      fullName,
+      name: r.name,
+      repositoryUrl: r.repo_url ?? `https://github.com/${r.github_full_name}`,
+      description: (r.custom_description as string | null) ?? (r.github_description as string | null) ?? null,
+      readme: r.readme ?? null,
+      primaryLanguage: r.primary_language ?? null,
+    });
+  }
+  return out;
+}
+
+export interface PublishedToolForReconciliation {
+  /** Normalized, lowercase "owner/repo" — null-filtered before this is built, so always present here. */
+  fullName: string;
+  name: string;
+  sourceUrl: string;
+  description: string | null;
+  readme: string | null;
+  primaryLanguage: string | null;
+}
+
+/**
+ * Every published tool whose source_url is a plain GitHub repo URL —
+ * source data for "tool → project" gaps. Tools hosted on their own
+ * website (non-GitHub source_url) are silently skipped: there is no
+ * repository to create a project candidate from, and this pipeline never
+ * fabricates one.
+ */
+export async function listPublishedToolsForReconciliation(
+  supabase: SupabaseClient,
+): Promise<PublishedToolForReconciliation[]> {
+  const { data, error } = await supabase
+    .from("opensource_tools")
+    .select("name, source_url, fetched_description, custom_description, readme, primary_language");
+  if (error) throw error;
+
+  const out: PublishedToolForReconciliation[] = [];
+  for (const r of data ?? []) {
+    const fullName = githubKeyFromUrl(r.source_url as string);
+    if (!fullName) continue;
+    out.push({
+      fullName,
+      name: r.name,
+      sourceUrl: r.source_url,
+      description: (r.custom_description as string | null) ?? (r.fetched_description as string | null) ?? null,
+      readme: r.readme ?? null,
+      primaryLanguage: r.primary_language ?? null,
+    });
+  }
+  return out;
 }
 
 export interface OnboardedProjectRef {

@@ -15,6 +15,7 @@ import {
 import {
   PROJECT_CATEGORIES,
   TOOL_CATEGORIES,
+  TOOL_DAILY_QUOTA,
   bumpCounters,
   getTodayCounters,
   insertDiscoveredProject,
@@ -24,6 +25,8 @@ import {
   listExistingTaskIssueNumbers,
   listExistingToolUrls,
   listOnboardedProjects,
+  listPublishedProjectsForReconciliation,
+  listPublishedToolsForReconciliation,
 } from "../db/aiDiscovery";
 import { logger } from "./logger";
 import type { AiDiscoveryCounters, AiDiscoveryRunSummary, DeveloperRole, ExperienceLevel } from "../types";
@@ -64,6 +67,20 @@ import type { AiDiscoveryCounters, AiDiscoveryRunSummary, DeveloperRole, Experie
  *    `project_onboarding_drafts`, `task_onboarding_drafts`, or
  *    `opensource_tool_onboarding_drafts` — those belong entirely to the
  *    manual admin wizards and this pipeline has no code path into them.
+ *
+ * 6. Cross-registration before fresh search — runProjectDiscovery and
+ *    runToolDiscovery each run a "reconciliation" pass FIRST, closing any
+ *    gap between the two published catalogs (a published tool that isn't
+ *    also a project candidate yet, or vice versa) before they ever call
+ *    search_github_repositories for something genuinely new. See
+ *    `reconcileToolsMissingAsProjects` / `reconcileProjectsMissingAsTools`
+ *    below. Reconciliation candidates consume the exact same daily quota
+ *    as a freshly-searched candidate (no separate unlimited backlog), go
+ *    through the exact same validate*Candidate() gate, and land in the
+ *    exact same PENDING queue — the only difference is `aiReasoning` is
+ *    prefixed to say a candidate was cross-registered, so the admin
+ *    review queue shows why it appeared, and no GitHub search tool call
+ *    is spent on it since the source repository is already known.
  * ---------------------------------------------------------------------------
  */
 
@@ -95,6 +112,399 @@ function parseGithubOwnerRepo(url: string): { owner: string; repo: string } | nu
   const repo = match?.[2];
   if (!owner || !repo) return null;
   return { owner, repo: repo.replace(/\.git$/i, "") };
+}
+
+/**
+ * Shared shape for the two reconciliation passes below — deliberately
+ * the same fields as `PhaseDiscoveryResult` minus `errors` (reconciliation
+ * failures are logged and skipped per-candidate, never surfaced as a
+ * run-level error string) so the caller can fold the numbers straight
+ * into its own totals.
+ */
+interface ReconciliationResult {
+  proposed: number;
+  dropped: number;
+  quotaExceeded: boolean;
+  accountQuotaExceeded: boolean;
+}
+
+const RECONCILIATION_SYSTEM_PROMPT = `You are DevTunnel's open-source discovery agent, currently doing a
+cross-registration pass: converting one already-known DevTunnel catalog
+entry into the OTHER catalog's shape. You are given every real fact you
+need (name, URL, description, README) directly in the prompt — do not
+call any tool, do not invent anything not present in what you were given.
+Fixed-choice fields must always be one of the exact values listed — never
+invent a new one. Free-text fields must be written only from the real
+material given to you — short, plain, no marketing language. When you are
+done, reply with ONLY a single JSON value (no markdown fences, no prose)
+matching exactly the schema described in the user message.`;
+
+/** No-op dispatcher for reconciliation's tool-free Groq calls — never actually invoked since `tools` is []. */
+const noToolDispatch: import("./groq").GroqToolDispatcher = async () => {
+  throw new Error("Reconciliation prompts must never trigger a tool call.");
+};
+
+/**
+ * Phase 0a (runs inside runProjectDiscovery, before fresh GitHub search):
+ * every published, GitHub-hosted tool that isn't ALSO a project candidate
+ * yet gets classified from its own already-known description/README (no
+ * new GitHub search) and proposed as a project. Mutates `remaining` and
+ * `exclude` in place so the caller's subsequent search step sees an
+ * up-to-date budget/dedup set.
+ */
+async function reconcileToolsMissingAsProjects(
+  env: ValidatedEnv,
+  kv: KVNamespace,
+  supabase: ReturnType<typeof getSupabase>,
+  readmeCache: ReadmeCache,
+  exclude: Set<string>,
+  remaining: { beginner: number; intermediate: number; advanced: number },
+  maxToPropose: number | undefined,
+  onStep: StepReporter | undefined,
+): Promise<ReconciliationResult> {
+  const totalRemaining = () => remaining.beginner + remaining.intermediate + remaining.advanced;
+  let proposed = 0;
+  let dropped = 0;
+
+  if (totalRemaining() === 0) {
+    return { proposed, dropped, quotaExceeded: false, accountQuotaExceeded: false };
+  }
+
+  onStep?.("Checking whether every open source tool is also registered as a project…");
+  const publishedTools = await listPublishedToolsForReconciliation(supabase);
+  const gaps = publishedTools.filter((t) => !exclude.has(t.fullName));
+
+  if (gaps.length === 0) {
+    onStep?.("Every GitHub-hosted tool is already registered as a project — nothing to cross-register.");
+    return { proposed, dropped, quotaExceeded: false, accountQuotaExceeded: false };
+  }
+
+  onStep?.(`Found ${gaps.length} tool(s) not yet registered as a project — cross-registering first.`);
+
+  for (const tool of gaps) {
+    if (totalRemaining() === 0) break;
+    if (maxToPropose !== undefined && proposed >= maxToPropose) break;
+
+    const ownerRepo = parseGithubOwnerRepo(`https://github.com/${tool.fullName}`);
+    if (!ownerRepo) continue; // defensive — fullName is only ever built from a URL that already parsed cleanly
+
+    onStep?.(`Cross-registering tool "${tool.name}" as a project…`);
+
+    const prompt = `DevTunnel already lists this open source tool in its tools catalog. It
+should also exist as a project candidate in the project catalog. Do NOT
+search GitHub or call any tool — classify only from what's given below.
+
+Name: ${tool.name}
+Repository: https://github.com/${ownerRepo.owner}/${ownerRepo.repo}
+Existing description: ${tool.description ?? "(none given)"}
+Primary language: ${tool.primaryLanguage ?? "(unknown)"}
+README (may be truncated):
+${(tool.readme ?? "(no README available)").slice(0, 6000)}
+
+From the material above ONLY (never invent facts not shown here):
+1. Pick "difficulty": exactly one of "BEGINNER", "INTERMEDIATE", "ADVANCED"
+   — how approachable this codebase looks for a new contributor.
+2. Pick "category": EXACTLY ONE of these values, whichever fits best:
+   ${JSON.stringify(PROJECT_CATEGORIES)}.
+3. Write "description": a SHORT, SIMPLE 1-2 sentence summary of what it does.
+4. Write "techStack": { "languages": [], "frameworks": [], "libraries": [] }
+   using only what the README/primary language actually show.
+5. Write "reasoning": 1-3 sentences for the admin, noting this project is
+   the tool "${tool.name}" already on DevTunnel's tools catalog, now being
+   cross-registered as a project too.
+
+Every field is required. If you can't confidently fill one in, reply with
+{"skip": true} instead of guessing.
+
+Reply with ONLY this JSON and nothing else:
+{
+  "difficulty": "BEGINNER" | "INTERMEDIATE" | "ADVANCED",
+  "category": "one of the fixed category values above",
+  "description": "your short, simple 1-2 sentence summary",
+  "techStack": { "languages": [], "frameworks": [], "libraries": [] },
+  "reasoning": "1-3 sentences for the admin"
+}`;
+
+    try {
+      const raw = await runGroqAgent(env, kv, RECONCILIATION_SYSTEM_PROMPT, prompt, [], noToolDispatch, "projects");
+      const parsed = parseGroqJson<{
+        skip?: unknown;
+        difficulty?: unknown;
+        category?: unknown;
+        description?: unknown;
+        techStack?: unknown;
+        reasoning?: unknown;
+      }>(raw);
+
+      if (parsed.skip === true) {
+        dropped += 1;
+        onStep?.(`Skipped cross-registering "${tool.name}" — not enough real material to classify confidently.`);
+        continue;
+      }
+
+      const candidateInput: ProjectCandidateInput = {
+        fullName: tool.fullName,
+        url: `https://github.com/${ownerRepo.owner}/${ownerRepo.repo}`,
+        owner: ownerRepo.owner,
+        repo: ownerRepo.repo,
+        githubDescription: tool.description ?? null,
+        primaryLanguage: tool.primaryLanguage ?? null,
+        stars: 0,
+        forks: 0,
+        openIssues: 0,
+        difficulty: parsed.difficulty,
+        category: parsed.category,
+        description: parsed.description,
+        reasoning: parsed.reasoning,
+        techStack: parsed.techStack,
+      };
+
+      const problems = validateProjectCandidate(candidateInput);
+      if (problems.length > 0) {
+        dropped += 1;
+        onStep?.(`Dropped cross-registration of "${tool.name}" — missing or invalid fields.`);
+        logger.warn("ai_reconciled_project_candidate_dropped", { fullName: tool.fullName, problems });
+        continue;
+      }
+
+      const candidate = candidateInput as Required<ProjectCandidateInput> & {
+        difficulty: "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
+        techStack: { languages: string[]; frameworks: string[]; libraries: string[] };
+      };
+
+      const bucket = candidate.difficulty === "BEGINNER" ? "beginner" : candidate.difficulty === "ADVANCED" ? "advanced" : "intermediate";
+      if (remaining[bucket] <= 0) {
+        dropped += 1;
+        onStep?.(`Skipped "${tool.name}" — ${bucket} project quota already met today.`);
+        continue;
+      }
+
+      const readme = tool.readme ?? (await getReadmeWithCache(env, readmeCache, ownerRepo.owner, ownerRepo.repo));
+
+      await insertDiscoveredProject(supabase, {
+        repositoryUrl: candidate.url as string,
+        githubOwner: ownerRepo.owner,
+        githubRepoName: ownerRepo.repo,
+        githubFullName: tool.fullName,
+        githubDescription: (candidate.githubDescription as string | null) ?? null,
+        readme,
+        primaryLanguage: (candidate.primaryLanguage as string | null) ?? null,
+        stars: 0,
+        forks: 0,
+        openIssues: 0,
+        techStack: {
+          languages: candidate.techStack.languages,
+          frontend: [],
+          backend: [],
+          frameworks: candidate.techStack.frameworks,
+          databases: [],
+          libraries: candidate.techStack.libraries,
+          buildTools: [],
+          packageManager: null,
+        },
+        description: (candidate.description as string).trim(),
+        category: candidate.category as string,
+        difficulty: candidate.difficulty,
+        aiReasoning: `Auto cross-registered from existing open source tool "${tool.name}" already on DevTunnel. ${candidate.reasoning}`,
+      });
+      await bumpCounters(supabase, { [bucket]: 1 } as any);
+      exclude.add(tool.fullName);
+      remaining[bucket] -= 1;
+      proposed += 1;
+      onStep?.(`Saved project ${tool.fullName} (cross-registered from tool "${tool.name}") — pending review.`);
+    } catch (err) {
+      if (err instanceof GroqQuotaExceededError) {
+        logger.warn("ai_project_reconciliation_quota_exceeded", { fullName: tool.fullName, reason: err.reason });
+        onStep?.("Today's Groq budget ran out during cross-registration — stopping here.");
+        return {
+          proposed,
+          dropped,
+          quotaExceeded: true,
+          accountQuotaExceeded: err.reason === "rpd" || err.reason === "tpd",
+        };
+      }
+      logger.warn("ai_project_reconciliation_failed", { fullName: tool.fullName, error: err instanceof Error ? err.message : String(err) });
+      onStep?.(`Couldn't cross-register "${tool.name}" — skipping.`);
+    }
+  }
+
+  return { proposed, dropped, quotaExceeded: false, accountQuotaExceeded: false };
+}
+
+/**
+ * Phase 0b (runs inside runToolDiscovery, before fresh GitHub search):
+ * every published project that isn't ALSO a tool candidate yet gets
+ * classified from its own already-known description/README (no new
+ * GitHub search) and proposed as a tool. Mutates `exclude` in place;
+ * returns how much of the shared tools budget it spent via `proposed` so
+ * the caller can shrink its own category loop accordingly.
+ */
+async function reconcileProjectsMissingAsTools(
+  env: ValidatedEnv,
+  kv: KVNamespace,
+  supabase: ReturnType<typeof getSupabase>,
+  readmeCache: ReadmeCache,
+  exclude: Set<string>,
+  budgetRemaining: number,
+  maxToPropose: number | undefined,
+  onStep: StepReporter | undefined,
+): Promise<ReconciliationResult> {
+  let proposed = 0;
+  let dropped = 0;
+
+  if (budgetRemaining <= 0) {
+    return { proposed, dropped, quotaExceeded: false, accountQuotaExceeded: false };
+  }
+
+  onStep?.("Checking whether every project is also registered as an open source tool…");
+  const publishedProjects = await listPublishedProjectsForReconciliation(supabase);
+  const gaps = publishedProjects.filter((p) => !exclude.has(p.fullName));
+
+  if (gaps.length === 0) {
+    onStep?.("Every project is already registered as a tool — nothing to cross-register.");
+    return { proposed, dropped, quotaExceeded: false, accountQuotaExceeded: false };
+  }
+
+  onStep?.(`Found ${gaps.length} project(s) not yet registered as a tool — cross-registering first.`);
+
+  for (const project of gaps) {
+    if (proposed >= budgetRemaining) break;
+    if (maxToPropose !== undefined && proposed >= maxToPropose) break;
+
+    const ownerRepo = parseGithubOwnerRepo(project.repositoryUrl) ?? parseGithubOwnerRepo(`https://github.com/${project.fullName}`);
+    if (!ownerRepo) continue; // defensive — fullName is only ever built from a URL that already parsed cleanly
+
+    onStep?.(`Cross-registering project "${project.name}" as a tool…`);
+
+    const prompt = `DevTunnel already lists this project in its project catalog. It should
+also exist as a tool candidate in the tools catalog. Do NOT search GitHub
+or call any tool — classify only from what's given below.
+
+Name: ${project.name}
+Repository: https://github.com/${ownerRepo.owner}/${ownerRepo.repo}
+Existing description: ${project.description ?? "(none given)"}
+Primary language: ${project.primaryLanguage ?? "(unknown)"}
+README (may be truncated):
+${(project.readme ?? "(no README available)").slice(0, 6000)}
+
+From the material above ONLY (never invent facts not shown here):
+1. Pick "category": EXACTLY ONE of these values, whichever fits best —
+   never invent a new one: ${JSON.stringify(TOOL_CATEGORIES)}.
+2. Write "labels": a few short audience/role labels, e.g. "Backend", "DevOps".
+3. Write "description": a SHORT, SIMPLE 1-2 sentence summary of what it does.
+4. Write "setupGuide": a SHORT how-to-install-and-use guide, IN BULLET
+   POINTS (each bullet its own line starting with "- "), 4-8 bullets total,
+   based only on install/usage steps the README actually documents. If the
+   README doesn't cover installation, a minimal standard install command
+   for that language's package manager is fine — never invent flags or
+   steps that aren't standard practice for that ecosystem.
+5. Write "reasoning": 1-3 sentences for the admin, noting this tool is the
+   project "${project.name}" already on DevTunnel's project catalog, now
+   being cross-registered as a tool too.
+
+Every field is required. If you can't confidently fill one in, reply with
+{"skip": true} instead of guessing.
+
+Reply with ONLY this JSON and nothing else:
+{
+  "category": "one of the fixed category values above",
+  "labels": ["a few short audience/role labels"],
+  "description": "your short, simple 1-2 sentence summary",
+  "setupGuide": "- bullet one\\n- bullet two\\n- ...",
+  "reasoning": "1-3 sentences for the admin"
+}`;
+
+    try {
+      const raw = await runGroqAgent(env, kv, RECONCILIATION_SYSTEM_PROMPT, prompt, [], noToolDispatch, "tools");
+      const parsed = parseGroqJson<{
+        skip?: unknown;
+        category?: unknown;
+        labels?: unknown;
+        description?: unknown;
+        setupGuide?: unknown;
+        reasoning?: unknown;
+      }>(raw);
+
+      if (parsed.skip === true) {
+        dropped += 1;
+        onStep?.(`Skipped cross-registering "${project.name}" — not enough real material to classify confidently.`);
+        continue;
+      }
+
+      const candidateInput: ToolCandidateInput = {
+        sourceUrl: `https://github.com/${ownerRepo.owner}/${ownerRepo.repo}`,
+        name: project.name,
+        fetchedDescription: project.description ?? null,
+        primaryLanguage: project.primaryLanguage ?? null,
+        labels: parsed.labels,
+        description: parsed.description,
+        setupGuide: parsed.setupGuide,
+        reasoning: parsed.reasoning,
+      };
+
+      const problems = validateToolCandidate(candidateInput);
+      if (problems.length > 0) {
+        dropped += 1;
+        onStep?.(`Dropped cross-registration of "${project.name}" — missing or invalid fields.`);
+        logger.warn("ai_reconciled_tool_candidate_dropped", { fullName: project.fullName, problems });
+        continue;
+      }
+
+      const category =
+        typeof parsed.category === "string" && (TOOL_CATEGORIES as readonly string[]).includes(parsed.category)
+          ? parsed.category
+          : null;
+      if (!category) {
+        dropped += 1;
+        onStep?.(`Dropped cross-registration of "${project.name}" — invalid category.`);
+        logger.warn("ai_reconciled_tool_candidate_dropped", { fullName: project.fullName, problems: ["category"] });
+        continue;
+      }
+
+      const candidate = candidateInput as Required<ToolCandidateInput> & { sourceUrl: string; name: string };
+      const key = candidate.sourceUrl.toLowerCase();
+      if (exclude.has(key)) {
+        dropped += 1;
+        onStep?.(`Skipped ${candidate.name} — already exists or already proposed.`);
+        continue;
+      }
+
+      const readme = project.readme ?? (await getReadmeWithCache(env, readmeCache, ownerRepo.owner, ownerRepo.repo));
+
+      await insertDiscoveredTool(supabase, {
+        sourceUrl: candidate.sourceUrl,
+        name: candidate.name,
+        fetchedDescription: (candidate.fetchedDescription as string | null) ?? null,
+        readme,
+        primaryLanguage: (candidate.primaryLanguage as string | null) ?? null,
+        category,
+        labels: candidate.labels as string[],
+        description: (candidate.description as string).trim(),
+        setupGuide: (candidate.setupGuide as string).trim(),
+        aiReasoning: `Auto cross-registered from existing project "${project.name}" already on DevTunnel. ${candidate.reasoning}`,
+      });
+      await bumpCounters(supabase, { tools: 1, toolCategory: category });
+      exclude.add(project.fullName);
+      exclude.add(key);
+      proposed += 1;
+      onStep?.(`Saved tool ${candidate.name} (cross-registered from project "${project.name}") — pending review.`);
+    } catch (err) {
+      if (err instanceof GroqQuotaExceededError) {
+        logger.warn("ai_tool_reconciliation_quota_exceeded", { fullName: project.fullName, reason: err.reason });
+        onStep?.("Today's Groq budget ran out during cross-registration — stopping here.");
+        return {
+          proposed,
+          dropped,
+          quotaExceeded: true,
+          accountQuotaExceeded: err.reason === "rpd" || err.reason === "tpd",
+        };
+      }
+      logger.warn("ai_tool_reconciliation_failed", { fullName: project.fullName, error: err instanceof Error ? err.message : String(err) });
+      onStep?.(`Couldn't cross-register "${project.name}" — skipping.`);
+    }
+  }
+
+  return { proposed, dropped, quotaExceeded: false, accountQuotaExceeded: false };
 }
 
 const SYSTEM_PROMPT = `You are DevTunnel's open-source discovery agent. DevTunnel is a platform that
@@ -145,21 +555,64 @@ async function runProjectDiscovery(
     return { proposed: 0, dropped: 0, errors, quotaExceeded: false, accountQuotaExceeded: false };
   }
 
-  // When capped (e.g. the "one project at a time" admin button), only
-  // ask the model for as many candidates as we'll actually use.
-  const requestCount = Math.min(totalNeeded, maxToPropose ?? totalNeeded);
-
   // Point 5: dedup against the real published table AND our own pending/
   // approved queue — never against the manual onboarding drafts table,
   // which this pipeline has no relationship to.
   onStep?.("Loading the list of existing and already-proposed projects…");
   const exclude = await listExistingProjectFullNames(supabase);
 
+  // Point 6 / Phase 0a: close the tool→project gap FIRST, before spending
+  // any budget on a fresh GitHub search. `remaining` is created here (not
+  // further down) so reconciliation can consume straight out of the same
+  // per-difficulty budget the search step below will also draw from.
+  const remaining = { ...need };
+  let reconciledProposed = 0;
+  let reconciledDropped = 0;
+  const reconciliation = await reconcileToolsMissingAsProjects(
+    env,
+    kv,
+    supabase,
+    readmeCache,
+    exclude,
+    remaining,
+    maxToPropose,
+    onStep,
+  );
+  reconciledProposed += reconciliation.proposed;
+  reconciledDropped += reconciliation.dropped;
+  if (reconciliation.quotaExceeded) {
+    return {
+      proposed: reconciledProposed,
+      dropped: reconciledDropped,
+      errors,
+      quotaExceeded: true,
+      accountQuotaExceeded: reconciliation.accountQuotaExceeded,
+    };
+  }
+
+  // Whatever reconciliation didn't use is what's left for a fresh search —
+  // both the per-difficulty totals AND (when capped) the caller's own
+  // maxToPropose ceiling.
+  const totalStillNeeded = remaining.beginner + remaining.intermediate + remaining.advanced;
+  const searchBudget = maxToPropose !== undefined ? Math.max(0, maxToPropose - reconciledProposed) : undefined;
+  if (totalStillNeeded === 0 || searchBudget === 0) {
+    onStep?.(
+      totalStillNeeded === 0
+        ? "Today's project quota is now full after cross-registration — nothing more to do."
+        : "Reached this run's project limit via cross-registration — nothing more to do.",
+    );
+    return { proposed: reconciledProposed, dropped: reconciledDropped, errors, quotaExceeded: false, accountQuotaExceeded: false };
+  }
+
+  // When capped (e.g. the "one project at a time" admin button), only
+  // ask the model for as many candidates as we'll actually use.
+  const requestCount = Math.min(totalStillNeeded, searchBudget ?? totalStillNeeded);
+
   const prompt = `Find open source GitHub repositories for DevTunnel's project catalog.
 
-Still needed today (overall): ${need.beginner} BEGINNER-friendly, ${need.intermediate} INTERMEDIATE, ${need.advanced} ADVANCED.
+Still needed today (overall): ${remaining.beginner} BEGINNER-friendly, ${remaining.intermediate} INTERMEDIATE, ${remaining.advanced} ADVANCED.
 ${
-    maxToPropose !== undefined && maxToPropose < totalNeeded
+    searchBudget !== undefined && searchBudget < totalStillNeeded
       ? `For THIS request specifically, only return ${requestCount} candidate(s) total — whichever difficulty is still most needed above.`
       : ""
   }
@@ -257,8 +710,8 @@ Return exactly ${requestCount} candidate(s) total, matching the needed counts pe
           : "Today's project discovery budget (25% of the daily Groq budget) ran out — stopping here.",
       );
       return {
-        proposed: 0,
-        dropped: 0,
+        proposed: reconciledProposed,
+        dropped: reconciledDropped,
         errors,
         quotaExceeded: true,
         accountQuotaExceeded: err.reason === "rpd" || err.reason === "tpd",
@@ -267,15 +720,17 @@ Return exactly ${requestCount} candidate(s) total, matching the needed counts pe
     logger.error("ai_project_discovery_failed", { error: err instanceof Error ? err.message : String(err) });
     errors.push("project_discovery_agent_error");
     onStep?.("The AI model call failed.");
-    return { proposed: 0, dropped: 0, errors, quotaExceeded: false, accountQuotaExceeded: false };
+    return { proposed: reconciledProposed, dropped: reconciledDropped, errors, quotaExceeded: false, accountQuotaExceeded: false };
   }
 
-  const remaining = { ...need };
+  // NOTE: `remaining` is the SAME object reconciliation already updated
+  // above — deliberately not reset to `{ ...need }` here, so a bucket
+  // reconciliation already filled can't be double-counted by this loop.
   let proposed = 0;
   let dropped = 0;
 
   for (const c of candidates) {
-    if (maxToPropose !== undefined && proposed >= maxToPropose) break;
+    if (maxToPropose !== undefined && reconciledProposed + proposed >= maxToPropose) break;
 
     // Point 3: validate the WHOLE record before touching the database.
     // Any problem drops the candidate outright — no partial insert.
@@ -368,9 +823,14 @@ Return exactly ${requestCount} candidate(s) total, matching the needed counts pe
     }
   }
 
-  return { proposed, dropped, errors, quotaExceeded: false, accountQuotaExceeded: false };
+  return {
+    proposed: reconciledProposed + proposed,
+    dropped: reconciledDropped + dropped,
+    errors,
+    quotaExceeded: false,
+    accountQuotaExceeded: false,
+  };
 }
-
 // ---------------------------------------------------------------------------
 // Tools — 7/day, drawn from a shuffled subset of TOOL_CATEGORIES (see
 // db/aiDiscovery.ts's getTodayCounters) so which 7 of the categories get
@@ -387,14 +847,71 @@ async function runToolDiscovery(
   const supabase = getSupabase(env);
   const errors: string[] = [];
   onStep?.("Checking today's tool discovery quota…");
-  const counters = await getTodayCounters(supabase);
+  let counters = await getTodayCounters(supabase);
   if (counters.toolCategoriesRemaining.length === 0) {
     onStep?.("Today's tool quota (7) is already used up — nothing more to do until it resets.");
     return { proposed: 0, dropped: 0, errors, quotaExceeded: false, accountQuotaExceeded: false };
   }
 
+  // Point 5: dedup against the real published table AND our own pending/
+  // approved queue — never against the manual onboarding drafts table.
   onStep?.("Loading the list of existing and already-proposed tools…");
   const exclude = await listExistingToolUrls(supabase);
+
+  // Point 6 / Phase 0b: close the project→tool gap FIRST, before spending
+  // any budget on a fresh GitHub search. Reconciliation draws from the
+  // exact same shared daily tools budget (TOOL_DAILY_QUOTA, 7/day) the
+  // category loop below also draws from — `counters.toolCategoriesRemaining
+  // .length` is already capped to whatever's left of that shared budget
+  // today (see getTodayCounters in db/aiDiscovery.ts).
+  let reconciledProposed = 0;
+  let reconciledDropped = 0;
+  const reconciliation = await reconcileProjectsMissingAsTools(
+    env,
+    kv,
+    supabase,
+    readmeCache,
+    exclude,
+    counters.toolCategoriesRemaining.length,
+    maxToPropose,
+    onStep,
+  );
+  reconciledProposed += reconciliation.proposed;
+  reconciledDropped += reconciliation.dropped;
+  if (reconciliation.quotaExceeded) {
+    return {
+      proposed: reconciledProposed,
+      dropped: reconciledDropped,
+      errors,
+      quotaExceeded: true,
+      accountQuotaExceeded: reconciliation.accountQuotaExceeded,
+    };
+  }
+
+  // Reconciliation spends out of the same shared counters row (via
+  // bumpCounters), so re-read it before deciding which categories are
+  // still genuinely open today — otherwise the loop below could re-walk
+  // ground reconciliation already claimed, or overshoot the daily cap.
+  if (reconciledProposed > 0) {
+    onStep?.("Re-checking today's tool quota after cross-registration…");
+    counters = await getTodayCounters(supabase);
+  }
+
+  const searchBudget = maxToPropose !== undefined ? Math.max(0, maxToPropose - reconciledProposed) : undefined;
+  if (counters.toolCategoriesRemaining.length === 0 || searchBudget === 0) {
+    onStep?.(
+      counters.toolCategoriesRemaining.length === 0
+        ? "Today's tool quota is now full after cross-registration — nothing more to do."
+        : "Reached this run's tool limit via cross-registration — nothing more to do.",
+    );
+    return { proposed: reconciledProposed, dropped: reconciledDropped, errors, quotaExceeded: false, accountQuotaExceeded: false };
+  }
+
+  // When capped (e.g. the "add one tool at a time" admin button), only
+  // walk as many categories as we'll actually use.
+  const categories =
+    searchBudget !== undefined ? counters.toolCategoriesRemaining.slice(0, searchBudget) : counters.toolCategoriesRemaining;
+
   let proposed = 0;
   let dropped = 0;
   let quotaExceeded = false;
@@ -405,8 +922,8 @@ async function runToolDiscovery(
   // itself only ever begins once project discovery has fully finished
   // (see runDailyDiscovery), so nothing here overlaps with another
   // phase's work either.
-  for (const category of counters.toolCategoriesRemaining) {
-    if (maxToPropose !== undefined && proposed >= maxToPropose) break;
+  for (const category of categories) {
+    if (maxToPropose !== undefined && reconciledProposed + proposed >= maxToPropose) break;
     onStep?.(`Looking for a tool in category: ${category}`);
     const prompt = `Find ONE excellent open source developer tool for DevTunnel's tools
 catalog in this exact category: "${category}".
@@ -416,7 +933,7 @@ strong tools in this category are written in Java/Kotlin, Go, Rust,
 TypeScript/JavaScript, Ruby, PHP, C#/.NET, etc. Pick whichever
 language/ecosystem is genuinely a leading example for THIS category, and
 build your search_github_repositories query around it (e.g.
-"language:go topic:${category.split(" ")[0].toLowerCase()} stars:>100",
+"language:go topic:${(category.split(" ")[0] ?? category).toLowerCase()} stars:>100",
 "language:java spring-boot stars:>100", "language:typescript stars:>100") —
 vary it run to run instead of repeating the same query.
 
@@ -533,7 +1050,13 @@ Reply with ONLY this JSON and nothing else:
     }
   }
 
-  return { proposed, dropped, errors, quotaExceeded, accountQuotaExceeded };
+  return {
+    proposed: reconciledProposed + proposed,
+    dropped: reconciledDropped + dropped,
+    errors,
+    quotaExceeded,
+    accountQuotaExceeded,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -574,12 +1097,26 @@ Reply with ONLY this JSON and nothing else:
 
 const MAX_ISSUES_PER_PROJECT = 15;
 
-/** Fisher-Yates shuffle — never mutates the input array. */
-function shuffled<T>(items: T[]): T[] {
+/**
+ * Fisher-Yates shuffle — never mutates the input array.
+ *
+ * Uses a temp variable instead of array-destructuring swap
+ * (`[a[i], a[j]] = [a[j], a[i]]`) so this type-checks cleanly under
+ * `noUncheckedIndexedAccess` for a generic `T[]` — indexed reads on a
+ * generic array are typed `T`, but TS can't always carry that through a
+ * destructuring assignment target on the left of `=`, which was flagged
+ * as a pre-existing (harmless at runtime, but noisy under strict
+ * indexing) quirk. Kept as its own local copy — not imported from
+ * db/aiDiscovery.ts's identical helper — since that module is
+ * deliberately framework-agnostic and free of lib/ imports.
+ */
+function shuffled<T>(items: readonly T[]): T[] {
   const copy = [...items];
   for (let i = copy.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
+    const tmp = copy[i];
+    copy[i] = copy[j] as T;
+    copy[j] = tmp as T;
   }
   return copy;
 }
@@ -815,7 +1352,7 @@ Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
 // ---------------------------------------------------------------------------
 // Entry point — called by the daily cron trigger and by the manual
 // POST /admin/ai/run endpoint. Runs all three phases strictly one at a
-// time, in this order: issues (tasks) -> projects -> tools. Each phase
+// time, in this order: projects -> tools -> tasks. Each phase
 // runs fully to completion — including every item inside it, one at a
 // time — before the next phase starts. One phase failing never aborts
 // the others (each is wrapped in its own .catch below).
@@ -896,8 +1433,10 @@ export async function runDailyDiscovery(env: ValidatedEnv, kv: KVNamespace): Pro
  *
  * `limit` caps how many projects a single call may propose — the admin
  * button calls this with the default of 1 so each click adds exactly one
- * project at a time, streaming its progress through `onStep` as it goes
- * (see routes/admin/ai.ts's `POST /admin/ai/projects/run` SSE handler).
+ * project at a time (cross-registering a missing tool first if one is
+ * waiting, per the reconciliation pass in runProjectDiscovery above),
+ * streaming its progress through `onStep` as it goes (see
+ * routes/admin/ai.ts's `POST /admin/ai/projects/run` SSE handler).
  */
 export async function runProjectDiscoveryOnly(
   env: ValidatedEnv,
@@ -931,9 +1470,10 @@ export async function runProjectDiscoveryOnly(
  * Scoped entry point — runs ONLY the tool-discovery phase, for the
  * "Add AI tool" button on the AI Added Tools admin page
  * (devtunnel-frontend .../ai/tools). Same quota/dedup guarantees as
- * runProjectDiscoveryOnly above, mirrored for tools — `limit` (default 1)
- * caps how many tools a single call may propose, and `onStep` streams
- * live progress.
+ * runProjectDiscoveryOnly above, mirrored for tools (including its own
+ * project→tool reconciliation pass, see runToolDiscovery above) —
+ * `limit` (default 1) caps how many tools a single call may propose, and
+ * `onStep` streams live progress.
  */
 export async function runToolDiscoveryOnly(
   env: ValidatedEnv,
@@ -1011,4 +1551,3 @@ export async function runTaskDiscoveryOnly(
 }
 
 export { TOOL_CATEGORIES, PROJECT_CATEGORIES };
-export type { StepReporter };
