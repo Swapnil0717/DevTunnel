@@ -214,6 +214,50 @@ export async function listAdminTasks(
 }
 
 /**
+ * Reads every non-deleted DevTunnel task belonging to one project, newest
+ * first — backs `GET /admin/projects/:id/tasks`, which powers the
+ * Project Detail page's "DevTunnel tasks" section (section 18 — task
+ * count already shown via `AdminProjectSummary.taskCount`; this is the
+ * actual list behind that number).
+ *
+ * Filters on the same `admin_task_list` view `listAdminTasks` reads
+ * (sql/013), so a task's project/GitHub-issue/contributor-count fields
+ * are mapped identically wherever a task list is rendered — this is not
+ * a second, divergent source of truth for a task row.
+ *
+ * Unlike `listAdminTasks` (which deliberately includes soft-deleted tasks
+ * for the "Deleted in DevTunnel" tab), this excludes them —
+ * `AdminProjectSummary.taskCount` (sql/015) only ever counts non-deleted
+ * tasks, so a project's own task list should match that same number
+ * rather than silently including rows the count doesn't (rule 38: never
+ * let two numbers that are supposed to agree quietly diverge).
+ *
+ * Capped at `limit` (default 100) rather than paginated — a single
+ * project's task list is bounded in practice, and this section isn't the
+ * primary Tasks table (`GET /admin/tasks`, which is properly
+ * keyset-paginated); an admin who needs the full, paginated cross-project
+ * view already has that page.
+ */
+export async function listAdminProjectTasks(
+  supabase: SupabaseClient,
+  projectId: string,
+  limit = 100,
+): Promise<AdminTaskSummary[]> {
+  const { data, error } = await supabase
+    .from("admin_task_list")
+    .select(LIST_COLUMNS)
+    .eq("project_id", projectId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(`Failed to load project tasks: ${error.message}`);
+
+  const rows = (data ?? []) as unknown as AdminTaskListRow[];
+  return rows.map(toAdminTaskSummary);
+}
+
+/**
  * Single-task detail lookup backing `GET /admin/tasks/:id` (section 13's
  * "View task" action; A14 in the final page list, section 29). Returns
  * `null` for a task that doesn't exist OR has been soft-deleted — a

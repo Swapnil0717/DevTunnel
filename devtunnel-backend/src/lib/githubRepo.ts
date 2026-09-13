@@ -267,6 +267,59 @@ export async function fetchRepositoryMetadata(
   };
 }
 
+const issueSearchCountSchema = z.object({
+  total_count: z.number().int().nonnegative(),
+});
+
+export interface GitHubRepoIssueCounts {
+  openIssues: number;
+  closedIssues: number;
+}
+
+/**
+ * "Fetch open/closed issue counts" — replaces the naive
+ * `repos/{owner}/{repo}` `open_issues_count` field
+ * (`fetchRepositoryMetadata.openIssues` above), which is a well-known
+ * GitHub API quirk: it silently counts open *pull requests* alongside
+ * open issues, and GitHub's repo-metadata endpoint has no closed-issue
+ * counterpart at all.
+ *
+ * Uses the Search API's `type:issue` qualifier instead, which excludes
+ * pull requests by construction, and asks for `state:open` and
+ * `state:closed` as two independent counts (never derived from one
+ * another — a repo's total issue count can change between the two
+ * requests, so treating `closed = total - open` would be a fabricated
+ * number, not a measured one — rule 38: never fake a metric). Only
+ * `total_count` from each search response is used; the (paginated) issue
+ * list itself is discarded since only the counts are needed here.
+ */
+export async function fetchRepositoryIssueCounts(
+  accessToken: string | null,
+  owner: string,
+  repo: string,
+): Promise<GitHubRepoIssueCounts> {
+  const search = async (state: "open" | "closed"): Promise<number> => {
+    const query = encodeURIComponent(`repo:${owner}/${repo} type:issue state:${state}`);
+    const res = await fetchWithTimeout(
+      `${GITHUB_API_BASE}/search/issues?q=${query}&per_page=1`,
+      { headers: authHeaders(accessToken) },
+    );
+    await assertOk(res, `issue ${state} count lookup`);
+
+    const parsed = issueSearchCountSchema.safeParse(await res.json());
+    if (!parsed.success) {
+      throw new GitHubRepoError(
+        "github_unavailable",
+        "Unexpected GitHub issue search response shape",
+      );
+    }
+    return parsed.data.total_count;
+  };
+
+  const [openIssues, closedIssues] = await Promise.all([search("open"), search("closed")]);
+  return { openIssues, closedIssues };
+}
+
 const contributorsSchema = z.array(githubIdentitySchema);
 
 /** "Fetch contributors" (Step 1 algorithm). Capped to keep the draft/response bounded (rule 67). */

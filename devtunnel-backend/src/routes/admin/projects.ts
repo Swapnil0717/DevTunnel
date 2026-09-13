@@ -17,9 +17,11 @@ import {
   getProjectGithubRepoRef,
   getProjectTechStack,
   listAdminProjects,
+  refreshProjectGithubData,
   refreshProjectReadme,
   updateAdminProject,
 } from "../../db/adminProjects";
+import { listAdminProjectTasks } from "../../db/adminTasks";
 import { recordAdminAudit } from "../../db/adminAudit";
 import { getValidGithubAccessToken } from "../../db/githubTokens";
 import { GitHubRepoError, fetchRepositoryIssues } from "../../lib/githubRepo";
@@ -430,6 +432,61 @@ adminProjects.get(
 );
 
 /**
+ * `GET /admin/projects/:id/tasks` (admin_workflow.txt section 18 —
+ * "Project Detail Page"; RBAC permission `admin:projects:read`, same as
+ * `/:id/tech-stack` above — a plain read of already-curated DevTunnel
+ * data, no GitHub call).
+ *
+ * Backs the Project Detail page's "DevTunnel tasks" section — the actual
+ * list behind the `taskCount` stat already shown on this page
+ * (`AdminProjectSummary.taskCount`, sql/015). Response body is the raw
+ * `AdminTaskSummary[]` array — NOT wrapped in the `{ data: ... }`
+ * envelope — same documented exception as every other list route in this
+ * file (see `GET /admin/projects` above).
+ */
+adminProjects.get(
+  "/:id/tasks",
+  requireAuth,
+  requireAdminRole,
+  requirePermission("admin:projects:read"),
+  async (c) => {
+    const env = getEnv(c.env);
+
+    const idResult = idSchema.safeParse(c.req.param("id"));
+    if (!idResult.success) {
+      return errorResponse(c, 400, "invalid_request", idResult.error.issues[0]!.message);
+    }
+
+    const withinLimit = await checkRateLimit(c, {
+      bucket: "admin-projects-tasks",
+      limit: 120,
+      windowSeconds: 60,
+    });
+    if (!withinLimit) {
+      return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+    }
+
+    try {
+      const supabase = getSupabase(env);
+
+      const project = await getAdminProjectById(supabase, idResult.data);
+      if (!project) {
+        return errorResponse(c, 404, "project_not_found", "Project not found");
+      }
+
+      const tasks = await listAdminProjectTasks(supabase, idResult.data);
+      return c.json(tasks, 200);
+    } catch (err) {
+      logger.error("admin_project_tasks_failed", {
+        error: err instanceof Error ? err.message : String(err),
+        requestId: c.get("requestId"),
+      });
+      return errorResponse(c, 500, "internal_error", "Couldn't load this project's tasks right now");
+    }
+  },
+);
+
+/**
  * `PATCH /admin/projects/:id` (admin_workflow.txt section 22 — Admin
  * Backend API Map, "Projects"; RBAC permission `admin:projects:write`
  * already reserved for this exact route in src/lib/rbac.ts).
@@ -655,6 +712,102 @@ adminProjects.post(
         requestId: c.get("requestId"),
       });
       return errorResponse(c, 500, "internal_error", "Couldn't refresh the README right now");
+    }
+  },
+);
+
+/**
+ * `POST /admin/projects/:id/sync` — Project Detail page's "Sync GitHub
+ * data" action.
+ *
+ * Re-fetches contributors, stars, forks, primary language, and
+ * open/closed issue counts from GitHub and overwrites those columns —
+ * see `refreshProjectGithubData` (src/db/adminProjects.ts) for why this
+ * is needed: every one of these fields is captured once at onboarding
+ * time and otherwise never refreshed, so an older or long-lived project
+ * can show a stale contributor count or an issue split that predates
+ * `fetchRepositoryIssueCounts`. Never touches the README (its own
+ * `/refresh-readme` action above), description, tech stack, or status —
+ * same GitHub-derived-vs-Admin-curated boundary `updateAdminProject`
+ * enforces.
+ *
+ * Uses `requirePermission("admin:projects:write")` — same permission
+ * `/refresh-readme` and `PATCH /:id` require, since this is still a
+ * write to the same row.
+ */
+adminProjects.post(
+  "/:id/sync",
+  requireAuth,
+  requireAdminRole,
+  requirePermission("admin:projects:write"),
+  async (c) => {
+    const env = getEnv(c.env);
+    const admin = c.get("user");
+    if (!admin) {
+      // requireAuth + requireAdminRole already guarantee this — kept for
+      // type safety, same pattern used throughout this file.
+      return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+    }
+
+    const idResult = idSchema.safeParse(c.req.param("id"));
+    if (!idResult.success) {
+      return errorResponse(c, 400, "invalid_request", idResult.error.issues[0]!.message);
+    }
+
+    const withinLimit = await checkRateLimit(c, {
+      bucket: "admin-projects-sync",
+      limit: 20,
+      windowSeconds: 60,
+    });
+    if (!withinLimit) {
+      return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+    }
+
+    const supabase = getSupabase(env);
+
+    try {
+      const repoRef = await getProjectGithubRepoRef(supabase, idResult.data);
+      if (!repoRef) {
+        return errorResponse(c, 404, "project_not_found", "Project not found");
+      }
+
+      const accessToken = await getValidGithubAccessToken(supabase, env, admin.id);
+      const project = await refreshProjectGithubData(supabase, accessToken, repoRef, idResult.data);
+
+      // Best-effort audit trail (rule 96), same convention as
+      // `/refresh-readme` above.
+      try {
+        await recordAdminAudit(supabase, {
+          adminId: admin.id,
+          action: "ADMIN_PROJECT_GITHUB_DATA_SYNCED",
+          resourceType: "project",
+          resourceId: project.id,
+          result: "SUCCESS",
+          metadata: {
+            slug: project.slug,
+            githubContributorCount: project.githubContributorCount,
+            openIssuesCount: project.openIssuesCount,
+            closedIssuesCount: project.closedIssuesCount,
+          },
+        });
+      } catch (auditErr) {
+        logger.error("admin_audit_write_failed", {
+          error: auditErr instanceof Error ? auditErr.message : String(auditErr),
+          requestId: c.get("requestId"),
+        });
+      }
+
+      return c.json(project, 200);
+    } catch (err) {
+      if (err instanceof GitHubRepoError) return mapGithubError(c, err);
+      if (err instanceof AdminProjectUpdateError) {
+        return errorResponse(c, 404, "project_not_found", "Project not found");
+      }
+      logger.error("admin_project_sync_failed", {
+        error: err instanceof Error ? err.message : String(err),
+        requestId: c.get("requestId"),
+      });
+      return errorResponse(c, 500, "internal_error", "Couldn't sync this project's GitHub data right now");
     }
   },
 );

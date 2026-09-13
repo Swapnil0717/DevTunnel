@@ -9,7 +9,7 @@ import type {
   DeleteAdminProjectResult,
   OnboardingTechStack,
 } from "../types";
-import { fetchRepositoryReadme } from "../lib/githubRepo";
+import { fetchRepositoryReadme, fetchRepositoryMetadata, fetchRepositoryContributors, fetchRepositoryIssueCounts } from "../lib/githubRepo";
 
 /**
  * Explicit column list for the detail-only fields — selected from
@@ -21,7 +21,7 @@ import { fetchRepositoryReadme } from "../lib/githubRepo";
  * `select("*")`, select exactly what the caller needs).
  */
 const DETAIL_EXTRA_COLUMNS =
-  "github_description, readme, open_issues, description_source, custom_description, tech_stack";
+  "github_description, readme, open_issues, closed_issues, description_source, custom_description, tech_stack";
 
 /**
  * Normalizes a `devtunnel.projects.tech_stack` jsonb value into the
@@ -249,6 +249,7 @@ export async function getAdminProjectDetailById(
     githubDescription: data.github_description,
     readme: data.readme,
     openIssuesCount: data.open_issues,
+    closedIssuesCount: data.closed_issues,
     description:
       data.description_source !== null
         ? { choice: data.description_source, customDescription: data.custom_description }
@@ -337,6 +338,77 @@ export async function refreshProjectReadme(
   if (!detail) {
     // Raced with a concurrent soft-delete between the write above and
     // this read — same handling as `updateAdminProject`.
+    throw new AdminProjectUpdateError("not_found", "Project not found");
+  }
+  return detail;
+}
+
+/**
+ * Re-fetches a project's GitHub-sourced *counts* — contributors, stars,
+ * forks, primary language, and open/closed issue counts — and overwrites
+ * the corresponding columns. Backs the Project Detail page's "Sync
+ * GitHub data" action.
+ *
+ * WHY THIS EXISTS: every one of these fields is captured exactly once,
+ * at Project Onboarding Step 1 (`saveRepositoryImport`,
+ * src/db/projectOnboarding.ts), and never touched again automatically.
+ * A project onboarded before `fetchRepositoryIssueCounts` existed (or
+ * simply weeks/months ago) permanently shows whatever GitHub reported on
+ * import day — a stale `github_contributor_count` of 0 because
+ * `github_contributors` was captured empty, or an `openIssuesCount` that
+ * is really the old, PR-inflated `open_issues_count` snapshot with
+ * `closedIssuesCount` frozen at 0. Re-running the full onboarding wizard
+ * is the only other way to refresh these today; this gives the Admin a
+ * one-click fix for an already-onboarded project without re-doing Steps
+ * 2–5 (description/tech-stack choices, which this never touches).
+ *
+ * Deliberately narrower than a full re-onboard: never overwrites
+ * `github_description`, `readme` (see `refreshProjectReadme` above for
+ * that, kept as its own action since a README refresh is a much larger
+ * response body and an Admin may want one without the other),
+ * `description_source`/`custom_description`, `tech_stack`, or `status` —
+ * exactly the same restriction `updateAdminProject` enforces on
+ * GitHub-derived vs. Admin-curated fields, just approached from the
+ * "refresh from GitHub" direction instead of the "edit in DevTunnel"
+ * direction.
+ *
+ * Reuses `getProjectGithubRepoRef`'s `{ owner, repo }` coordinates
+ * (never a client-supplied URL — rule 15), and the exact same
+ * `fetchRepositoryMetadata` / `fetchRepositoryContributors` /
+ * `fetchRepositoryIssueCounts` helpers Project Onboarding Step 1 already
+ * uses — this is not a second, divergent way of computing these numbers.
+ */
+export async function refreshProjectGithubData(
+  supabase: SupabaseClient,
+  accessToken: string | null,
+  repoRef: { owner: string; repo: string },
+  projectId: string,
+): Promise<AdminProjectDetail> {
+  const [metadata, contributors, issueCounts] = await Promise.all([
+    fetchRepositoryMetadata(accessToken, repoRef.owner, repoRef.repo),
+    fetchRepositoryContributors(accessToken, repoRef.owner, repoRef.repo),
+    fetchRepositoryIssueCounts(accessToken, repoRef.owner, repoRef.repo),
+  ]);
+
+  const { error: updateError } = await supabase
+    .from("projects")
+    .update({
+      primary_language: metadata.primaryLanguage,
+      stars: metadata.stars,
+      forks: metadata.forks,
+      open_issues: issueCounts.openIssues,
+      closed_issues: issueCounts.closedIssues,
+      github_contributors: contributors,
+    })
+    .eq("id", projectId)
+    .is("deleted_at", null);
+
+  if (updateError) throw new Error(`Failed to sync project GitHub data: ${updateError.message}`);
+
+  const detail = await getAdminProjectDetailById(supabase, projectId);
+  if (!detail) {
+    // Raced with a concurrent soft-delete between the write above and
+    // this read — same handling as `refreshProjectReadme`.
     throw new AdminProjectUpdateError("not_found", "Project not found");
   }
   return detail;

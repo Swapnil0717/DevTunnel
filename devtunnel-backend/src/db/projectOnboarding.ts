@@ -13,7 +13,7 @@ import type {
 /** Explicit column list — never `select("*")` (Backend_Development_Rules.txt rule 23). */
 const DRAFT_COLUMNS =
   "id, admin_id, repository_url, github_owner, github_repo_name, github_full_name, " +
-  "github_description, readme, default_branch, primary_language, stars, forks, open_issues, " +
+  "github_description, readme, default_branch, primary_language, stars, forks, open_issues, closed_issues, " +
   "github_author, github_contributors, has_github_app_access, repository_completed, " +
   "description_choice, custom_description, description_completed, " +
   "tech_stack, tech_stack_completed, preview_completed, validation_completed, " +
@@ -66,6 +66,7 @@ export function toOnboardingDraft(row: ProjectOnboardingDraftRow): ProjectOnboar
           stars: row.stars ?? 0,
           forks: row.forks ?? 0,
           openIssues: row.open_issues ?? 0,
+          closedIssues: row.closed_issues ?? 0,
           author: (row.github_author as OnboardingGithubIdentity | null) ?? {
             username: row.github_owner as string,
             name: null,
@@ -169,6 +170,7 @@ export interface RepositoryImportInput {
   stars: number;
   forks: number;
   openIssues: number;
+  closedIssues: number;
   author: OnboardingGithubIdentity;
   contributors: OnboardingGithubIdentity[];
   hasGithubAppAccess: boolean;
@@ -217,6 +219,7 @@ export async function saveRepositoryImport(
     stars: input.stars,
     forks: input.forks,
     open_issues: input.openIssues,
+    closed_issues: input.closedIssues,
     github_author: input.author,
     github_contributors: input.contributors,
     has_github_app_access: input.hasGithubAppAccess,

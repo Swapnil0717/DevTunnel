@@ -254,6 +254,13 @@ export interface OnboardingRepository {
   stars: number;
   forks: number;
   openIssues: number;
+  /**
+   * Independently fetched via the GitHub Search API (`type:issue
+   * state:closed`) — never derived from `openIssues` or any other field
+   * (rule 38: never fake a metric). See
+   * src/lib/githubRepo.ts `fetchRepositoryIssueCounts`.
+   */
+  closedIssues: number;
   author: OnboardingGithubIdentity;
   contributors: OnboardingGithubIdentity[];
   hasGithubAppAccess: boolean;
@@ -338,6 +345,7 @@ export interface ProjectOnboardingDraftRow {
   stars: number | null;
   forks: number | null;
   open_issues: number | null;
+  closed_issues: number | null;
   github_author: OnboardingGithubIdentity | null;
   github_contributors: OnboardingGithubIdentity[] | null;
   has_github_app_access: boolean;
@@ -485,6 +493,13 @@ export interface AdminProjectDetail extends AdminProjectSummary {
   readme: string | null;
   /** Open issue count on GitHub for this repository (not a DevTunnel task count). */
   openIssuesCount: number;
+  /**
+   * Closed issue count on GitHub for this repository — fetched
+   * independently of `openIssuesCount` via the GitHub Search API
+   * (`type:issue`, which excludes pull requests), never derived by
+   * subtracting from a combined total (rule 38: never fake a metric).
+   */
+  closedIssuesCount: number;
   /** The admin's description choice for this project, or `null` if never set. */
   description: OnboardingDescription | null;
   /** The project's curated tech stack, or `null` if none has been recorded. */
@@ -501,6 +516,7 @@ export interface AdminProjectDetailExtraRow {
   github_description: string | null;
   readme: string | null;
   open_issues: number;
+  closed_issues: number;
   description_source: DescriptionChoice | null;
   custom_description: string | null;
   tech_stack: unknown;

@@ -76,3 +76,44 @@ export async function getAdminTaskDetail(id: string): Promise<AdminTaskDetailRes
     return { status: "error" };
   }
 }
+
+/**
+ * `GET /admin/projects/:id/tasks` (admin_workflow.txt section 18 —
+ * "Project Detail Page"). Backs that page's "DevTunnel tasks" section —
+ * the actual list behind the `taskCount` stat already shown there. Same
+ * three-state result shape as `getAdminTasks`/`getAdminProjectDetail` so
+ * the page can render one honest `SectionMessage` on failure rather than
+ * a blank section (Frontend_Development_Rules.txt rule 25).
+ */
+type AdminProjectTasksResult =
+  | { status: "ok"; data: AdminTaskSummary[] }
+  | { status: "empty" }
+  | { status: "not-found" }
+  | { status: "error" };
+
+export async function getAdminProjectTasks(projectId: string): Promise<AdminProjectTasksResult> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/admin/projects/${projectId}/tasks`, {
+      headers: { cookie: cookies().toString() },
+      cache: "no-store",
+    });
+
+    if (res.status === 404) {
+      return { status: "not-found" };
+    }
+
+    if (!res.ok) {
+      return { status: "error" };
+    }
+
+    const data = (await res.json()) as AdminTaskSummary[];
+
+    if (Array.isArray(data) && data.length === 0) {
+      return { status: "empty" };
+    }
+
+    return { status: "ok", data };
+  } catch {
+    return { status: "error" };
+  }
+}

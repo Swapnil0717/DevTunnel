@@ -3,12 +3,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { buildMetadata } from "@/lib/seo";
 import { getAdminProjectDetail } from "@/lib/admin/projects/api";
+import { getAdminProjectTasks } from "@/lib/admin/tasks/api";
 import { AdminProjectStatusBadge } from "@/components/admin/projects/admin-project-status-badge";
+import { AdminTaskStatusBadge } from "@/components/admin/tasks/admin-task-status-badge";
 import { AdminStatCard } from "@/components/admin/admin-stat-card";
 import { DeleteProjectButton } from "@/components/admin/projects/delete-project-button";
 import { ProjectStatusToggle } from "@/components/admin/projects/project-status-toggle";
 import { EditProjectDetailsPanel } from "@/components/admin/projects/edit-project-details-panel";
-import { EditIcon, GitBranchIcon } from "@/components/layout/nav-icons";
+import { SyncProjectGithubDataButton } from "@/components/admin/projects/sync-project-github-data-button";
+import { EditIcon, GitBranchIcon, IssueIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
 
@@ -85,7 +88,14 @@ export default async function AdminProjectDetailPage({
   params,
   searchParams,
 }: ProjectDetailPageProps) {
-  const result = await getAdminProjectDetail(params.id);
+  // Fetched in parallel — the tasks section is independent of the
+  // project detail fetch and shouldn't add its own round-trip latency
+  // (Frontend_Development_Rules.txt rule 39: don't serialize
+  // independent data fetches).
+  const [result, tasksResult] = await Promise.all([
+    getAdminProjectDetail(params.id),
+    getAdminProjectTasks(params.id),
+  ]);
   const startInEditMode = searchParams?.edit === "1";
 
   if (result.status === "not-found") {
@@ -162,6 +172,7 @@ export default async function AdminProjectDetailPage({
             <EditIcon className="h-3.5 w-3.5 shrink-0" />
             Edit details
           </Link>
+          <SyncProjectGithubDataButton projectId={project.id} />
           <ProjectStatusToggle
             projectId={project.id}
             projectName={project.name}
@@ -183,18 +194,87 @@ export default async function AdminProjectDetailPage({
         >
           Contributors, tasks &amp; issues
         </h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           <AdminStatCard
             label="DevTunnel contributors"
             value={project.devTunnelContributorCount}
           />
           <AdminStatCard label="GitHub contributors" value={project.githubContributorCount} />
           <AdminStatCard label="DevTunnel tasks" value={project.taskCount} />
+          {/*
+            Open and closed issue counts are fetched independently from
+            GitHub (`type:issue state:open` / `state:closed` via the
+            Search API — devtunnel-backend/src/lib/githubRepo.ts
+            `fetchRepositoryIssueCounts`), never derived from one another
+            or from a single combined "issues" figure — the previous
+            version of this page showed one `openIssuesCount` that GitHub
+            itself silently mixes with open pull requests, with no closed
+            count at all.
+          */}
           <AdminStatCard label="Open GitHub issues" value={project.openIssuesCount} />
+          <AdminStatCard label="Closed GitHub issues" value={project.closedIssuesCount} />
         </div>
       </section>
 
       <EditProjectDetailsPanel project={project} startInEditMode={startInEditMode} />
+
+      <section aria-labelledby="project-tasks-heading" className="mb-8">
+        <div className="mb-2.5 flex items-center justify-between">
+          <h2
+            id="project-tasks-heading"
+            className="m-0 text-[12.5px] font-normal text-text-muted"
+          >
+            DevTunnel tasks
+          </h2>
+          <Link
+            href={`/admin/tasks?project=${project.slug}`}
+            className="text-[12.5px] font-medium text-accent hover:underline"
+          >
+            View all
+          </Link>
+        </div>
+
+        {tasksResult.status === "error" && (
+          <SectionMessage>
+            Tasks for this project aren&apos;t available right now — check back soon.
+          </SectionMessage>
+        )}
+
+        {(tasksResult.status === "empty" || tasksResult.status === "not-found") && (
+          <div className="rounded-[10px] border border-border-subtle bg-surface px-4 py-6 text-center text-[12.5px] text-text-faint">
+            No DevTunnel tasks have been created for this project yet.
+          </div>
+        )}
+
+        {tasksResult.status === "ok" && (
+          <ul className="flex flex-col gap-2">
+            {tasksResult.data.map((task) => (
+              <li key={task.id}>
+                <Link
+                  href={`/admin/tasks/${task.id}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-border bg-surface px-4 py-3 hover:bg-surface-raised"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <IssueIcon className="h-3.5 w-3.5 shrink-0 text-text-faint" />
+                    <span className="truncate text-[13px] font-medium text-text">
+                      {task.title}
+                    </span>
+                    {task.githubIssue && (
+                      <span className="shrink-0 font-mono text-[12px] text-text-faint">
+                        #{task.githubIssue.number}
+                      </span>
+                    )}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-3 text-[12.5px] text-text-secondary">
+                    <span>{task.submissionCount} submissions</span>
+                    <AdminTaskStatusBadge status={task.status} />
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section
         aria-labelledby="project-readme-heading"

@@ -91,3 +91,25 @@ export async function refreshAdminProjectReadme(id: string): Promise<AdminProjec
 
   return (await res.json()) as AdminProjectDetail;
 }
+
+/**
+ * `POST /admin/projects/:id/sync` — the Project Detail page's "Sync
+ * GitHub data" action. Re-fetches contributors, stars, forks, primary
+ * language, and open/closed issue counts straight from GitHub — the
+ * fields that are otherwise only ever captured once, at onboarding time
+ * (see `refreshProjectGithubData` on the backend). Returns the full
+ * refreshed `AdminProjectDetail`, same round-trip contract
+ * `refreshAdminProjectReadme`/`updateAdminProject` already use.
+ */
+export async function syncAdminProjectGithubData(id: string): Promise<AdminProjectDetail> {
+  const res = await fetch(`${API_BASE_URL}/admin/projects/${id}/sync`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    throw new AdminProjectsApiError(`Failed to sync GitHub data (${res.status})`, res.status);
+  }
+
+  return (await res.json()) as AdminProjectDetail;
+}

@@ -85,6 +85,14 @@
    /** Open issue count on GitHub for this repository (not a DevTunnel task count). */
    openIssuesCount: number;
    /**
+    * Closed issue count on GitHub for this repository — fetched
+    * independently of `openIssuesCount` via the GitHub Search API
+    * (`type:issue`, which excludes pull requests), never derived by
+    * subtracting one count from a combined total (rule 38: never fake a
+    * metric).
+    */
+   closedIssuesCount: number;
+   /**
     * The Admin's Step 2 choice from Project Onboarding — reusing
     * `OnboardingDescription` rather than a second copy of the same shape,
     * since it's exactly the same "existing vs custom" decision, just read

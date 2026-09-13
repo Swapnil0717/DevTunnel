@@ -6,7 +6,7 @@ import { getEnv } from "../config/env";
 import { recordAdminAudit } from "../db/adminAudit";
 import { getValidGithubAccessToken } from "../db/githubTokens";
 import { ProjectOnboardingError, saveRepositoryImport, toOnboardingDraft, saveDescription, saveTechStack, getDraftForAdmin, markPreviewCompleted, computeValidation, saveValidationResult, completeOnboarding } from "../db/projectOnboarding";
-import { GitHubRepoError, parseGithubRepoUrl, fetchRepositoryMetadata, fetchRepositoryContributors, fetchRepositoryReadme, fetchRepositoryLanguages } from "../lib/githubRepo";
+import { GitHubRepoError, parseGithubRepoUrl, fetchRepositoryMetadata, fetchRepositoryContributors, fetchRepositoryReadme, fetchRepositoryLanguages, fetchRepositoryIssueCounts } from "../lib/githubRepo";
 import { logger } from "../lib/logger";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
@@ -127,9 +127,14 @@ adminProjectOnboarding.post(
       const accessToken = await getValidGithubAccessToken(supabase, env, admin.id);
 
       const metadata = await fetchRepositoryMetadata(accessToken, parsedRepo.owner, parsedRepo.repo);
-      const [contributors, readme] = await Promise.all([
+      const [contributors, readme, issueCounts] = await Promise.all([
         fetchRepositoryContributors(accessToken, parsedRepo.owner, parsedRepo.repo),
         fetchRepositoryReadme(accessToken, parsedRepo.owner, parsedRepo.repo),
+        // `metadata.openIssues` (repos/{owner}/{repo}'s `open_issues_count`)
+        // silently includes open pull requests and has no closed
+        // counterpart — fetchRepositoryIssueCounts uses the Search API's
+        // `type:issue` qualifier for two accurate, independent numbers.
+        fetchRepositoryIssueCounts(accessToken, parsedRepo.owner, parsedRepo.repo),
       ]);
 
       const isNewDraft = !bodyResult.data.draftId;
@@ -144,7 +149,8 @@ adminProjectOnboarding.post(
         primaryLanguage: metadata.primaryLanguage,
         stars: metadata.stars,
         forks: metadata.forks,
-        openIssues: metadata.openIssues,
+        openIssues: issueCounts.openIssues,
+        closedIssues: issueCounts.closedIssues,
         author: metadata.author,
         contributors,
         // A successful, validated metadata fetch is this codebase's only
