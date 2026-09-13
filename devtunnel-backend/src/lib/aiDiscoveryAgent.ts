@@ -167,6 +167,24 @@ ${
 simple, approachable codebase, moderate star count. "Advanced" = larger,
 architecturally complex, requires real domain expertise to contribute to.
 
+IMPORTANT — cover a mix of languages/frameworks, don't default to the same
+one every time. If you're returning more than one candidate, each should
+generally use a DIFFERENT primary language or framework from the others.
+Rotate your search_github_repositories queries across ecosystems like:
+- JavaScript/TypeScript: Node.js, React, Next.js, Vue, Angular
+- Python: Django, FastAPI, Flask
+- Java / Kotlin: Spring Boot, Ktor
+- Go
+- Rust
+- Ruby: Rails
+- PHP: Laravel, Symfony
+- C# / .NET
+- Swift
+Build the query around the language/framework you're targeting (e.g.
+"language:java spring-boot stars:>100", "language:typescript topic:nextjs
+stars:>100", "language:rust stars:>100", "language:python django stars:>100")
+instead of repeating the same search every run.
+
 Do NOT propose any of these repositories (already on DevTunnel or already
 proposed today) — full_name values, case-insensitive. This is a hint, not
 the full list — every candidate you return is still checked against the
@@ -392,6 +410,15 @@ async function runToolDiscovery(
     onStep?.(`Looking for a tool in category: ${category}`);
     const prompt = `Find ONE excellent open source developer tool for DevTunnel's tools
 catalog in this exact category: "${category}".
+
+Don't default to searching only Python (or only one ecosystem) — plenty of
+strong tools in this category are written in Java/Kotlin, Go, Rust,
+TypeScript/JavaScript, Ruby, PHP, C#/.NET, etc. Pick whichever
+language/ecosystem is genuinely a leading example for THIS category, and
+build your search_github_repositories query around it (e.g.
+"language:go topic:${category.split(" ")[0].toLowerCase()} stars:>100",
+"language:java spring-boot stars:>100", "language:typescript stars:>100") —
+vary it run to run instead of repeating the same query.
 
 Do NOT propose any of these tool URLs (already listed or already proposed
 today). This is a hint, not the full list — every candidate is still

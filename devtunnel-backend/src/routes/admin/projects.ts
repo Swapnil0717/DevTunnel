@@ -17,6 +17,7 @@ import {
   getProjectGithubRepoRef,
   getProjectTechStack,
   listAdminProjects,
+  listAllProjectGithubRepoRefs,
   refreshProjectGithubData,
   refreshProjectReadme,
   updateAdminProject,
@@ -808,6 +809,110 @@ adminProjects.post(
         requestId: c.get("requestId"),
       });
       return errorResponse(c, 500, "internal_error", "Couldn't sync this project's GitHub data right now");
+    }
+  },
+);
+
+/**
+ * `POST /admin/projects/sync-all` — All Projects page's "Sync GitHub
+ * data" action, next to "Onboard a project".
+ *
+ * Does exactly the same work as `POST /:id/sync` above, once per active
+ * project instead of once for a single id — same
+ * `refreshProjectGithubData` call, same GitHub-derived-only fields, same
+ * "never touches README/description/tech-stack/status" boundary. Not a
+ * second implementation of the sync logic, just this route's own loop
+ * over every project `getProjectGithubRepoRef`'s bulk counterpart
+ * (`listAllProjectGithubRepoRefs`) returns.
+ *
+ * Runs sequentially (one project's three GitHub calls finish before the
+ * next project starts) rather than firing all projects' requests at
+ * once — this can run across every onboarded project, and GitHub's API
+ * has its own rate limits this admin's token is subject to regardless of
+ * how DevTunnel batches its own requests.
+ *
+ * One project failing (deleted mid-loop, GitHub 404s it, etc.) never
+ * aborts the rest — every project gets a real attempt and the response
+ * reports per-project results so the Admin can see exactly what synced
+ * and what didn't, rather than an all-or-nothing result hiding partial
+ * success (rule 17: never paper over a partial outcome as full success
+ * or full failure).
+ */
+adminProjects.post(
+  "/sync-all",
+  requireAuth,
+  requireAdminRole,
+  requirePermission("admin:projects:write"),
+  async (c) => {
+    const env = getEnv(c.env);
+    const admin = c.get("user");
+    if (!admin) {
+      return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+    }
+
+    // Tighter than the per-project bucket (20/min) since one call here can
+    // itself trigger dozens of underlying GitHub requests.
+    const withinLimit = await checkRateLimit(c, {
+      bucket: "admin-projects-sync-all",
+      limit: 5,
+      windowSeconds: 60,
+    });
+    if (!withinLimit) {
+      return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+    }
+
+    const supabase = getSupabase(env);
+
+    try {
+      const refs = await listAllProjectGithubRepoRefs(supabase);
+      const accessToken = await getValidGithubAccessToken(supabase, env, admin.id);
+
+      const synced: string[] = [];
+      const failed: Array<{ id: string; slug: string; error: string }> = [];
+
+      for (const ref of refs) {
+        try {
+          await refreshProjectGithubData(supabase, accessToken, { owner: ref.owner, repo: ref.repo }, ref.id);
+          synced.push(ref.id);
+        } catch (err) {
+          logger.error("admin_project_sync_all_item_failed", {
+            projectId: ref.id,
+            slug: ref.slug,
+            error: err instanceof Error ? err.message : String(err),
+            requestId: c.get("requestId"),
+          });
+          failed.push({
+            id: ref.id,
+            slug: ref.slug,
+            error: err instanceof GitHubRepoError ? err.reason : "internal_error",
+          });
+        }
+      }
+
+      // Best-effort audit trail (rule 96), same convention as `/:id/sync`.
+      try {
+        await recordAdminAudit(supabase, {
+          adminId: admin.id,
+          action: "ADMIN_PROJECTS_GITHUB_DATA_SYNCED_ALL",
+          resourceType: "project",
+          resourceId: null,
+          result: failed.length === 0 ? "SUCCESS" : "FAILURE",
+          metadata: { total: refs.length, syncedCount: synced.length, failedCount: failed.length },
+        });
+      } catch (auditErr) {
+        logger.error("admin_audit_write_failed", {
+          error: auditErr instanceof Error ? auditErr.message : String(auditErr),
+          requestId: c.get("requestId"),
+        });
+      }
+
+      return c.json({ total: refs.length, synced: synced.length, failed }, 200);
+    } catch (err) {
+      logger.error("admin_project_sync_all_failed", {
+        error: err instanceof Error ? err.message : String(err),
+        requestId: c.get("requestId"),
+      });
+      return errorResponse(c, 500, "internal_error", "Couldn't sync projects' GitHub data right now");
     }
   },
 );

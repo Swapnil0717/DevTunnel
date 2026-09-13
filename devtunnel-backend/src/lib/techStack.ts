@@ -96,6 +96,79 @@ const NPM_PACKAGE_MAP: Record<string, PackageMapping> = {
   typescript: { name: "TypeScript", bucket: "buildTools" },
 };
 
+/**
+ * Python dependency name -> canonical display name + category. Unlike
+ * `NPM_PACKAGE_MAP` this isn't matched against parsed JSON keys — Python
+ * has three differently-shaped manifests (`requirements.txt` line-based,
+ * `pyproject.toml` TOML, `Pipfile` TOML-ish) and writing a real parser for
+ * each is the same "out of scope" call the switch below already makes for
+ * Go/Rust/Ruby/PHP/Java. Instead this is matched as a word-boundary
+ * substring against the raw manifest text (see `applyPythonManifest`) —
+ * still a fact actually present in the file (rule 37/38), just detected
+ * more cheaply than full parsing.
+ */
+const PYTHON_PACKAGE_MAP: Record<string, PackageMapping> = {
+  django: { name: "Django", bucket: "backend" },
+  flask: { name: "Flask", bucket: "backend" },
+  fastapi: { name: "FastAPI", bucket: "backend" },
+  tornado: { name: "Tornado", bucket: "backend" },
+  pyramid: { name: "Pyramid", bucket: "backend" },
+  bottle: { name: "Bottle", bucket: "backend" },
+  aiohttp: { name: "aiohttp", bucket: "backend" },
+  streamlit: { name: "Streamlit", bucket: "frameworks" },
+  dash: { name: "Dash", bucket: "frameworks" },
+
+  sqlalchemy: { name: "SQLAlchemy", bucket: "libraries" },
+  alembic: { name: "Alembic", bucket: "libraries" },
+  pydantic: { name: "Pydantic", bucket: "libraries" },
+  numpy: { name: "NumPy", bucket: "libraries" },
+  pandas: { name: "Pandas", bucket: "libraries" },
+  scipy: { name: "SciPy", bucket: "libraries" },
+  "scikit-learn": { name: "scikit-learn", bucket: "libraries" },
+  sklearn: { name: "scikit-learn", bucket: "libraries" },
+  tensorflow: { name: "TensorFlow", bucket: "libraries" },
+  torch: { name: "PyTorch", bucket: "libraries" },
+  keras: { name: "Keras", bucket: "libraries" },
+  pytest: { name: "pytest", bucket: "libraries" },
+  requests: { name: "Requests", bucket: "libraries" },
+  celery: { name: "Celery", bucket: "libraries" },
+  boto3: { name: "boto3", bucket: "libraries" },
+  click: { name: "Click", bucket: "libraries" },
+
+  psycopg2: { name: "PostgreSQL", bucket: "databases" },
+  "psycopg2-binary": { name: "PostgreSQL", bucket: "databases" },
+  asyncpg: { name: "PostgreSQL", bucket: "databases" },
+  pymongo: { name: "MongoDB", bucket: "databases" },
+  redis: { name: "Redis", bucket: "databases" },
+  pymysql: { name: "MySQL", bucket: "databases" },
+  mysqlclient: { name: "MySQL", bucket: "databases" },
+
+  poetry: { name: "Poetry", bucket: "buildTools" },
+  black: { name: "Black", bucket: "buildTools" },
+  flake8: { name: "Flake8", bucket: "buildTools" },
+  mypy: { name: "mypy", bucket: "buildTools" },
+  tox: { name: "tox", bucket: "buildTools" },
+};
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Checks each known Python package name for a word-boundary match in the
+ * raw manifest text (covers `foo==1.0`, `"foo>=1.0"`, `foo = "^1.0"`,
+ * `[packages]\nfoo = "*"`, extras like `foo[extra]`, etc. without needing
+ * to know which of the three manifest shapes produced the text).
+ */
+function applyPythonManifest(stack: OnboardingTechStack, raw: string): void {
+  for (const [pkgKey, mapping] of Object.entries(PYTHON_PACKAGE_MAP)) {
+    const pattern = new RegExp(`(?:^|[\\s"'\\[,])${escapeRegExp(pkgKey)}(?:[\\s"'\\]<>=!~;,]|$)`, "im");
+    if (pattern.test(raw)) {
+      addUnique(stack[mapping.bucket], mapping.name);
+    }
+  }
+}
+
 function emptyStack(): OnboardingTechStack {
   return {
     languages: [],
@@ -234,6 +307,7 @@ export async function detectTechStack(
       case "pyproject.toml":
       case "Pipfile":
         addUnique(stack.languages, "Python");
+        applyPythonManifest(stack, result.value);
         break;
       case "go.mod":
         addUnique(stack.languages, "Go");

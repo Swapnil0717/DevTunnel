@@ -3,6 +3,7 @@ import Link from "next/link";
 import { buildMetadata } from "@/lib/seo";
 import { getAdminProjects } from "@/lib/admin/projects/api";
 import { AdminProjectsExplorer } from "@/components/admin/projects/admin-projects-explorer";
+import { SyncAllProjectsGithubDataButton } from "@/components/admin/projects/sync-all-projects-github-data-button";
 import { SectionMessage } from "@/components/home/section-message";
 
 export const metadata: Metadata = buildMetadata({
@@ -39,12 +40,15 @@ export default async function AdminProjectsPage() {
             All projects currently available on DevTunnel.
           </p>
         </div>
-        <Link
-          href="/admin/projects/new"
-          className="inline-flex shrink-0 items-center rounded-[8px] bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground hover:bg-accent/90"
-        >
-          Onboard a project
-        </Link>
+        <div className="flex flex-wrap items-start gap-3">
+          <SyncAllProjectsGithubDataButton />
+          <Link
+            href="/admin/projects/new"
+            className="inline-flex shrink-0 items-center rounded-[8px] bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground hover:bg-accent/90"
+          >
+            Onboard a project
+          </Link>
+        </div>
       </div>
 
       {result.status === "error" ? (

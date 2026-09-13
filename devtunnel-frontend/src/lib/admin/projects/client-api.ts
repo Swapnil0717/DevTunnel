@@ -113,3 +113,32 @@ export async function syncAdminProjectGithubData(id: string): Promise<AdminProje
 
   return (await res.json()) as AdminProjectDetail;
 }
+
+export interface SyncAllProjectsGithubDataResult {
+  total: number;
+  synced: number;
+  failed: Array<{ id: string; slug: string; error: string }>;
+}
+
+/**
+ * `POST /admin/projects/sync-all` — the All Projects page's "Sync GitHub
+ * data" action, next to "Onboard a project". Does exactly the same work
+ * as `syncAdminProjectGithubData` above, once per active project instead
+ * of one at a time — same GitHub-derived fields, same round-trip to the
+ * backend's own loop over `refreshProjectGithubData`. Returns a summary
+ * rather than a single `AdminProjectDetail` since this touches every
+ * project at once; the caller (`SyncAllProjectsGithubDataButton`)
+ * refreshes the page to pick up whichever projects actually changed.
+ */
+export async function syncAllAdminProjectsGithubData(): Promise<SyncAllProjectsGithubDataResult> {
+  const res = await fetch(`${API_BASE_URL}/admin/projects/sync-all`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    throw new AdminProjectsApiError(`Failed to sync GitHub data (${res.status})`, res.status);
+  }
+
+  return (await res.json()) as SyncAllProjectsGithubDataResult;
+}

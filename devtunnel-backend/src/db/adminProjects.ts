@@ -284,6 +284,43 @@ interface GithubRepoRefRow {
  * (rule 13: prevent IDOR by never revealing *why* a resource isn't
  * usable).
  */
+export interface AdminProjectSyncRef {
+  id: string;
+  slug: string;
+  owner: string;
+  repo: string;
+}
+
+/**
+ * All active (non-deleted) projects with a real GitHub repo attached, as
+ * `{ id, slug, owner, repo }` — the bulk counterpart to
+ * `getProjectGithubRepoRef` above. Backs the All Projects page's
+ * "Sync all GitHub data" action: that button loops this list and calls
+ * `refreshProjectGithubData` once per project, exactly the same work
+ * the single-project "Sync GitHub data" button already does, just for
+ * every project instead of one.
+ */
+export async function listAllProjectGithubRepoRefs(supabase: SupabaseClient): Promise<AdminProjectSyncRef[]> {
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id, slug, github_owner, github_full_name")
+    .is("deleted_at", null)
+    .not("github_full_name", "is", null);
+
+  if (error) throw new Error(`Failed to load projects for sync: ${error.message}`);
+
+  const refs: AdminProjectSyncRef[] = [];
+  for (const row of data ?? []) {
+    const fullName = row.github_full_name as string | null;
+    if (!fullName) continue;
+    const repo = fullName.split("/")[1];
+    const owner = (row.github_owner as string | null) ?? fullName.split("/")[0];
+    if (!row.id || !owner || !repo) continue;
+    refs.push({ id: row.id as string, slug: row.slug as string, owner, repo });
+  }
+  return refs;
+}
+
 export async function getProjectGithubRepoRef(
   supabase: SupabaseClient,
   projectId: string,
