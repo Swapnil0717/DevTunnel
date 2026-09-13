@@ -1,3 +1,4 @@
+// devtunnel-frontend/src/components/admin/ai-discovery/ai-discovery-run-button.tsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -15,21 +16,27 @@ interface AiDiscoveryRunButtonProps {
   kind: "projects" | "tools" | "tasks";
 }
 
+/** One live progress line shown in the running steps log. */
+interface StepEntry {
+  id: number;
+  message: string;
+}
+
 const COPY = {
   projects: {
-    idle: "Add AI projects",
-    running: "Finding open source projects…",
+    idle: "Add AI project",
+    running: "Finding an open source project…",
     noun: (n: number) => `${n} project${n === 1 ? "" : "s"}`,
     error: "Couldn't run project discovery. Try again.",
   },
   tools: {
-    idle: "Add AI tools",
-    running: "Finding open source tools…",
+    idle: "Add AI tool",
+    running: "Finding an open source tool…",
     noun: (n: number) => `${n} tool${n === 1 ? "" : "s"}`,
     error: "Couldn't run tool discovery. Try again.",
   },
   tasks: {
-    idle: "Add AI tasks",
+    idle: "Add AI issue",
     running: "Going through onboarded projects' issues…",
     noun: (n: number) => `${n} task${n === 1 ? "" : "s"}`,
     error: "Couldn't run task discovery. Try again.",
@@ -54,7 +61,10 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
   const [elapsedMs, setElapsedMs] = useState(0);
   const [lastRunDurationMs, setLastRunDurationMs] = useState<number | null>(null);
   const [quotaRefreshKey, setQuotaRefreshKey] = useState(0);
+  const [steps, setSteps] = useState<StepEntry[]>([]);
   const runStartedAtRef = useRef<number | null>(null);
+  const nextStepIdRef = useRef(0);
+  const stepsLogRef = useRef<HTMLOListElement | null>(null);
   const copy = COPY[kind];
 
   useEffect(() => {
@@ -67,19 +77,34 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
     return () => clearInterval(intervalId);
   }, [isRunning]);
 
+  // Auto-scroll the live steps log to the newest line as it grows.
+  useEffect(() => {
+    const el = stepsLogRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [steps]);
+
+  function appendStep(message: string) {
+    const id = nextStepIdRef.current;
+    nextStepIdRef.current += 1;
+    setSteps((prev) => [...prev, { id, message }]);
+  }
+
   async function handleRun() {
     setError(null);
     setLastRunDurationMs(null);
+    setSteps([]);
+    nextStepIdRef.current = 0;
     runStartedAtRef.current = Date.now();
     setElapsedMs(0);
     setIsRunning(true);
     try {
+      const handlers = { onStep: appendStep };
       const summary =
         kind === "projects"
-          ? await triggerAiProjectDiscoveryRun()
+          ? await triggerAiProjectDiscoveryRun(handlers)
           : kind === "tools"
-            ? await triggerAiToolDiscoveryRun()
-            : await triggerAiTaskDiscoveryRun();
+            ? await triggerAiToolDiscoveryRun(handlers)
+            : await triggerAiTaskDiscoveryRun(handlers);
       setLastRun(summary);
       router.refresh();
     } catch {
@@ -121,6 +146,27 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
           Running for {formatElapsed(elapsedMs)}…
         </p>
       ) : null}
+
+      {(isRunning || steps.length > 0) && (
+        <ol
+          ref={stepsLogRef}
+          aria-live="polite"
+          className="m-0 mt-3 max-h-56 list-none space-y-1 overflow-y-auto rounded-[8px] border border-border bg-surface-raised p-3 font-mono text-[11.5px] leading-relaxed text-text-muted"
+        >
+          {steps.map((step, index) => (
+            <li key={step.id} className="flex gap-2">
+              <span className="shrink-0 text-text-faint">{String(index + 1).padStart(2, "0")}</span>
+              <span>{step.message}</span>
+            </li>
+          ))}
+          {isRunning ? (
+            <li className="flex gap-2 text-text-faint">
+              <span className="shrink-0">··</span>
+              <span className="animate-pulse">Working…</span>
+            </li>
+          ) : null}
+        </ol>
+      )}
 
       {error ? <p className="m-0 mt-3 text-[12px] text-status-error-label">{error}</p> : null}
 

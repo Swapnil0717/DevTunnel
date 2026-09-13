@@ -1,8 +1,9 @@
+// devtunnel-backend/src/lib/aiDiscoveryAgent.ts
 import type { ValidatedEnv } from "../config/env";
 import { getSupabase } from "./supabase";
 import { parseGroqJson, runGroqAgent } from "./groq";
 import { GroqQuotaExceededError } from "./groqQuota";
-import { DISCOVERY_TOOLS, buildDiscoveryDispatcher, getReadmeWithCache, type ReadmeCache } from "./aiDiscoveryTools";
+import { DISCOVERY_TOOLS, buildDiscoveryDispatcher, getReadmeWithCache, type ReadmeCache, type StepReporter } from "./aiDiscoveryTools";
 import {
   validateProjectCandidate,
   validateToolCandidate,
@@ -109,24 +110,38 @@ async function runProjectDiscovery(
   env: ValidatedEnv,
   kv: KVNamespace,
   readmeCache: ReadmeCache,
+  opts: { maxToPropose?: number; onStep?: StepReporter } = {},
 ): Promise<{ proposed: number; dropped: number; errors: string[]; quotaExceeded: boolean }> {
+  const { maxToPropose, onStep } = opts;
   const supabase = getSupabase(env);
   const errors: string[] = [];
+  onStep?.("Checking today's project discovery quota…");
   const counters = await getTodayCounters(supabase);
   const need = counters.projectsRemaining;
   const totalNeeded = need.beginner + need.intermediate + need.advanced;
   if (totalNeeded === 0) {
+    onStep?.("Today's project quota is already full — nothing to do.");
     return { proposed: 0, dropped: 0, errors, quotaExceeded: false };
   }
+
+  // When capped (e.g. the "one project at a time" admin button), only
+  // ask the model for as many candidates as we'll actually use.
+  const requestCount = Math.min(totalNeeded, maxToPropose ?? totalNeeded);
 
   // Point 5: dedup against the real published table AND our own pending/
   // approved queue — never against the manual onboarding drafts table,
   // which this pipeline has no relationship to.
+  onStep?.("Loading the list of existing and already-proposed projects…");
   const exclude = await listExistingProjectFullNames(supabase);
 
   const prompt = `Find open source GitHub repositories for DevTunnel's project catalog.
 
-Needed today: ${need.beginner} BEGINNER-friendly, ${need.intermediate} INTERMEDIATE, ${need.advanced} ADVANCED.
+Still needed today (overall): ${need.beginner} BEGINNER-friendly, ${need.intermediate} INTERMEDIATE, ${need.advanced} ADVANCED.
+${
+    maxToPropose !== undefined && maxToPropose < totalNeeded
+      ? `For THIS request specifically, only return ${requestCount} candidate(s) total — whichever difficulty is still most needed above.`
+      : ""
+  }
 "Beginner-friendly" = well-documented, has "good first issue" style labels or a
 simple, approachable codebase, moderate star count. "Advanced" = larger,
 architecturally complex, requires real domain expertise to contribute to.
@@ -180,14 +195,16 @@ When finished, reply with ONLY this JSON shape and nothing else:
     }
   ]
 }
-Return exactly ${totalNeeded} candidates total, matching the needed counts per difficulty exactly.`;
+Return exactly ${requestCount} candidate(s) total, matching the needed counts per difficulty as closely as possible.`;
 
   let candidates: ProjectCandidateInput[] = [];
   try {
-    const dispatch = buildDiscoveryDispatcher(env, readmeCache);
+    onStep?.(`Asking the AI model to find ${requestCount} project candidate${requestCount === 1 ? "" : "s"}…`);
+    const dispatch = buildDiscoveryDispatcher(env, readmeCache, onStep);
     const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
     const parsed = parseGroqJson<{ candidates: ProjectCandidateInput[] }>(raw);
     candidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];
+    onStep?.(`AI returned ${candidates.length} candidate${candidates.length === 1 ? "" : "s"} to check.`);
   } catch (err) {
     if (err instanceof GroqQuotaExceededError) {
       // Daily Groq budget is gone — stop here, no candidates were ever
@@ -195,10 +212,12 @@ Return exactly ${totalNeeded} candidates total, matching the needed counts per d
       // not a run-level error (no entry in `errors`); the run summary's
       // own `quotaExceeded` flag is what the frontend surfaces instead.
       logger.warn("ai_project_discovery_quota_exceeded", { reason: err.reason });
+      onStep?.("Today's Groq budget ran out — stopping here.");
       return { proposed: 0, dropped: 0, errors, quotaExceeded: true };
     }
     logger.error("ai_project_discovery_failed", { error: err instanceof Error ? err.message : String(err) });
     errors.push("project_discovery_agent_error");
+    onStep?.("The AI model call failed.");
     return { proposed: 0, dropped: 0, errors, quotaExceeded: false };
   }
 
@@ -207,11 +226,14 @@ Return exactly ${totalNeeded} candidates total, matching the needed counts per d
   let dropped = 0;
 
   for (const c of candidates) {
+    if (maxToPropose !== undefined && proposed >= maxToPropose) break;
+
     // Point 3: validate the WHOLE record before touching the database.
     // Any problem drops the candidate outright — no partial insert.
     const problems = validateProjectCandidate(c);
     if (problems.length > 0) {
       dropped += 1;
+      onStep?.(`Dropped a candidate — missing or invalid fields.`);
       logger.warn("ai_project_candidate_dropped", { fullName: (c as any).fullName, problems });
       continue;
     }
@@ -234,15 +256,18 @@ Return exactly ${totalNeeded} candidates total, matching the needed counts per d
     const key = candidate.fullName.toLowerCase();
     if (exclude.has(key)) {
       dropped += 1;
+      onStep?.(`Skipped ${candidate.fullName} — already exists or already proposed.`);
       continue;
     }
     const bucket = candidate.difficulty === "BEGINNER" ? "beginner" : candidate.difficulty === "ADVANCED" ? "advanced" : "intermediate";
     if (remaining[bucket] <= 0) {
       dropped += 1;
+      onStep?.(`Skipped ${candidate.fullName} — ${bucket} quota already met today.`);
       continue;
     }
 
     try {
+      onStep?.(`Validated ${candidate.fullName} (${candidate.difficulty}).`);
       // Attach the real README this run already read (or, failing that,
       // fetch it directly) — this is the same content the admin will see
       // once approved (sql/020's approve_ai_discovered_project copies this
@@ -251,6 +276,7 @@ Return exactly ${totalNeeded} candidates total, matching the needed counts per d
       // carry free text this long.
       const readme = await getReadmeWithCache(env, readmeCache, candidate.owner, candidate.repo);
 
+      onStep?.(`Saving project ${candidate.fullName}…`);
       await insertDiscoveredProject(supabase, {
         repositoryUrl: candidate.url,
         githubOwner: candidate.owner,
@@ -283,10 +309,12 @@ Return exactly ${totalNeeded} candidates total, matching the needed counts per d
       exclude.add(key);
       remaining[bucket] -= 1;
       proposed += 1;
+      onStep?.(`Saved ${candidate.fullName} — pending review.`);
     } catch (err) {
       // A unique-index race (already onboarded/proposed between our
       // exclude-set read and this insert) is expected and non-fatal —
       // skip and keep going, never let one candidate abort the run.
+      onStep?.(`Couldn't save ${candidate.fullName} — skipping.`);
       logger.warn("ai_project_insert_skipped", { fullName: candidate.fullName, error: err instanceof Error ? err.message : String(err) });
     }
   }
@@ -302,14 +330,19 @@ async function runToolDiscovery(
   env: ValidatedEnv,
   kv: KVNamespace,
   readmeCache: ReadmeCache,
+  opts: { maxToPropose?: number; onStep?: StepReporter } = {},
 ): Promise<{ proposed: number; dropped: number; errors: string[]; quotaExceeded: boolean }> {
+  const { maxToPropose, onStep } = opts;
   const supabase = getSupabase(env);
   const errors: string[] = [];
+  onStep?.("Checking today's tool discovery quota…");
   const counters = await getTodayCounters(supabase);
   if (counters.toolCategoriesRemaining.length === 0) {
+    onStep?.("Every tool category is already covered today — nothing to do.");
     return { proposed: 0, dropped: 0, errors, quotaExceeded: false };
   }
 
+  onStep?.("Loading the list of existing and already-proposed tools…");
   const exclude = await listExistingToolUrls(supabase);
   let proposed = 0;
   let dropped = 0;
@@ -321,6 +354,8 @@ async function runToolDiscovery(
   // (see runDailyDiscovery), so nothing here overlaps with another
   // phase's work either.
   for (const category of counters.toolCategoriesRemaining) {
+    if (maxToPropose !== undefined && proposed >= maxToPropose) break;
+    onStep?.(`Looking for a tool in category: ${category}`);
     const prompt = `Find ONE excellent open source developer tool for DevTunnel's tools
 catalog in this exact category: "${category}".
 
@@ -362,13 +397,15 @@ Reply with ONLY this JSON and nothing else:
 }`;
 
     try {
-      const dispatch = buildDiscoveryDispatcher(env, readmeCache);
+      onStep?.(`Asking the AI model for a tool in "${category}"…`);
+      const dispatch = buildDiscoveryDispatcher(env, readmeCache, onStep);
       const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
       const candidateRaw = parseGroqJson<ToolCandidateInput>(raw);
 
       const problems = validateToolCandidate(candidateRaw);
       if (problems.length > 0) {
         dropped += 1;
+        onStep?.(`Dropped the "${category}" candidate — missing or invalid fields.`);
         logger.warn("ai_tool_candidate_dropped", { category, sourceUrl: (candidateRaw as any).sourceUrl, problems });
         continue;
       }
@@ -385,9 +422,11 @@ Reply with ONLY this JSON and nothing else:
       const key = candidate.sourceUrl.toLowerCase();
       if (exclude.has(key)) {
         dropped += 1;
+        onStep?.(`Skipped ${candidate.name} — already exists or already proposed.`);
         continue;
       }
       exclude.add(key);
+      onStep?.(`Validated ${candidate.name} for "${category}".`);
 
       // Same real-README attachment as projects: prefer what this
       // conversation already fetched, fall back to a direct fetch. Only
@@ -396,6 +435,7 @@ Reply with ONLY this JSON and nothing else:
       const ownerRepo = parseGithubOwnerRepo(candidate.sourceUrl);
       const readme = ownerRepo ? await getReadmeWithCache(env, readmeCache, ownerRepo.owner, ownerRepo.repo) : null;
 
+      onStep?.(`Saving tool ${candidate.name}…`);
       await insertDiscoveredTool(supabase, {
         sourceUrl: candidate.sourceUrl,
         name: candidate.name,
@@ -410,16 +450,19 @@ Reply with ONLY this JSON and nothing else:
       });
       await bumpCounters(supabase, { tools: 1, toolCategory: category });
       proposed += 1;
+      onStep?.(`Saved ${candidate.name} — pending review.`);
     } catch (err) {
       if (err instanceof GroqQuotaExceededError) {
         // Daily Groq budget is gone mid-loop — stop trying further
         // categories this run (they'd all fail the same way) rather than
         // burning a run-level "error" entry per remaining category.
         logger.warn("ai_tool_discovery_quota_exceeded", { category, reason: err.reason });
+        onStep?.("Today's Groq budget ran out — stopping here.");
         quotaExceeded = true;
         break;
       }
       logger.error("ai_tool_discovery_failed", { category, error: err instanceof Error ? err.message : String(err) });
+      onStep?.(`Couldn't find a tool for "${category}" this time.`);
       errors.push(`tool_discovery_failed:${category}`);
     }
   }
@@ -440,21 +483,27 @@ const MAX_ISSUES_PER_PROJECT = 15;
 async function runTaskDiscovery(
   env: ValidatedEnv,
   kv: KVNamespace,
+  opts: { maxToPropose?: number; onStep?: StepReporter } = {},
 ): Promise<{ proposed: number; dropped: number; errors: string[]; quotaExceeded: boolean }> {
+  const { maxToPropose, onStep } = opts;
   const supabase = getSupabase(env);
   const errors: string[] = [];
   let proposed = 0;
   let dropped = 0;
   let quotaExceeded = false;
 
+  onStep?.("Loading onboarded projects…");
   const projects = await listOnboardedProjects(supabase);
+  onStep?.(`Found ${projects.length} onboarded project${projects.length === 1 ? "" : "s"} to check for issues.`);
 
   // One onboarded project at a time, fully finished before the next
   // starts — this is also the first phase runDailyDiscovery runs, so
   // every issue gets proposed before a single project or tool candidate
   // does.
   for (const project of projects) {
+    if (maxToPropose !== undefined && proposed >= maxToPropose) break;
     try {
+      onStep?.(`Checking ${project.githubFullName} for open issues…`);
       const alreadyKnown = await listExistingTaskIssueNumbers(supabase, project.id);
 
       const prompt = `DevTunnel has already onboarded this GitHub repository as a project:
@@ -505,15 +554,20 @@ Reply with ONLY this JSON and nothing else:
 }
 Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
 
-      const dispatch = buildDiscoveryDispatcher(env);
+      onStep?.(`Asking the AI model to review issues on ${project.githubFullName}…`);
+      const dispatch = buildDiscoveryDispatcher(env, undefined, onStep);
       const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
       const parsed = parseGroqJson<{ candidates: TaskCandidateInput[] }>(raw);
       const candidates = Array.isArray(parsed.candidates) ? parsed.candidates.slice(0, MAX_ISSUES_PER_PROJECT) : [];
+      onStep?.(`AI returned ${candidates.length} candidate issue${candidates.length === 1 ? "" : "s"} for ${project.githubFullName}.`);
 
       for (const c of candidates) {
+        if (maxToPropose !== undefined && proposed >= maxToPropose) break;
+
         const problems = validateTaskCandidate(c);
         if (problems.length > 0) {
           dropped += 1;
+          onStep?.(`Dropped an issue candidate — missing or invalid fields.`);
           logger.warn("ai_task_candidate_dropped", { project: project.githubFullName, issueNumber: (c as any).issueNumber, problems });
           continue;
         }
@@ -530,10 +584,13 @@ Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
 
         if (alreadyKnown.has(candidate.issueNumber)) {
           dropped += 1;
+          onStep?.(`Skipped issue #${candidate.issueNumber} — already tracked.`);
           continue;
         }
 
         try {
+          onStep?.(`Validated issue #${candidate.issueNumber}: ${candidate.title}`);
+          onStep?.(`Saving task for issue #${candidate.issueNumber}…`);
           await insertDiscoveredTask(supabase, {
             projectId: project.id,
             issueNumber: candidate.issueNumber,
@@ -550,7 +607,9 @@ Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
           await bumpCounters(supabase, { tasks: 1 });
           alreadyKnown.add(candidate.issueNumber);
           proposed += 1;
+          onStep?.(`Saved issue #${candidate.issueNumber} from ${project.githubFullName} — pending review.`);
         } catch (err) {
+          onStep?.(`Couldn't save issue #${candidate.issueNumber} — skipping.`);
           logger.warn("ai_task_insert_skipped", { project: project.githubFullName, issueNumber: candidate.issueNumber, error: err instanceof Error ? err.message : String(err) });
         }
       }
@@ -560,10 +619,12 @@ Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
         // projects this run (they'd all fail the same way) rather than
         // burning a run-level "error" entry per remaining project.
         logger.warn("ai_task_discovery_quota_exceeded", { project: project.githubFullName, reason: err.reason });
+        onStep?.("Today's Groq budget ran out — stopping here.");
         quotaExceeded = true;
         break;
       }
       logger.error("ai_task_discovery_failed", { project: project.githubFullName, error: err instanceof Error ? err.message : String(err) });
+      onStep?.(`Couldn't check ${project.githubFullName} this time.`);
       errors.push(`task_discovery_failed:${project.githubFullName}`);
     }
   }
@@ -646,17 +707,28 @@ export async function runDailyDiscovery(env: ValidatedEnv, kv: KVNamespace): Pro
 
 /**
  * Scoped entry point — runs ONLY the project-discovery phase, for the
- * "Add AI projects" button on the AI Added Projects admin page
+ * "Add AI project" button on the AI Added Projects admin page
  * (devtunnel-frontend .../ai/projects). Shares the same daily quota and
  * dedup logic as runDailyDiscovery, so it's safe to call repeatedly —
  * it only ever fills whatever's left of today's project quota. Tools
  * and tasks are left untouched.
+ *
+ * `limit` caps how many projects a single call may propose — the admin
+ * button calls this with the default of 1 so each click adds exactly one
+ * project at a time, streaming its progress through `onStep` as it goes
+ * (see routes/admin/ai.ts's `POST /admin/ai/projects/run` SSE handler).
  */
-export async function runProjectDiscoveryOnly(env: ValidatedEnv, kv: KVNamespace): Promise<AiDiscoveryRunSummary> {
+export async function runProjectDiscoveryOnly(
+  env: ValidatedEnv,
+  kv: KVNamespace,
+  onStep?: StepReporter,
+  limit = 1,
+): Promise<AiDiscoveryRunSummary> {
   logger.info("ai_discovery_projects_run_started");
   const readmeCache: ReadmeCache = new Map();
-  const projectsResult = await runProjectDiscovery(env, kv, readmeCache).catch((err) => {
+  const projectsResult = await runProjectDiscovery(env, kv, readmeCache, { maxToPropose: limit, onStep }).catch((err) => {
     logger.error("ai_discovery_project_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
+    onStep?.("Something went wrong during project discovery.");
     return { proposed: 0, dropped: 0, errors: ["project_discovery_crashed"], quotaExceeded: false };
   });
 
@@ -676,15 +748,23 @@ export async function runProjectDiscoveryOnly(env: ValidatedEnv, kv: KVNamespace
 
 /**
  * Scoped entry point — runs ONLY the tool-discovery phase, for the
- * "Add AI tools" button on the AI Added Tools admin page
+ * "Add AI tool" button on the AI Added Tools admin page
  * (devtunnel-frontend .../ai/tools). Same quota/dedup guarantees as
- * runProjectDiscoveryOnly above, mirrored for tools.
+ * runProjectDiscoveryOnly above, mirrored for tools — `limit` (default 1)
+ * caps how many tools a single call may propose, and `onStep` streams
+ * live progress.
  */
-export async function runToolDiscoveryOnly(env: ValidatedEnv, kv: KVNamespace): Promise<AiDiscoveryRunSummary> {
+export async function runToolDiscoveryOnly(
+  env: ValidatedEnv,
+  kv: KVNamespace,
+  onStep?: StepReporter,
+  limit = 1,
+): Promise<AiDiscoveryRunSummary> {
   logger.info("ai_discovery_tools_run_started");
   const readmeCache: ReadmeCache = new Map();
-  const toolsResult = await runToolDiscovery(env, kv, readmeCache).catch((err) => {
+  const toolsResult = await runToolDiscovery(env, kv, readmeCache, { maxToPropose: limit, onStep }).catch((err) => {
     logger.error("ai_discovery_tool_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
+    onStep?.("Something went wrong during tool discovery.");
     return { proposed: 0, dropped: 0, errors: ["tool_discovery_crashed"], quotaExceeded: false };
   });
 
@@ -704,16 +784,24 @@ export async function runToolDiscoveryOnly(env: ValidatedEnv, kv: KVNamespace): 
 
 /**
  * Scoped entry point — runs ONLY the task-discovery phase, for the
- * "Add AI tasks" button on the AI Added Tasks admin page
+ * "Add AI issue" button on the AI Added Tasks admin page
  * (devtunnel-frontend .../ai/tasks). Walks every onboarded project's
  * open issues one at a time (see runTaskDiscovery above) — no daily
  * quota to share, just per-project dedup, so it's safe to call
- * repeatedly. Projects and tools are left untouched.
+ * repeatedly. Projects and tools are left untouched. `limit` (default 1)
+ * stops the walk as soon as that many issues have been proposed, and
+ * `onStep` streams live progress as each project is checked.
  */
-export async function runTaskDiscoveryOnly(env: ValidatedEnv, kv: KVNamespace): Promise<AiDiscoveryRunSummary> {
+export async function runTaskDiscoveryOnly(
+  env: ValidatedEnv,
+  kv: KVNamespace,
+  onStep?: StepReporter,
+  limit = 1,
+): Promise<AiDiscoveryRunSummary> {
   logger.info("ai_discovery_tasks_run_started");
-  const tasksResult = await runTaskDiscovery(env, kv).catch((err) => {
+  const tasksResult = await runTaskDiscovery(env, kv, { maxToPropose: limit, onStep }).catch((err) => {
     logger.error("ai_discovery_task_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
+    onStep?.("Something went wrong during issue discovery.");
     return { proposed: 0, dropped: 0, errors: ["task_discovery_crashed"], quotaExceeded: false };
   });
 
@@ -732,3 +820,4 @@ export async function runTaskDiscoveryOnly(env: ValidatedEnv, kv: KVNamespace): 
 }
 
 export { TOOL_CATEGORIES, PROJECT_CATEGORIES };
+export type { StepReporter };

@@ -1,4 +1,6 @@
+// devtunnel-backend/src/routes/admin/ai.ts
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import type { Env, Variables } from "../../types";
 import { getEnv } from "../../config/env";
@@ -8,7 +10,14 @@ import { requireAdminRole, requirePermission } from "../../middleware/adminAuth"
 import { errorResponse } from "../../lib/response";
 import { logger } from "../../lib/logger";
 import { recordAdminAudit } from "../../db/adminAudit";
-import { runDailyDiscovery, runProjectDiscoveryOnly, runToolDiscoveryOnly, runTaskDiscoveryOnly } from "../../lib/aiDiscoveryAgent";
+import {
+  runDailyDiscovery,
+  runProjectDiscoveryOnly,
+  runToolDiscoveryOnly,
+  runTaskDiscoveryOnly,
+  type StepReporter,
+} from "../../lib/aiDiscoveryAgent";
+import type { AiDiscoveryRunSummary } from "../../types";
 import { getGroqQuotaSnapshot } from "../../lib/groqQuota";
 import {
   approveDiscoveredProject,
@@ -188,62 +197,78 @@ adminAi.post("/run", requireAuth, requireAdminRole, requirePermission("admin:ai:
   }
 });
 
-adminAi.post("/projects/run", requireAuth, requireAdminRole, requirePermission("admin:ai:write"), async (c) => {
+/**
+ * Streams live progress for a single-item AI discovery run as
+ * Server-Sent Events, so the admin UI can show every step being carried
+ * out in real time instead of just spinning until a final JSON response
+ * arrives. Event shapes (all `data:` payloads are JSON):
+ *   - "step": { message: string } — one human-readable progress line.
+ *   - "done": AiDiscoveryRunSummary — the final result (stream ends after this).
+ *   - "error": { message: string } — the run failed (stream ends after this).
+ *
+ * `runOne` is called with `limit = 1` by each route below, so every
+ * button click adds exactly one project / tool / issue at a time.
+ */
+function streamDiscoveryRun(
+  c: any,
+  kind: "projects" | "tools" | "tasks",
+  runOne: (env: ReturnType<typeof getEnv>, kv: KVNamespace, onStep: StepReporter) => Promise<AiDiscoveryRunSummary>,
+  auditAction: string,
+) {
   const env = getEnv(c.env);
   const user = c.get("user");
-  try {
-    const summary = await runProjectDiscoveryOnly(env, c.env.RATE_LIMIT_KV);
-    await recordAdminAudit(getSupabase(env), {
-      adminId: user.id,
-      action: "AI_DISCOVERY_MANUAL_RUN_PROJECTS",
-      resourceType: "ai_discovery",
-      resourceId: null,
-      result: "SUCCESS",
-      metadata: summary as unknown as Record<string, unknown>,
-    });
-    return c.json(summary);
-  } catch (err) {
-    logger.error("ai_discovery_manual_run_projects_failed", { error: extractErrorMessage(err) });
-    return errorResponse(c, 500, "internal_error", "Discovery run failed");
-  }
-});
 
-adminAi.post("/tools/run", requireAuth, requireAdminRole, requirePermission("admin:ai:write"), async (c) => {
-  const env = getEnv(c.env);
-  const user = c.get("user");
-  try {
-    const summary = await runToolDiscoveryOnly(env, c.env.RATE_LIMIT_KV);
-    await recordAdminAudit(getSupabase(env), {
-      adminId: user.id,
-      action: "AI_DISCOVERY_MANUAL_RUN_TOOLS",
-      resourceType: "ai_discovery",
-      resourceId: null,
-      result: "SUCCESS",
-      metadata: summary as unknown as Record<string, unknown>,
-    });
-    return c.json(summary);
-  } catch (err) {
-    logger.error("ai_discovery_manual_run_tools_failed", { error: extractErrorMessage(err) });
-    return errorResponse(c, 500, "internal_error", "Discovery run failed");
-  }
-});
+  return streamSSE(c, async (stream) => {
+    let stepIndex = 0;
+    const onStep: StepReporter = (message) => {
+      stepIndex += 1;
+      // Errors from writeSSE (client disconnected mid-run) are swallowed
+      // deliberately — the discovery work itself must keep running to
+      // completion regardless of whether anyone is still listening.
+      void stream.writeSSE({ event: "step", data: JSON.stringify({ message }), id: String(stepIndex) }).catch(() => {});
+    };
 
-adminAi.post("/tasks/run", requireAuth, requireAdminRole, requirePermission("admin:ai:write"), async (c) => {
-  const env = getEnv(c.env);
-  const user = c.get("user");
-  try {
-    const summary = await runTaskDiscoveryOnly(env, c.env.RATE_LIMIT_KV);
-    await recordAdminAudit(getSupabase(env), {
-      adminId: user.id,
-      action: "AI_DISCOVERY_MANUAL_RUN_TASKS",
-      resourceType: "ai_discovery",
-      resourceId: null,
-      result: "SUCCESS",
-      metadata: summary as unknown as Record<string, unknown>,
-    });
-    return c.json(summary);
-  } catch (err) {
-    logger.error("ai_discovery_manual_run_tasks_failed", { error: extractErrorMessage(err) });
-    return errorResponse(c, 500, "internal_error", "Discovery run failed");
-  }
-});
+    try {
+      const summary = await runOne(env, c.env.RATE_LIMIT_KV, onStep);
+      await recordAdminAudit(getSupabase(env), {
+        adminId: user.id,
+        action: auditAction,
+        resourceType: "ai_discovery",
+        resourceId: null,
+        result: "SUCCESS",
+        metadata: summary as unknown as Record<string, unknown>,
+      });
+      await stream.writeSSE({ event: "done", data: JSON.stringify(summary) });
+    } catch (err) {
+      logger.error(`ai_discovery_manual_run_${kind}_failed`, { error: extractErrorMessage(err) });
+      await stream.writeSSE({ event: "error", data: JSON.stringify({ message: "Discovery run failed" }) });
+    }
+  });
+}
+
+adminAi.post("/projects/run", requireAuth, requireAdminRole, requirePermission("admin:ai:write"), (c) =>
+  streamDiscoveryRun(
+    c,
+    "projects",
+    (env, kv, onStep) => runProjectDiscoveryOnly(env, kv, onStep, 1),
+    "AI_DISCOVERY_MANUAL_RUN_PROJECTS",
+  ),
+);
+
+adminAi.post("/tools/run", requireAuth, requireAdminRole, requirePermission("admin:ai:write"), (c) =>
+  streamDiscoveryRun(
+    c,
+    "tools",
+    (env, kv, onStep) => runToolDiscoveryOnly(env, kv, onStep, 1),
+    "AI_DISCOVERY_MANUAL_RUN_TOOLS",
+  ),
+);
+
+adminAi.post("/tasks/run", requireAuth, requireAdminRole, requirePermission("admin:ai:write"), (c) =>
+  streamDiscoveryRun(
+    c,
+    "tasks",
+    (env, kv, onStep) => runTaskDiscoveryOnly(env, kv, onStep, 1),
+    "AI_DISCOVERY_MANUAL_RUN_TASKS",
+  ),
+);

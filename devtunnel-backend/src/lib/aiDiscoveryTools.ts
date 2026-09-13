@@ -1,3 +1,4 @@
+// devtunnel-backend/src/lib/aiDiscoveryTools.ts
 import type { ValidatedEnv } from "../config/env";
 import type { GroqFunctionDeclaration } from "./groq";
 import {
@@ -116,6 +117,15 @@ export async function getReadmeWithCache(
 }
 
 /**
+ * Called with a short, human-readable description of one step of the
+ * discovery process as it happens (e.g. "Searching GitHub for…", "Reading
+ * README for owner/repo…"). Purely observational — never affects control
+ * flow. Used to stream live progress to the admin UI (see
+ * routes/admin/ai.ts's `/run-one` SSE endpoints).
+ */
+export type StepReporter = (message: string) => void;
+
+/**
  * Builds the tool dispatcher Groq's agent loop calls into. When a
  * `readmeCache` is supplied, every real `get_github_readme` result is
  * recorded into it as a side effect — this is what lets
@@ -123,12 +133,21 @@ export async function getReadmeWithCache(
  * discovery to the candidate it ends up inserting, instead of either
  * discarding it (the previous behavior) or re-fetching it a second time
  * for the same repo.
+ *
+ * When `onStep` is supplied, every dispatched tool call reports what it's
+ * doing (and a short summary of what came back) through it, in real time,
+ * before/after the actual network call — this is the only place that
+ * knows the true, real-time sequence of GitHub calls the model chose to
+ * make, so it's the right place to source step-by-step progress from
+ * (rather than guessing the sequence in aiDiscoveryAgent.ts).
  */
-export function buildDiscoveryDispatcher(env: ValidatedEnv, readmeCache?: ReadmeCache) {
+export function buildDiscoveryDispatcher(env: ValidatedEnv, readmeCache?: ReadmeCache, onStep?: StepReporter) {
   return async (name: string, args: Record<string, unknown>): Promise<unknown> => {
     switch (name) {
       case "search_github_repositories": {
+        onStep?.(`Searching GitHub repositories: ${String(args.query)}`);
         const items = await searchRepositories(env, String(args.query), (args.sort as "stars" | "updated" | "best-match") ?? "stars");
+        onStep?.(`Found ${items.length} repositor${items.length === 1 ? "y" : "ies"} for "${String(args.query)}"`);
         return items.map((r) => ({
           fullName: r.full_name,
           url: r.html_url,
@@ -140,29 +159,40 @@ export function buildDiscoveryDispatcher(env: ValidatedEnv, readmeCache?: Readme
         }));
       }
       case "get_github_repository": {
-        const repo = await getRepository(env, String(args.owner), String(args.repo));
-        if (!repo) return { error: "not_found" };
+        const owner = String(args.owner);
+        const repo = String(args.repo);
+        onStep?.(`Fetching repository details for ${owner}/${repo}`);
+        const repoData = await getRepository(env, owner, repo);
+        if (!repoData) {
+          onStep?.(`${owner}/${repo} not found on GitHub`);
+          return { error: "not_found" };
+        }
+        onStep?.(`Got details for ${owner}/${repo}`);
         return {
-          fullName: repo.full_name,
-          url: repo.html_url,
-          description: repo.description,
-          language: repo.language,
-          stars: repo.stargazers_count,
-          forks: repo.forks_count,
-          openIssues: repo.open_issues_count,
+          fullName: repoData.full_name,
+          url: repoData.html_url,
+          description: repoData.description,
+          language: repoData.language,
+          stars: repoData.stargazers_count,
+          forks: repoData.forks_count,
+          openIssues: repoData.open_issues_count,
         };
       }
       case "get_github_readme": {
         const owner = String(args.owner);
         const repo = String(args.repo);
+        onStep?.(`Reading README for ${owner}/${repo}`);
         const readme = await getRepositoryReadme(env, owner, repo);
         if (readme && readmeCache) {
           readmeCache.set(readmeCacheKey(owner, repo), readme);
         }
+        onStep?.(readme ? `Read README for ${owner}/${repo}` : `No README found for ${owner}/${repo}`);
         return { readme: readme ?? "" };
       }
       case "search_github_issues": {
+        onStep?.(`Searching GitHub issues: ${String(args.query)}`);
         const items = await searchIssues(env, String(args.query));
+        onStep?.(`Found ${items.length} issue${items.length === 1 ? "" : "s"} for "${String(args.query)}"`);
         // Body truncation shrunk from 1500: at the old length, a full
         // page of results alone could exceed the entire Groq TPM budget
         // (see searchIssues' perPage comment in githubDiscovery.ts).
@@ -177,7 +207,11 @@ export function buildDiscoveryDispatcher(env: ValidatedEnv, readmeCache?: Readme
         }));
       }
       case "get_github_repository_open_issues": {
-        const items = await getRepositoryOpenIssues(env, String(args.owner), String(args.repo));
+        const owner = String(args.owner);
+        const repo = String(args.repo);
+        onStep?.(`Listing open issues for ${owner}/${repo}`);
+        const items = await getRepositoryOpenIssues(env, owner, repo);
+        onStep?.(`Found ${items.length} open issue${items.length === 1 ? "" : "s"} on ${owner}/${repo}`);
         return items.map((i) => ({
           number: i.number,
           title: i.title,
