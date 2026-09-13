@@ -15,6 +15,26 @@ import type {
 
 const PROJECT_QUOTA = { beginner: 3, intermediate: 3, advanced: 1 } as const;
 
+/**
+ * How many tools get proposed per day, total — see `TOOL_CATEGORIES`
+ * below for why this is smaller than the category list's length.
+ */
+const TOOL_DAILY_QUOTA = 7;
+
+/**
+ * Fixed vocabulary for `AiDiscoveredTool.category`, and the full pool
+ * `getTodayCounters` draws from — but NOT the day's tools quota anymore.
+ * Chosen to span the whole developer lifecycle (build, test, secure,
+ * ship, observe, document, collaborate, data/AI) so the catalog can
+ * surface something useful for contributors no matter what kind of work
+ * they're doing.
+ *
+ * The day's quota is capped at `TOOL_DAILY_QUOTA` (7) regardless of how
+ * many categories are listed here — `getTodayCounters` shuffles this
+ * list and only takes the categories still needed today, so which 7 of
+ * the 18 get a tool varies day to day instead of always being the first
+ * 7 in this array. Over multiple days every category gets its turn.
+ */
 export const TOOL_CATEGORIES = [
   "API Testing & Documentation",
   "Database & Data Tools",
@@ -23,6 +43,17 @@ export const TOOL_CATEGORIES = [
   "Monitoring & Observability",
   "Developer Documentation",
   "Design & UI Tooling",
+  "Testing & QA Automation",
+  "Security & Vulnerability Scanning",
+  "Package & Dependency Management",
+  "Build Tools & Bundlers",
+  "Version Control & Git Tooling",
+  "Authentication & Identity",
+  "Cloud & Infrastructure as Code",
+  "Containers & Orchestration",
+  "Data Visualization & Analytics",
+  "AI & Machine Learning Tooling",
+  "Productivity & Developer Experience",
 ] as const;
 
 /**
@@ -45,6 +76,16 @@ export const PROJECT_CATEGORIES = [
 
 function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/** Fisher-Yates shuffle — never mutates the input array. */
+function shuffled<T>(items: readonly T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
 }
 
 export async function getTodayCounters(supabase: SupabaseClient): Promise<AiDiscoveryCounters> {
@@ -71,6 +112,15 @@ export async function getTodayCounters(supabase: SupabaseClient): Promise<AiDisc
     ? (row.tool_categories_found as string[])
     : [];
 
+  // Only categories not yet covered today are candidates — then shuffle
+  // THAT list (not the fixed source array) and cap it to whatever's left
+  // of the day's TOOL_DAILY_QUOTA (7). This is what makes "which 7
+  // categories" vary day to day across the full 18-category pool, while
+  // still never proposing more than 7 tools total in a day.
+  const toolsRemainingToday = Math.max(0, TOOL_DAILY_QUOTA - row.tools_found);
+  const uncoveredCategories = TOOL_CATEGORIES.filter((c) => !foundCategories.includes(c));
+  const toolCategoriesRemaining = shuffled(uncoveredCategories).slice(0, toolsRemainingToday);
+
   return {
     discoveryDate: row.discovery_date,
     projectsBeginner: row.projects_beginner,
@@ -84,7 +134,7 @@ export async function getTodayCounters(supabase: SupabaseClient): Promise<AiDisc
       intermediate: Math.max(0, PROJECT_QUOTA.intermediate - row.projects_intermediate),
       advanced: Math.max(0, PROJECT_QUOTA.advanced - row.projects_advanced),
     },
-    toolCategoriesRemaining: TOOL_CATEGORIES.filter((c) => !foundCategories.includes(c)),
+    toolCategoriesRemaining,
   };
 }
 

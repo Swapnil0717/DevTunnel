@@ -22,7 +22,9 @@ function formatTimeUntil(resetsAt: string): string {
   return `${hours}h ${minutes}m`;
 }
 
-const PHASE_LABELS: Record<string, string> = {
+type DiscoveryKind = "projects" | "tools" | "tasks";
+
+const PHASE_LABELS: Record<DiscoveryKind, string> = {
   projects: "Projects",
   tools: "Tools",
   tasks: "Tasks/Issues",
@@ -30,6 +32,18 @@ const PHASE_LABELS: Record<string, string> = {
 
 interface GroqQuotaPanelProps {
   refreshKey?: number;
+  /**
+   * Which discovery phase this panel is for (matches the run button's
+   * `kind` on the same page). When given, the panel's headline
+   * Requests/Tokens numbers show THIS phase's own daily share (see
+   * `PHASE_BUDGET_SHARE` in devtunnel-backend `groqQuota.ts`) instead of
+   * the whole account's daily budget — so the Projects page shows only
+   * the projects budget, Tools only the tools budget, and so on, since
+   * that's the number that actually governs whether a run on THIS page
+   * can go. Omit to fall back to the old account-wide view (all phases
+   * combined, listed individually underneath).
+   */
+  kind?: DiscoveryKind;
 }
 
 function budgetColors(remaining: number, limit: number) {
@@ -49,8 +63,11 @@ function budgetColors(remaining: number, limit: number) {
  * 900/day, 6,500 tokens/minute, 180,000 tokens/day) is left right now.
  * Shows BOTH the request and token budgets, since tokens/minute is the
  * cap that actually binds for this agent's workload.
+ *
+ * Pass `kind` to scope the headline numbers to one discovery phase's
+ * own daily share instead of the whole account's daily budget.
  */
-export function GroqQuotaPanel({ refreshKey }: GroqQuotaPanelProps) {
+export function GroqQuotaPanel({ refreshKey, kind }: GroqQuotaPanelProps) {
   const [snapshot, setSnapshot] = useState<GroqQuotaSnapshot | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -77,11 +94,26 @@ export function GroqQuotaPanel({ refreshKey }: GroqQuotaPanelProps) {
 
   if (failed || !snapshot) return null;
 
-  const requestDayPct = snapshot.limitPerDay > 0 ? (snapshot.usedToday / snapshot.limitPerDay) * 100 : 0;
-  const requestBudget = budgetColors(snapshot.remainingToday, snapshot.limitPerDay);
+  const activePhase = kind ? snapshot.phases?.find((p) => p.phase === kind) : undefined;
 
-  const tokenDayPct = snapshot.tokenLimitPerDay > 0 ? (snapshot.tokensUsedToday / snapshot.tokenLimitPerDay) * 100 : 0;
-  const tokenBudget = budgetColors(snapshot.tokensRemainingToday, snapshot.tokenLimitPerDay);
+  // Daily headline numbers: this phase's own share when `kind` is given
+  // and the backend actually returned a phase breakdown, otherwise the
+  // account-wide totals (old behavior). Per-minute numbers are never
+  // split by phase (Groq doesn't ration those that finely) so they
+  // always come from the account-wide snapshot regardless of `kind`.
+  const requestsLimitPerDay = activePhase ? activePhase.limitPerDay : snapshot.limitPerDay;
+  const requestsUsedToday = activePhase ? activePhase.usedToday : snapshot.usedToday;
+  const requestsRemainingToday = activePhase ? activePhase.remainingToday : snapshot.remainingToday;
+
+  const tokensLimitPerDay = activePhase ? activePhase.tokenLimitPerDay : snapshot.tokenLimitPerDay;
+  const tokensUsedToday = activePhase ? activePhase.tokensUsedToday : snapshot.tokensUsedToday;
+  const tokensRemainingToday = activePhase ? activePhase.tokensRemainingToday : snapshot.tokensRemainingToday;
+
+  const requestDayPct = requestsLimitPerDay > 0 ? (requestsUsedToday / requestsLimitPerDay) * 100 : 0;
+  const requestBudget = budgetColors(requestsRemainingToday, requestsLimitPerDay);
+
+  const tokenDayPct = tokensLimitPerDay > 0 ? (tokensUsedToday / tokensLimitPerDay) * 100 : 0;
+  const tokenBudget = budgetColors(tokensRemainingToday, tokensLimitPerDay);
 
   const anyExhausted = requestBudget.exhausted || tokenBudget.exhausted;
 
@@ -89,14 +121,19 @@ export function GroqQuotaPanel({ refreshKey }: GroqQuotaPanelProps) {
     <div className="mb-6 rounded-[8px] border border-border-subtle bg-surface/40 p-3.5">
       <div className="flex items-center gap-1.5">
         <ActivityIcon className="h-3.5 w-3.5 shrink-0 text-text-faint" />
-        <span className="text-[12.5px] font-medium text-text">Groq budget</span>
+        <span className="text-[12.5px] font-medium text-text">
+          Groq budget{activePhase ? ` · ${PHASE_LABELS[activePhase.phase]}` : ""}
+        </span>
+        {activePhase ? (
+          <span className="text-[10.5px] text-text-faint">({activePhase.sharePct}% of the daily budget)</span>
+        ) : null}
       </div>
 
       <div className="mt-2.5">
         <div className="flex items-center justify-between gap-3">
           <span className="text-[11px] text-text-faint">Requests</span>
           <span className={`text-[12px] font-medium ${requestBudget.labelColor}`}>
-            {formatCount(snapshot.remainingToday)} / {formatCount(snapshot.limitPerDay)} left today
+            {formatCount(requestsRemainingToday)} / {formatCount(requestsLimitPerDay)} left today
           </span>
         </div>
         <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-border-subtle">
@@ -107,6 +144,7 @@ export function GroqQuotaPanel({ refreshKey }: GroqQuotaPanelProps) {
         </div>
         <div className="mt-1 text-[11px] text-text-faint">
           {formatCount(snapshot.remainingThisMinute)} / {formatCount(snapshot.limitPerMinute)} left this minute
+          {activePhase ? " (shared across all sections)" : ""}
         </div>
       </div>
 
@@ -114,7 +152,7 @@ export function GroqQuotaPanel({ refreshKey }: GroqQuotaPanelProps) {
         <div className="flex items-center justify-between gap-3">
           <span className="text-[11px] text-text-faint">Tokens</span>
           <span className={`text-[12px] font-medium ${tokenBudget.labelColor}`}>
-            {formatCount(snapshot.tokensRemainingToday)} / {formatCount(snapshot.tokenLimitPerDay)} left today
+            {formatCount(tokensRemainingToday)} / {formatCount(tokensLimitPerDay)} left today
           </span>
         </div>
         <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-border-subtle">
@@ -125,10 +163,14 @@ export function GroqQuotaPanel({ refreshKey }: GroqQuotaPanelProps) {
         </div>
         <div className="mt-1 text-[11px] text-text-faint">
           {formatCount(snapshot.tokensRemainingThisMinute)} / {formatCount(snapshot.tokenLimitPerMinute)} left this minute
+          {activePhase ? " (shared across all sections)" : ""}
         </div>
       </div>
 
-      {snapshot.phases && snapshot.phases.length > 0 ? (
+      {/* Only show the full per-phase breakdown when this panel ISN'T already
+          scoped to one phase — otherwise it would just repeat the headline
+          numbers above for `kind`'s own row. */}
+      {!activePhase && snapshot.phases && snapshot.phases.length > 0 ? (
         <div className="mt-3.5 border-t border-border-subtle pt-3">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-[11px] text-text-faint">Split by phase</span>
@@ -168,7 +210,8 @@ export function GroqQuotaPanel({ refreshKey }: GroqQuotaPanelProps) {
 
       {anyExhausted ? (
         <p className="m-0 mt-2.5 text-[11.5px] text-status-error-label">
-          Today&apos;s Groq {requestBudget.exhausted && tokenBudget.exhausted ? "request and token" : requestBudget.exhausted ? "request" : "token"} budget is used up — discovery runs will pause until it resets.
+          Today&apos;s {activePhase ? `${PHASE_LABELS[activePhase.phase]} ` : ""}Groq{" "}
+          {requestBudget.exhausted && tokenBudget.exhausted ? "request and token" : requestBudget.exhausted ? "request" : "token"} budget is used up — {activePhase ? "this section's" : "discovery"} runs will pause until it resets.
         </p>
       ) : null}
     </div>

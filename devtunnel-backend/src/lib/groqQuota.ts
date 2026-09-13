@@ -305,3 +305,23 @@ export async function getGroqQuotaSnapshot(kv: KVNamespace): Promise<GroqQuotaSn
     phases,
   };
 }
+
+/**
+ * True once a phase can no longer make any more Groq calls today — its
+ * own daily request share OR its own daily token share (whichever binds
+ * first) has hit zero. Mirrors the "exhausted" definition the admin quota
+ * panel already uses (`budgetColors` in `groq-quota-panel.tsx`): either
+ * dimension reaching zero means `reserveGroqRequest` will throw
+ * `GroqQuotaExceededError` for this phase on its very next call, so the
+ * phase is effectively done for the day even if the other dimension has
+ * room left.
+ *
+ * Used by `aiDiscoveryAgent.ts` to gate task/issue discovery: per product
+ * direction, tasks should only start once BOTH the projects and tools
+ * phases have completely used up their own daily share — so pass each
+ * phase's `getGroqQuotaSnapshot(...).phases` entry through this and
+ * require both to be true before running task discovery.
+ */
+export function isPhaseBudgetExhausted(phase: { remainingToday: number; tokensRemainingToday: number }): boolean {
+  return phase.remainingToday <= 0 || phase.tokensRemainingToday <= 0;
+}

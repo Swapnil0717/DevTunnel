@@ -129,7 +129,7 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
 
   return (
     <div className="mb-8">
-      <GroqQuotaPanel refreshKey={quotaRefreshKey} />
+      <GroqQuotaPanel refreshKey={quotaRefreshKey} kind={kind} />
 
       <button
         type="button"

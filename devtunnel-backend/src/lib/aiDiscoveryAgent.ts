@@ -2,7 +2,7 @@
 import type { ValidatedEnv } from "../config/env";
 import { getSupabase } from "./supabase";
 import { parseGroqJson, runGroqAgent } from "./groq";
-import { GroqQuotaExceededError } from "./groqQuota";
+import { GroqQuotaExceededError, getGroqQuotaSnapshot, isPhaseBudgetExhausted } from "./groqQuota";
 import { DISCOVERY_TOOLS, buildDiscoveryDispatcher, getReadmeWithCache, type ReadmeCache, type StepReporter } from "./aiDiscoveryTools";
 import {
   validateProjectCandidate,
@@ -354,7 +354,9 @@ Return exactly ${requestCount} candidate(s) total, matching the needed counts pe
 }
 
 // ---------------------------------------------------------------------------
-// Tools — 7/day, exactly one per category.
+// Tools — 7/day, drawn from a shuffled subset of TOOL_CATEGORIES (see
+// db/aiDiscovery.ts's getTodayCounters) so which 7 of the categories get
+// a tool varies day to day, one tool per chosen category.
 // ---------------------------------------------------------------------------
 
 async function runToolDiscovery(
@@ -369,7 +371,7 @@ async function runToolDiscovery(
   onStep?.("Checking today's tool discovery quota…");
   const counters = await getTodayCounters(supabase);
   if (counters.toolCategoriesRemaining.length === 0) {
-    onStep?.("Every tool category is already covered today — nothing to do.");
+    onStep?.("Today's tool quota (7) is already used up — nothing more to do until it resets.");
     return { proposed: 0, dropped: 0, errors, quotaExceeded: false, accountQuotaExceeded: false };
   }
 
@@ -513,9 +515,57 @@ Reply with ONLY this JSON and nothing else:
 // related to projects that are in devtunnel"), but still deduplicated and
 // run with a sane per-project ceiling so one huge repo can't blow the
 // Groq/GitHub budget for the day.
+//
+// Two product rules layered on top of that:
+//
+// 1. Budget priority — task/issue discovery must NOT spend a single Groq
+//    call until the projects phase AND the tools phase have each
+//    completely used up their own daily share (see PHASE_BUDGET_SHARE in
+//    groqQuota.ts). Projects and tools always get first claim on the
+//    day's budget; tasks only ever picks up what's left once both of
+//    those are fully spent. Enforced by `isTasksBudgetUnlocked` below,
+//    checked once at the very start of every run (scoped button click OR
+//    daily cron) — never mid-loop, since the gate is about WHETHER tasks
+//    should run at all today, not a per-request quota check (that part
+//    is still handled by reserveGroqRequest/GroqQuotaExceededError as
+//    before).
+//
+// 2. Shuffled project order — every run walks onboarded projects in a
+//    freshly randomized order (see `shuffled` below) rather than
+//    always starting from the same project. Without this, a single
+//    "Add AI issue" click (maxToPropose = 1) would keep draining the
+//    same first project's issues run after run before ever touching the
+//    others; shuffling spreads new tasks across every onboarded project
+//    over time instead of exhausting one before moving to the next.
 // ---------------------------------------------------------------------------
 
 const MAX_ISSUES_PER_PROJECT = 15;
+
+/** Fisher-Yates shuffle — never mutates the input array. */
+function shuffled<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+/**
+ * True once BOTH the projects phase and the tools phase have completely
+ * used up their own daily Groq share (see `isPhaseBudgetExhausted` in
+ * groqQuota.ts) — the gate task discovery must clear before it's allowed
+ * to spend a single Groq call today.
+ */
+async function isTasksBudgetUnlocked(kv: KVNamespace): Promise<boolean> {
+  const snapshot = await getGroqQuotaSnapshot(kv);
+  const projectsPhase = snapshot.phases.find((p) => p.phase === "projects");
+  const toolsPhase = snapshot.phases.find((p) => p.phase === "tools");
+  // Fail closed: if either phase's entry is somehow missing, treat tasks
+  // as still locked rather than risk running early.
+  if (!projectsPhase || !toolsPhase) return false;
+  return isPhaseBudgetExhausted(projectsPhase) && isPhaseBudgetExhausted(toolsPhase);
+}
 
 async function runTaskDiscovery(
   env: ValidatedEnv,
@@ -530,14 +580,24 @@ async function runTaskDiscovery(
   let quotaExceeded = false;
   let accountQuotaExceeded = false;
 
+  onStep?.("Checking whether today's Projects and Tools budgets are fully used…");
+  const unlocked = await isTasksBudgetUnlocked(kv);
+  if (!unlocked) {
+    onStep?.(
+      "Task discovery is on hold — it only runs once today's Projects and Tools Groq budgets are completely used.",
+    );
+    return { proposed: 0, dropped: 0, errors, quotaExceeded: false, accountQuotaExceeded: false };
+  }
+
   onStep?.("Loading onboarded projects…");
-  const projects = await listOnboardedProjects(supabase);
+  const projects = shuffled(await listOnboardedProjects(supabase));
   onStep?.(`Found ${projects.length} onboarded project${projects.length === 1 ? "" : "s"} to check for issues.`);
 
-  // One onboarded project at a time, fully finished before the next
-  // starts — this is also the first phase runDailyDiscovery runs, so
-  // every issue gets proposed before a single project or tool candidate
-  // does.
+  // Every onboarded project, in a freshly shuffled order each run (see
+  // the module comment above) — one project fully finished before the
+  // next starts within this call, but WHICH project goes first varies
+  // run to run so issues get spread across the whole catalog instead of
+  // always draining the same project first.
   for (const project of projects) {
     if (maxToPropose !== undefined && proposed >= maxToPropose) break;
     try {
@@ -672,6 +732,15 @@ Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
     }
   }
 
+  // Ran the full (shuffled) project list, hit no Groq quota wall, and
+  // still came away with nothing new to propose — every open issue
+  // across every onboarded project is either already tracked or didn't
+  // qualify, so say so plainly rather than leaving the log looking like
+  // it silently did nothing.
+  if (proposed === 0 && !quotaExceeded && errors.length === 0) {
+    onStep?.("No issues found — all issues are addressed.");
+  }
+
   return { proposed, dropped, errors, quotaExceeded, accountQuotaExceeded };
 }
 
@@ -702,6 +771,13 @@ export async function runDailyDiscovery(env: ValidatedEnv, kv: KVNamespace): Pro
   // independently in groqQuota.ts. Only a genuine account-wide
   // exhaustion (accountQuotaExceeded === true — the whole Groq key has
   // nothing left for anyone today) short-circuits the phases after it.
+  //
+  // runTaskDiscovery (called below) additionally self-gates: even once
+  // it's this run's turn, it does nothing until BOTH the projects and
+  // tools phases have completely used up their own daily share
+  // (`isTasksBudgetUnlocked`) — so on a typical day with quota still
+  // left over, this daily run proposes projects and tools but leaves
+  // tasks/issues untouched until a later run once that budget is spent.
   const readmeCache: ReadmeCache = new Map();
 
   const projectsResult = await runProjectDiscovery(env, kv, readmeCache).catch((err) => {
@@ -822,11 +898,20 @@ export async function runToolDiscoveryOnly(
  * Scoped entry point — runs ONLY the task-discovery phase, for the
  * "Add AI issue" button on the AI Added Tasks admin page
  * (devtunnel-frontend .../ai/tasks). Walks every onboarded project's
- * open issues one at a time (see runTaskDiscovery above) — no daily
- * quota to share, just per-project dedup, so it's safe to call
- * repeatedly. Projects and tools are left untouched. `limit` (default 1)
- * stops the walk as soon as that many issues have been proposed, and
- * `onStep` streams live progress as each project is checked.
+ * open issues, in a freshly shuffled order each call (see
+ * `shuffled`/module comment above), one project at a time — no daily
+ * quota of its own to share, just per-project dedup, so it's safe to
+ * call repeatedly. Projects and tools are left untouched. `limit`
+ * (default 1) stops the walk as soon as that many issues have been
+ * proposed, and `onStep` streams live progress as each project is
+ * checked.
+ *
+ * Gated by `isTasksBudgetUnlocked`: this call does nothing (proposes 0,
+ * no error) until today's Projects AND Tools Groq budgets are both
+ * completely used up — the admin page's step log explains the hold when
+ * that happens. If every onboarded project's issues are already tracked
+ * or none qualify, the step log says so explicitly ("No issues found —
+ * all issues are addressed.") instead of silently returning nothing.
  */
 export async function runTaskDiscoveryOnly(
   env: ValidatedEnv,
