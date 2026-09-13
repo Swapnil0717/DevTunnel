@@ -56,7 +56,13 @@ const RPM_WINDOW_SECONDS = 60;
  */
 export type DiscoveryPhase = "projects" | "tools" | "tasks";
 
-export const PHASE_BUDGET_SHARE: Record<DiscoveryPhase, number> = {
+/**
+ * Fallback split used until an admin sets a custom one via
+ * `PUT /admin/ai/budget` (routes/admin/ai.ts), and whenever whatever's
+ * stored in KV is missing or malformed. Matches the original hardcoded
+ * 25/25/50 product direction.
+ */
+export const DEFAULT_PHASE_BUDGET_SHARE: Record<DiscoveryPhase, number> = {
   projects: 0.25,
   tools: 0.25,
   tasks: 0.5,
@@ -71,8 +77,83 @@ export const PHASE_BUDGET_SHARE: Record<DiscoveryPhase, number> = {
  */
 export const PHASE_SPEND_ORDER: DiscoveryPhase[] = ["projects", "tools", "tasks"];
 
-function phaseLimit(totalLimit: number, phase: DiscoveryPhase): number {
-  return Math.max(1, Math.floor(totalLimit * PHASE_BUDGET_SHARE[phase]));
+/**
+ * Persistent (no TTL — this is a setting, not a daily counter) KV key
+ * holding the admin-configured projects/tools/tasks split, as fractions
+ * that sum to 1. Separate key namespace from every `groq:rpd:*` /
+ * `groq:tpd:*` counter above so it's never touched by the daily
+ * expirationTtl those use.
+ */
+const PHASE_BUDGET_SHARE_KV_KEY = "groq:phase_budget_shares";
+
+/** How far a stored/submitted share set's total may drift from exactly 1 (100%) before being rejected — accounts for float rounding, not sloppy input. */
+const SHARE_SUM_TOLERANCE = 0.005;
+
+function isValidShareSet(value: unknown): value is Record<DiscoveryPhase, number> {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  let sum = 0;
+  for (const phase of PHASE_SPEND_ORDER) {
+    const share = record[phase];
+    if (typeof share !== "number" || !Number.isFinite(share) || share < 0 || share > 1) return false;
+    sum += share;
+  }
+  return Math.abs(sum - 1) <= SHARE_SUM_TOLERANCE;
+}
+
+/** Thrown by `setPhaseBudgetShares` when the submitted split isn't three 0-1 fractions summing to 1 (i.e. three 0-100 percentages summing to 100). */
+export class InvalidPhaseBudgetSharesError extends Error {
+  constructor() {
+    super("Budget percentages must each be between 0 and 100, and add up to exactly 100");
+    this.name = "InvalidPhaseBudgetSharesError";
+  }
+}
+
+/**
+ * Reads the admin-configured projects/tools/tasks Groq budget split.
+ * Falls back to `DEFAULT_PHASE_BUDGET_SHARE` whenever nothing has been
+ * set yet, or the stored value fails validation — `reserveGroqRequest`
+ * and `getGroqQuotaSnapshot` must never operate on a split that could let
+ * a phase (or all three combined) claim more than 100% of the daily
+ * account-wide budget.
+ */
+export async function getPhaseBudgetShares(kv: KVNamespace): Promise<Record<DiscoveryPhase, number>> {
+  try {
+    const raw = await kv.get(PHASE_BUDGET_SHARE_KV_KEY);
+    if (!raw) return DEFAULT_PHASE_BUDGET_SHARE;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isValidShareSet(parsed)) {
+      logger.warn("groq_phase_shares_invalid_stored_value", { raw });
+      return DEFAULT_PHASE_BUDGET_SHARE;
+    }
+    return parsed;
+  } catch (err) {
+    logger.error("groq_phase_shares_read_failed", { error: String(err) });
+    return DEFAULT_PHASE_BUDGET_SHARE;
+  }
+}
+
+/**
+ * Persists a new projects/tools/tasks split (fractions 0-1, summing to 1
+ * within `SHARE_SUM_TOLERANCE`) — called from the admin "custom budget"
+ * setter (`PUT /admin/ai/budget`). Takes effect on the very next call to
+ * `reserveGroqRequest` / `getGroqQuotaSnapshot`; doesn't touch or reset
+ * any of today's already-spent counters, so changing the split partway
+ * through the day re-slices whatever's LEFT, not what's already been
+ * used.
+ */
+export async function setPhaseBudgetShares(
+  kv: KVNamespace,
+  shares: Record<DiscoveryPhase, number>,
+): Promise<Record<DiscoveryPhase, number>> {
+  if (!isValidShareSet(shares)) throw new InvalidPhaseBudgetSharesError();
+  await kv.put(PHASE_BUDGET_SHARE_KV_KEY, JSON.stringify(shares));
+  logger.info("groq_phase_shares_updated", { shares });
+  return shares;
+}
+
+function phaseLimit(totalLimit: number, phase: DiscoveryPhase, shares: Record<DiscoveryPhase, number>): number {
+  return Math.max(1, Math.floor(totalLimit * shares[phase]));
 }
 
 export type GroqQuotaReason = "rpm" | "rpd" | "tpm" | "tpd" | "rpd_phase" | "tpd_phase";
@@ -202,12 +283,13 @@ export async function reserveGroqRequest(
     throw new GroqQuotaExceededError("tpm", msUntilNextMinuteWindow());
   }
 
+  const shares = await getPhaseBudgetShares(kv);
   const rpdKey = `groq:rpd:${todayKey()}`;
   const tpdKey = `groq:tpd:${todayKey()}`;
   const phaseRpd = phaseRpdKey(phase);
   const phaseTpd = phaseTpdKey(phase);
-  const phaseRpdLimit = phaseLimit(GROQ_RPD_LIMIT, phase);
-  const phaseTpdLimit = phaseLimit(GROQ_TPD_LIMIT, phase);
+  const phaseRpdLimit = phaseLimit(GROQ_RPD_LIMIT, phase, shares);
+  const phaseTpdLimit = phaseLimit(GROQ_TPD_LIMIT, phase, shares);
 
   for (let attempt = 0; attempt <= maxWaitAttempts; attempt++) {
     const usedToday = await readCounter(kv, rpdKey);
@@ -268,16 +350,17 @@ export async function getGroqQuotaSnapshot(kv: KVNamespace): Promise<GroqQuotaSn
   const usedThisMinute = await readCounter(kv, `groq:rpm:${minuteWindow()}`);
   const tokensToday = await readCounter(kv, `groq:tpd:${todayKey()}`);
   const tokensThisMinute = await readCounter(kv, `groq:tpm:${minuteWindow()}`);
+  const shares = await getPhaseBudgetShares(kv);
 
   const phases = await Promise.all(
     PHASE_SPEND_ORDER.map(async (phase) => {
-      const rpdLimit = phaseLimit(GROQ_RPD_LIMIT, phase);
-      const tpdLimit = phaseLimit(GROQ_TPD_LIMIT, phase);
+      const rpdLimit = phaseLimit(GROQ_RPD_LIMIT, phase, shares);
+      const tpdLimit = phaseLimit(GROQ_TPD_LIMIT, phase, shares);
       const rpdUsed = await readCounter(kv, phaseRpdKey(phase));
       const tpdUsed = await readCounter(kv, phaseTpdKey(phase));
       return {
         phase,
-        sharePct: Math.round(PHASE_BUDGET_SHARE[phase] * 100),
+        sharePct: Math.round(shares[phase] * 100),
         limitPerDay: rpdLimit,
         usedToday: rpdUsed,
         remainingToday: Math.max(rpdLimit - rpdUsed, 0),

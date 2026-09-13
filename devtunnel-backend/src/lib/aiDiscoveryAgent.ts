@@ -70,7 +70,7 @@ import type { AiDiscoveryCounters, AiDiscoveryRunSummary, DeveloperRole, Experie
 /**
  * Shared return shape for each of the three phase runners below.
  * `quotaExceeded` means THIS phase stopped early because ITS budget
- * (which, per groqQuota.ts's PHASE_BUDGET_SHARE, may be only that
+ * (which, per groqQuota.ts's getPhaseBudgetShares split, may be only that
  * phase's own 25%/25%/50% slice — not necessarily the whole account) ran
  * out. `accountQuotaExceeded` is the narrower, more serious case: the
  * shared Groq account itself has zero requests/tokens left for ANY
@@ -549,7 +549,7 @@ Reply with ONLY this JSON and nothing else:
 //    call until the projects phase AND the tools phase are each done for
 //    the day: either today's quota target is already met (PROJECT_QUOTA /
 //    TOOL_DAILY_QUOTA in db/aiDiscovery.ts) or that phase has spent at
-//    least 75% of its own daily Groq share (see PHASE_BUDGET_SHARE in
+//    least 75% of its own daily Groq share (see getPhaseBudgetShares in
 //    groqQuota.ts, and TASKS_UNLOCK_BUDGET_THRESHOLD below). Projects and
 //    tools always get first claim on the day's budget; tasks only ever
 //    picks up what's left once both of those are done. Enforced by
@@ -826,7 +826,7 @@ export async function runDailyDiscovery(env: ValidatedEnv, kv: KVNamespace): Pro
 
   // Per product direction, the shared daily Groq budget is split
   // 25% projects / 25% tools / 50% tasks (groqQuota.ts
-  // PHASE_BUDGET_SHARE) — and projects+tools' combined half is spent
+  // getPhaseBudgetShares, default 25/25/50) — and projects+tools' combined half is spent
   // BEFORE tasks/issues ever gets a turn, never the other way around.
   // That's why the run order below is projects -> tools -> tasks (it
   // used to be tasks first) — every project and tool candidate this run

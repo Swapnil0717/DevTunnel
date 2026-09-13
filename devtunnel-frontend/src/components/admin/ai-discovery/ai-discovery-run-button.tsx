@@ -45,6 +45,16 @@ const COPY = {
 
 const QUOTA_EXCEEDED_MESSAGE = "Today's Groq budget was hit partway through this run. It'll pick back up once the budget resets.";
 
+/** Pause between loop iterations — long enough that the confirmation queue's refresh and the quota panel aren't hammered, short enough that the loop still feels continuous. */
+const LOOP_PAUSE_MS = 1500;
+
+/** Two runs in a row that found nothing new means the project catalog is exhausted for today — stop instead of looping forever on empty results. */
+const LOOP_EMPTY_RUNS_BEFORE_STOP = 2;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function formatElapsed(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
@@ -67,15 +77,30 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
   const stepsLogRef = useRef<HTMLOListElement | null>(null);
   const copy = COPY[kind];
 
+  // Loop mode — only wired up for "tasks": repeatedly hits the same
+  // single-issue endpoint used by the button above, one onboarded
+  // project's random open issue at a time, until today's issue-discovery
+  // Groq budget runs out or every project's issues are already covered.
+  // Each proposed task lands in the PENDING queue exactly like a single
+  // click would, so it's still sitting there for an admin to confirm —
+  // looping just keeps that queue filling up instead of requiring a
+  // click per issue.
+  const [isLooping, setIsLooping] = useState(false);
+  const [loopRuns, setLoopRuns] = useState(0);
+  const [loopTotalProposed, setLoopTotalProposed] = useState(0);
+  const [loopStopReason, setLoopStopReason] = useState<string | null>(null);
+  const [lastRunWasLoop, setLastRunWasLoop] = useState(false);
+  const stopLoopRef = useRef(false);
+
   useEffect(() => {
-    if (!isRunning) return;
+    if (!isRunning && !isLooping) return;
     const intervalId = setInterval(() => {
       if (runStartedAtRef.current !== null) {
         setElapsedMs(Date.now() - runStartedAtRef.current);
       }
     }, 1000);
     return () => clearInterval(intervalId);
-  }, [isRunning]);
+  }, [isRunning, isLooping]);
 
   // Auto-scroll the live steps log to the newest line as it grows.
   useEffect(() => {
@@ -97,6 +122,7 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
     runStartedAtRef.current = Date.now();
     setElapsedMs(0);
     setIsRunning(true);
+    setLastRunWasLoop(false);
     try {
       const handlers = { onStep: appendStep };
       const summary =
@@ -119,6 +145,92 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
     }
   }
 
+  /**
+   * Loop: convert one random project's issue into a task, leave it in the
+   * PENDING queue for confirmation, then immediately go looking for the
+   * next one — repeating until today's tasks/issue budget (50% of the
+   * shared Groq daily budget) is exhausted, or two runs in a row turn up
+   * nothing new (every onboarded project's issues are already tracked).
+   * Stops instantly if the admin clicks "Stop".
+   */
+  async function handleStartLoop() {
+    setError(null);
+    setLoopStopReason(null);
+    setLastRun(null);
+    setLastRunDurationMs(null);
+    setSteps([]);
+    nextStepIdRef.current = 0;
+    setLoopRuns(0);
+    setLoopTotalProposed(0);
+    stopLoopRef.current = false;
+    runStartedAtRef.current = Date.now();
+    setElapsedMs(0);
+    setIsLooping(true);
+    setLastRunWasLoop(true);
+
+    let consecutiveEmptyRuns = 0;
+    let runCount = 0;
+    let totalProposed = 0;
+
+    while (!stopLoopRef.current) {
+      runCount += 1;
+      appendStep(`— Run ${runCount}: picking a random onboarded project to check for open issues…`);
+
+      let summary: AiDiscoveryRunSummary;
+      try {
+        summary = await triggerAiTaskDiscoveryRun({ onStep: appendStep });
+      } catch {
+        setError(copy.error);
+        appendStep("Run failed — stopping the loop.");
+        break;
+      }
+
+      totalProposed += summary.tasksProposed;
+      setLoopRuns(runCount);
+      setLoopTotalProposed(totalProposed);
+      setLastRun(summary);
+      setQuotaRefreshKey((k) => k + 1);
+      router.refresh();
+
+      if (summary.tasksProposed > 0) {
+        appendStep(
+          `Proposed ${summary.tasksProposed} task${summary.tasksProposed === 1 ? "" : "s"} — now waiting in the queue for confirmation.`,
+        );
+      }
+
+      if (summary.groqQuotaExceeded) {
+        setLoopStopReason("Today's issue-conversion Groq budget is used up for now.");
+        appendStep("Today's issue-conversion budget ran out — loop stopped.");
+        break;
+      }
+
+      if (summary.tasksProposed === 0 && summary.candidatesDropped === 0 && summary.errors.length === 0) {
+        consecutiveEmptyRuns += 1;
+        if (consecutiveEmptyRuns >= LOOP_EMPTY_RUNS_BEFORE_STOP) {
+          setLoopStopReason("Every onboarded project's open issues are already tracked or didn't qualify.");
+          appendStep("No more actionable issues found — loop stopped.");
+          break;
+        }
+      } else {
+        consecutiveEmptyRuns = 0;
+      }
+
+      if (stopLoopRef.current) break;
+      appendStep("Pausing briefly before the next issue…");
+      await sleep(LOOP_PAUSE_MS);
+    }
+
+    if (runStartedAtRef.current !== null) {
+      setLastRunDurationMs(Date.now() - runStartedAtRef.current);
+    }
+    runStartedAtRef.current = null;
+    setIsLooping(false);
+  }
+
+  function handleStopLoop() {
+    stopLoopRef.current = true;
+  }
+
   const proposedCount = lastRun
     ? kind === "projects"
       ? lastRun.projectsProposed
@@ -131,23 +243,62 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
     <div className="mb-8">
       <GroqQuotaPanel refreshKey={quotaRefreshKey} kind={kind} />
 
-      <button
-        type="button"
-        onClick={handleRun}
-        disabled={isRunning}
-        className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        <SparkleIcon className="h-3.5 w-3.5 shrink-0" />
-        {isRunning ? copy.running : copy.idle}
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={handleRun}
+          disabled={isRunning || isLooping}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <SparkleIcon className="h-3.5 w-3.5 shrink-0" />
+          {isRunning ? copy.running : copy.idle}
+        </button>
 
-      {isRunning ? (
+        {kind === "tasks" ? (
+          isLooping ? (
+            <button
+              type="button"
+              onClick={handleStopLoop}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-status-error-border bg-status-error-bg px-4 py-2 text-[13px] font-medium text-status-error-label transition-opacity hover:opacity-90"
+            >
+              Stop loop
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleStartLoop}
+              disabled={isRunning}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface-raised px-4 py-2 text-[13px] font-medium text-text transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <SparkleIcon className="h-3.5 w-3.5 shrink-0" />
+              Auto-convert issues until budget runs out
+            </button>
+          )
+        ) : null}
+      </div>
+
+      {(isRunning || isLooping) ? (
         <p className="m-0 mt-2 text-[12px] text-text-faint" aria-live="polite">
-          Running for {formatElapsed(elapsedMs)}…
+          {isLooping
+            ? `Looping for ${formatElapsed(elapsedMs)} — run ${loopRuns}, ${loopTotalProposed} task${loopTotalProposed === 1 ? "" : "s"} proposed so far…`
+            : `Running for ${formatElapsed(elapsedMs)}…`}
         </p>
       ) : null}
 
-      {(isRunning || steps.length > 0) && (
+      {!isRunning && !isLooping && loopStopReason ? (
+        <div className="mt-3 rounded-[8px] border border-border bg-surface-raised p-3">
+          <p className="m-0 text-[12.5px] font-medium text-text">
+            Loop stopped after {loopRuns} run{loopRuns === 1 ? "" : "s"}
+            {lastRunDurationMs !== null ? ` (${formatElapsed(lastRunDurationMs)})` : ""}
+          </p>
+          <p className="m-0 mt-1 text-[12px] text-text-muted">{loopStopReason}</p>
+          <p className="m-0 mt-1 text-[12px] text-text-muted">
+            {loopTotalProposed} task{loopTotalProposed === 1 ? "" : "s"} proposed in total, waiting for confirmation.
+          </p>
+        </div>
+      ) : null}
+
+      {(isRunning || isLooping || steps.length > 0) && (
         <ol
           ref={stepsLogRef}
           aria-live="polite"
@@ -159,7 +310,7 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
               <span>{step.message}</span>
             </li>
           ))}
-          {isRunning ? (
+          {isRunning || isLooping ? (
             <li className="flex gap-2 text-text-faint">
               <span className="shrink-0">··</span>
               <span className="animate-pulse">Working…</span>
@@ -170,7 +321,10 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
 
       {error ? <p className="m-0 mt-3 text-[12px] text-status-error-label">{error}</p> : null}
 
-      {lastRun && !error && lastRun.groqQuotaExceeded ? (
+      {/* Loop runs get their own "Loop stopped" summary above instead of these
+          per-run banners, which would otherwise flash a new one after every
+          single iteration. */}
+      {!lastRunWasLoop && lastRun && !error && lastRun.groqQuotaExceeded ? (
         <div className="mt-3 rounded-[8px] border border-status-error-border bg-status-error-bg p-3">
           <p className="m-0 text-[12.5px] font-medium text-status-error-label">Groq budget limit hit</p>
           <p className="m-0 mt-1 text-[12px] text-status-error-text">{QUOTA_EXCEEDED_MESSAGE}</p>
@@ -182,7 +336,7 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
         </div>
       ) : null}
 
-      {lastRun && !error && !lastRun.groqQuotaExceeded ? (
+      {!lastRunWasLoop && lastRun && !error && !lastRun.groqQuotaExceeded ? (
         <div className="mt-3 rounded-[8px] border border-status-success-border bg-status-success-bg p-3">
           <p className="m-0 text-[12.5px] font-medium text-status-success-label">
             Run complete{lastRunDurationMs !== null ? ` in ${formatElapsed(lastRunDurationMs)}` : ""}

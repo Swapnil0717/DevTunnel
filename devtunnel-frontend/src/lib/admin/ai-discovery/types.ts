@@ -84,6 +84,20 @@ export interface AiDiscoveryRunSummary {
 }
 
 /**
+ * Response body of both `GET` and `PUT /admin/ai/budget`
+ * (devtunnel-backend `groqQuota.ts` getPhaseBudgetShares /
+ * setPhaseBudgetShares) — the admin-configured split of the shared daily
+ * Groq budget across the three discovery phases, as whole percentages
+ * that always add up to 100. Defaults to 25/25/50 (projects/tools/tasks)
+ * until an admin sets a custom split.
+ */
+export interface PhaseBudgetShares {
+  projects: number;
+  tools: number;
+  tasks: number;
+}
+
+/**
  * Response body of `GET /admin/ai/groq-quota` (devtunnel-backend
  * `GroqQuotaSnapshot`) — how much of the shared Groq request/token
  * budget is left this minute and today. Backs `GroqQuotaPanel`.

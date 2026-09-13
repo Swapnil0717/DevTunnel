@@ -1,6 +1,6 @@
 // devtunnel-frontend/src/lib/admin/ai-discovery/client-api.ts
 import { API_BASE_URL } from "@/lib/config";
-import type { AiDiscoveryRunSummary, GroqQuotaSnapshot } from "./types";
+import type { AiDiscoveryRunSummary, GroqQuotaSnapshot, PhaseBudgetShares } from "./types";
 
 export class AiDiscoveryApiError extends Error {
   status: number;
@@ -163,5 +163,48 @@ export async function getGroqQuota(): Promise<GroqQuotaSnapshot> {
     credentials: "include",
   });
   if (!res.ok) throw new AiDiscoveryApiError(`Failed to load Groq quota (${res.status})`, res.status);
+  return res.json();
+}
+
+/**
+ * `GET /admin/ai/budget` — the current admin-configured split of the
+ * shared daily Groq budget across projects/tools/tasks, as whole
+ * percentages summing to 100 (25/25/50 until an admin has ever set a
+ * custom one).
+ */
+export async function getPhaseBudgetShares(): Promise<PhaseBudgetShares> {
+  const res = await fetch(`${API_BASE_URL}/admin/ai/budget`, {
+    method: "GET",
+    credentials: "include",
+  });
+  if (!res.ok) throw new AiDiscoveryApiError(`Failed to load the budget split (${res.status})`, res.status);
+  return res.json();
+}
+
+/**
+ * `PUT /admin/ai/budget` — replaces the projects/tools/tasks split.
+ * `shares` must be three 0-100 percentages that add up to exactly 100;
+ * the backend re-validates this and returns 400 (surfaced here as an
+ * `AiDiscoveryApiError`) if they don't. Takes effect on the very next
+ * Groq call — re-slices whatever's left of today's budget, not what's
+ * already been spent.
+ */
+export async function setPhaseBudgetShares(shares: PhaseBudgetShares): Promise<PhaseBudgetShares> {
+  const res = await fetch(`${API_BASE_URL}/admin/ai/budget`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(shares),
+  });
+  if (!res.ok) {
+    let message = `Failed to save the budget split (${res.status})`;
+    try {
+      const body = (await res.json()) as { error?: { message?: string } };
+      if (body?.error?.message) message = body.error.message;
+    } catch {
+      // Non-JSON error body — fall back to the generic message above.
+    }
+    throw new AiDiscoveryApiError(message, res.status);
+  }
   return res.json();
 }

@@ -69,6 +69,9 @@ import type { UserRole } from "../types";
  *   GET    /admin/ai/tools                -> admin:ai:read
  *   GET    /admin/ai/tasks                -> admin:ai:read
  *   GET    /admin/ai/confirmation         -> admin:ai:read
+ *   GET    /admin/ai/groq-quota           -> admin:ai:read
+ *   GET    /admin/ai/budget               -> admin:ai:read
+ *   PUT    /admin/ai/budget               -> admin:ai:write
  *   POST   /admin/ai/projects/:id/approve -> admin:ai:write
  *   POST   /admin/ai/projects/:id/reject  -> admin:ai:write
  *   POST   /admin/ai/tools/:id/approve    -> admin:ai:write
@@ -76,6 +79,9 @@ import type { UserRole } from "../types";
  *   POST   /admin/ai/tasks/:id/approve    -> admin:ai:write
  *   POST   /admin/ai/tasks/:id/reject     -> admin:ai:write
  *   POST   /admin/ai/run                  -> admin:ai:write
+ *   POST   /admin/ai/projects/run         -> admin:ai:write
+ *   POST   /admin/ai/tools/run            -> admin:ai:write
+ *   POST   /admin/ai/tasks/run            -> admin:ai:write
  *
  * `admin:tasks:read` / `admin:tasks:write` back admin_workflow.txt section
  * 10's Task Onboarding wizard (today: Step 1 — "Project Selection", Step 2

@@ -18,7 +18,13 @@ import {
   type StepReporter,
 } from "../../lib/aiDiscoveryAgent";
 import type { AiDiscoveryRunSummary } from "../../types";
-import { getGroqQuotaSnapshot } from "../../lib/groqQuota";
+import {
+  getGroqQuotaSnapshot,
+  getPhaseBudgetShares,
+  setPhaseBudgetShares,
+  InvalidPhaseBudgetSharesError,
+  type DiscoveryPhase,
+} from "../../lib/groqQuota";
 import {
   approveDiscoveredProject,
   approveDiscoveredTask,
@@ -97,6 +103,69 @@ adminAi.get("/confirmation", requireAuth, requireAdminRole, requirePermission("a
 adminAi.get("/groq-quota", requireAuth, requireAdminRole, requirePermission("admin:ai:read"), async (c) => {
   const snapshot = await getGroqQuotaSnapshot(c.env.RATE_LIMIT_KV);
   return c.json(snapshot);
+});
+
+/**
+ * Custom budget setter: lets an admin re-slice the shared daily Groq
+ * budget across the three discovery phases (default 25% projects / 25%
+ * tools / 50% tasks — groqQuota.ts DEFAULT_PHASE_BUDGET_SHARE) instead of
+ * being stuck with that hardcoded split. `GET` reads the current split as
+ * whole percentages; `PUT` replaces it. Takes effect on the very next
+ * Groq call — it re-slices whatever budget is LEFT today, not what's
+ * already been spent, and never resets any daily counters itself.
+ */
+const budgetSharesSchema = z.object({
+  projects: z.number().min(0).max(100),
+  tools: z.number().min(0).max(100),
+  tasks: z.number().min(0).max(100),
+});
+
+function sharesToPercentages(shares: Record<DiscoveryPhase, number>): { projects: number; tools: number; tasks: number } {
+  return {
+    projects: Math.round(shares.projects * 100),
+    tools: Math.round(shares.tools * 100),
+    tasks: Math.round(shares.tasks * 100),
+  };
+}
+
+adminAi.get("/budget", requireAuth, requireAdminRole, requirePermission("admin:ai:read"), async (c) => {
+  const shares = await getPhaseBudgetShares(c.env.RATE_LIMIT_KV);
+  return c.json(sharesToPercentages(shares));
+});
+
+adminAi.put("/budget", requireAuth, requireAdminRole, requirePermission("admin:ai:write"), async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const parsed = budgetSharesSchema.safeParse(body);
+  if (!parsed.success) {
+    return errorResponse(c, 400, "invalid_body", "Provide projects/tools/tasks percentages (0-100)");
+  }
+
+  const user = c.get("user");
+  const env = getEnv(c.env);
+  const requested = parsed.data;
+
+  try {
+    const saved = await setPhaseBudgetShares(c.env.RATE_LIMIT_KV, {
+      projects: requested.projects / 100,
+      tools: requested.tools / 100,
+      tasks: requested.tasks / 100,
+    });
+    await recordAdminAudit(getSupabase(env), {
+      adminId: user.id,
+      action: "AI_DISCOVERY_BUDGET_UPDATED",
+      resourceType: "ai_discovery",
+      resourceId: null,
+      result: "SUCCESS",
+      metadata: requested,
+    });
+    return c.json(sharesToPercentages(saved));
+  } catch (err) {
+    if (err instanceof InvalidPhaseBudgetSharesError) {
+      return errorResponse(c, 400, "invalid_shares", err.message);
+    }
+    logger.error("ai_discovery_budget_update_failed", { error: extractErrorMessage(err) });
+    return errorResponse(c, 500, "internal_error", "Failed to update the budget split");
+  }
 });
 
 async function handleApprove(
