@@ -138,9 +138,13 @@ export async function runGroqAgent(
     // (system prompt vs. a specific message vs. the tools schema) instead
     // of guessing from the total alone. Logs lengths only, never content.
     if (estimatedTokens > GROQ_TPM_LIMIT * 0.5) {
+      // Logged as requestSizeEstimate, not estimatedTokens — logger.ts
+      // redacts any field name containing "token" (see groqQuota.ts for
+      // the same fix), so the earlier version of this log line silently
+      // hid the one number it existed to show.
       logger.warn("groq_request_size_breakdown", {
         turn,
-        estimatedTokens,
+        requestSizeEstimate: estimatedTokens,
         limit: GROQ_TPM_LIMIT,
         toolsSchemaChars: JSON.stringify(groqTools).length,
         messageCharsByIndex: messages.map((m, i) => ({
@@ -207,13 +211,29 @@ export async function runGroqAgent(
 
     for (const call of toolCalls) {
       let result: unknown;
+      let args: Record<string, unknown> = {};
       try {
-        const args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
+        args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
         result = await dispatch(call.function.name, args);
       } catch (err) {
         result = { error: err instanceof Error ? err.message : String(err) };
       }
-      messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result) });
+      const resultContent = JSON.stringify(result);
+      // Diagnostic only: none of the known dispatch cases (aiDiscoveryTools.ts)
+      // should legitimately produce a result anywhere near this size given
+      // their caps (4,000-char README, 8 items x 600-char issue bodies, 10
+      // repos). Two separate runs hit the exact same 132,702-char result on
+      // the very first tool call with no visibility into which tool or
+      // repo/query caused it — logging that here instead of guessing again.
+      if (resultContent.length > 20000) {
+        logger.warn("groq_tool_result_oversized", {
+          turn,
+          toolName: call.function.name,
+          toolArgs: args,
+          resultChars: resultContent.length,
+        });
+      }
+      messages.push({ role: "tool", tool_call_id: call.id, content: resultContent });
     }
   }
 
