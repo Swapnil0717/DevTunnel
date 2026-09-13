@@ -15,18 +15,31 @@ import type { AdminNewIssue } from "./types";
  * The spec also lists `GET /admin/projects/:id/new-issues` for a
  * per-project scoped view, but section 29's final page list only names
  * one route for this page (`/admin/tasks/new-issues`, A15) — so this
- * fetches the full cross-project list and lets `AdminNewIssuesExplorer`
- * narrow it by project client-side, the same division of labor
- * `AdminTasksExplorer` already uses for its own project filter.
+ * fetches one page of the cross-project list and lets
+ * `AdminNewIssuesExplorer` narrow it by project client-side, the same
+ * division of labor `AdminTasksExplorer` already uses for its own
+ * project filter.
+ *
+ * The backend's `GET /admin/new-issues` is itself keyset-paginated
+ * (`limit`/`before`, `X-Next-Cursor` response header — see that route's
+ * own doc comment), so this forwards an optional `before` cursor and
+ * surfaces `nextCursor` back to the caller. The page component pairs
+ * this with `lib/admin/cursor-pagination.ts` to render real
+ * Previous/Next controls instead of silently truncating the list to
+ * whatever the first page happens to contain.
  */
 type AdminNewIssuesResult =
-  | { status: "ok"; data: AdminNewIssue[] }
+  | { status: "ok"; data: AdminNewIssue[]; nextCursor: string | null }
   | { status: "empty" }
   | { status: "error" };
 
-export async function getAdminNewIssues(): Promise<AdminNewIssuesResult> {
+export async function getAdminNewIssues(params?: { before?: string }): Promise<AdminNewIssuesResult> {
   try {
-    const res = await fetch(`${API_BASE_URL}/admin/new-issues`, {
+    const query = new URLSearchParams();
+    if (params?.before) query.set("before", params.before);
+    const qs = query.toString();
+
+    const res = await fetch(`${API_BASE_URL}/admin/new-issues${qs ? `?${qs}` : ""}`, {
       headers: { cookie: cookies().toString() },
       cache: "no-store",
     });
@@ -37,11 +50,11 @@ export async function getAdminNewIssues(): Promise<AdminNewIssuesResult> {
 
     const data = (await res.json()) as AdminNewIssue[];
 
-    if (Array.isArray(data) && data.length === 0) {
+    if (Array.isArray(data) && data.length === 0 && !params?.before) {
       return { status: "empty" };
     }
 
-    return { status: "ok", data };
+    return { status: "ok", data, nextCursor: res.headers.get("X-Next-Cursor") };
   } catch {
     return { status: "error" };
   }

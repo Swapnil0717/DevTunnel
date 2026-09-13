@@ -497,6 +497,79 @@ export async function fetchRepositoryIssues(
 }
 
 /**
+ * Safety ceiling for `fetchAllRepositoryIssues` below — a hard cap on how
+ * many open issues one repository can contribute to a single New Issues
+ * scan (`GET /admin/new-issues`), independent of how many pages that
+ * takes to walk. Protects the per-call GitHub rate-limit budget (rule 67)
+ * against a single very large repository (thousands of open issues)
+ * blowing through it on every admin page load. 1000 is generously above
+ * any repository this platform has onboarded so far; if a repository
+ * ever legitimately exceeds it, this function still returns its most
+ * recently updated 1000 open issues rather than failing outright.
+ */
+const MAX_SCANNED_ISSUES = 1000;
+
+/**
+ * Parses the `next` URL out of a GitHub API response's `Link` header
+ * (RFC 5988), e.g. `<https://api.github.com/...&page=2>; rel="next", ...`.
+ * Returns `null` once GitHub stops sending a `rel="next"` entry — the
+ * signal that the current page was the last one.
+ */
+function parseNextLinkUrl(linkHeader: string | null): string | null {
+  if (!linkHeader) return null;
+  for (const part of linkHeader.split(",")) {
+    const match = part.match(/<([^>]+)>\s*;\s*rel="next"/);
+    if (match) return match[1] ?? null;
+  }
+  return null;
+}
+
+/**
+ * "Fetch Issues" for `GET /admin/new-issues`'s New Issue Detection scan
+ * (admin_workflow.txt section 9 / section 16) — unlike `fetchRepositoryIssues`
+ * above (a deliberately first-page-only picker for Task Onboarding), this
+ * walks every page of a repository's open issues via GitHub's `Link:
+ * rel="next"` pagination, because a diff against DevTunnel's covered/
+ * ignored issues has to see the *entire* open backlog to be correct — a
+ * repository with, say, 122 open issues must contribute all 122 to the
+ * scan, not just its most-recently-updated 50 (the bug this function
+ * fixes: previously every project was silently truncated to one page,
+ * so New Issues undercounted for any project with more open issues than
+ * that page size).
+ *
+ * Requests the largest page size GitHub allows (100) to minimize round
+ * trips, and stops at `MAX_SCANNED_ISSUES` (see above) as a hard safety
+ * ceiling rather than looping unbounded.
+ */
+export async function fetchAllRepositoryIssues(
+  accessToken: string | null,
+  owner: string,
+  repo: string,
+): Promise<GithubIssueSummary[]> {
+  const results: GithubIssueSummary[] = [];
+  let url: string | null =
+    `${GITHUB_API_BASE}/repos/${owner}/${repo}/issues?state=open&per_page=100&sort=updated&direction=desc`;
+
+  while (url && results.length < MAX_SCANNED_ISSUES) {
+    const res = await fetchWithTimeout(url, { headers: authHeaders(accessToken) });
+    await assertOk(res, "issues lookup");
+
+    const parsed = z.array(githubIssueSchema).safeParse(await res.json());
+    if (!parsed.success) {
+      throw new GitHubRepoError("github_unavailable", "Unexpected GitHub issues response shape");
+    }
+
+    for (const issue of parsed.data) {
+      if (!issue.pull_request) results.push(toIssueSummary(issue));
+    }
+
+    url = parseNextLinkUrl(res.headers.get("Link"));
+  }
+
+  return results.slice(0, MAX_SCANNED_ISSUES);
+}
+
+/**
  * "Re-fetch [the] issue" a Task Onboarding admin selected, so the backend
  * never trusts an issue's title/body/labels purely because they were
  * offered in an earlier `fetchRepositoryIssues` list response

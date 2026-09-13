@@ -4,6 +4,8 @@ import { buildMetadata } from "@/lib/seo";
 import { getAdminNewIssues } from "@/lib/admin/new-issues/api";
 import { AdminNewIssuesExplorer } from "@/components/admin/new-issues/admin-new-issues-explorer";
 import { SectionMessage } from "@/components/home/section-message";
+import { CursorPaginationControls } from "@/components/admin/cursor-pagination-controls";
+import { nextPageHref, parseCursorStack, prevPageHref } from "@/lib/admin/cursor-pagination";
 
 export const metadata: Metadata = buildMetadata({
   title: "All Issue",
@@ -38,8 +40,15 @@ export const metadata: Metadata = buildMetadata({
  * `SectionMessage` instead of a fabricated table or a blank page
  * (Frontend_Development_Rules.txt rule 26/58).
  */
-export default async function AdminNewIssuesPage() {
-  const result = await getAdminNewIssues();
+const BASE_PATH = "/admin/tasks/new-issues";
+
+export default async function AdminNewIssuesPage({
+  searchParams,
+}: {
+  searchParams: { before?: string; stack?: string };
+}) {
+  const result = await getAdminNewIssues({ before: searchParams.before });
+  const stack = parseCursorStack(searchParams);
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
@@ -67,7 +76,17 @@ export default async function AdminNewIssuesPage() {
           ignored.
         </SectionMessage>
       ) : (
-        <AdminNewIssuesExplorer issues={result.data} />
+        <>
+          <AdminNewIssuesExplorer issues={result.data} />
+          <CursorPaginationControls
+            hasPrevious={Boolean(searchParams.before)}
+            hasNext={Boolean(result.nextCursor)}
+            prevHref={prevPageHref(BASE_PATH, stack)}
+            nextHref={
+              result.nextCursor ? nextPageHref(BASE_PATH, searchParams.before, stack, result.nextCursor) : "#"
+            }
+          />
+        </>
       )}
     </main>
   );

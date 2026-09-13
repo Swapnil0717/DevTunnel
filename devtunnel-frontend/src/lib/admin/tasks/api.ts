@@ -12,13 +12,25 @@ import type { AdminTaskDetail, AdminTaskSummary } from "./types";
  * degrades to one honest `SectionMessage`, never a blank/broken page.
  */
 type AdminTasksResult =
-  | { status: "ok"; data: AdminTaskSummary[] }
+  | { status: "ok"; data: AdminTaskSummary[]; nextCursor: string | null }
   | { status: "empty" }
   | { status: "error" };
 
-export async function getAdminTasks(): Promise<AdminTasksResult> {
+/**
+ * `GET /admin/tasks` is keyset-paginated on the backend (`limit`/
+ * `before`, `X-Next-Cursor` response header, mirroring
+ * `GET /admin/projects`). This forwards an optional `before` cursor and
+ * returns `nextCursor` so the page can render real Previous/Next
+ * controls (`components/admin/cursor-pagination-controls`) instead of
+ * only ever showing the first page's worth of tasks.
+ */
+export async function getAdminTasks(params?: { before?: string }): Promise<AdminTasksResult> {
   try {
-    const res = await fetch(`${API_BASE_URL}/admin/tasks`, {
+    const query = new URLSearchParams();
+    if (params?.before) query.set("before", params.before);
+    const qs = query.toString();
+
+    const res = await fetch(`${API_BASE_URL}/admin/tasks${qs ? `?${qs}` : ""}`, {
       headers: { cookie: cookies().toString() },
       cache: "no-store",
     });
@@ -29,11 +41,11 @@ export async function getAdminTasks(): Promise<AdminTasksResult> {
 
     const data = (await res.json()) as AdminTaskSummary[];
 
-    if (Array.isArray(data) && data.length === 0) {
+    if (Array.isArray(data) && data.length === 0 && !params?.before) {
       return { status: "empty" };
     }
 
-    return { status: "ok", data };
+    return { status: "ok", data, nextCursor: res.headers.get("X-Next-Cursor") };
   } catch {
     return { status: "error" };
   }

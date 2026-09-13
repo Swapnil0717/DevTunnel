@@ -13,13 +13,24 @@ import type { AdminToolDetail, AdminToolSummary } from "./types";
  * (Frontend_Development_Rules.txt rule 26).
  */
 type AdminOpenSourceToolsResult =
-  | { status: "ok"; data: AdminToolSummary[] }
+  | { status: "ok"; data: AdminToolSummary[]; nextCursor: string | null }
   | { status: "empty" }
   | { status: "error" };
 
-export async function getAdminOpenSourceTools(): Promise<AdminOpenSourceToolsResult> {
+/**
+ * `GET /admin/opensource-tools` is keyset-paginated on the backend
+ * (`limit`/`before`, `X-Next-Cursor` response header, mirroring
+ * `GET /admin/projects`). This forwards an optional `before` cursor and
+ * returns `nextCursor` so the page can render real Previous/Next
+ * controls instead of only ever showing the first page's worth of tools.
+ */
+export async function getAdminOpenSourceTools(params?: { before?: string }): Promise<AdminOpenSourceToolsResult> {
   try {
-    const res = await fetch(`${API_BASE_URL}/admin/opensource-tools`, {
+    const query = new URLSearchParams();
+    if (params?.before) query.set("before", params.before);
+    const qs = query.toString();
+
+    const res = await fetch(`${API_BASE_URL}/admin/opensource-tools${qs ? `?${qs}` : ""}`, {
       headers: { cookie: cookies().toString() },
       cache: "no-store",
     });
@@ -30,11 +41,11 @@ export async function getAdminOpenSourceTools(): Promise<AdminOpenSourceToolsRes
 
     const data = (await res.json()) as AdminToolSummary[];
 
-    if (Array.isArray(data) && data.length === 0) {
+    if (Array.isArray(data) && data.length === 0 && !params?.before) {
       return { status: "empty" };
     }
 
-    return { status: "ok", data };
+    return { status: "ok", data, nextCursor: res.headers.get("X-Next-Cursor") };
   } catch {
     return { status: "error" };
   }

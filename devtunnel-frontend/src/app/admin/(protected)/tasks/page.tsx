@@ -4,6 +4,10 @@ import { buildMetadata } from "@/lib/seo";
 import { getAdminTasks } from "@/lib/admin/tasks/api";
 import { AdminTasksExplorer } from "@/components/admin/tasks/admin-tasks-explorer";
 import { SectionMessage } from "@/components/home/section-message";
+import { CursorPaginationControls } from "@/components/admin/cursor-pagination-controls";
+import { nextPageHref, parseCursorStack, prevPageHref } from "@/lib/admin/cursor-pagination";
+
+const BASE_PATH = "/admin/tasks";
 
 export const metadata: Metadata = buildMetadata({
   title: "Tasks",
@@ -20,7 +24,7 @@ interface AdminTasksPageProps {
    * than opening a separate `/admin/projects/:id/tasks` route that isn't
    * part of the spec's page list (section 29).
    */
-  searchParams?: { project?: string };
+  searchParams?: { project?: string; before?: string; stack?: string };
 }
 
 /**
@@ -42,7 +46,9 @@ interface AdminTasksPageProps {
  * (Frontend_Development_Rules.txt rule 58).
  */
 export default async function AdminTasksPage({ searchParams }: AdminTasksPageProps) {
-  const result = await getAdminTasks();
+  const result = await getAdminTasks({ before: searchParams?.before });
+  const stack = parseCursorStack(searchParams ?? {});
+  const extraParams = { project: searchParams?.project };
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
@@ -72,7 +78,19 @@ export default async function AdminTasksPage({ searchParams }: AdminTasksPagePro
           .
         </SectionMessage>
       ) : (
-        <AdminTasksExplorer tasks={result.data} initialProjectSlug={searchParams?.project ?? "ALL"} />
+        <>
+          <AdminTasksExplorer tasks={result.data} initialProjectSlug={searchParams?.project ?? "ALL"} />
+          <CursorPaginationControls
+            hasPrevious={Boolean(searchParams?.before)}
+            hasNext={Boolean(result.nextCursor)}
+            prevHref={prevPageHref(BASE_PATH, stack, extraParams)}
+            nextHref={
+              result.nextCursor
+                ? nextPageHref(BASE_PATH, searchParams?.before, stack, result.nextCursor, extraParams)
+                : "#"
+            }
+          />
+        </>
       )}
     </main>
   );

@@ -21,19 +21,24 @@ import type { AdminNewIssue } from "./types";
  * `SectionMessage` rather than a blank table.
  */
 type AdminNewIssuesSinceOnboardingResult =
-  | { status: "ok"; data: AdminNewIssue[] }
+  | { status: "ok"; data: AdminNewIssue[]; nextCursor: string | null }
   | { status: "empty" }
   | { status: "error" };
 
-export async function getAdminNewIssuesSinceOnboarding(): Promise<AdminNewIssuesSinceOnboardingResult> {
-  const result = await getAdminNewIssues();
+export async function getAdminNewIssuesSinceOnboarding(params?: {
+  before?: string;
+}): Promise<AdminNewIssuesSinceOnboardingResult> {
+  const result = await getAdminNewIssues(params);
 
   if (result.status === "error") return { status: "error" };
   if (result.status === "empty") return { status: "empty" };
 
   const filtered = filterNewIssuesSinceOnboarding(result.data);
 
-  if (filtered.length === 0) return { status: "empty" };
+  // Only treat a truly-first-page, all-filtered-out result as "empty" —
+  // a later page filtering down to zero on its own still has earlier
+  // pages (and a Previous control) to go back to.
+  if (filtered.length === 0 && !params?.before) return { status: "empty" };
 
-  return { status: "ok", data: filtered };
+  return { status: "ok", data: filtered, nextCursor: result.nextCursor };
 }

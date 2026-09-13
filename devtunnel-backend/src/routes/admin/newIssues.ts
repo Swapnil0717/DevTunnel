@@ -18,7 +18,7 @@ import {
 } from "../../db/adminNewIssues";
 import { recordAdminAudit } from "../../db/adminAudit";
 import { getValidGithubAccessToken } from "../../db/githubTokens";
-import { fetchRepositoryIssues } from "../../lib/githubRepo";
+import { fetchAllRepositoryIssues } from "../../lib/githubRepo";
 
 /**
  * Admin — New Issues (admin_workflow.txt section 9 — "DevTunnel Task
@@ -121,9 +121,10 @@ const listQuerySchema = z.object({
  * costs the same full scan the rate limit above already accounts for.
  * What pagination buys here is exactly the other half of rule 108: a
  * bounded response body. Without it, an installation with many active
- * projects (each contributing up to `fetchRepositoryIssues`'s own 50-item
- * page) could return several thousand issues in one JSON payload; with
- * it, the frontend gets a capped first page and a cursor for the rest,
+ * projects (each contributing up to `fetchAllRepositoryIssues`'s own
+ * 1000-issue-per-repository ceiling) could return several thousand
+ * issues in one JSON payload; with it, the frontend gets a capped first
+ * page and a cursor for the rest,
  * the same shape it already knows how to consume from the other admin
  * list endpoints. `before` is matched against `updatedAt` with a strict
  * `<` comparison, the same keyset semantics (and the same accepted
@@ -190,7 +191,7 @@ adminNewIssues.get(
 
       const perProjectResults = await Promise.allSettled(
         projects.map(async ({ project, owner, repo }) => {
-          const issues = await fetchRepositoryIssues(accessToken, owner, repo);
+          const issues = await fetchAllRepositoryIssues(accessToken, owner, repo);
           const coveredNumbers = coveredByProject.get(project.id) ?? new Set<number>();
 
           const newIssuesForProject: AdminNewIssue[] = [];

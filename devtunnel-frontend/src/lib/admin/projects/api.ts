@@ -12,13 +12,24 @@ import type { AdminProjectDetail, AdminProjectSummary } from "./types";
  * one honest `SectionMessage`, never a blank/broken page.
  */
 type AdminProjectsResult =
-  | { status: "ok"; data: AdminProjectSummary[] }
+  | { status: "ok"; data: AdminProjectSummary[]; nextCursor: string | null }
   | { status: "empty" }
   | { status: "error" };
 
-export async function getAdminProjects(): Promise<AdminProjectsResult> {
+/**
+ * `GET /admin/projects` is keyset-paginated on the backend (`limit`/
+ * `before`, `X-Next-Cursor` response header). This forwards an optional
+ * `before` cursor and returns `nextCursor` so the page can render real
+ * Previous/Next controls (`components/admin/cursor-pagination-controls`)
+ * instead of only ever showing the first page's worth of projects.
+ */
+export async function getAdminProjects(params?: { before?: string }): Promise<AdminProjectsResult> {
   try {
-    const res = await fetch(`${API_BASE_URL}/admin/projects`, {
+    const query = new URLSearchParams();
+    if (params?.before) query.set("before", params.before);
+    const qs = query.toString();
+
+    const res = await fetch(`${API_BASE_URL}/admin/projects${qs ? `?${qs}` : ""}`, {
       headers: { cookie: cookies().toString() },
       cache: "no-store",
     });
@@ -29,11 +40,11 @@ export async function getAdminProjects(): Promise<AdminProjectsResult> {
 
     const data = (await res.json()) as AdminProjectSummary[];
 
-    if (Array.isArray(data) && data.length === 0) {
+    if (Array.isArray(data) && data.length === 0 && !params?.before) {
       return { status: "empty" };
     }
 
-    return { status: "ok", data };
+    return { status: "ok", data, nextCursor: res.headers.get("X-Next-Cursor") };
   } catch {
     return { status: "error" };
   }

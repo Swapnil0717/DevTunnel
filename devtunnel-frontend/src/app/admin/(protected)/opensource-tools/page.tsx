@@ -4,6 +4,8 @@ import { buildMetadata } from "@/lib/seo";
 import { getAdminOpenSourceTools } from "@/lib/admin/opensource-tools/api";
 import { AdminOpenSourceToolsExplorer } from "@/components/admin/opensource-tools/admin-opensource-tools-explorer";
 import { SectionMessage } from "@/components/home/section-message";
+import { CursorPaginationControls } from "@/components/admin/cursor-pagination-controls";
+import { nextPageHref, parseCursorStack, prevPageHref } from "@/lib/admin/cursor-pagination";
 
 export const metadata: Metadata = buildMetadata({
   title: "Open Source Tools",
@@ -37,8 +39,15 @@ export const metadata: Metadata = buildMetadata({
  * so a failed or empty fetch degrades to one honest `SectionMessage`
  * instead of a fabricated grid or a blank page (rule 58).
  */
-export default async function AdminOpenSourceToolsPage() {
-  const result = await getAdminOpenSourceTools();
+const BASE_PATH = "/admin/opensource-tools";
+
+export default async function AdminOpenSourceToolsPage({
+  searchParams,
+}: {
+  searchParams: { before?: string; stack?: string };
+}) {
+  const result = await getAdminOpenSourceTools({ before: searchParams.before });
+  const stack = parseCursorStack(searchParams);
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
@@ -70,7 +79,17 @@ export default async function AdminOpenSourceToolsPage() {
           .
         </SectionMessage>
       ) : (
-        <AdminOpenSourceToolsExplorer tools={result.data} />
+        <>
+          <AdminOpenSourceToolsExplorer tools={result.data} />
+          <CursorPaginationControls
+            hasPrevious={Boolean(searchParams.before)}
+            hasNext={Boolean(result.nextCursor)}
+            prevHref={prevPageHref(BASE_PATH, stack)}
+            nextHref={
+              result.nextCursor ? nextPageHref(BASE_PATH, searchParams.before, stack, result.nextCursor) : "#"
+            }
+          />
+        </>
       )}
     </main>
   );
