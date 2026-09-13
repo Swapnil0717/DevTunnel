@@ -1,10 +1,20 @@
 import { AdminAuditResultBadge } from "./admin-audit-result-badge";
 import type { AdminAuditEntry } from "@/lib/admin/activity/types";
 
+/**
+ * Locale is pinned to "en-US" rather than left `undefined`. Passing
+ * `undefined` tells `toLocaleString` to use the runtime's default
+ * locale — but Node (server-side render) and the browser (client-side
+ * hydration) can resolve different defaults, which produces two
+ * different strings for the same timestamp ("13 Sept 2026, 4:42 pm" vs
+ * "Sep 13, 2026, 4:42 PM") and fails React hydration. Pinning an
+ * explicit locale guarantees server and client always render the same
+ * text.
+ */
 function formatTimestamp(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
