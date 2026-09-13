@@ -1551,3 +1551,4 @@ export async function runTaskDiscoveryOnly(
 }
 
 export { TOOL_CATEGORIES, PROJECT_CATEGORIES };
+export type { StepReporter };
