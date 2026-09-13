@@ -26,7 +26,8 @@ export interface AdminNavLink {
    * (`/admin/projects/new`), All Tasks (`/admin/tasks`), Create Task
    * (`/admin/tasks/new`), New Issues (`/admin/tasks/new-issues`), its
    * Since Onboarding filter (`/admin/tasks/new-issues/since-onboarding`),
-   * and the AI / Open Source Tools sections below have real pages today.
+   * the AI / Open Source Tools sections below, and Activity
+   * (`/admin/activity`) have real pages today.
    *
    * `AdminSidebar` / `AdminMobileNav` render `built: false` entries as
    * disabled, non-navigating labels rather than `<Link>`s to pages that
@@ -223,7 +224,7 @@ export const ADMIN_NAV_ITEMS: AdminNavEntry[] = [
       },
     ],
   },
-  { type: "link", href: "/admin/activity", label: "Activity", Icon: ActivityIcon, built: false },
+  { type: "link", href: "/admin/activity", label: "Activity", Icon: ActivityIcon, built: true },
 ];
 
 /**

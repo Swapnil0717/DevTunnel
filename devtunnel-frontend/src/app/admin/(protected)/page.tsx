@@ -2,67 +2,70 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { buildMetadata } from "@/lib/seo";
 import { getServerUser } from "@/lib/auth/get-server-user";
+import { getAdminAuthMe } from "@/lib/admin/auth/api";
+import { getAdminProjects } from "@/lib/admin/projects/api";
+import { getAdminTasks } from "@/lib/admin/tasks/api";
+import { getAiDiscoveryStatus } from "@/lib/admin/ai-discovery/api";
+import { getRecentAdminActivity } from "@/lib/admin/activity/api";
 import { AdminStatCard } from "@/components/admin/admin-stat-card";
 import { AdminTractionChart } from "@/components/admin/admin-traction-chart";
+import { AdminActivityTable } from "@/components/admin/activity/admin-activity-table";
+import { SectionMessage } from "@/components/home/section-message";
 
 export const metadata: Metadata = buildMetadata({
   title: "Admin dashboard",
   description: "DevTunnel Admin Portal — curate and publish open source projects.",
   path: "/admin",
-  // Private application UI, never public content (rule 18).
   noIndex: true,
 });
 
 /**
- * `/admin` — Admin Portal Master Coding Specification, section 3 (Admin
- * Dashboard).
- *
- * The spec calls for exactly two things here: a metric grid, and a
- * time-series graph of user activity — nothing repository-health related
- * ("It should not become a repository-health dashboard").
- *
- * Metrics, per section 3:
- *  - Primary: Total Users, Total Projects, Total Tasks, Tasks Submitted.
- *  - Optional secondary: Active Contributors, Completed Tasks, Open
- *    DevTunnel Tasks.
- *
- * "Only include metrics that already exist or can be reliably calculated
- * from the database" — there is no `GET /admin/dashboard` aggregation
- * endpoint on the backend yet (only `/admin/auth` and `/admin/activity`
- * exist today), so every value below renders as an honest "—" via
- * `AdminStatCard` rather than a fabricated number (rule 58 — AI-generated
- * code must not invent statistics). Wiring up the real numbers later only
- * means replacing the `null`s with a fetch call once that endpoint ships —
- * this shell doesn't need to change shape.
- *
- * The User Activity / Traction Graph (section 3) has the same "no invented
- * data" treatment in `AdminTractionChart`, backed by the not-yet-built
- * `GET /admin/dashboard/activity`.
- *
- * Everything else in the spec's page list except Project Onboarding and
- * All Projects (Tasks, Task Onboarding, New Issues, Activity) is
- * intentionally not built as a page yet — it's listed in `AdminSidebar` /
- * `AdminMobileNav` as disabled "Soon" entries instead, so the full shape
- * of the portal is visible without shipping links to pages that don't
- * exist (rule 11). Project Onboarding (`/admin/projects/new`) and All
- * Projects (`/admin/projects`) are now real — `built: true` in
- * `admin-nav-items.ts` — so the placeholder card below links to
- * onboarding instead of describing it as pending.
+ * `/admin` — Admin Portal Master Coding Specification, section 3.
+ * Total Projects/Tasks/Submitted/Completed/Open are derived from the
+ * already-shipped `GET /admin/projects` and `GET /admin/tasks`.
+ * Total Users / Active Contributors stay an honest "—" — no admin
+ * endpoint answers either without fabricating a number.
  */
 export default async function AdminDashboardPage() {
-  const user = await getServerUser();
+  const [user, authMe, projectsResult, tasksResult, aiStatusResult, recentActivityResult] =
+    await Promise.all([
+      getServerUser(),
+      getAdminAuthMe(),
+      getAdminProjects(),
+      getAdminTasks(),
+      getAiDiscoveryStatus(),
+      getRecentAdminActivity(5),
+    ]);
+
+  const projects = projectsResult.status === "ok" ? projectsResult.data : [];
+  const tasks = tasksResult.status === "ok" ? tasksResult.data : [];
+
+  const totalProjects = projectsResult.status === "error" ? null : projects.length;
+  const totalTasks = tasksResult.status === "error" ? null : tasks.length;
+  const tasksSubmitted =
+    tasksResult.status === "error"
+      ? null
+      : tasks.reduce((sum, task) => sum + task.submissionCount, 0);
+  const completedTasks =
+    tasksResult.status === "error"
+      ? null
+      : tasks.filter((task) => task.status === "DONE").length;
+  const openTasks =
+    tasksResult.status === "error"
+      ? null
+      : tasks.filter((task) => task.status === "OPEN").length;
 
   const primaryStats: { label: string; value: number | null }[] = [
     { label: "Total users", value: null },
-    { label: "Total projects", value: null },
-    { label: "Total tasks", value: null },
-    { label: "Tasks submitted", value: null },
+    { label: "Total projects", value: totalProjects },
+    { label: "Total tasks", value: totalTasks },
+    { label: "Tasks submitted", value: tasksSubmitted },
   ];
 
   const secondaryStats: { label: string; value: number | null }[] = [
     { label: "Active contributors", value: null },
-    { label: "Completed tasks", value: null },
-    { label: "Open DevTunnel tasks", value: null },
+    { label: "Completed tasks", value: completedTasks },
+    { label: "Open DevTunnel tasks", value: openTasks },
   ];
 
   return (
@@ -71,13 +74,11 @@ export default async function AdminDashboardPage() {
       <p className="m-0 mb-8 text-sm text-text-muted">
         Signed in as <strong className="text-text">{user?.username}</strong>
         {user?.name ? ` (${user.name})` : null} — admin access confirmed.
+        {authMe ? ` ${authMe.permissions.length} permissions granted.` : null}
       </p>
 
       <section aria-labelledby="dashboard-stats-heading" className="mb-8">
-        <h2
-          id="dashboard-stats-heading"
-          className="mb-2.5 text-[12.5px] font-normal text-text-muted"
-        >
+        <h2 id="dashboard-stats-heading" className="mb-2.5 text-[12.5px] font-normal text-text-muted">
           Platform overview
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -88,10 +89,7 @@ export default async function AdminDashboardPage() {
       </section>
 
       <section aria-labelledby="dashboard-secondary-stats-heading" className="mb-8">
-        <h2
-          id="dashboard-secondary-stats-heading"
-          className="mb-2.5 text-[12.5px] font-normal text-text-muted"
-        >
+        <h2 id="dashboard-secondary-stats-heading" className="mb-2.5 text-[12.5px] font-normal text-text-muted">
           Contribution &amp; task activity
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -102,33 +100,87 @@ export default async function AdminDashboardPage() {
       </section>
 
       <section aria-labelledby="dashboard-activity-heading" className="mb-8">
-        <h2
-          id="dashboard-activity-heading"
-          className="mb-2.5 text-[12.5px] font-normal text-text-muted"
-        >
+        <h2 id="dashboard-activity-heading" className="mb-2.5 text-[12.5px] font-normal text-text-muted">
           User activity
         </h2>
         <AdminTractionChart />
       </section>
 
+      <section aria-labelledby="dashboard-ai-heading" className="mb-8">
+        <h2 id="dashboard-ai-heading" className="mb-2.5 text-[12.5px] font-normal text-text-muted">
+          AI discovery today
+        </h2>
+        {aiStatusResult.status === "error" ? (
+          <SectionMessage>AI discovery status isn&apos;t available right now.</SectionMessage>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <AdminStatCard
+              label="Projects proposed"
+              value={
+                aiStatusResult.data.projectsBeginner +
+                aiStatusResult.data.projectsIntermediate +
+                aiStatusResult.data.projectsAdvanced
+              }
+            />
+            <AdminStatCard label="Tools proposed" value={aiStatusResult.data.toolsFound} />
+            <AdminStatCard label="Tasks proposed" value={aiStatusResult.data.tasksFound} />
+            <AdminStatCard
+              label="Project slots remaining"
+              value={
+                aiStatusResult.data.projectsRemaining.beginner +
+                aiStatusResult.data.projectsRemaining.intermediate +
+                aiStatusResult.data.projectsRemaining.advanced
+              }
+            />
+          </div>
+        )}
+        <div className="mt-3">
+          <Link href="/admin/ai/confirmation" className="text-[12.5px] text-text-secondary hover:text-accent">
+            Review the confirmation queue →
+          </Link>
+        </div>
+      </section>
+
+      <section aria-labelledby="dashboard-recent-activity-heading" className="mb-8">
+        <div className="mb-2.5 flex items-center justify-between">
+          <h2 id="dashboard-recent-activity-heading" className="text-[12.5px] font-normal text-text-muted">
+            Recent activity
+          </h2>
+          <Link href="/admin/activity" className="text-[12.5px] text-text-secondary hover:text-accent">
+            View all →
+          </Link>
+        </div>
+        {recentActivityResult.status === "error" ? (
+          <SectionMessage>Recent activity isn&apos;t available right now.</SectionMessage>
+        ) : recentActivityResult.status === "empty" ? (
+          <SectionMessage>No admin activity has been recorded yet.</SectionMessage>
+        ) : (
+          <AdminActivityTable entries={recentActivityResult.data} />
+        )}
+      </section>
+
       <div className="rounded-[10px] border border-border bg-surface px-6 py-5">
-        <p className="m-0 mb-2 text-sm font-medium text-text">Onboard a new project</p>
+        <p className="m-0 mb-2 text-sm font-medium text-text">Quick actions</p>
         <p className="m-0 mb-4 text-[13px] leading-[1.6] text-text-muted">
-          Project Onboarding is live — walk through the wizard to add a new
-          project. Task onboarding, New Issues, and the dashboard aggregation
-          endpoints are still listed in the sidebar as pending; they open
-          once the corresponding{" "}
-          <code className="rounded bg-surface-raised px-1 py-0.5 font-mono text-xs text-text-secondary">
-            /admin/*
-          </code>{" "}
-          backend routes exist.
+          Projects, Tasks, AI discovery, Open Source Tools, and Activity are all live. Total
+          Users and Active Contributors stay an honest{" "}
+          <code className="rounded bg-surface-raised px-1 py-0.5 font-mono text-xs text-text-secondary">—</code>{" "}
+          until a platform-wide user endpoint exists.
         </p>
-        <Link
-          href="/admin/projects/new"
-          className="inline-flex items-center rounded-[8px] bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground hover:bg-accent/90"
-        >
-          Start Project Onboarding
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin/projects/new" className="inline-flex items-center rounded-[8px] bg-accent px-4 py-2 text-[13px] font-medium text-accent-foreground hover:bg-accent/90">
+            Start Project Onboarding
+          </Link>
+          <Link href="/admin/tasks/new" className="inline-flex items-center rounded-[8px] border border-border px-4 py-2 text-[13px] font-medium text-text hover:bg-surface-raised">
+            Create task
+          </Link>
+          <Link href="/admin/opensource-tools/new" className="inline-flex items-center rounded-[8px] border border-border px-4 py-2 text-[13px] font-medium text-text hover:bg-surface-raised">
+            Add open source tool
+          </Link>
+          <Link href="/admin/activity" className="inline-flex items-center rounded-[8px] border border-border px-4 py-2 text-[13px] font-medium text-text hover:bg-surface-raised">
+            View activity log
+          </Link>
+        </div>
       </div>
     </main>
   );
