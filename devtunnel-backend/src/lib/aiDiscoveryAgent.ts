@@ -67,6 +67,27 @@ import type { AiDiscoveryRunSummary, DeveloperRole, ExperienceLevel } from "../t
  * ---------------------------------------------------------------------------
  */
 
+/**
+ * Shared return shape for each of the three phase runners below.
+ * `quotaExceeded` means THIS phase stopped early because ITS budget
+ * (which, per groqQuota.ts's PHASE_BUDGET_SHARE, may be only that
+ * phase's own 25%/25%/50% slice — not necessarily the whole account) ran
+ * out. `accountQuotaExceeded` is the narrower, more serious case: the
+ * shared Groq account itself has zero requests/tokens left for ANY
+ * phase today (GroqQuotaExceededError reason "rpd"/"tpd", not
+ * "rpd_phase"/"tpd_phase") — this is the only condition that should ever
+ * make `runDailyDiscovery` skip a phase it hasn't started yet, since a
+ * phase running out of its own share must never block a different
+ * phase's separate share.
+ */
+interface PhaseDiscoveryResult {
+  proposed: number;
+  dropped: number;
+  errors: string[];
+  quotaExceeded: boolean;
+  accountQuotaExceeded: boolean;
+}
+
 /** Extracts { owner, repo } from a github.com repo URL, or null for anything else (never guessed). */
 function parseGithubOwnerRepo(url: string): { owner: string; repo: string } | null {
   const match = url.match(/^https:\/\/github\.com\/([^/\s]+)\/([^/\s]+?)\/?$/i);
@@ -111,7 +132,7 @@ async function runProjectDiscovery(
   kv: KVNamespace,
   readmeCache: ReadmeCache,
   opts: { maxToPropose?: number; onStep?: StepReporter } = {},
-): Promise<{ proposed: number; dropped: number; errors: string[]; quotaExceeded: boolean }> {
+): Promise<PhaseDiscoveryResult> {
   const { maxToPropose, onStep } = opts;
   const supabase = getSupabase(env);
   const errors: string[] = [];
@@ -121,7 +142,7 @@ async function runProjectDiscovery(
   const totalNeeded = need.beginner + need.intermediate + need.advanced;
   if (totalNeeded === 0) {
     onStep?.("Today's project quota is already full — nothing to do.");
-    return { proposed: 0, dropped: 0, errors, quotaExceeded: false };
+    return { proposed: 0, dropped: 0, errors, quotaExceeded: false, accountQuotaExceeded: false };
   }
 
   // When capped (e.g. the "one project at a time" admin button), only
@@ -201,7 +222,7 @@ Return exactly ${requestCount} candidate(s) total, matching the needed counts pe
   try {
     onStep?.(`Asking the AI model to find ${requestCount} project candidate${requestCount === 1 ? "" : "s"}…`);
     const dispatch = buildDiscoveryDispatcher(env, readmeCache, onStep);
-    const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
+    const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch, "projects");
     const parsed = parseGroqJson<{ candidates: ProjectCandidateInput[] }>(raw);
     candidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];
     onStep?.(`AI returned ${candidates.length} candidate${candidates.length === 1 ? "" : "s"} to check.`);
@@ -212,13 +233,23 @@ Return exactly ${requestCount} candidate(s) total, matching the needed counts pe
       // not a run-level error (no entry in `errors`); the run summary's
       // own `quotaExceeded` flag is what the frontend surfaces instead.
       logger.warn("ai_project_discovery_quota_exceeded", { reason: err.reason });
-      onStep?.("Today's Groq budget ran out — stopping here.");
-      return { proposed: 0, dropped: 0, errors, quotaExceeded: true };
+      onStep?.(
+        err.reason === "rpd" || err.reason === "tpd"
+          ? "Today's Groq budget ran out — stopping here."
+          : "Today's project discovery budget (25% of the daily Groq budget) ran out — stopping here.",
+      );
+      return {
+        proposed: 0,
+        dropped: 0,
+        errors,
+        quotaExceeded: true,
+        accountQuotaExceeded: err.reason === "rpd" || err.reason === "tpd",
+      };
     }
     logger.error("ai_project_discovery_failed", { error: err instanceof Error ? err.message : String(err) });
     errors.push("project_discovery_agent_error");
     onStep?.("The AI model call failed.");
-    return { proposed: 0, dropped: 0, errors, quotaExceeded: false };
+    return { proposed: 0, dropped: 0, errors, quotaExceeded: false, accountQuotaExceeded: false };
   }
 
   const remaining = { ...need };
@@ -319,7 +350,7 @@ Return exactly ${requestCount} candidate(s) total, matching the needed counts pe
     }
   }
 
-  return { proposed, dropped, errors, quotaExceeded: false };
+  return { proposed, dropped, errors, quotaExceeded: false, accountQuotaExceeded: false };
 }
 
 // ---------------------------------------------------------------------------
@@ -331,7 +362,7 @@ async function runToolDiscovery(
   kv: KVNamespace,
   readmeCache: ReadmeCache,
   opts: { maxToPropose?: number; onStep?: StepReporter } = {},
-): Promise<{ proposed: number; dropped: number; errors: string[]; quotaExceeded: boolean }> {
+): Promise<PhaseDiscoveryResult> {
   const { maxToPropose, onStep } = opts;
   const supabase = getSupabase(env);
   const errors: string[] = [];
@@ -339,7 +370,7 @@ async function runToolDiscovery(
   const counters = await getTodayCounters(supabase);
   if (counters.toolCategoriesRemaining.length === 0) {
     onStep?.("Every tool category is already covered today — nothing to do.");
-    return { proposed: 0, dropped: 0, errors, quotaExceeded: false };
+    return { proposed: 0, dropped: 0, errors, quotaExceeded: false, accountQuotaExceeded: false };
   }
 
   onStep?.("Loading the list of existing and already-proposed tools…");
@@ -347,6 +378,7 @@ async function runToolDiscovery(
   let proposed = 0;
   let dropped = 0;
   let quotaExceeded = false;
+  let accountQuotaExceeded = false;
 
   // One category at a time, fully finished (proposed/dropped/inserted)
   // before the next category's conversation even starts — this phase
@@ -399,7 +431,7 @@ Reply with ONLY this JSON and nothing else:
     try {
       onStep?.(`Asking the AI model for a tool in "${category}"…`);
       const dispatch = buildDiscoveryDispatcher(env, readmeCache, onStep);
-      const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
+      const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch, "tools");
       const candidateRaw = parseGroqJson<ToolCandidateInput>(raw);
 
       const problems = validateToolCandidate(candidateRaw);
@@ -457,7 +489,12 @@ Reply with ONLY this JSON and nothing else:
         // categories this run (they'd all fail the same way) rather than
         // burning a run-level "error" entry per remaining category.
         logger.warn("ai_tool_discovery_quota_exceeded", { category, reason: err.reason });
-        onStep?.("Today's Groq budget ran out — stopping here.");
+        accountQuotaExceeded = err.reason === "rpd" || err.reason === "tpd";
+        onStep?.(
+          accountQuotaExceeded
+            ? "Today's Groq budget ran out — stopping here."
+            : "Today's tool discovery budget (25% of the daily Groq budget) ran out — stopping here.",
+        );
         quotaExceeded = true;
         break;
       }
@@ -467,7 +504,7 @@ Reply with ONLY this JSON and nothing else:
     }
   }
 
-  return { proposed, dropped, errors, quotaExceeded };
+  return { proposed, dropped, errors, quotaExceeded, accountQuotaExceeded };
 }
 
 // ---------------------------------------------------------------------------
@@ -484,13 +521,14 @@ async function runTaskDiscovery(
   env: ValidatedEnv,
   kv: KVNamespace,
   opts: { maxToPropose?: number; onStep?: StepReporter } = {},
-): Promise<{ proposed: number; dropped: number; errors: string[]; quotaExceeded: boolean }> {
+): Promise<PhaseDiscoveryResult> {
   const { maxToPropose, onStep } = opts;
   const supabase = getSupabase(env);
   const errors: string[] = [];
   let proposed = 0;
   let dropped = 0;
   let quotaExceeded = false;
+  let accountQuotaExceeded = false;
 
   onStep?.("Loading onboarded projects…");
   const projects = await listOnboardedProjects(supabase);
@@ -556,7 +594,7 @@ Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
 
       onStep?.(`Asking the AI model to review issues on ${project.githubFullName}…`);
       const dispatch = buildDiscoveryDispatcher(env, undefined, onStep);
-      const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch);
+      const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch, "tasks");
       const parsed = parseGroqJson<{ candidates: TaskCandidateInput[] }>(raw);
       const candidates = Array.isArray(parsed.candidates) ? parsed.candidates.slice(0, MAX_ISSUES_PER_PROJECT) : [];
       onStep?.(`AI returned ${candidates.length} candidate issue${candidates.length === 1 ? "" : "s"} for ${project.githubFullName}.`);
@@ -619,7 +657,12 @@ Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
         // projects this run (they'd all fail the same way) rather than
         // burning a run-level "error" entry per remaining project.
         logger.warn("ai_task_discovery_quota_exceeded", { project: project.githubFullName, reason: err.reason });
-        onStep?.("Today's Groq budget ran out — stopping here.");
+        accountQuotaExceeded = err.reason === "rpd" || err.reason === "tpd";
+        onStep?.(
+          accountQuotaExceeded
+            ? "Today's Groq budget ran out — stopping here."
+            : "Today's issue/task discovery budget (50% of the daily Groq budget) ran out — stopping here.",
+        );
         quotaExceeded = true;
         break;
       }
@@ -629,7 +672,7 @@ Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
     }
   }
 
-  return { proposed, dropped, errors, quotaExceeded };
+  return { proposed, dropped, errors, quotaExceeded, accountQuotaExceeded };
 }
 
 // ---------------------------------------------------------------------------
@@ -644,52 +687,45 @@ export async function runDailyDiscovery(env: ValidatedEnv, kv: KVNamespace): Pro
   const errors: string[] = [];
   logger.info("ai_discovery_run_started");
 
-  // Deliberately sequential and in this exact order — issues, then
-  // projects, then tools — one phase runs to completion (every category /
-  // every project / every candidate handled one at a time within it) before
-  // the next one is even started. Nothing here runs concurrently with
-  // anything else in the run.
-  const tasksResult = await runTaskDiscovery(env, kv).catch((err) => {
-    errors.push("task_discovery_crashed");
-    logger.error("ai_discovery_task_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
-    return { proposed: 0, dropped: 0, errors: [], quotaExceeded: false };
-  });
-
-  // Once the daily Groq budget is gone, every remaining phase would
-  // fail identically — skip them outright instead of burning tool calls
-  // on requests we already know will be quota-rejected.
-  if (tasksResult.quotaExceeded) {
-    const summary: AiDiscoveryRunSummary = {
-      date: new Date().toISOString().slice(0, 10),
-      projectsProposed: 0,
-      toolsProposed: 0,
-      tasksProposed: tasksResult.proposed,
-      candidatesDropped: tasksResult.dropped,
-      errors: [...errors, ...tasksResult.errors],
-      groqQuotaExceeded: true,
-    };
-    logger.info("ai_discovery_run_finished_quota_exceeded", summary as unknown as Record<string, unknown>);
-    return summary;
-  }
-
-  // Shared across the project and tool phases (task candidates don't
-  // carry a README) so a repo that comes up in both never gets fetched
-  // from GitHub twice in the same run.
+  // Per product direction, the shared daily Groq budget is split
+  // 25% projects / 25% tools / 50% tasks (groqQuota.ts
+  // PHASE_BUDGET_SHARE) — and projects+tools' combined half is spent
+  // BEFORE tasks/issues ever gets a turn, never the other way around.
+  // That's why the run order below is projects -> tools -> tasks (it
+  // used to be tasks first) — every project and tool candidate this run
+  // can produce is attempted, one phase fully finished before the next
+  // starts, before a single issue is looked at.
+  //
+  // A phase running out of ITS OWN 25%/25%/50% share (accountQuotaExceeded
+  // === false) only stops that one phase — it must never block a later
+  // phase's separate share, since each phase's budget is tracked
+  // independently in groqQuota.ts. Only a genuine account-wide
+  // exhaustion (accountQuotaExceeded === true — the whole Groq key has
+  // nothing left for anyone today) short-circuits the phases after it.
   const readmeCache: ReadmeCache = new Map();
 
   const projectsResult = await runProjectDiscovery(env, kv, readmeCache).catch((err) => {
     errors.push("project_discovery_crashed");
     logger.error("ai_discovery_project_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
-    return { proposed: 0, dropped: 0, errors: [], quotaExceeded: false };
+    return { proposed: 0, dropped: 0, errors: [], quotaExceeded: false, accountQuotaExceeded: false };
   });
 
-  const toolsResult = projectsResult.quotaExceeded
-    ? { proposed: 0, dropped: 0, errors: [] as string[], quotaExceeded: true }
+  const toolsResult = projectsResult.accountQuotaExceeded
+    ? { proposed: 0, dropped: 0, errors: [] as string[], quotaExceeded: true, accountQuotaExceeded: true }
     : await runToolDiscovery(env, kv, readmeCache).catch((err) => {
         errors.push("tool_discovery_crashed");
         logger.error("ai_discovery_tool_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
-        return { proposed: 0, dropped: 0, errors: [], quotaExceeded: false };
+        return { proposed: 0, dropped: 0, errors: [], quotaExceeded: false, accountQuotaExceeded: false };
       });
+
+  const tasksResult =
+    projectsResult.accountQuotaExceeded || toolsResult.accountQuotaExceeded
+      ? { proposed: 0, dropped: 0, errors: [] as string[], quotaExceeded: true, accountQuotaExceeded: true }
+      : await runTaskDiscovery(env, kv).catch((err) => {
+          errors.push("task_discovery_crashed");
+          logger.error("ai_discovery_task_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
+          return { proposed: 0, dropped: 0, errors: [], quotaExceeded: false, accountQuotaExceeded: false };
+        });
 
   const summary: AiDiscoveryRunSummary = {
     date: new Date().toISOString().slice(0, 10),
@@ -698,7 +734,7 @@ export async function runDailyDiscovery(env: ValidatedEnv, kv: KVNamespace): Pro
     tasksProposed: tasksResult.proposed,
     candidatesDropped: projectsResult.dropped + toolsResult.dropped + tasksResult.dropped,
     errors: [...errors, ...projectsResult.errors, ...toolsResult.errors, ...tasksResult.errors],
-    groqQuotaExceeded: projectsResult.quotaExceeded || toolsResult.quotaExceeded,
+    groqQuotaExceeded: projectsResult.quotaExceeded || toolsResult.quotaExceeded || tasksResult.quotaExceeded,
   };
 
   logger.info("ai_discovery_run_finished", summary as unknown as Record<string, unknown>);
@@ -729,7 +765,7 @@ export async function runProjectDiscoveryOnly(
   const projectsResult = await runProjectDiscovery(env, kv, readmeCache, { maxToPropose: limit, onStep }).catch((err) => {
     logger.error("ai_discovery_project_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
     onStep?.("Something went wrong during project discovery.");
-    return { proposed: 0, dropped: 0, errors: ["project_discovery_crashed"], quotaExceeded: false };
+    return { proposed: 0, dropped: 0, errors: ["project_discovery_crashed"], quotaExceeded: false, accountQuotaExceeded: false };
   });
 
   const summary: AiDiscoveryRunSummary = {
@@ -765,7 +801,7 @@ export async function runToolDiscoveryOnly(
   const toolsResult = await runToolDiscovery(env, kv, readmeCache, { maxToPropose: limit, onStep }).catch((err) => {
     logger.error("ai_discovery_tool_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
     onStep?.("Something went wrong during tool discovery.");
-    return { proposed: 0, dropped: 0, errors: ["tool_discovery_crashed"], quotaExceeded: false };
+    return { proposed: 0, dropped: 0, errors: ["tool_discovery_crashed"], quotaExceeded: false, accountQuotaExceeded: false };
   });
 
   const summary: AiDiscoveryRunSummary = {
@@ -802,7 +838,7 @@ export async function runTaskDiscoveryOnly(
   const tasksResult = await runTaskDiscovery(env, kv, { maxToPropose: limit, onStep }).catch((err) => {
     logger.error("ai_discovery_task_phase_crashed", { error: err instanceof Error ? err.message : String(err) });
     onStep?.("Something went wrong during issue discovery.");
-    return { proposed: 0, dropped: 0, errors: ["task_discovery_crashed"], quotaExceeded: false };
+    return { proposed: 0, dropped: 0, errors: ["task_discovery_crashed"], quotaExceeded: false, accountQuotaExceeded: false };
   });
 
   const summary: AiDiscoveryRunSummary = {

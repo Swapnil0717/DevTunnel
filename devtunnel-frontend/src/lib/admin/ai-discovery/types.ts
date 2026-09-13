@@ -102,4 +102,23 @@ export interface GroqQuotaSnapshot {
   tokensUsedToday: number;
   tokensRemainingToday: number;
   dailyResetsAt: string;
+  /**
+   * The daily budget above, split by discovery phase — 25% projects,
+   * 25% tools, 50% tasks (devtunnel-backend `groqQuota.ts`
+   * PHASE_BUDGET_SHARE), listed in the order the phases actually run
+   * (projects -> tools -> tasks — projects and tools always spend their
+   * share before tasks/issues gets a turn). Lets the panel show, e.g.,
+   * "tasks" already exhausted for today while "projects" still has
+   * room, which the account-wide numbers above can't distinguish.
+   */
+  phases: Array<{
+    phase: "projects" | "tools" | "tasks";
+    sharePct: number;
+    limitPerDay: number;
+    usedToday: number;
+    remainingToday: number;
+    tokenLimitPerDay: number;
+    tokensUsedToday: number;
+    tokensRemainingToday: number;
+  }>;
 }

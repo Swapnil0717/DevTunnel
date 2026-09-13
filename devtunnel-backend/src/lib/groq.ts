@@ -1,6 +1,6 @@
 import type { ValidatedEnv } from "../config/env";
 import { logger } from "./logger";
-import { reserveGroqRequest, estimateTokens, GROQ_TPM_LIMIT } from "./groqQuota";
+import { reserveGroqRequest, estimateTokens, GROQ_TPM_LIMIT, type DiscoveryPhase } from "./groqQuota";
 
 /**
  * Minimal Groq function-calling client (OpenAI-compatible
@@ -110,6 +110,7 @@ export async function runGroqAgent(
   userPrompt: string,
   tools: GroqFunctionDeclaration[],
   dispatch: GroqToolDispatcher,
+  phase: DiscoveryPhase,
 ): Promise<string> {
   const messages: GroqMessage[] = [
     { role: "system", content: systemPrompt },
@@ -158,11 +159,12 @@ export async function runGroqAgent(
 
     for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
       // Reserve budget for this exact physical call BEFORE making it.
-      // Throws GroqQuotaExceededError("rpd" | "tpd", ...) immediately (no
-      // retry) once today's daily budget is gone — callers
-      // (aiDiscoveryAgent.ts) catch that specifically and stop early
-      // instead of treating it as a generic failure to retry.
-      await reserveGroqRequest(kv, estimatedTokens);
+      // Throws GroqQuotaExceededError("rpd" | "tpd" | "rpd_phase" |
+      // "tpd_phase", ...) immediately (no retry) once today's budget —
+      // account-wide OR this phase's own 25/25/50 share — is gone.
+      // Callers (aiDiscoveryAgent.ts) catch that specifically and stop
+      // early instead of treating it as a generic failure to retry.
+      await reserveGroqRequest(kv, estimatedTokens, phase);
 
       const res = await fetch(GROQ_API, {
         method: "POST",

@@ -1327,4 +1327,22 @@ export interface GroqQuotaSnapshot {
   tokensRemainingToday: number;
   /** ISO timestamp of the next UTC midnight, when the daily counter resets. */
   dailyResetsAt: string;
+  /**
+   * The shared daily request/token budget above, split by discovery
+   * phase (25% projects / 25% tools / 50% tasks — src/lib/groqQuota.ts
+   * PHASE_BUDGET_SHARE), in the order the phases actually run
+   * (projects -> tools -> tasks, PHASE_SPEND_ORDER). Lets the admin
+   * quota panel show, e.g., "tasks" already exhausted while "projects"
+   * still has room, which a single account-wide number can't distinguish.
+   */
+  phases: Array<{
+    phase: "projects" | "tools" | "tasks";
+    sharePct: number;
+    limitPerDay: number;
+    usedToday: number;
+    remainingToday: number;
+    tokenLimitPerDay: number;
+    tokensUsedToday: number;
+    tokensRemainingToday: number;
+  }>;
 }

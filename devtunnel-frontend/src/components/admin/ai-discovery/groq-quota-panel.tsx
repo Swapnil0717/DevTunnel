@@ -22,6 +22,12 @@ function formatTimeUntil(resetsAt: string): string {
   return `${hours}h ${minutes}m`;
 }
 
+const PHASE_LABELS: Record<string, string> = {
+  projects: "Projects",
+  tools: "Tools",
+  tasks: "Tasks/Issues",
+};
+
 interface GroqQuotaPanelProps {
   refreshKey?: number;
 }
@@ -121,6 +127,40 @@ export function GroqQuotaPanel({ refreshKey }: GroqQuotaPanelProps) {
           {formatCount(snapshot.tokensRemainingThisMinute)} / {formatCount(snapshot.tokenLimitPerMinute)} left this minute
         </div>
       </div>
+
+      {snapshot.phases && snapshot.phases.length > 0 ? (
+        <div className="mt-3.5 border-t border-border-subtle pt-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[11px] text-text-faint">Split by phase</span>
+            <span className="text-[10.5px] text-text-faint">projects → tools → tasks</span>
+          </div>
+          <div className="flex flex-col gap-2">
+            {snapshot.phases.map((p) => {
+              const reqPct = p.limitPerDay > 0 ? (p.usedToday / p.limitPerDay) * 100 : 0;
+              const budget = budgetColors(p.remainingToday, p.limitPerDay);
+              return (
+                <div key={p.phase}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[11px] text-text-faint">
+                      {PHASE_LABELS[p.phase] ?? p.phase} <span className="text-text-faint/70">({p.sharePct}%)</span>
+                    </span>
+                    <span className={`text-[11px] font-medium ${budget.labelColor}`}>
+                      {formatCount(p.remainingToday)} / {formatCount(p.limitPerDay)} req ·{" "}
+                      {formatCount(p.tokensRemainingToday)} / {formatCount(p.tokenLimitPerDay)} tok
+                    </span>
+                  </div>
+                  <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-border-subtle">
+                    <div
+                      className={`h-full rounded-full transition-[width] ${budget.barColor}`}
+                      style={{ width: `${Math.min(100, Math.max(0, reqPct))}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-2.5 flex items-center justify-between text-[11px] text-text-faint">
         <span>Resets in {formatTimeUntil(snapshot.dailyResetsAt)}</span>
