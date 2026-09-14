@@ -62,6 +62,19 @@ export interface AdminNewIssuesSyncSummary {
  * distinct projects found by this scan, then the caller triggers
  * `router.refresh()` to pull that same fresh data into the server-
  * rendered page.
+ *
+ * `refresh=true` is sent only on this walk's *first* request — that's
+ * what actually forces the backend's `GithubScanCacheEntry` to bypass
+ * its cache and run a real live GitHub re-scan, which is the entire
+ * point of an admin pressing "Sync" (src/routes/admin/newIssues.ts).
+ * Every subsequent page of the same walk deliberately omits it: that
+ * first call just populated the cache with a brand-new scan, so later
+ * pages reading from it are reading fresh data, not stale data — and
+ * asking again would otherwise force one full live cross-project scan
+ * per page, exactly the amplification bug `pageLimit` below (and
+ * `fetchAllAdminPages`'s matching one for ordinary page loads) exists
+ * to avoid. 1000, not 100, for the same reason: fewer pages means fewer
+ * chances this ever needed a second call in the first place.
  */
 export async function syncAllAdminNewIssues(): Promise<AdminNewIssuesSyncSummary> {
   let before: string | undefined;
@@ -70,8 +83,9 @@ export async function syncAllAdminNewIssues(): Promise<AdminNewIssuesSyncSummary
   let pages = 0;
 
   do {
-    const query = new URLSearchParams({ limit: "100" });
+    const query = new URLSearchParams({ limit: "1000" });
     if (before) query.set("before", before);
+    else query.set("refresh", "true"); // first page of the walk only
 
     const res = await fetch(`${API_BASE_URL}/admin/new-issues?${query.toString()}`, {
       credentials: "include",

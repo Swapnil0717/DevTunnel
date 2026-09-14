@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import type { AdminNewIssue, Env, Variables } from "../../types";
+import type { AdminNewIssue, Env, GithubIssueSummary, Variables } from "../../types";
 import { getEnv } from "../../config/env";
 import { getSupabase } from "../../lib/supabase";
 import { requireAuth } from "../../middleware/auth";
@@ -8,6 +8,7 @@ import { requireAdminRole, requirePermission } from "../../middleware/adminAuth"
 import { checkRateLimit } from "../../lib/rateLimit";
 import { errorResponse } from "../../lib/response";
 import { logger } from "../../lib/logger";
+import { getCached, setCached } from "../../lib/cache";
 import {
   NewIssueProjectNotFoundError,
   getCoveredIssueNumbersByProject,
@@ -86,7 +87,56 @@ const listQuerySchema = z.object({
   // maximum this endpoint can ever return.
   limit: z.coerce.number().int().min(1).max(1000).optional().default(50),
   before: z.string().datetime({ offset: true }).optional(),
+  // Set by `SyncAllIssuesButton` (via `syncAllAdminNewIssues`, only on the
+  // *first* page of its walk — see that function's own comment) to force
+  // a real live GitHub re-scan, bypassing `GITHUB_SCAN_CACHE_KEY` below
+  // even when a fresh-enough cache entry exists. Every other caller
+  // (ordinary page loads, subsequent pages of the same walk) omits this
+  // and gets the cache when one's available.
+  //
+  // An explicit `"true"`/`"false"` literal union rather than
+  // `z.coerce.boolean()`: that coercion just runs JS `Boolean(...)` under
+  // the hood, so a query string of `"false"` — a non-empty string — would
+  // coerce to `true`, the exact opposite of what it says. Nothing in this
+  // codebase currently sends `?refresh=false` (omitting the param does
+  // the same thing), but getting this wrong silently would be an easy
+  // future bug to reintroduce by accident.
+  refresh: z
+    .union([z.literal("true"), z.literal("false")])
+    .optional()
+    .transform((value) => value === "true"),
 });
+
+/**
+ * Cached snapshot of every scanned project's *raw* GitHub issues — the
+ * output of `fetchAllRepositoryIssues`, before the covered/ignored diff
+ * below is applied.
+ *
+ * Only this part is cached, deliberately: the diff itself
+ * (`getCoveredIssueNumbersByProject` / `getIgnoredIssueKeysByProject`) is
+ * two cheap indexed Supabase queries, re-run on every request regardless
+ * of cache state, so creating a task or ignoring an issue is reflected
+ * immediately — never stuck behind this cache's TTL. What's expensive,
+ * and what this cache exists to avoid repeating, is the live GitHub scan
+ * itself (see this route's own doc comment, and `fetchAllRepositoryIssues`
+ * in src/lib/githubRepo.ts on why that's slow at any real scale).
+ */
+interface GithubScanCacheEntry {
+  scannedAt: string;
+  projects: Array<{ projectId: string; issues: GithubIssueSummary[] }>;
+}
+
+const GITHUB_SCAN_CACHE_KEY = "admin-new-issues:github-scan:v1";
+
+// 5 minutes: long enough that a burst of page loads/pagination walks
+// (previously the actual cause of multi-minute waits — see
+// `fetchAllAdminPages`'s doc comment on the pagination-amplification
+// bug this cache also fixes) shares one scan instead of repeating it,
+// short enough that "new issues" still shows up-to-date data on any
+// normal admin workflow without needing the Sync button. The Sync
+// button (`?refresh=true`) always bypasses this when an admin wants a
+// guaranteed-fresh read regardless of TTL.
+const GITHUB_SCAN_CACHE_TTL_SECONDS = 5 * 60;
 
 /**
  * `GET /admin/new-issues` (admin_workflow.txt section 16 ▸ Backend;
@@ -116,9 +166,22 @@ const listQuerySchema = z.object({
  * whole response; that project simply contributes no issues this time,
  * and the failure is logged loudly rather than silently swallowed
  * (rule 21). A hard failure before any per-project scan starts (loading
- * the project list itself, or the admin's own GitHub token) still
- * surfaces as a 500, since at that point nothing could be computed at
- * all.
+ * the project list itself) still surfaces as a 500, since at that point
+ * nothing could be computed at all.
+ *
+ * The live scan above only actually runs on a cache miss —
+ * `GithubScanCacheEntry` (see its own comment just above this route)
+ * caches the raw per-project GitHub results for
+ * `GITHUB_SCAN_CACHE_TTL_SECONDS`, so back-to-back calls (a page load
+ * immediately followed by `fetchAllAdminPages` walking a second page, or
+ * two admins loading this page within the same few minutes) share one
+ * scan instead of each repeating the full cross-project GitHub walk.
+ * This is the fix for the previously-unbounded cost at real scale: an
+ * installation with thousands of combined open issues no longer turns
+ * one page load into several full re-scans just to page through the
+ * result (see `fetchAllAdminPages`'s doc comment on that
+ * amplification), nor does it re-scan GitHub from scratch on every
+ * single admin visit.
  *
  * Pagination (rule 21/40/41/108): `limit`/`before` and the `X-Next-Cursor`
  * response header work exactly like `GET /admin/projects` and
@@ -173,6 +236,7 @@ adminNewIssues.get(
     const parsed = listQuerySchema.safeParse({
       limit: c.req.query("limit"),
       before: c.req.query("before"),
+      refresh: c.req.query("refresh"),
     });
     if (!parsed.success) {
       return errorResponse(
@@ -193,54 +257,97 @@ adminNewIssues.get(
 
       const projectIds = projects.map(({ project }) => project.id);
 
-      const [coveredByProject, ignoredKeys, accessToken] = await Promise.all([
+      const [coveredByProject, ignoredKeys] = await Promise.all([
         getCoveredIssueNumbersByProject(supabase, projectIds),
         getIgnoredIssueKeysByProject(supabase, projectIds),
-        getValidGithubAccessToken(supabase, env, admin.id),
       ]);
 
-      const perProjectResults = await Promise.allSettled(
-        projects.map(async ({ project, owner, repo }) => {
-          const issues = await fetchAllRepositoryIssues(accessToken, owner, repo);
-          const coveredNumbers = coveredByProject.get(project.id) ?? new Set<number>();
+      // Try the cached raw scan first (see `GithubScanCacheEntry`'s own
+      // comment on exactly what is/isn't cached). Usable only when it has
+      // an entry for every currently active project — a project onboarded
+      // since the cache was written would otherwise silently contribute
+      // zero issues until the cache expired, which is worse than just
+      // treating that as a miss and re-scanning everything.
+      const cached = parsed.data.refresh
+        ? null
+        : await getCached<GithubScanCacheEntry>(c.env, GITHUB_SCAN_CACHE_KEY);
+      const cachedByProjectId = new Map((cached?.projects ?? []).map((p) => [p.projectId, p.issues]));
+      const cacheIsUsable = cached !== null && projectIds.every((id) => cachedByProjectId.has(id));
 
-          const newIssuesForProject: AdminNewIssue[] = [];
-          for (const issue of issues) {
-            if (coveredNumbers.has(issue.number)) continue;
-            const key = ignoredIssueKey(project.id, issue.number);
-            if (ignoredKeys.has(key)) continue;
+      let rawIssuesByProjectId: Map<string, GithubIssueSummary[]>;
 
-            newIssuesForProject.push({
-              id: key,
-              number: issue.number,
-              title: issue.title,
-              url: issue.url,
-              state: issue.state,
-              project,
-              author: issue.author,
-              labels: issue.labels,
-              createdAt: issue.createdAt,
-              updatedAt: issue.updatedAt,
-            });
+      if (cacheIsUsable) {
+        rawIssuesByProjectId = cachedByProjectId;
+      } else {
+        // Cache miss, expired, stale (new project since last scan), or an
+        // explicit `?refresh=true` from the Sync button — fall back to the
+        // real live cross-project GitHub scan, exactly as before.
+        const accessToken = await getValidGithubAccessToken(supabase, env, admin.id);
+
+        const perProjectResults = await Promise.allSettled(
+          projects.map(async ({ project, owner, repo }) => ({
+            projectId: project.id,
+            issues: await fetchAllRepositoryIssues(accessToken, owner, repo),
+          })),
+        );
+
+        rawIssuesByProjectId = new Map();
+        const scannedForCache: GithubScanCacheEntry["projects"] = [];
+        perProjectResults.forEach((result, index) => {
+          if (result.status === "fulfilled") {
+            rawIssuesByProjectId.set(result.value.projectId, result.value.issues);
+            scannedForCache.push(result.value);
+            return;
           }
-          return newIssuesForProject;
-        }),
-      );
+          const { project } = projects[index]!;
+          logger.error("admin_new_issues_project_scan_failed", {
+            projectId: project.id,
+            repositoryFullName: project.repositoryFullName,
+            error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+            requestId: c.get("requestId"),
+          });
+        });
+
+        // Only cache what actually succeeded (rule 21: never fake data
+        // that wasn't really fetched). A project whose scan keeps failing
+        // simply keeps `cacheIsUsable` false on every subsequent request —
+        // strictly no worse than the pre-cache behavior, where *every*
+        // request re-scanned *every* project regardless.
+        if (scannedForCache.length > 0) {
+          await setCached(
+            c.env,
+            GITHUB_SCAN_CACHE_KEY,
+            { scannedAt: new Date().toISOString(), projects: scannedForCache } satisfies GithubScanCacheEntry,
+            GITHUB_SCAN_CACHE_TTL_SECONDS,
+          );
+        }
+      }
 
       const newIssues: AdminNewIssue[] = [];
-      perProjectResults.forEach((result, index) => {
-        if (result.status === "fulfilled") {
-          newIssues.push(...result.value);
-          return;
+      for (const { project } of projects) {
+        const issues = rawIssuesByProjectId.get(project.id);
+        if (!issues) continue; // this project's scan failed and isn't cached — contributes nothing this time
+
+        const coveredNumbers = coveredByProject.get(project.id) ?? new Set<number>();
+        for (const issue of issues) {
+          if (coveredNumbers.has(issue.number)) continue;
+          const key = ignoredIssueKey(project.id, issue.number);
+          if (ignoredKeys.has(key)) continue;
+
+          newIssues.push({
+            id: key,
+            number: issue.number,
+            title: issue.title,
+            url: issue.url,
+            state: issue.state,
+            project,
+            author: issue.author,
+            labels: issue.labels,
+            createdAt: issue.createdAt,
+            updatedAt: issue.updatedAt,
+          });
         }
-        const { project } = projects[index]!;
-        logger.error("admin_new_issues_project_scan_failed", {
-          projectId: project.id,
-          repositoryFullName: project.repositoryFullName,
-          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-          requestId: c.get("requestId"),
-        });
-      });
+      }
 
       // Newest-updated-first across every project, matching
       // `fetchRepositoryIssues`'s own per-repository ordering

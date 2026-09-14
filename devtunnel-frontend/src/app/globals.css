@@ -40,6 +40,18 @@
       transition-duration: 0.001ms !important;
       scroll-behavior: auto !important;
     }
+
+    /* Exception to the blanket rule above: a loading spinner isn't
+       decorative motion, it's the only signal that a page is still
+       working. Freezing it to a single 0.001ms frame (as the rule
+       above does) makes an in-progress page look identical to a
+       broken one — worse for someone with motion sensitivity, not
+       better. Keep it spinning, just slower than the default 1s, as
+       a middle ground. */
+    .animate-spin {
+      animation-duration: 1.6s !important;
+      animation-iteration-count: infinite !important;
+    }
   }
 
   /* Custom scrollbar — thin, rounded, dark-surface-matching thumb that

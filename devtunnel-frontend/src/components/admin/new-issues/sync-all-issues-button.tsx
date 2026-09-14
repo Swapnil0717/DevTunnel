@@ -9,13 +9,17 @@ import { AdminNewIssuesApiError, syncAllAdminNewIssues } from "@/lib/admin/new-i
  * "Sync all issues" action, shown on both `/admin/tasks/new-issues` and
  * `/admin/tasks/new-issues/since-onboarding`.
  *
- * `GET /admin/new-issues` already scans every active project's GitHub
- * repository live on every server render (`cache: "no-store"`, no
- * DevTunnel-side cache to invalidate) — so this button's job isn't to
- * "unstick" stale data, it's to let the Admin trigger that same
- * cross-project GitHub scan on demand and see a concrete result (how
- * many issues, across how many projects) before refreshing the page,
- * the same "refresh + report a summary" pattern
+ * `GET /admin/new-issues` serves most requests from a short-lived
+ * server-side cache of the last live GitHub scan
+ * (`GithubScanCacheEntry`, src/routes/admin/newIssues.ts) — a plain
+ * server render (`cache: "no-store"` here just means *this browser*
+ * doesn't cache the response; it says nothing about the backend) can
+ * therefore return data that's up to a few minutes old. This button's
+ * job is to let the Admin force a real live cross-project GitHub
+ * re-scan on demand (`syncAllAdminNewIssues`'s `refresh=true` on its
+ * first request) and see a concrete result (how many issues, across
+ * how many projects) before refreshing the page, the same
+ * "refresh + report a summary" pattern
  * `SyncAllProjectsGithubDataButton` already uses on the Projects page.
  */
 export function SyncAllIssuesButton() {

@@ -22,5 +22,10 @@ import { LoadingPanel } from "@/components/ui/spinner";
  * installation with more than ~100 combined new issues.
  */
 export default function NewIssuesLoading() {
-  return <LoadingPanel label="Scanning your projects' GitHub repositories for new issues…" />;
+  return (
+    <LoadingPanel
+      label="Scanning your projects' GitHub repositories for new issues…"
+      description="This re-checks every connected repo live, so larger project lists can take a little while. Feel free to leave this tab open — it'll load automatically."
+    />
+  );
 }
