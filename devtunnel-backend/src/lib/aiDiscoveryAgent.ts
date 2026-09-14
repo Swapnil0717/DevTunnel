@@ -74,13 +74,18 @@ import type { AiDiscoveryCounters, AiDiscoveryRunSummary, DeveloperRole, Experie
  *    also a project candidate yet, or vice versa) before they ever call
  *    search_github_repositories for something genuinely new. See
  *    `reconcileToolsMissingAsProjects` / `reconcileProjectsMissingAsTools`
- *    below. Reconciliation candidates consume the exact same daily quota
- *    as a freshly-searched candidate (no separate unlimited backlog), go
- *    through the exact same validate*Candidate() gate, and land in the
- *    exact same PENDING queue — the only difference is `aiReasoning` is
- *    prefixed to say a candidate was cross-registered, so the admin
- *    review queue shows why it appeared, and no GitHub search tool call
- *    is spent on it since the source repository is already known.
+ *    below. On the tools→projects side, reconciliation runs to
+ *    completion — every published tool gets registered as a project —
+ *    BEFORE the day's 3-beginner/3-intermediate/1-advanced quota is even
+ *    read, and does not draw from or count against that quota (it's not
+ *    a "new project found by search"). That quota applies exclusively to
+ *    the fresh-search step that follows. Reconciliation candidates still
+ *    go through the exact same validate*Candidate() gate and land in the
+ *    exact same PENDING queue as a freshly-searched one — the only
+ *    difference is `aiReasoning` is prefixed to say a candidate was
+ *    cross-registered, so the admin review queue shows why it appeared,
+ *    and no GitHub search tool call is spent on it since the source
+ *    repository is already known.
  * ---------------------------------------------------------------------------
  */
 
@@ -145,12 +150,24 @@ const noToolDispatch: import("./groq").GroqToolDispatcher = async () => {
 };
 
 /**
- * Phase 0a (runs inside runProjectDiscovery, before fresh GitHub search):
- * every published, GitHub-hosted tool that isn't ALSO a project candidate
- * yet gets classified from its own already-known description/README (no
- * new GitHub search) and proposed as a project. Mutates `remaining` and
+ * Phase 0a (runs inside runProjectDiscovery, BEFORE fresh GitHub search,
+ * and BEFORE the day's 3-beginner/3-intermediate/1-advanced quota is
+ * even considered): every published, GitHub-hosted tool that isn't ALSO
+ * a project candidate yet gets classified from its own already-known
+ * description/README (no new GitHub search) and proposed as a project.
+ *
+ * Deliberately NOT gated by, or counted against, the day's per-
+ * difficulty project quota (`PROJECT_QUOTA` / `projectsRemaining` in
+ * db/aiDiscovery.ts) — that quota is "3 beginner / 3 intermediate / 1
+ * advanced NEW projects found by search," full stop. Cross-registering
+ * an already-known, already-published tool isn't "finding a new
+ * project," so it must never eat into or block that budget. This
+ * function runs to completion — every gap tool gets registered as a
+ * project — before the caller ever looks at the day's quota; only
+ * `maxToPropose` (the manual "add one project" admin button's own
+ * per-click cap) and the shared Groq budget can stop it early. Mutates
  * `exclude` in place so the caller's subsequent search step sees an
- * up-to-date budget/dedup set.
+ * up-to-date dedup set.
  */
 async function reconcileToolsMissingAsProjects(
   env: ValidatedEnv,
@@ -158,17 +175,11 @@ async function reconcileToolsMissingAsProjects(
   supabase: ReturnType<typeof getSupabase>,
   readmeCache: ReadmeCache,
   exclude: Set<string>,
-  remaining: { beginner: number; intermediate: number; advanced: number },
   maxToPropose: number | undefined,
   onStep: StepReporter | undefined,
 ): Promise<ReconciliationResult> {
-  const totalRemaining = () => remaining.beginner + remaining.intermediate + remaining.advanced;
   let proposed = 0;
   let dropped = 0;
-
-  if (totalRemaining() === 0) {
-    return { proposed, dropped, quotaExceeded: false, accountQuotaExceeded: false };
-  }
 
   onStep?.("Checking whether every open source tool is also registered as a project…");
   const publishedTools = await listPublishedToolsForReconciliation(supabase);
@@ -179,10 +190,9 @@ async function reconcileToolsMissingAsProjects(
     return { proposed, dropped, quotaExceeded: false, accountQuotaExceeded: false };
   }
 
-  onStep?.(`Found ${gaps.length} tool(s) not yet registered as a project — cross-registering first.`);
+  onStep?.(`Found ${gaps.length} tool(s) not yet registered as a project — registering all of them as projects first, before searching for anything new.`);
 
   for (const tool of gaps) {
-    if (totalRemaining() === 0) break;
     if (maxToPropose !== undefined && proposed >= maxToPropose) break;
 
     const ownerRepo = parseGithubOwnerRepo(`https://github.com/${tool.fullName}`);
@@ -272,13 +282,6 @@ Reply with ONLY this JSON and nothing else:
         techStack: { languages: string[]; frameworks: string[]; libraries: string[] };
       };
 
-      const bucket = candidate.difficulty === "BEGINNER" ? "beginner" : candidate.difficulty === "ADVANCED" ? "advanced" : "intermediate";
-      if (remaining[bucket] <= 0) {
-        dropped += 1;
-        onStep?.(`Skipped "${tool.name}" — ${bucket} project quota already met today.`);
-        continue;
-      }
-
       const readme = tool.readme ?? (await getReadmeWithCache(env, readmeCache, ownerRepo.owner, ownerRepo.repo));
 
       await insertDiscoveredProject(supabase, {
@@ -307,9 +310,13 @@ Reply with ONLY this JSON and nothing else:
         difficulty: candidate.difficulty,
         aiReasoning: `Auto cross-registered from existing open source tool "${tool.name}" already on DevTunnel. ${candidate.reasoning}`,
       });
-      await bumpCounters(supabase, { [bucket]: 1 } as any);
+      // Deliberately NOT bumpCounters(beginner/intermediate/advanced) here:
+      // those counters ARE the day's 3/3/1 search quota tracker
+      // (db/aiDiscovery.ts PROJECT_QUOTA), and a cross-registered project
+      // isn't a "new project found by search" — it must never count
+      // against, or shrink, that budget. `exclude` (dedup) is the only
+      // state this needs to update for the caller.
       exclude.add(tool.fullName);
-      remaining[bucket] -= 1;
       proposed += 1;
       onStep?.(`Saved project ${tool.fullName} (cross-registered from tool "${tool.name}") — pending review.`);
     } catch (err) {
@@ -546,14 +553,6 @@ async function runProjectDiscovery(
   const { maxToPropose, onStep } = opts;
   const supabase = getSupabase(env);
   const errors: string[] = [];
-  onStep?.("Checking today's project discovery quota…");
-  const counters = await getTodayCounters(supabase);
-  const need = counters.projectsRemaining;
-  const totalNeeded = need.beginner + need.intermediate + need.advanced;
-  if (totalNeeded === 0) {
-    onStep?.("Today's project quota is already full — nothing to do.");
-    return { proposed: 0, dropped: 0, errors, quotaExceeded: false, accountQuotaExceeded: false };
-  }
 
   // Point 5: dedup against the real published table AND our own pending/
   // approved queue — never against the manual onboarding drafts table,
@@ -561,23 +560,17 @@ async function runProjectDiscovery(
   onStep?.("Loading the list of existing and already-proposed projects…");
   const exclude = await listExistingProjectFullNames(supabase);
 
-  // Point 6 / Phase 0a: close the tool→project gap FIRST, before spending
-  // any budget on a fresh GitHub search. `remaining` is created here (not
-  // further down) so reconciliation can consume straight out of the same
-  // per-difficulty budget the search step below will also draw from.
-  const remaining = { ...need };
+  // Step 1 / Point 6 / Phase 0a: register EVERY published tool that isn't
+  // already a project as a project — first, and to completion, before
+  // today's 3-beginner/3-intermediate/1-advanced search quota is even
+  // looked at. This runs regardless of whether that quota is already
+  // full for the day, since cross-registration draws from no daily
+  // quota of its own (see reconcileToolsMissingAsProjects's own
+  // comment). Only `maxToPropose` (a manual admin click's own per-click
+  // cap) or a Groq budget exhaustion can stop it early.
   let reconciledProposed = 0;
   let reconciledDropped = 0;
-  const reconciliation = await reconcileToolsMissingAsProjects(
-    env,
-    kv,
-    supabase,
-    readmeCache,
-    exclude,
-    remaining,
-    maxToPropose,
-    onStep,
-  );
+  const reconciliation = await reconcileToolsMissingAsProjects(env, kv, supabase, readmeCache, exclude, maxToPropose, onStep);
   reconciledProposed += reconciliation.proposed;
   reconciledDropped += reconciliation.dropped;
   if (reconciliation.quotaExceeded) {
@@ -590,29 +583,40 @@ async function runProjectDiscovery(
     };
   }
 
-  // Whatever reconciliation didn't use is what's left for a fresh search —
-  // both the per-difficulty totals AND (when capped) the caller's own
-  // maxToPropose ceiling.
-  const totalStillNeeded = remaining.beginner + remaining.intermediate + remaining.advanced;
+  // Whatever cross-registration didn't use of a manual click's own cap
+  // is what's left for a fresh search this call.
   const searchBudget = maxToPropose !== undefined ? Math.max(0, maxToPropose - reconciledProposed) : undefined;
-  if (totalStillNeeded === 0 || searchBudget === 0) {
-    onStep?.(
-      totalStillNeeded === 0
-        ? "Today's project quota is now full after cross-registration — nothing more to do."
-        : "Reached this run's project limit via cross-registration — nothing more to do.",
-    );
+  if (searchBudget === 0) {
+    onStep?.("Reached this run's project limit via cross-registration — nothing more to do.");
     return { proposed: reconciledProposed, dropped: reconciledDropped, errors, quotaExceeded: false, accountQuotaExceeded: false };
   }
 
+  // Step 2: only now — with every tool already registered as a project —
+  // does the day's per-difficulty search quota come into play, and only
+  // for genuinely NEW projects the search below is about to find. This
+  // quota was untouched by however many tools were just cross-registered
+  // above.
+  onStep?.("Checking today's project discovery quota…");
+  const need = (await getTodayCounters(supabase)).projectsRemaining;
+  const totalNeeded = need.beginner + need.intermediate + need.advanced;
+  if (totalNeeded === 0) {
+    onStep?.("Today's project quota is already full — nothing more to search for.");
+    return { proposed: reconciledProposed, dropped: reconciledDropped, errors, quotaExceeded: false, accountQuotaExceeded: false };
+  }
+
+  // Mutable per-difficulty budget for the fresh-search insert loop below
+  // (it can gate multiple candidates from one Groq response against it).
+  const remaining = { ...need };
+
   // When capped (e.g. the "one project at a time" admin button), only
   // ask the model for as many candidates as we'll actually use.
-  const requestCount = Math.min(totalStillNeeded, searchBudget ?? totalStillNeeded);
+  const requestCount = Math.min(totalNeeded, searchBudget ?? totalNeeded);
 
   const prompt = `Find open source GitHub repositories for DevTunnel's project catalog.
 
-Still needed today (overall): ${remaining.beginner} BEGINNER-friendly, ${remaining.intermediate} INTERMEDIATE, ${remaining.advanced} ADVANCED.
+Still needed today (overall): ${need.beginner} BEGINNER-friendly, ${need.intermediate} INTERMEDIATE, ${need.advanced} ADVANCED.
 ${
-    searchBudget !== undefined && searchBudget < totalStillNeeded
+    searchBudget !== undefined && searchBudget < totalNeeded
       ? `For THIS request specifically, only return ${requestCount} candidate(s) total — whichever difficulty is still most needed above.`
       : ""
   }
@@ -723,9 +727,11 @@ Return exactly ${requestCount} candidate(s) total, matching the needed counts pe
     return { proposed: reconciledProposed, dropped: reconciledDropped, errors, quotaExceeded: false, accountQuotaExceeded: false };
   }
 
-  // NOTE: `remaining` is the SAME object reconciliation already updated
-  // above — deliberately not reset to `{ ...need }` here, so a bucket
-  // reconciliation already filled can't be double-counted by this loop.
+  // `remaining` starts as a fresh copy of today's real per-difficulty
+  // quota (untouched by reconciliation above) and is decremented as
+  // candidates from THIS Groq response are inserted below, so a second
+  // candidate in the same response for an already-filled bucket is still
+  // caught.
   let proposed = 0;
   let dropped = 0;
 

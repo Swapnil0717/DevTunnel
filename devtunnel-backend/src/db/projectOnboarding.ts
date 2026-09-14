@@ -14,7 +14,7 @@ import type {
 const DRAFT_COLUMNS =
   "id, admin_id, repository_url, github_owner, github_repo_name, github_full_name, " +
   "github_description, readme, default_branch, primary_language, stars, forks, open_issues, closed_issues, " +
-  "github_author, github_contributors, has_github_app_access, repository_completed, " +
+  "github_author, github_contributors, github_contributor_total_count, has_github_app_access, repository_completed, " +
   "description_choice, custom_description, description_completed, " +
   "tech_stack, tech_stack_completed, preview_completed, validation_completed, " +
   "completed_project_id, completed_at, created_at, updated_at";
@@ -74,6 +74,7 @@ export function toOnboardingDraft(row: ProjectOnboardingDraftRow): ProjectOnboar
             profileUrl: `https://github.com/${row.github_owner}`,
           },
           contributors: (row.github_contributors as OnboardingGithubIdentity[] | null) ?? [],
+          contributorCount: row.github_contributor_total_count ?? 0,
           hasGithubAppAccess: row.has_github_app_access,
         }
       : null,
@@ -173,6 +174,7 @@ export interface RepositoryImportInput {
   closedIssues: number;
   author: OnboardingGithubIdentity;
   contributors: OnboardingGithubIdentity[];
+  contributorCount: number;
   hasGithubAppAccess: boolean;
 }
 
@@ -222,6 +224,7 @@ export async function saveRepositoryImport(
     closed_issues: input.closedIssues,
     github_author: input.author,
     github_contributors: input.contributors,
+    github_contributor_total_count: input.contributorCount,
     has_github_app_access: input.hasGithubAppAccess,
     repository_completed: input.hasGithubAppAccess,
     // A fresh (or re-run) repository import invalidates anything that was

@@ -6,7 +6,7 @@ import { getEnv } from "../config/env";
 import { recordAdminAudit } from "../db/adminAudit";
 import { getValidGithubAccessToken } from "../db/githubTokens";
 import { ProjectOnboardingError, saveRepositoryImport, toOnboardingDraft, saveDescription, saveTechStack, getDraftForAdmin, markPreviewCompleted, computeValidation, saveValidationResult, completeOnboarding } from "../db/projectOnboarding";
-import { GitHubRepoError, parseGithubRepoUrl, fetchRepositoryMetadata, fetchRepositoryContributors, fetchRepositoryReadme, fetchRepositoryLanguages, fetchRepositoryIssueCounts } from "../lib/githubRepo";
+import { GitHubRepoError, parseGithubRepoUrl, fetchRepositoryMetadata, fetchRepositoryContributors, fetchRepositoryContributorCount, fetchRepositoryReadme, fetchRepositoryLanguages, fetchRepositoryIssueCounts } from "../lib/githubRepo";
 import { logger } from "../lib/logger";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
@@ -127,8 +127,9 @@ adminProjectOnboarding.post(
       const accessToken = await getValidGithubAccessToken(supabase, env, admin.id);
 
       const metadata = await fetchRepositoryMetadata(accessToken, parsedRepo.owner, parsedRepo.repo);
-      const [contributors, readme, issueCounts] = await Promise.all([
+      const [contributors, contributorCount, readme, issueCounts] = await Promise.all([
         fetchRepositoryContributors(accessToken, parsedRepo.owner, parsedRepo.repo),
+        fetchRepositoryContributorCount(accessToken, parsedRepo.owner, parsedRepo.repo),
         fetchRepositoryReadme(accessToken, parsedRepo.owner, parsedRepo.repo),
         // `metadata.openIssues` (repos/{owner}/{repo}'s `open_issues_count`)
         // silently includes open pull requests and has no closed
@@ -153,6 +154,7 @@ adminProjectOnboarding.post(
         closedIssues: issueCounts.closedIssues,
         author: metadata.author,
         contributors,
+        contributorCount,
         // A successful, validated metadata fetch is this codebase's only
         // signal of repository access (see src/lib/githubRepo.ts's
         // module comment) — there is no separate GitHub App installation

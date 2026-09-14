@@ -263,6 +263,12 @@ export interface OnboardingRepository {
   closedIssues: number;
   author: OnboardingGithubIdentity;
   contributors: OnboardingGithubIdentity[];
+  /**
+   * True total contributor count from GitHub — NOT `contributors.length`,
+   * which is capped at 25 for display (rule 67; see
+   * src/lib/githubRepo.ts `fetchRepositoryContributorCount`).
+   */
+  contributorCount: number;
   hasGithubAppAccess: boolean;
 }
 
@@ -348,6 +354,7 @@ export interface ProjectOnboardingDraftRow {
   closed_issues: number | null;
   github_author: OnboardingGithubIdentity | null;
   github_contributors: OnboardingGithubIdentity[] | null;
+  github_contributor_total_count: number | null;
   has_github_app_access: boolean;
   repository_completed: boolean;
 

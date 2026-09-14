@@ -79,7 +79,7 @@ export function PreviewStep({ draft }: PreviewStepProps) {
             <dd className="m-0 text-text">@{repository.author.username}</dd>
 
             <dt className="text-text-muted">GitHub contributors</dt>
-            <dd className="m-0 text-text">{repository.contributors.length}</dd>
+            <dd className="m-0 text-text">{repository.contributorCount}</dd>
 
             <dt className="text-text-muted">Default branch</dt>
             <dd className="m-0 font-mono text-text">{repository.defaultBranch}</dd>

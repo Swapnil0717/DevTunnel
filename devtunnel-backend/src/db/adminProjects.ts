@@ -9,7 +9,7 @@ import type {
   DeleteAdminProjectResult,
   OnboardingTechStack,
 } from "../types";
-import { fetchRepositoryReadme, fetchRepositoryMetadata, fetchRepositoryContributors, fetchRepositoryIssueCounts } from "../lib/githubRepo";
+import { fetchRepositoryReadme, fetchRepositoryMetadata, fetchRepositoryContributors, fetchRepositoryContributorCount, fetchRepositoryIssueCounts } from "../lib/githubRepo";
 
 /**
  * Explicit column list for the detail-only fields — selected from
@@ -421,9 +421,10 @@ export async function refreshProjectGithubData(
   repoRef: { owner: string; repo: string },
   projectId: string,
 ): Promise<AdminProjectDetail> {
-  const [metadata, contributors, issueCounts] = await Promise.all([
+  const [metadata, contributors, contributorCount, issueCounts] = await Promise.all([
     fetchRepositoryMetadata(accessToken, repoRef.owner, repoRef.repo),
     fetchRepositoryContributors(accessToken, repoRef.owner, repoRef.repo),
+    fetchRepositoryContributorCount(accessToken, repoRef.owner, repoRef.repo),
     fetchRepositoryIssueCounts(accessToken, repoRef.owner, repoRef.repo),
   ]);
 
@@ -436,6 +437,7 @@ export async function refreshProjectGithubData(
       open_issues: issueCounts.openIssues,
       closed_issues: issueCounts.closedIssues,
       github_contributors: contributors,
+      github_contributor_total_count: contributorCount,
     })
     .eq("id", projectId)
     .is("deleted_at", null);

@@ -349,6 +349,48 @@ export async function fetchRepositoryContributors(
 }
 
 /**
+ * True total contributor count for a repository — NOT
+ * `fetchRepositoryContributors(...).length`, which is deliberately capped
+ * at `limit` (25 by default) to keep the onboarding/detail UI's avatar
+ * list bounded (rule 67) and is never meant to double as a total.
+ *
+ * GitHub's `/contributors` endpoint has no count field in its body. The
+ * standard trick to get the real total without paging through every
+ * contributor: request `per_page=1` and read the page number out of the
+ * paginated `Link` response header's `rel="last"` entry — with exactly 1
+ * contributor per page, that page number IS the total contributor count.
+ * No `Link` header at all means everything fit on the single page
+ * returned, so the total is just that page's length (0 or 1).
+ */
+export async function fetchRepositoryContributorCount(
+  accessToken: string | null,
+  owner: string,
+  repo: string,
+): Promise<number> {
+  const res = await fetchWithTimeout(
+    `${GITHUB_API_BASE}/repos/${owner}/${repo}/contributors?per_page=1&anon=false`,
+    { headers: authHeaders(accessToken) },
+  );
+
+  // Same "no contributors yet" handling as fetchRepositoryContributors.
+  if (res.status === 204) return 0;
+  if (!res.ok) {
+    if (res.status === 404) return 0;
+    await assertOk(res, "contributor count lookup");
+  }
+
+  const link = res.headers.get("Link") ?? res.headers.get("link");
+  if (link) {
+    const lastPageMatch = link.match(/[?&]page=(\d+)[^>]*>;\s*rel="last"/);
+    if (lastPageMatch) return Number(lastPageMatch[1]);
+  }
+
+  const parsed = contributorsSchema.safeParse(await res.json());
+  if (!parsed.success) return 0;
+  return parsed.data.length;
+}
+
+/**
  * "Fetch README" (Step 1 algorithm). Uses the raw media type so the
  * response body is the README's actual text content, not a base64-wrapped
  * JSON envelope. Returns `null` (not an error) when the repository simply
