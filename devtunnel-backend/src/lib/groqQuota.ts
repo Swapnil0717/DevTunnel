@@ -352,8 +352,31 @@ export async function getGroqQuotaSnapshot(kv: KVNamespace): Promise<GroqQuotaSn
   const tokensThisMinute = await readCounter(kv, `groq:tpm:${minuteWindow()}`);
   const shares = await getPhaseBudgetShares(kv);
 
+  // The account-wide ceiling for the REST of today — this is the hard
+  // cap `reserveGroqRequest` actually enforces before it ever looks at a
+  // phase's own counter (see its rpdKey/tpdKey checks, which run before
+  // the phase-scoped ones). No phase can ever really spend past this,
+  // no matter what its own share-derived limit below says.
+  const accountRpdRemaining = Math.max(GROQ_RPD_LIMIT - usedToday, 0);
+  const accountTpdRemaining = Math.max(GROQ_TPD_LIMIT - tokensToday, 0);
+
   const phases = await Promise.all(
     PHASE_SPEND_ORDER.map(async (phase) => {
+      // `phaseLimit` is share × the FULL fixed daily cap — a fresh
+      // full-day allotment. That's correct as the phase's own ceiling,
+      // but it says nothing about whether the ACCOUNT still has that
+      // much left today. If an admin raises a phase's share intraday
+      // (e.g. bumps Tools to 100%) after other phases already spent
+      // part of today's shared pool, this limit alone makes the phase
+      // look like it has a full fresh 900/180,000 to spend — when in
+      // reality only whatever's left account-wide is actually spendable,
+      // and that can be — and typically is — smaller. Below, `remainingToday`
+      // and `tokensRemainingToday` are the two numbers this snapshot
+      // reports as "what THIS phase can still spend today"; clamping them
+      // to the account-wide remaining keeps that promise honest, and
+      // guarantees a phase can never display more remaining than the
+      // account it draws from actually has left (previously it could,
+      // and did — see the incident this comment was added for).
       const rpdLimit = phaseLimit(GROQ_RPD_LIMIT, phase, shares);
       const tpdLimit = phaseLimit(GROQ_TPD_LIMIT, phase, shares);
       const rpdUsed = await readCounter(kv, phaseRpdKey(phase));
@@ -363,10 +386,10 @@ export async function getGroqQuotaSnapshot(kv: KVNamespace): Promise<GroqQuotaSn
         sharePct: Math.round(shares[phase] * 100),
         limitPerDay: rpdLimit,
         usedToday: rpdUsed,
-        remainingToday: Math.max(rpdLimit - rpdUsed, 0),
+        remainingToday: Math.min(Math.max(rpdLimit - rpdUsed, 0), accountRpdRemaining),
         tokenLimitPerDay: tpdLimit,
         tokensUsedToday: tpdUsed,
-        tokensRemainingToday: Math.max(tpdLimit - tpdUsed, 0),
+        tokensRemainingToday: Math.min(Math.max(tpdLimit - tpdUsed, 0), accountTpdRemaining),
       };
     }),
   );
@@ -398,7 +421,35 @@ export async function getGroqQuotaSnapshot(kv: KVNamespace): Promise<GroqQuotaSn
  * `GroqQuotaExceededError` for this phase on its very next call, so the
  * phase is effectively done for the day even if the other dimension has
  * room left.
+ *
+ * Used by `aiDiscoveryAgent.ts` to gate task/issue discovery: per product
+ * direction, tasks should only start once BOTH the projects and tools
+ * phases have completely used up their own daily share — so pass each
+ * phase's `getGroqQuotaSnapshot(...).phases` entry through this and
+ * require both to be true before running task discovery.
  */
+/**
+ * True once a phase has spent at least `thresholdPct` of its own daily
+ * budget share — a looser trigger than `isPhaseBudgetExhausted`'s "hit
+ * zero". Same "either dimension" reasoning as that function: requests or
+ * tokens, whichever has burned through more of its share, decides how
+ * spent the phase counts as.
+ *
+ * Used by `aiDiscoveryAgent.ts` to gate task/issue discovery at 75%
+ * spent rather than 100% — per product direction, tasks shouldn't have
+ * to wait for projects/tools to fully exhaust their share (which, once
+ * their much smaller daily quota is met, may never happen — see
+ * `isTasksBudgetUnlocked`'s comment) before picking up whatever's left.
+ */
+export function isPhaseBudgetMostlySpent(
+  phase: { limitPerDay: number; usedToday: number; tokenLimitPerDay: number; tokensUsedToday: number },
+  thresholdPct: number,
+): boolean {
+  const requestsSpentPct = phase.limitPerDay > 0 ? phase.usedToday / phase.limitPerDay : 1;
+  const tokensSpentPct = phase.tokenLimitPerDay > 0 ? phase.tokensUsedToday / phase.tokenLimitPerDay : 1;
+  return requestsSpentPct >= thresholdPct || tokensSpentPct >= thresholdPct;
+}
+
 export function isPhaseBudgetExhausted(phase: { remainingToday: number; tokensRemainingToday: number }): boolean {
   return phase.remainingToday <= 0 || phase.tokensRemainingToday <= 0;
 }

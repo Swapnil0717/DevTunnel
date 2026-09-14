@@ -17,69 +17,92 @@ import {
  * fabricates a result (rule 37/38 applied to an AI's tool use, not just
  * the database).
  */
-export const DISCOVERY_TOOLS: GroqFunctionDeclaration[] = [
-  {
-    name: "search_github_repositories",
-    description:
-      "Search public GitHub repositories using GitHub's search syntax (e.g. 'topic:cli language:go stars:>100'). Returns up to 10 real repositories with stars, forks, language, and description.",
-    parameters: {
-      type: "object",
-      properties: {
-        query: { type: "string", description: "GitHub search-repositories query string." },
-        sort: { type: "string", enum: ["stars", "updated", "best-match"] },
-      },
-      required: ["query"],
+const SEARCH_GITHUB_REPOSITORIES: GroqFunctionDeclaration = {
+  name: "search_github_repositories",
+  description:
+    "Search public GitHub repositories using GitHub's search syntax (e.g. 'topic:cli language:go stars:>100'). Returns up to 10 real repositories with stars, forks, language, and description.",
+  parameters: {
+    type: "object",
+    properties: {
+      query: { type: "string", description: "GitHub search-repositories query string." },
+      sort: { type: "string", enum: ["stars", "updated", "best-match"] },
     },
+    required: ["query"],
   },
-  {
-    name: "get_github_repository",
-    description: "Fetch full details (stars, forks, open issues, language, description) for one exact owner/repo.",
-    parameters: {
-      type: "object",
-      properties: {
-        owner: { type: "string" },
-        repo: { type: "string" },
-      },
-      required: ["owner", "repo"],
+};
+
+const GET_GITHUB_REPOSITORY: GroqFunctionDeclaration = {
+  name: "get_github_repository",
+  description: "Fetch full details (stars, forks, open issues, language, description) for one exact owner/repo.",
+  parameters: {
+    type: "object",
+    properties: {
+      owner: { type: "string" },
+      repo: { type: "string" },
     },
+    required: ["owner", "repo"],
   },
-  {
-    name: "get_github_readme",
-    description: "Fetch the README (truncated) for one exact owner/repo, to judge documentation quality and contributor-friendliness.",
-    parameters: {
-      type: "object",
-      properties: {
-        owner: { type: "string" },
-        repo: { type: "string" },
-      },
-      required: ["owner", "repo"],
+};
+
+const GET_GITHUB_README: GroqFunctionDeclaration = {
+  name: "get_github_readme",
+  description: "Fetch the README (truncated) for one exact owner/repo, to judge documentation quality and contributor-friendliness.",
+  parameters: {
+    type: "object",
+    properties: {
+      owner: { type: "string" },
+      repo: { type: "string" },
     },
+    required: ["owner", "repo"],
   },
-  {
-    name: "search_github_issues",
-    description:
-      "Search GitHub issues using GitHub's search syntax. The query MUST include 'is:issue' (e.g. 'repo:owner/name is:issue is:open label:\"good first issue\"') — GitHub rejects queries missing 'is:issue' or 'is:pull-request'. Returns up to 8 real open issues with title, body, labels, and author.",
-    parameters: {
-      type: "object",
-      properties: {
-        query: { type: "string" },
-      },
-      required: ["query"],
+};
+
+const SEARCH_GITHUB_ISSUES: GroqFunctionDeclaration = {
+  name: "search_github_issues",
+  description:
+    "Search GitHub issues using GitHub's search syntax. The query MUST include 'is:issue' (e.g. 'repo:owner/name is:issue is:open label:\"good first issue\"') — GitHub rejects queries missing 'is:issue' or 'is:pull-request'. Returns up to 8 real open issues with title, body, labels, and author.",
+  parameters: {
+    type: "object",
+    properties: {
+      query: { type: "string" },
     },
+    required: ["query"],
   },
-  {
-    name: "get_github_repository_open_issues",
-    description: "List open issues directly on one exact owner/repo (use when a repo has too few issues for search indexing to have caught up).",
-    parameters: {
-      type: "object",
-      properties: {
-        owner: { type: "string" },
-        repo: { type: "string" },
-      },
-      required: ["owner", "repo"],
+};
+
+const GET_GITHUB_REPOSITORY_OPEN_ISSUES: GroqFunctionDeclaration = {
+  name: "get_github_repository_open_issues",
+  description: "List open issues directly on one exact owner/repo (use when a repo has too few issues for search indexing to have caught up).",
+  parameters: {
+    type: "object",
+    properties: {
+      owner: { type: "string" },
+      repo: { type: "string" },
     },
+    required: ["owner", "repo"],
   },
-];
+};
+
+/**
+ * Repo-discovery-only toolset — used by BOTH the projects phase and the
+ * tools phase. Deliberately excludes search_github_issues /
+ * get_github_repository_open_issues: neither phase's prompt ever asks
+ * the model to look at issues, and previously both were handed the full
+ * DISCOVERY_TOOLS array anyway, so nothing stopped the model from
+ * calling an issue tool mid-search on its own initiative (observed in
+ * practice — the tools phase would occasionally go searching for
+ * "good first issue" labeled issues despite never being asked to).
+ * Scoping the tool list per phase is what actually enforces this, not
+ * prompt wording alone.
+ */
+export const REPO_DISCOVERY_TOOLS: GroqFunctionDeclaration[] = [SEARCH_GITHUB_REPOSITORIES, GET_GITHUB_REPOSITORY, GET_GITHUB_README];
+
+/**
+ * Issue-discovery-only toolset — used exclusively by the tasks phase,
+ * which operates on a single already-onboarded repo and never needs to
+ * search for or fetch new repositories/READMEs.
+ */
+export const ISSUE_DISCOVERY_TOOLS: GroqFunctionDeclaration[] = [SEARCH_GITHUB_ISSUES, GET_GITHUB_REPOSITORY_OPEN_ISSUES];
 
 /** `owner/repo` (lowercased) -> full README text, shared across one discovery run. */
 export type ReadmeCache = Map<string, string>;
@@ -236,10 +259,29 @@ export function buildDiscoveryDispatcher(env: ValidatedEnv, readmeCache?: Readme
         case "get_github_readme": {
           const owner = String(args.owner);
           const repo = String(args.repo);
+          const key = readmeCacheKey(owner, repo);
+          const cached = readmeCache?.get(key);
+          if (cached !== undefined) {
+            // Already fetched this exact repo's README earlier in this
+            // same discovery run (readmeCache is shared across the whole
+            // run, not just one conversation) — the model still has that
+            // full README in its own conversation history from the first
+            // call, so resending it again would just be paying the same
+            // multi-KB token cost a second (or third) time for zero new
+            // information. This is what let a single repo's README get
+            // sent 3 times in one run and burn through the day's token
+            // budget before a second candidate was even finished. Return
+            // a short redirect instead of the real content.
+            onStep?.(`Already have the README for ${owner}/${repo} — not fetching it again`);
+            return {
+              readme: null,
+              note: `You already fetched the README for ${owner}/${repo} earlier in this conversation — reuse what you already have instead of calling get_github_readme for it again.`,
+            };
+          }
           onStep?.(`Reading README for ${owner}/${repo}`);
           const readme = await getRepositoryReadme(env, owner, repo);
           if (readme && readmeCache) {
-            readmeCache.set(readmeCacheKey(owner, repo), readme);
+            readmeCache.set(key, readme);
           }
           onStep?.(readme ? `Read README for ${owner}/${repo}` : `No README found for ${owner}/${repo}`);
           return { readme: readme ?? "" };

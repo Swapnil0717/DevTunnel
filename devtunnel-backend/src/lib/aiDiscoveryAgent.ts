@@ -3,7 +3,7 @@ import type { ValidatedEnv } from "../config/env";
 import { getSupabase } from "./supabase";
 import { parseGroqJson, runGroqAgent } from "./groq";
 import { GroqQuotaExceededError } from "./groqQuota";
-import { DISCOVERY_TOOLS, buildDiscoveryDispatcher, getReadmeWithCache, type ReadmeCache, type StepReporter } from "./aiDiscoveryTools";
+import { REPO_DISCOVERY_TOOLS, ISSUE_DISCOVERY_TOOLS, buildDiscoveryDispatcher, getReadmeWithCache, type ReadmeCache, type StepReporter } from "./aiDiscoveryTools";
 import {
   validateProjectCandidate,
   validateToolCandidate,
@@ -433,7 +433,7 @@ Reply with ONLY this JSON and nothing else:
   "category": "one of the fixed category values above",
   "labels": ["every applicable value from the fixed audience label list above"],
   "description": "your short, simple 1-2 sentence summary",
-  "setupGuide": "- bullet one\n- bullet two\n- ...",
+  "setupGuide": "- bullet one\\n- bullet two\\n- ...",
   "reasoning": "1-3 sentences for the admin"
 }`;
 
@@ -553,8 +553,12 @@ turn rather than one call per turn. Do not call get_github_repository just to
 re-confirm stats (stars, forks, language, description) that
 search_github_repositories already gave you for that exact repository —
 reuse those values and only call get_github_repository when you need details
-it didn't already return. Move on once you have enough real information for
-a candidate instead of gathering more than the required fields need.`;
+it didn't already return. Likewise, call get_github_readme AT MOST ONCE per
+repository — if you already called it for an owner/repo earlier in this
+conversation, you already have its full README; reuse it from your own
+conversation history instead of calling get_github_readme for that repository
+again. Move on once you have enough real information for a candidate instead
+of gathering more than the required fields need.`;
 
 // ---------------------------------------------------------------------------
 // Projects — 7/day: 3 beginner, 3 intermediate, 1 advanced.
@@ -713,7 +717,7 @@ Return exactly ${requestCount} candidate(s) total, matching the needed counts pe
   try {
     onStep?.(`Asking the AI model to find ${requestCount} project candidate${requestCount === 1 ? "" : "s"}…`);
     const dispatch = buildDiscoveryDispatcher(env, readmeCache, onStep);
-    const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch, "projects");
+    const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, REPO_DISCOVERY_TOOLS, dispatch, "projects");
     const parsed = parseGroqJson<{ candidates: ProjectCandidateInput[] }>(raw);
     candidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];
     onStep?.(`AI returned ${candidates.length} candidate${candidates.length === 1 ? "" : "s"} to check.`);
@@ -1002,14 +1006,14 @@ Reply with ONLY this JSON and nothing else:
   "primaryLanguage": "string or null",
   "labels": ["every applicable value from the fixed audience label list above"],
   "description": "your short, simple 1-2 sentence summary",
-  "setupGuide": "- bullet one\n- bullet two\n- ...",
+  "setupGuide": "- bullet one\\n- bullet two\\n- ...",
   "reasoning": "1-3 sentences for the admin on why this is a great pick"
 }`;
 
     try {
       onStep?.(`Asking the AI model for a tool in "${category}"…`);
       const dispatch = buildDiscoveryDispatcher(env, readmeCache, onStep);
-      const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch, "tools");
+      const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, REPO_DISCOVERY_TOOLS, dispatch, "tools");
       const candidateRaw = parseGroqJson<ToolCandidateInput>(raw);
 
       const problems = validateToolCandidate(candidateRaw);
@@ -1096,17 +1100,20 @@ Reply with ONLY this JSON and nothing else:
 // No numeric daily cap (per spec: "address all the issues that are
 // related to projects that are in devtunnel"), but still deduplicated and
 // run with a sane per-project ceiling so one huge repo can't blow the
-// Groq/GitHub budget for the day.
-//
-// One product rule layered on top of that:
+// Groq/GitHub budget for the day. Task discovery is NOT gated behind
+// projects/tools being "done" for the day — it spends from the shared
+// Groq budget on the same terms as any other phase (its own daily
+// share via reserveGroqRequest/GroqQuotaExceededError, same as before),
+// it just no longer waits for projects/tools to hit a completion
+// threshold before it's allowed to start.
 //
 // Shuffled project order — every run walks onboarded projects in a
-//    freshly randomized order (see `shuffled` below) rather than
-//    always starting from the same project. Without this, a single
-//    "Add AI issue" click (maxToPropose = 1) would keep draining the
-//    same first project's issues run after run before ever touching the
-//    others; shuffling spreads new tasks across every onboarded project
-//    over time instead of exhausting one before moving to the next.
+// freshly randomized order (see `shuffled` below) rather than
+// always starting from the same project. Without this, a single
+// "Add AI issue" click (maxToPropose = 1) would keep draining the
+// same first project's issues run after run before ever touching the
+// others; shuffling spreads new tasks across every onboarded project
+// over time instead of exhausting one before moving to the next.
 // ---------------------------------------------------------------------------
 
 const MAX_ISSUES_PER_PROJECT = 15;
@@ -1218,7 +1225,7 @@ Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
 
       onStep?.(`Asking the AI model to review issues on ${project.githubFullName}…`);
       const dispatch = buildDiscoveryDispatcher(env, undefined, onStep);
-      const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, DISCOVERY_TOOLS, dispatch, "tasks");
+      const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, ISSUE_DISCOVERY_TOOLS, dispatch, "tasks");
       const parsed = parseGroqJson<{ candidates: TaskCandidateInput[] }>(raw);
       const candidates = Array.isArray(parsed.candidates) ? parsed.candidates.slice(0, MAX_ISSUES_PER_PROJECT) : [];
       onStep?.(`AI returned ${candidates.length} candidate issue${candidates.length === 1 ? "" : "s"} for ${project.githubFullName}.`);
@@ -1335,6 +1342,10 @@ export async function runDailyDiscovery(env: ValidatedEnv, kv: KVNamespace): Pro
   // independently in groqQuota.ts. Only a genuine account-wide
   // exhaustion (accountQuotaExceeded === true — the whole Groq key has
   // nothing left for anyone today) short-circuits the phases after it.
+  //
+  // runTaskDiscovery (called below) no longer self-gates on projects/tools
+  // being "done" for the day — it runs on this same schedule, spending from
+  // its own daily budget share exactly like the other two phases.
   const readmeCache: ReadmeCache = new Map();
 
   const projectsResult = await runProjectDiscovery(env, kv, readmeCache).catch((err) => {
@@ -1464,11 +1475,14 @@ export async function runToolDiscoveryOnly(
  * call repeatedly. Projects and tools are left untouched. `limit`
  * (default 1) stops the walk as soon as that many issues have been
  * proposed, and `onStep` streams live progress as each project is
- * checked. Can be called any time — task discovery is no longer gated
- * behind the projects/tools phases being done for the day. If every
- * onboarded project's issues are already tracked or none qualify, the
- * step log says so explicitly ("No issues found — all issues are
- * addressed.") instead of silently returning nothing.
+ * checked.
+ *
+ * Not gated behind projects/tools completion — this call runs
+ * immediately on click, spending from tasks' own daily Groq budget
+ * share like any other phase. If every onboarded project's issues are
+ * already tracked or none qualify, the step log says so explicitly
+ * ("No issues found — all issues are addressed.") instead of silently
+ * returning nothing.
  */
 export async function runTaskDiscoveryOnly(
   env: ValidatedEnv,
