@@ -52,6 +52,15 @@
       animation-duration: 1.6s !important;
       animation-iteration-count: infinite !important;
     }
+
+    /* Same reasoning as .animate-spin above, applied to the skeleton
+       shimmer sweep (components/ui/skeleton.tsx, ProjectGridSkeleton,
+       ListSkeleton) — a frozen skeleton reads as a broken/stuck page,
+       not a loading one. */
+    .animate-shimmer {
+      animation-duration: 2.4s !important;
+      animation-iteration-count: infinite !important;
+    }
   }
 
   /* Custom scrollbar — thin, rounded, dark-surface-matching thumb that

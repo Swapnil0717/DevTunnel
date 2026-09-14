@@ -88,6 +88,20 @@ const config: Config = {
       borderRadius: {
         xl: "12px",
       },
+      keyframes: {
+        // Skeleton-loading shimmer sweep. Kept as a plain translateX
+        // pass rather than an animated background-position gradient —
+        // simpler to reason about and cheaper to run on low-end devices,
+        // which matters here since several skeletons (SkeletonTable,
+        // ProjectGridSkeleton) render a dozen+ of these at once.
+        shimmer: {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(100%)" },
+        },
+      },
+      animation: {
+        shimmer: "shimmer 1.6s ease-in-out infinite",
+      },
     },
   },
   plugins: [],
