@@ -8,6 +8,8 @@
  * div, so the animation only needs to change in one place.
  */
 
+ import type { ReactNode } from "react";
+
  export function SkeletonBlock({ className = "" }: { className?: string }) {
   return (
     <div className={`relative overflow-hidden rounded-lg bg-surface ${className}`} aria-hidden="true">
@@ -16,10 +18,31 @@
   );
 }
 
-/** A row of N stat-card placeholders, matching `AdminStatCard`'s shape. */
+/**
+ * Static lookup rather than a template-literal class name — Tailwind's
+ * class scanner needs the full `sm:grid-cols-N` string to appear
+ * literally somewhere, and a `count` that only exists at request time
+ * can't satisfy that. Covers every count an `AdminStatCard` row actually
+ * uses today (Task detail: 3, Admin Dashboard/most grids: 4, Project
+ * detail: 5); anything else falls back to 4.
+ */
+const STAT_CARD_GRID_COLS: Record<number, string> = {
+  3: "sm:grid-cols-3",
+  4: "sm:grid-cols-4",
+  5: "sm:grid-cols-5",
+};
+
+/**
+ * A row of N stat-card placeholders, matching `AdminStatCard`'s shape.
+ * `sm:grid-cols-{count}` so the placeholder wraps at the same count as
+ * the real grid — previously hardcoded to 4 columns regardless of
+ * `count`, so a 5-card row (Project detail) or 3-card row (Task detail)
+ * wrapped its cards onto a different line than the real data did.
+ */
 export function SkeletonStatCards({ count = 4 }: { count?: number }) {
+  const gridColsClass = STAT_CARD_GRID_COLS[count] ?? STAT_CARD_GRID_COLS[4];
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-hidden="true">
+    <div className={`grid grid-cols-2 gap-3 ${gridColsClass}`} aria-hidden="true">
       {Array.from({ length: count }).map((_, index) => (
         <div key={index} className="rounded-[10px] border border-border bg-surface px-4 py-3.5">
           <SkeletonBlock className="mb-2 h-2.5 w-16" />
@@ -88,28 +111,53 @@ export function SkeletonAvatarHeader() {
 }
 
 /**
- * Breadcrumb + title/meta row + action-button row, matching the shared
- * header on `/admin/{projects,tasks,opensource-tools}/[id]` — none of
- * which use a circular avatar (that's profile-only), so this is the
- * detail-page counterpart to `SkeletonAvatarHeader`. Pass `withLogo` for
- * the tool detail page, the one variant with a square logo next to the
- * title (`OpenSourceToolLogo`, `rounded-[12px]`, not round).
+ * "Back to X" link + breadcrumb nav + title/meta row + action-button
+ * row, matching the shared header on
+ * `/admin/{projects,tasks,opensource-tools}/[id]` — none of which use a
+ * circular avatar (that's profile-only), so this is the detail-page
+ * counterpart to `SkeletonAvatarHeader`. Pass `withLogo` for the tool
+ * detail page, the one variant with a square logo next to the title
+ * (`OpenSourceToolLogo`, `rounded-[12px]`, not round).
+ *
+ * `meta` and `actions` let each `loading.tsx` pass placeholders shaped
+ * like its own page's real content instead of one generic line/two
+ * buttons — the three pages render a different number of meta chips
+ * (2–3, some with icons, one with a status badge) and a different
+ * number of action buttons (Project detail alone has five: View on
+ * GitHub, Edit details, Sync GitHub data, Archive/Reactivate, Delete),
+ * so a single fixed shape here could only ever be right for one of the
+ * three pages. Falls back to the previous generic shape when omitted.
  */
-export function SkeletonDetailHeader({ withLogo = false }: { withLogo?: boolean }) {
+export function SkeletonDetailHeader({
+  withLogo = false,
+  meta,
+  actions,
+}: {
+  withLogo?: boolean;
+  meta?: ReactNode;
+  actions?: ReactNode;
+}) {
   return (
     <div aria-hidden="true">
+      <SkeletonBlock className="mb-4 h-3 w-32" />
       <SkeletonBlock className="mb-6 h-3 w-40" />
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div className={withLogo ? "flex items-start gap-4" : "flex flex-col gap-2.5"}>
           {withLogo ? <SkeletonBlock className="h-14 w-14 shrink-0 rounded-[12px]" /> : null}
           <div className="flex flex-col gap-2.5">
             <SkeletonBlock className="h-5 w-52" />
-            <SkeletonBlock className="h-3 w-64" />
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              {meta ?? <SkeletonBlock className="h-3 w-64" />}
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <SkeletonBlock className="h-9 w-28" />
-          <SkeletonBlock className="h-9 w-24" />
+          {actions ?? (
+            <>
+              <SkeletonBlock className="h-9 w-28" />
+              <SkeletonBlock className="h-9 w-24" />
+            </>
+          )}
         </div>
       </div>
     </div>
