@@ -4,7 +4,7 @@ import { SkeletonPageHeader, SkeletonTable } from "@/components/ui/skeleton";
 export default function AdminActivityLoading() {
   return (
     <div aria-hidden="true">
-      <SkeletonPageHeader actions={0} />
+      <SkeletonPageHeader withAction={false} />
       <SkeletonTable rows={8} columns={5} />
     </div>
   );

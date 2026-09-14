@@ -1,19 +1,12 @@
-import { SkeletonPageHeader } from "@/components/ui/skeleton";
-import { SkeletonGroqBudgetPanel, SkeletonRunButtonRow, SkeletonAiQueueSection } from "@/components/admin/ai-discovery/ai-discovery-skeletons";
+import { SkeletonBlock, SkeletonPageHeader, SkeletonQueueList } from "@/components/ui/skeleton";
 
-/**
- * `/admin/ai/projects` — one `getAiDiscoveredProjects("PENDING")` fetch.
- * Renders as: page header (no action button), `AiDiscoveryRunButton`'s
- * own kind-scoped `GroqQuotaPanel` + run button, then `AiDiscoveryQueue`
- * as a filterable list of item cards — never a table.
- */
+/** `/admin/ai/projects` — one `getAiDiscoveredProjects("PENDING")` fetch, rendered as `AiDiscoveryRunButton` (quota panel + run button) followed by `AiDiscoveryQueue`'s card list — never a table. */
 export default function AdminAiProjectsLoading() {
   return (
     <div aria-hidden="true">
-      <SkeletonPageHeader actions={0} />
-      <SkeletonGroqBudgetPanel />
-      <SkeletonRunButtonRow />
-      <SkeletonAiQueueSection rows={3} />
+      <SkeletonPageHeader withAction={false} />
+      <SkeletonBlock className="mb-8 h-[110px] w-full" />
+      <SkeletonQueueList rows={4} />
     </div>
   );
 }

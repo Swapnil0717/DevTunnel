@@ -1,6 +1,6 @@
 import { SkeletonBlock } from "@/components/ui/skeleton";
 
-/** `/settings` — one `getServerUser()` fetch, rendered as the Account section. */
+/** `/settings` — one `getServerUser()` fetch, rendered as the Account section plus the Session (sign-out) section below it. */
 export default function SettingsLoading() {
   return (
     <main className="px-4 py-5 sm:px-[26px] sm:py-[22px]" aria-hidden="true">
@@ -15,6 +15,11 @@ export default function SettingsLoading() {
               <SkeletonBlock className="h-3 w-16" />
               <SkeletonBlock className="h-3 w-32" />
             </div>
+          </div>
+          <div className="rounded-[10px] border border-border bg-surface p-5">
+            <SkeletonBlock className="mb-3 h-4 w-16" />
+            <SkeletonBlock className="mb-3 h-3 w-56" />
+            <SkeletonBlock className="h-9 w-24" />
           </div>
         </div>
       </div>

@@ -1,18 +1,12 @@
-import { SkeletonPageHeader } from "@/components/ui/skeleton";
-import { SkeletonGroqBudgetPanel, SkeletonRunButtonRow, SkeletonAiQueueSection } from "@/components/admin/ai-discovery/ai-discovery-skeletons";
+import { SkeletonBlock, SkeletonPageHeader, SkeletonQueueList } from "@/components/ui/skeleton";
 
-/**
- * `/admin/ai/tools` — one `getAiDiscoveredTools("PENDING")` fetch, same
- * shape as `/admin/ai/projects`'s loading state (kind-scoped budget
- * panel + run button + filterable queue list, not a table).
- */
+/** `/admin/ai/tools` — one `getAiDiscoveredTools("PENDING")` fetch, rendered as `AiDiscoveryRunButton` (quota panel + run button) followed by `AiDiscoveryQueue`'s card list — never a table. */
 export default function AdminAiToolsLoading() {
   return (
     <div aria-hidden="true">
-      <SkeletonPageHeader actions={0} />
-      <SkeletonGroqBudgetPanel />
-      <SkeletonRunButtonRow />
-      <SkeletonAiQueueSection rows={3} />
+      <SkeletonPageHeader withAction={false} />
+      <SkeletonBlock className="mb-8 h-[110px] w-full" />
+      <SkeletonQueueList rows={4} />
     </div>
   );
 }

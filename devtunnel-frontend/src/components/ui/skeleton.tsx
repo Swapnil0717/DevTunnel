@@ -30,31 +30,12 @@ export function SkeletonStatCards({ count = 4 }: { count?: number }) {
   );
 }
 
-/**
- * A page heading + description + N action-button placeholders, matching
- * the `<div className="mb-8 flex ... justify-between">
- *   <div><h1/><p/></div>
- *   {actions}
- * </div>` header markup shared by every admin list page (Projects,
- * Tasks, Open Source Tools, Activity, the AI queue pages, ...). Always
- * renders the description line — every one of those pages has a
- * one-line subtitle under the `h1`, so a header skeleton missing it
- * collapses to a shorter box than what actually replaces it.
- */
-export function SkeletonPageHeader({ actions = 1 }: { actions?: number }) {
+/** A page heading + "new" button placeholder, matching most admin list pages. */
+export function SkeletonPageHeader({ withAction = true }: { withAction?: boolean }) {
   return (
-    <div className="mb-8 flex flex-wrap items-start justify-between gap-4" aria-hidden="true">
-      <div className="flex flex-col gap-2">
-        <SkeletonBlock className="h-6 w-40" />
-        <SkeletonBlock className="h-3.5 w-72 max-w-full" />
-      </div>
-      {actions > 0 ? (
-        <div className="flex flex-wrap items-start gap-3">
-          {Array.from({ length: actions }).map((_, index) => (
-            <SkeletonBlock key={index} className="h-9 w-28" />
-          ))}
-        </div>
-      ) : null}
+    <div className="mb-4 flex items-center justify-between" aria-hidden="true">
+      <SkeletonBlock className="h-6 w-40" />
+      {withAction ? <SkeletonBlock className="h-8 w-28" /> : null}
     </div>
   );
 }
@@ -102,6 +83,123 @@ export function SkeletonAvatarHeader() {
         <SkeletonBlock className="h-4 w-40" />
         <SkeletonBlock className="h-3 w-24" />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Breadcrumb + title/meta row + action-button row, matching the shared
+ * header on `/admin/{projects,tasks,opensource-tools}/[id]` — none of
+ * which use a circular avatar (that's profile-only), so this is the
+ * detail-page counterpart to `SkeletonAvatarHeader`. Pass `withLogo` for
+ * the tool detail page, the one variant with a square logo next to the
+ * title (`OpenSourceToolLogo`, `rounded-[12px]`, not round).
+ */
+export function SkeletonDetailHeader({ withLogo = false }: { withLogo?: boolean }) {
+  return (
+    <div aria-hidden="true">
+      <SkeletonBlock className="mb-6 h-3 w-40" />
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div className={withLogo ? "flex items-start gap-4" : "flex flex-col gap-2.5"}>
+          {withLogo ? <SkeletonBlock className="h-14 w-14 shrink-0 rounded-[12px]" /> : null}
+          <div className="flex flex-col gap-2.5">
+            <SkeletonBlock className="h-5 w-52" />
+            <SkeletonBlock className="h-3 w-64" />
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <SkeletonBlock className="h-9 w-28" />
+          <SkeletonBlock className="h-9 w-24" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Search box + N labeled filter-select placeholders, matching the filter
+ * bar every admin Explorer renders above its table/grid
+ * (`AdminProjectsExplorer`, `AdminTasksExplorer`,
+ * `AdminOpenSourceToolsExplorer`, `AdminActivityExplorer`) — previously
+ * missing from every one of those `loading.tsx` files, so the table/grid
+ * used to jump down the page the moment real data replaced the skeleton.
+ */
+export function SkeletonFilterBar({ filters = 2 }: { filters?: number }) {
+  return (
+    <div
+      className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between"
+      aria-hidden="true"
+    >
+      <SkeletonBlock className="h-9 w-full sm:max-w-xs" />
+      <div className="flex flex-wrap items-end gap-3">
+        {Array.from({ length: filters }).map((_, index) => (
+          <div key={index} className="flex flex-col gap-1">
+            <SkeletonBlock className="h-2 w-12" />
+            <SkeletonBlock className="h-9 w-28" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Filter bar + N review-card placeholders, matching `AiDiscoveryQueue`'s
+ * rendered list (title link, subtitle line, meta chips, Confirm/Reject
+ * buttons) — replaces `SkeletonTable`, which this queue never actually
+ * renders as (it's a card list, not a table).
+ */
+export function SkeletonQueueList({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="flex flex-col gap-3" aria-hidden="true">
+      <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-border-subtle bg-surface/40 p-3">
+        <SkeletonBlock className="h-9 w-full sm:w-64" />
+        <SkeletonBlock className="h-9 w-32" />
+      </div>
+      {Array.from({ length: rows }).map((_, index) => (
+        <div key={index} className="rounded-lg border border-border p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <SkeletonBlock className="h-3.5 w-2/5" />
+              <SkeletonBlock className="mt-2 h-3 w-3/5" />
+              <SkeletonBlock className="mt-2 h-2.5 w-1/3" />
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <SkeletonBlock className="h-7 w-[74px]" />
+              <SkeletonBlock className="h-7 w-[64px]" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * N tool-card placeholders matching `AdminOpenSourceToolCard`: a
+ * centered 88px square logo, a name line, a two-line description, a tag
+ * pill, then a bordered View/Edit/Delete action row — replaces a flat
+ * `h-[120px]` rectangle that had none of that internal shape.
+ */
+export function SkeletonToolCardGrid({ count = 6 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-hidden="true">
+      {Array.from({ length: count }).map((_, index) => (
+        <div
+          key={index}
+          className="flex flex-col items-center rounded-[10px] border border-border bg-surface p-4"
+        >
+          <SkeletonBlock className="h-[88px] w-[88px] rounded-[12px]" />
+          <SkeletonBlock className="mt-2.5 h-3.5 w-24" />
+          <SkeletonBlock className="mt-1.5 h-2.5 w-32" />
+          <SkeletonBlock className="mt-1.5 h-2.5 w-14 rounded-full" />
+          <div className="mt-3 flex w-full items-center justify-center gap-2 border-t border-border-subtle pt-2.5">
+            <SkeletonBlock className="h-5 w-10" />
+            <SkeletonBlock className="h-5 w-10" />
+            <SkeletonBlock className="h-5 w-10" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
