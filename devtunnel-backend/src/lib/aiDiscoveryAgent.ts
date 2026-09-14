@@ -2,7 +2,7 @@
 import type { ValidatedEnv } from "../config/env";
 import { getSupabase } from "./supabase";
 import { parseGroqJson, runGroqAgent } from "./groq";
-import { GroqQuotaExceededError, getGroqQuotaSnapshot, isPhaseBudgetMostlySpent } from "./groqQuota";
+import { GroqQuotaExceededError } from "./groqQuota";
 import { DISCOVERY_TOOLS, buildDiscoveryDispatcher, getReadmeWithCache, type ReadmeCache, type StepReporter } from "./aiDiscoveryTools";
 import {
   validateProjectCandidate,
@@ -30,7 +30,7 @@ import {
   listPublishedToolsForReconciliation,
 } from "../db/aiDiscovery";
 import { logger } from "./logger";
-import type { AiDiscoveryCounters, AiDiscoveryRunSummary, DeveloperRole, ExperienceLevel } from "../types";
+import type { AiDiscoveryRunSummary, DeveloperRole, ExperienceLevel } from "../types";
 
 /**
  * ---------------------------------------------------------------------------
@@ -433,7 +433,7 @@ Reply with ONLY this JSON and nothing else:
   "category": "one of the fixed category values above",
   "labels": ["every applicable value from the fixed audience label list above"],
   "description": "your short, simple 1-2 sentence summary",
-  "setupGuide": "- bullet one\\n- bullet two\\n- ...",
+  "setupGuide": "- bullet one\n- bullet two\n- ...",
   "reasoning": "1-3 sentences for the admin"
 }`;
 
@@ -1002,7 +1002,7 @@ Reply with ONLY this JSON and nothing else:
   "primaryLanguage": "string or null",
   "labels": ["every applicable value from the fixed audience label list above"],
   "description": "your short, simple 1-2 sentence summary",
-  "setupGuide": "- bullet one\\n- bullet two\\n- ...",
+  "setupGuide": "- bullet one\n- bullet two\n- ...",
   "reasoning": "1-3 sentences for the admin on why this is a great pick"
 }`;
 
@@ -1098,27 +1098,9 @@ Reply with ONLY this JSON and nothing else:
 // run with a sane per-project ceiling so one huge repo can't blow the
 // Groq/GitHub budget for the day.
 //
-// Two product rules layered on top of that:
+// One product rule layered on top of that:
 //
-// 1. Budget priority — task/issue discovery must NOT spend a single Groq
-//    call until the projects phase AND the tools phase are each done for
-//    the day: either today's quota target is already met (PROJECT_QUOTA /
-//    TOOL_DAILY_QUOTA in db/aiDiscovery.ts) or that phase has spent at
-//    least 75% of its own daily Groq share (see getPhaseBudgetShares in
-//    groqQuota.ts, and TASKS_UNLOCK_BUDGET_THRESHOLD below). Projects and
-//    tools always get first claim on the day's budget; tasks only ever
-//    picks up what's left once both of those are done. Enforced by
-//    `isTasksBudgetUnlocked` below, checked
-//    once at the very start of every run (scoped button click OR daily
-//    cron) — never mid-loop, since the gate is about WHETHER tasks should
-//    run at all today, not a per-request quota check (that part is still
-//    handled by reserveGroqRequest/GroqQuotaExceededError as before).
-//    Checking budget exhaustion alone isn't enough: a phase's quota is
-//    almost always hit using only a fraction of its 25% budget share, so
-//    waiting for that share to reach zero would leave tasks locked out of
-//    budget that's genuinely just sitting unused for the rest of the day.
-//
-// 2. Shuffled project order — every run walks onboarded projects in a
+// Shuffled project order — every run walks onboarded projects in a
 //    freshly randomized order (see `shuffled` below) rather than
 //    always starting from the same project. Without this, a single
 //    "Add AI issue" click (maxToPropose = 1) would keep draining the
@@ -1153,56 +1135,6 @@ function shuffled<T>(items: readonly T[]): T[] {
   return copy;
 }
 
-/**
- * Task discovery's own daily quota gate: unlock once each of the
- * projects/tools phases is "done enough" for the day — per product
- * direction, that means either phase's daily quota target is already
- * met (PROJECT_QUOTA / TOOL_DAILY_QUOTA in db/aiDiscovery.ts) OR that
- * phase has spent at least 75% of its own daily Groq budget share (see
- * `isPhaseBudgetMostlySpent` in groqQuota.ts) — NOT the full 100%.
- */
-const TASKS_UNLOCK_BUDGET_THRESHOLD = 0.75;
-
-/**
- * True once BOTH the projects phase and the tools phase are "done" for
- * the day by the definition above — the gate task discovery must clear
- * before it's allowed to spend a single Groq call today.
- *
- * Checking budget exhaustion at 100% (the original behavior) was wrong:
- * each phase's daily quota (7 projects, 7 tools) is almost always
- * satisfied using only a small slice of that phase's 25%-of-daily-budget
- * share (see the admin quota panel — 209/225 requests still left after
- * hitting today's project quota, in one real run). Waiting for that
- * remaining budget to hit zero meant tasks stayed locked essentially
- * forever. Counting "quota met" as done fixes most of that, but the 75%
- * threshold below also lets tasks unlock even on a day where a phase's
- * quota genuinely isn't met yet but it's already burned through most of
- * its share — instead of insisting on either "fully done" or "fully
- * spent" before tasks get a turn.
- */
-async function isTasksBudgetUnlocked(
-  kv: KVNamespace,
-  counters: Pick<AiDiscoveryCounters, "projectsRemaining" | "toolCategoriesRemaining">,
-): Promise<boolean> {
-  const snapshot = await getGroqQuotaSnapshot(kv);
-  const projectsPhase = snapshot.phases.find((p) => p.phase === "projects");
-  const toolsPhase = snapshot.phases.find((p) => p.phase === "tools");
-  // Fail closed: if either phase's entry is somehow missing, treat tasks
-  // as still locked rather than risk running early.
-  if (!projectsPhase || !toolsPhase) return false;
-
-  const projectsQuotaMet =
-    counters.projectsRemaining.beginner === 0 &&
-    counters.projectsRemaining.intermediate === 0 &&
-    counters.projectsRemaining.advanced === 0;
-  const toolsQuotaMet = counters.toolCategoriesRemaining.length === 0;
-
-  const projectsDone = projectsQuotaMet || isPhaseBudgetMostlySpent(projectsPhase, TASKS_UNLOCK_BUDGET_THRESHOLD);
-  const toolsDone = toolsQuotaMet || isPhaseBudgetMostlySpent(toolsPhase, TASKS_UNLOCK_BUDGET_THRESHOLD);
-
-  return projectsDone && toolsDone;
-}
-
 async function runTaskDiscovery(
   env: ValidatedEnv,
   kv: KVNamespace,
@@ -1215,16 +1147,6 @@ async function runTaskDiscovery(
   let dropped = 0;
   let quotaExceeded = false;
   let accountQuotaExceeded = false;
-
-  onStep?.("Checking whether today's Projects and Tools discovery is done…");
-  const todaysCounters = await getTodayCounters(supabase);
-  const unlocked = await isTasksBudgetUnlocked(kv, todaysCounters);
-  if (!unlocked) {
-    onStep?.(
-      "Task discovery is on hold — it only runs once today's Projects and Tools targets are met or 75% of their Groq budget is spent.",
-    );
-    return { proposed: 0, dropped: 0, errors, quotaExceeded: false, accountQuotaExceeded: false };
-  }
 
   onStep?.("Loading onboarded projects…");
   const projects = shuffled(await listOnboardedProjects(supabase));
@@ -1413,14 +1335,6 @@ export async function runDailyDiscovery(env: ValidatedEnv, kv: KVNamespace): Pro
   // independently in groqQuota.ts. Only a genuine account-wide
   // exhaustion (accountQuotaExceeded === true — the whole Groq key has
   // nothing left for anyone today) short-circuits the phases after it.
-  //
-  // runTaskDiscovery (called below) additionally self-gates: even once
-  // it's this run's turn, it does nothing until BOTH the projects and
-  // tools phases are done for the day — quota target met or budget
-  // exhausted, whichever comes first (`isTasksBudgetUnlocked`) — so on a
-  // typical day, once projects/tools hit their daily quota this same run
-  // goes on to also pick up tasks/issues with whatever budget share is
-  // left over, rather than leaving it unused until that share hits zero.
   const readmeCache: ReadmeCache = new Map();
 
   const projectsResult = await runProjectDiscovery(env, kv, readmeCache).catch((err) => {
@@ -1550,15 +1464,11 @@ export async function runToolDiscoveryOnly(
  * call repeatedly. Projects and tools are left untouched. `limit`
  * (default 1) stops the walk as soon as that many issues have been
  * proposed, and `onStep` streams live progress as each project is
- * checked.
- *
- * Gated by `isTasksBudgetUnlocked`: this call does nothing (proposes 0,
- * no error) until today's Projects AND Tools phases are both done — quota
- * met or at least 75% of that phase's budget spent — the admin page's
- * step log explains the hold when that happens. If every onboarded
- * project's issues are already tracked or none qualify, the step log
- * says so explicitly ("No issues found —
- * all issues are addressed.") instead of silently returning nothing.
+ * checked. Can be called any time — task discovery is no longer gated
+ * behind the projects/tools phases being done for the day. If every
+ * onboarded project's issues are already tracked or none qualify, the
+ * step log says so explicitly ("No issues found — all issues are
+ * addressed.") instead of silently returning nothing.
  */
 export async function runTaskDiscoveryOnly(
   env: ValidatedEnv,

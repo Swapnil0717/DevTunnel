@@ -398,35 +398,7 @@ export async function getGroqQuotaSnapshot(kv: KVNamespace): Promise<GroqQuotaSn
  * `GroqQuotaExceededError` for this phase on its very next call, so the
  * phase is effectively done for the day even if the other dimension has
  * room left.
- *
- * Used by `aiDiscoveryAgent.ts` to gate task/issue discovery: per product
- * direction, tasks should only start once BOTH the projects and tools
- * phases have completely used up their own daily share — so pass each
- * phase's `getGroqQuotaSnapshot(...).phases` entry through this and
- * require both to be true before running task discovery.
  */
-/**
- * True once a phase has spent at least `thresholdPct` of its own daily
- * budget share — a looser trigger than `isPhaseBudgetExhausted`'s "hit
- * zero". Same "either dimension" reasoning as that function: requests or
- * tokens, whichever has burned through more of its share, decides how
- * spent the phase counts as.
- *
- * Used by `aiDiscoveryAgent.ts` to gate task/issue discovery at 75%
- * spent rather than 100% — per product direction, tasks shouldn't have
- * to wait for projects/tools to fully exhaust their share (which, once
- * their much smaller daily quota is met, may never happen — see
- * `isTasksBudgetUnlocked`'s comment) before picking up whatever's left.
- */
-export function isPhaseBudgetMostlySpent(
-  phase: { limitPerDay: number; usedToday: number; tokenLimitPerDay: number; tokensUsedToday: number },
-  thresholdPct: number,
-): boolean {
-  const requestsSpentPct = phase.limitPerDay > 0 ? phase.usedToday / phase.limitPerDay : 1;
-  const tokensSpentPct = phase.tokenLimitPerDay > 0 ? phase.tokensUsedToday / phase.tokenLimitPerDay : 1;
-  return requestsSpentPct >= thresholdPct || tokensSpentPct >= thresholdPct;
-}
-
 export function isPhaseBudgetExhausted(phase: { remainingToday: number; tokensRemainingToday: number }): boolean {
   return phase.remainingToday <= 0 || phase.tokensRemainingToday <= 0;
 }
