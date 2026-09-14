@@ -1,3 +1,4 @@
+// src/app/admin/(protected)/loading.tsx
 import { SkeletonBlock, SkeletonStatCards, SkeletonTable } from "@/components/ui/skeleton";
 
 /**
@@ -15,7 +16,7 @@ import { SkeletonBlock, SkeletonStatCards, SkeletonTable } from "@/components/ui
  */
 export default function AdminDashboardLoading() {
   return (
-    <div aria-hidden="true">
+    <main className="mx-auto max-w-5xl px-6 py-10" aria-hidden="true">
       <SkeletonBlock className="mb-1 h-6 w-48" />
       <SkeletonBlock className="mb-8 h-3 w-80" />
 
@@ -45,6 +46,6 @@ export default function AdminDashboardLoading() {
       </div>
 
       <SkeletonBlock className="h-[132px] w-full" />
-    </div>
+    </main>
   );
 }

@@ -1,13 +1,8 @@
 import { SkeletonBlock } from "@/components/ui/skeleton";
 
-/**
- * Matches `ProjectCard`'s actual internal layout — a bordered box with a
- * title line, a description line, then a row of tag/match chips —
- * instead of one flat rectangle the same overall height.
- */
 export function ProjectGridSkeleton({ count }: { count: number }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5" aria-hidden="true">
+    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3" aria-hidden="true">
       {Array.from({ length: count }).map((_, index) => (
         <div key={index} className="rounded-lg border border-border bg-surface p-3">
           <SkeletonBlock className="mb-1.5 h-3 w-3/5" />

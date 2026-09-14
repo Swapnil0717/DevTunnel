@@ -1,3 +1,4 @@
+// src/app/admin/(protected)/projects/[id]/loading.tsx
 import { SkeletonBlock, SkeletonDetailHeader, SkeletonStatCards } from "@/components/ui/skeleton";
 
 /**
@@ -15,7 +16,13 @@ import { SkeletonBlock, SkeletonDetailHeader, SkeletonStatCards } from "@/compon
  *   `AdminStatCard`'s own grid).
  * - `EditProjectDetailsPanel`'s two *separate* bordered read-mode cards
  *   (Description, Tech stack), each with its own heading + small "Edit"
- *   pill — not one flattened bar standing in for both.
+ *   pill — not one flattened bar standing in for both. Tech stack is a
+ *   `dl` of labeled rows (Language, Frontend, Backend, ...), each with
+ *   its own tag pills, not one undifferentiated row of pills.
+ * - The whole page wrapped in the same `mx-auto max-w-4xl px-6 py-10`
+ *   `<main>` the real page renders inside, so the skeleton occupies the
+ *   same column width instead of stretching full-bleed under the
+ *   sidebar/header shell.
  * - The task list's heading row (with its own "View all" link), and
  *   each task row's actual left icon+title / right submissions+status
  *   shape rather than a single flat bar.
@@ -23,7 +30,7 @@ import { SkeletonBlock, SkeletonDetailHeader, SkeletonStatCards } from "@/compon
  */
 export default function AdminProjectDetailLoading() {
   return (
-    <div aria-hidden="true">
+    <main className="mx-auto max-w-4xl px-6 py-10" aria-hidden="true">
       <SkeletonDetailHeader
         meta={
           <>
@@ -64,9 +71,16 @@ export default function AdminProjectDetailLoading() {
           <SkeletonBlock className="h-2.5 w-24" />
           <SkeletonBlock className="h-5 w-12" />
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <SkeletonBlock key={index} className="h-5 w-16 rounded-md" />
+        <div className="flex flex-col gap-3">
+          {[2, 1, 1, 2, 1].map((tagCount, rowIndex) => (
+            <div key={rowIndex}>
+              <SkeletonBlock className="mb-1.5 h-2.5 w-16" />
+              <div className="flex flex-wrap gap-1.5">
+                {Array.from({ length: tagCount }).map((_, tagIndex) => (
+                  <SkeletonBlock key={tagIndex} className="h-5 w-16 rounded-md" />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </div>
@@ -96,6 +110,6 @@ export default function AdminProjectDetailLoading() {
         <SkeletonBlock className="mb-2 h-2.5 w-20" />
         <SkeletonBlock className="h-[260px] w-full" />
       </div>
-    </div>
+    </main>
   );
 }

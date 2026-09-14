@@ -1,12 +1,25 @@
-import { SkeletonBlock, SkeletonPageHeader, SkeletonQueueList } from "@/components/ui/skeleton";
+// src/app/admin/(protected)/ai/tasks/loading.tsx
+import { SkeletonPageHeader } from "@/components/ui/skeleton";
+import {
+  SkeletonGroqBudgetPanel,
+  SkeletonRunButtonRow,
+  SkeletonAiQueueSection,
+} from "@/components/admin/ai-discovery/ai-discovery-skeletons";
 
-/** `/admin/ai/tasks` — one `getAiDiscoveredTasks("PENDING")` fetch, rendered as `AiDiscoveryRunButton` (quota panel + run button) followed by `AiDiscoveryQueue`'s card list — never a table. */
+/**
+ * `/admin/ai/tasks` — one `getAiDiscoveredTasks("PENDING")` fetch,
+ * rendered as `AiDiscoveryRunButton` (its own `GroqQuotaPanel`, scoped
+ * to `kind="tasks"`, plus the run button AND the Tasks-only second
+ * "Auto-convert issues until budget runs out" button) followed by
+ * `AiDiscoveryQueue`'s toolbar + card list — never a table.
+ */
 export default function AdminAiTasksLoading() {
   return (
-    <div aria-hidden="true">
+    <main className="mx-auto max-w-6xl px-6 py-10" aria-hidden="true">
       <SkeletonPageHeader withAction={false} />
-      <SkeletonBlock className="mb-8 h-[110px] w-full" />
-      <SkeletonQueueList rows={4} />
-    </div>
+      <SkeletonGroqBudgetPanel />
+      <SkeletonRunButtonRow withSecondary />
+      <SkeletonAiQueueSection rows={4} />
+    </main>
   );
 }

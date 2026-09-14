@@ -1,3 +1,4 @@
+// src/app/admin/(protected)/opensource-tools/[id]/loading.tsx
 import { SkeletonBlock, SkeletonDetailHeader } from "@/components/ui/skeleton";
 
 /**
@@ -17,7 +18,7 @@ import { SkeletonBlock, SkeletonDetailHeader } from "@/components/ui/skeleton";
  */
 export default function AdminOpenSourceToolDetailLoading() {
   return (
-    <div aria-hidden="true">
+    <main className="mx-auto max-w-4xl px-6 py-10" aria-hidden="true">
       <SkeletonDetailHeader
         withLogo
         meta={
@@ -72,6 +73,6 @@ export default function AdminOpenSourceToolDetailLoading() {
         <SkeletonBlock className="mb-2 h-2.5 w-20" />
         <SkeletonBlock className="h-[260px] w-full" />
       </div>
-    </div>
+    </main>
   );
 }

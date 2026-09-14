@@ -1,24 +1,33 @@
-import { SkeletonBlock, SkeletonPageHeader, SkeletonQueueList } from "@/components/ui/skeleton";
+// src/app/admin/(protected)/ai/confirmation/loading.tsx
+import { SkeletonBlock, SkeletonPageHeader } from "@/components/ui/skeleton";
+import {
+  SkeletonGroqBudgetPanel,
+  SkeletonBudgetShareEditor,
+  SkeletonAiQueueSection,
+} from "@/components/admin/ai-discovery/ai-discovery-skeletons";
 
 /**
  * `/admin/ai/confirmation` — one `getAiConfirmationQueue()` fetch,
- * rendered as `AiBudgetOverview` (quota panel + budget-share editor)
- * followed by three separately-headed `AiDiscoveryQueue` card lists
- * (Projects, Tools, Tasks) — never a table.
+ * rendered as `AiBudgetOverview` (the account-wide `GroqQuotaPanel` —
+ * no `kind`, so it shows the "Split by phase" breakdown — plus
+ * `BudgetShareEditor`) followed by three separately-headed
+ * `AiDiscoveryQueue` toolbar + card lists (Projects, Tools, Tasks) —
+ * never a table.
  */
 export default function AdminAiConfirmationLoading() {
   return (
-    <div aria-hidden="true">
+    <main className="mx-auto max-w-6xl px-6 py-10" aria-hidden="true">
       <SkeletonPageHeader withAction={false} />
-      <SkeletonBlock className="mb-8 h-[150px] w-full" />
+      <SkeletonGroqBudgetPanel withPhaseBreakdown />
+      <SkeletonBudgetShareEditor />
       <div className="flex flex-col gap-8">
         {Array.from({ length: 3 }).map((_, index) => (
           <div key={index}>
             <SkeletonBlock className="mb-3 h-3.5 w-32" />
-            <SkeletonQueueList rows={2} />
+            <SkeletonAiQueueSection rows={2} />
           </div>
         ))}
       </div>
-    </div>
+    </main>
   );
 }

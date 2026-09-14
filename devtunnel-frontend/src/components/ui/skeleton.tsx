@@ -1,3 +1,4 @@
+// src/components/ui/skeleton.tsx
 /**
  * Shared skeleton building blocks for route-level `loading.tsx` files.
  *
@@ -53,12 +54,32 @@ export function SkeletonStatCards({ count = 4 }: { count?: number }) {
   );
 }
 
-/** A page heading + "new" button placeholder, matching most admin list pages. */
-export function SkeletonPageHeader({ withAction = true }: { withAction?: boolean }) {
+/**
+ * A page heading placeholder matching the `<h1> + <p>` title/subtitle
+ * block every admin list/queue page renders inside its own
+ * `mb-8 flex flex-wrap items-start justify-between gap-4` (or plain
+ * `mb-8`, when there's no right-hand action) header `div` — not a
+ * generic single title bar. `actions` lets a page pass its own real
+ * button placeholders (Projects has two: "Sync all" + "Onboard a
+ * project"; Tasks and Open Source Tools each have one; the AI queue and
+ * Activity pages have none, since their controls render as their own
+ * block below the header). Falls back to a single default-width button
+ * when `withAction` is true and no `actions` are given.
+ */
+export function SkeletonPageHeader({
+  withAction = true,
+  actions,
+}: {
+  withAction?: boolean;
+  actions?: ReactNode;
+}) {
   return (
-    <div className="mb-4 flex items-center justify-between" aria-hidden="true">
-      <SkeletonBlock className="h-6 w-40" />
-      {withAction ? <SkeletonBlock className="h-8 w-28" /> : null}
+    <div className="mb-8 flex flex-wrap items-start justify-between gap-4" aria-hidden="true">
+      <div className="flex flex-col gap-1.5">
+        <SkeletonBlock className="h-5 w-44" />
+        <SkeletonBlock className="h-3 w-72" />
+      </div>
+      {actions ?? (withAction ? <SkeletonBlock className="h-9 w-36" /> : null)}
     </div>
   );
 }

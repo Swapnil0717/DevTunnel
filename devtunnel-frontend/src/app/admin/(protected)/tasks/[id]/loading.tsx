@@ -1,28 +1,8 @@
 import { SkeletonBlock, SkeletonDetailHeader, SkeletonStatCards } from "@/components/ui/skeleton";
 
-/**
- * `/admin/tasks/[id]` — `generateMetadata` and the page both call
- * `getAdminTaskDetail`.
- *
- * Matches the real page's section order and internal shape:
- * - Back link + breadcrumb + title, a 3-chip meta row (project link ·
- *   repo link · status badge), and both header actions (View issue,
- *   Delete) sized to their own text rather than a generic two-button
- *   placeholder.
- * - A 3-card contributor/submission stat row (`sm:grid-cols-3`,
- *   matching `AdminStatCard`'s own grid).
- * - `EditTaskDetailsPanel`'s single bordered read-mode "Curation" card —
- *   heading + small "Edit" pill, then the actual Role/Difficulty/
- *   Status/Description label-value grid, not a flattened bar.
- * - The bordered tech-stack chip section.
- * - The bordered "GitHub issue" section (issue number + title line,
- *   then the scrollable body panel) — previously missing from this
- *   skeleton entirely, so the page used to grow a whole extra section
- *   the instant real data replaced the skeleton.
- */
 export default function AdminTaskDetailLoading() {
   return (
-    <div aria-hidden="true">
+    <main className="mx-auto max-w-4xl px-6 py-10" aria-hidden="true">
       <SkeletonDetailHeader
         meta={
           <>
@@ -77,6 +57,6 @@ export default function AdminTaskDetailLoading() {
         <SkeletonBlock className="mb-3 h-3.5 w-3/5" />
         <SkeletonBlock className="h-[260px] w-full" />
       </div>
-    </div>
+    </main>
   );
 }
