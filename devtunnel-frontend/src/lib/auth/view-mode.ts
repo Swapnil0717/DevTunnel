@@ -1,18 +1,9 @@
-import { cookies } from "next/headers";
-
 export const VIEW_MODE_COOKIE = "dt_view_mode";
 
 export type ViewMode = "admin" | "user";
 
 function parseViewMode(raw: string | undefined): ViewMode | null {
   return raw === "admin" || raw === "user" ? raw : null;
-}
-
-/**
- * Server-side read.
- */
-export function getServerViewMode(): ViewMode | null {
-  return parseViewMode(cookies().get(VIEW_MODE_COOKIE)?.value);
 }
 
 /**
@@ -24,9 +15,10 @@ export function getClientViewMode(): ViewMode | null {
   const match = document.cookie.match(
     /(?:^|; )dt_view_mode=([^;]*)/,
   );
+  const raw = match?.[1];
 
   return parseViewMode(
-    match ? decodeURIComponent(match[1]) : undefined,
+    raw !== undefined ? decodeURIComponent(raw) : undefined,
   );
 }
 

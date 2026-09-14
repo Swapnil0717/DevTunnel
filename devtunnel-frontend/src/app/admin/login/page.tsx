@@ -13,7 +13,7 @@ import { buildMetadata } from "@/lib/seo";
 import { getServerUser } from "@/lib/auth/get-server-user";
 import { needsOnboarding } from "@/lib/onboarding/needs-onboarding";
 import { isAdmin } from "@/lib/auth/is-admin";
-import { getServerViewMode } from "@/lib/auth/view-mode";
+import { getServerViewMode } from "@/lib/auth/view-mode.server";
 
 export const metadata: Metadata = buildMetadata({
   title: "Sign in",
