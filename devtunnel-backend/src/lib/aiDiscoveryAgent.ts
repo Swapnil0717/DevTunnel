@@ -14,6 +14,7 @@ import {
 } from "./aiDiscoveryValidation";
 import {
   PROJECT_CATEGORIES,
+  TOOL_AUDIENCE_LABELS,
   TOOL_CATEGORIES,
   TOOL_DAILY_QUOTA,
   bumpCounters,
@@ -405,7 +406,14 @@ ${(project.readme ?? "(no README available)").slice(0, 6000)}
 From the material above ONLY (never invent facts not shown here):
 1. Pick "category": EXACTLY ONE of these values, whichever fits best —
    never invent a new one: ${JSON.stringify(TOOL_CATEGORIES)}.
-2. Write "labels": a few short audience/role labels, e.g. "Backend", "DevOps".
+2. Write "labels": pick EVERY value from this exact fixed list that
+   genuinely applies to who benefits from this tool — never just one or
+   two if more genuinely fit, and never invent wording outside this list
+   (e.g. "backend devs", "Server-side") unless truly nothing here fits:
+   ${JSON.stringify(TOOL_AUDIENCE_LABELS)}.
+   Selecting every relevant label (not the single closest one) is what
+   makes this tool actually findable when a contributor filters/searches
+   the catalog by role.
 3. Write "description": a SHORT, SIMPLE 1-2 sentence summary of what it does.
 4. Write "setupGuide": a SHORT how-to-install-and-use guide, IN BULLET
    POINTS (each bullet its own line starting with "- "), 4-8 bullets total,
@@ -423,7 +431,7 @@ Every field is required. If you can't confidently fill one in, reply with
 Reply with ONLY this JSON and nothing else:
 {
   "category": "one of the fixed category values above",
-  "labels": ["a few short audience/role labels"],
+  "labels": ["every applicable value from the fixed audience label list above"],
   "description": "your short, simple 1-2 sentence summary",
   "setupGuide": "- bullet one\\n- bullet two\\n- ...",
   "reasoning": "1-3 sentences for the admin"
@@ -958,7 +966,9 @@ ${JSON.stringify(Array.from(exclude).slice(0, 80))}
 
 1. Use search_github_repositories to find a real, actively maintained,
    well-regarded open source tool for this category.
-2. Use get_github_readme to actually read its README.
+2. Use get_github_readme to actually read its README — this is what
+   "setupGuide" below must be built from, not general knowledge of the
+   tool.
 3. Write "description": a SHORT, SIMPLE 1-2 sentence summary of what the
    tool does, based only on what you actually read.
 4. Write "setupGuide": a SHORT how-to-install-and-use guide, IN BULLET
@@ -970,7 +980,15 @@ ${JSON.stringify(Array.from(exclude).slice(0, 80))}
    minimal, standard install command for that language's package manager
    (e.g. "npm install <package>") — never invent flags, config keys, or
    steps that aren't standard practice for that ecosystem.
-5. Write "reasoning": 1-3 sentences for the admin on why this is a great
+5. Write "labels": pick EVERY value from this exact fixed list that
+   genuinely applies to who benefits from this tool — never just one or
+   two if more genuinely fit, and never invent wording outside this list
+   (e.g. "backend devs", "Server-side") unless truly nothing here fits:
+   ${JSON.stringify(TOOL_AUDIENCE_LABELS)}.
+   Selecting every relevant label (not the single closest one) is what
+   makes this tool actually findable when a contributor filters/searches
+   the catalog by role.
+6. Write "reasoning": 1-3 sentences for the admin on why this is a great
    pick for this category.
 
 Every field below is required. If you can't confidently fill one in, don't
@@ -982,7 +1000,7 @@ Reply with ONLY this JSON and nothing else:
   "name": "string",
   "fetchedDescription": "string or null (GitHub's own repo description, verbatim)",
   "primaryLanguage": "string or null",
-  "labels": ["a few short audience/role labels, e.g. Backend, DevOps"],
+  "labels": ["every applicable value from the fixed audience label list above"],
   "description": "your short, simple 1-2 sentence summary",
   "setupGuide": "- bullet one\\n- bullet two\\n- ...",
   "reasoning": "1-3 sentences for the admin on why this is a great pick"
@@ -1241,9 +1259,14 @@ Only include genuinely actionable issues. It is fine to return an empty list
 if none qualify.
 
 For each issue you include, every field is required:
-- "suggestedRoles": at least one role, only from FRONTEND, BACKEND,
-  FULL_STACK, DOCUMENTATION, TESTING, DEVOPS — never invent a new role, and
-  never return an empty list (if you truly can't tell, drop the candidate).
+- "suggestedRoles": every role from FRONTEND, BACKEND, FULL_STACK,
+  DOCUMENTATION, TESTING, DEVOPS that genuinely fits the work this issue
+  needs — not just the single closest one. Most real issues touch more
+  than one (e.g. a new API endpoint plus its docs is BACKEND and
+  DOCUMENTATION; a UI bug with a test regression is FRONTEND and TESTING).
+  Under-selecting hides this task from contributors who filter/search by
+  role. Never invent a role outside this list, and never return an empty
+  list (if you truly can't tell, drop the candidate).
 - "suggestedDifficulty": only BEGINNER, INTERMEDIATE, ADVANCED, or null if
   you genuinely can't tell — never invent a new value.
 - "summary": a SHORT, SIMPLE 1-2 sentence description of what a contributor

@@ -30,12 +30,31 @@ export function SkeletonStatCards({ count = 4 }: { count?: number }) {
   );
 }
 
-/** A page heading + "new" button placeholder, matching most admin list pages. */
-export function SkeletonPageHeader({ withAction = true }: { withAction?: boolean }) {
+/**
+ * A page heading + description + N action-button placeholders, matching
+ * the `<div className="mb-8 flex ... justify-between">
+ *   <div><h1/><p/></div>
+ *   {actions}
+ * </div>` header markup shared by every admin list page (Projects,
+ * Tasks, Open Source Tools, Activity, the AI queue pages, ...). Always
+ * renders the description line — every one of those pages has a
+ * one-line subtitle under the `h1`, so a header skeleton missing it
+ * collapses to a shorter box than what actually replaces it.
+ */
+export function SkeletonPageHeader({ actions = 1 }: { actions?: number }) {
   return (
-    <div className="mb-4 flex items-center justify-between" aria-hidden="true">
-      <SkeletonBlock className="h-6 w-40" />
-      {withAction ? <SkeletonBlock className="h-8 w-28" /> : null}
+    <div className="mb-8 flex flex-wrap items-start justify-between gap-4" aria-hidden="true">
+      <div className="flex flex-col gap-2">
+        <SkeletonBlock className="h-6 w-40" />
+        <SkeletonBlock className="h-3.5 w-72 max-w-full" />
+      </div>
+      {actions > 0 ? (
+        <div className="flex flex-wrap items-start gap-3">
+          {Array.from({ length: actions }).map((_, index) => (
+            <SkeletonBlock key={index} className="h-9 w-28" />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

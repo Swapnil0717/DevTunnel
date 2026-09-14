@@ -81,6 +81,37 @@ export const PROJECT_CATEGORIES = [
   "Other",
 ] as const;
 
+/**
+ * Canonical audience/role labels for `AiDiscoveredTool.labels` — kept in
+ * exact sync with `SUGGESTED_LABELS` in
+ * devtunnel-frontend/src/components/admin/opensource-tool-onboarding/steps/labels-step.tsx,
+ * the chip list an Admin sees when manually tagging a tool.
+ *
+ * The manual admin flow deliberately keeps this open-ended (chips are
+ * suggestions, not a closed enum, so an Admin can still type anything).
+ * The AI discovery agent is different: given the same "who benefits from
+ * this tool" question, an unconstrained model tends to invent loose,
+ * inconsistent wording ("Backend", "backend devs", "Server-side") that
+ * fragments search/filtering on the tools catalog. So the discovery
+ * prompt in aiDiscoveryAgent.ts points the model at this exact list and
+ * asks it to select every label that genuinely applies (not just one),
+ * only reaching outside it when none of these fit at all.
+ */
+export const TOOL_AUDIENCE_LABELS = [
+  "Frontend developer",
+  "Backend developer",
+  "Full-stack developer",
+  "DevOps",
+  "Data science",
+  "Machine learning",
+  "Mobile developer",
+  "Designer",
+  "Student",
+  "Open source maintainer",
+  "Security",
+  "QA / Testing",
+] as const;
+
 function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
 }
