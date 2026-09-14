@@ -367,15 +367,33 @@ export async function fetchRepositoryContributorCount(
   owner: string,
   repo: string,
 ): Promise<number> {
+  // NOTE: anon=true (not anon=false) is required here. GitHub only links
+  // the first 500 author *email addresses* to GitHub accounts; with
+  // anon=false every other contributor — anyone whose commits don't
+  // resolve to one of those 500 identified accounts — is silently
+  // dropped from the response entirely, not just hidden. For a repo with
+  // (say) 1,500 real contributors, that can leave only a few hundred
+  // countable via the per_page=1/Link-header trick below, wildly
+  // undercounting the true total. anon=true counts every distinct commit
+  // author (identified or not), which is what a "total contributors"
+  // figure should reflect.
   const res = await fetchWithTimeout(
-    `${GITHUB_API_BASE}/repos/${owner}/${repo}/contributors?per_page=1&anon=false`,
+    `${GITHUB_API_BASE}/repos/${owner}/${repo}/contributors?per_page=1&anon=true`,
     { headers: authHeaders(accessToken) },
   );
 
-  // Same "no contributors yet" handling as fetchRepositoryContributors.
+  // A repository whose commit history/contributor list is too large for
+  // GitHub to compute on demand (e.g. torvalds/linux, chromium/chromium)
+  // returns a 403 with a distinct message here rather than data — treat
+  // that the same as "no contributors yet" so one huge repo can't fail
+  // the whole sync.
   if (res.status === 204) return 0;
   if (!res.ok) {
     if (res.status === 404) return 0;
+    if (res.status === 403) {
+      const body = await res.text();
+      if (/too large to list contributors/i.test(body)) return 0;
+    }
     await assertOk(res, "contributor count lookup");
   }
 

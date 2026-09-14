@@ -365,7 +365,15 @@ async function reconcileProjectsMissingAsTools(
 
   onStep?.("Checking whether every project is also registered as an open source tool…");
   const publishedProjects = await listPublishedProjectsForReconciliation(supabase);
-  const gaps = publishedProjects.filter((p) => !exclude.has(p.fullName));
+  // `exclude` (listExistingToolUrls) is keyed by full source URL
+  // ("https://github.com/owner/repo"), but `p.fullName` is the bare
+  // "owner/repo" string listPublishedProjectsForReconciliation builds —
+  // comparing them directly never matches, so every already-registered
+  // project was wrongly treated as a fresh gap on every single run (the
+  // one correct format-matched check, a few lines below at `candidate
+  // .sourceUrl.toLowerCase()`, only runs *after* a wasted Groq
+  // classification call). Build the same URL shape here before checking.
+  const gaps = publishedProjects.filter((p) => !exclude.has(`https://github.com/${p.fullName}`.toLowerCase()));
 
   if (gaps.length === 0) {
     onStep?.("Every project is already registered as a tool — nothing to cross-register.");

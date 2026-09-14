@@ -165,7 +165,11 @@ export async function bumpCounters(
 
 export async function listExistingProjectFullNames(supabase: SupabaseClient): Promise<Set<string>> {
   const [onboarded, pending] = await Promise.all([
-    supabase.from("projects").select("github_full_name").not("github_full_name", "is", null),
+    supabase
+      .from("projects")
+      .select("github_full_name")
+      .is("deleted_at", null)
+      .not("github_full_name", "is", null),
     supabase.from("ai_discovered_projects").select("github_full_name").in("status", ["PENDING", "APPROVED"]),
   ]);
   if (onboarded.error) throw onboarded.error;
@@ -238,7 +242,17 @@ export interface PublishedProjectForReconciliation {
   primaryLanguage: string | null;
 }
 
-/** Every ACTIVE, GitHub-linked published project — source data for "project → tool" gaps. */
+/**
+ * Every ACTIVE, GitHub-linked, *non-deleted* published project — source
+ * data for "project → tool" gaps.
+ *
+ * `status = 'ACTIVE'` alone is not enough: `deleteAdminProject`
+ * (sql/008) soft-deletes a project by setting `deleted_at` and never
+ * touches `status`, so a deleted project's `status` column is still
+ * `'ACTIVE'`. Without the `deleted_at is null` guard below, every
+ * deleted project keeps getting read back in here and re-proposed as a
+ * tool candidate on each discovery run.
+ */
 export async function listPublishedProjectsForReconciliation(
   supabase: SupabaseClient,
 ): Promise<PublishedProjectForReconciliation[]> {
@@ -246,6 +260,7 @@ export async function listPublishedProjectsForReconciliation(
     .from("projects")
     .select("name, repo_url, github_full_name, github_description, custom_description, readme, primary_language")
     .eq("status", "ACTIVE")
+    .is("deleted_at", null)
     .not("github_full_name", "is", null);
   if (error) throw error;
 
@@ -315,11 +330,21 @@ export interface OnboardedProjectRef {
   githubFullName: string;
 }
 
+/**
+ * Feeds `runTaskDiscovery` (aiDiscoveryAgent.ts) — the set of projects
+ * whose open GitHub issues get scanned and turned into task candidates.
+ * Same `deleted_at is null` requirement as
+ * `listPublishedProjectsForReconciliation` above and for the same
+ * reason: soft-deleting a project never changes its `status`, so this
+ * must not rely on `status = 'ACTIVE'` alone or a deleted project's
+ * issues keep getting proposed as new tasks run after run.
+ */
 export async function listOnboardedProjects(supabase: SupabaseClient): Promise<OnboardedProjectRef[]> {
   const { data, error } = await supabase
     .from("projects")
     .select("id, slug, name, github_owner, github_repo_name, github_full_name")
     .eq("status", "ACTIVE")
+    .is("deleted_at", null)
     .not("github_full_name", "is", null);
   if (error) throw error;
   return (data ?? []).map((r) => ({

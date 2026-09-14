@@ -74,7 +74,17 @@ function parseNewIssueId(id: string): { projectId: string; issueNumber: number }
  * datetimes, so the same Zod check applies unchanged.
  */
 const listQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  // Capped at 1000, not the 100 every other admin list route uses:
+  // unlike those, this endpoint has no database rows to page through —
+  // every call recomputes its entire result from a live GitHub scan (see
+  // this route's own doc comment below), so a low per-call cap doesn't
+  // save any work, it just forces the frontend's `fetchAllAdminPages`
+  // walk to redo that same expensive scan multiple times to assemble one
+  // page view. 1000 matches `MAX_SCANNED_ISSUES` (githubRepo.ts) — the
+  // hard ceiling on how many issues one repository can ever contribute
+  // to a single scan — so a single call already covers the realistic
+  // maximum this endpoint can ever return.
+  limit: z.coerce.number().int().min(1).max(1000).optional().default(50),
   before: z.string().datetime({ offset: true }).optional(),
 });
 

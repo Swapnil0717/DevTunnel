@@ -5,8 +5,9 @@ import { API_BASE_URL } from "@/lib/config";
 /**
  * Every Admin list endpoint (`GET /admin/projects`, `/admin/tasks`,
  * `/admin/opensource-tools`, `/admin/new-issues`) accepts up to 100 rows
- * per page (`listQuerySchema` on each route) — the widest page size, so
- * walking the full list takes the fewest round trips.
+ * per page by default — the widest page size those first three take, so
+ * walking their full list takes the fewest round trips. `/admin/new-issues`
+ * is the one exception: see `pageLimit` below.
  */
 const MAX_PAGE_LIMIT = 100;
 
@@ -41,15 +42,34 @@ export type FetchAllPagesResult<T> =
  * one transient failure partway through a walk shouldn't blank out data
  * already in hand (same "don't let one failure void real work" posture
  * the backend's own `Promise.allSettled` project scans take).
+ *
+ * `pageLimit` (default `MAX_PAGE_LIMIT`) sizes the `limit` query param
+ * this walk requests per call. For `GET /admin/projects` / `/admin/tasks`
+ * / `/admin/opensource-tools`, each page is a cheap indexed database
+ * query, so the default is fine even when a walk needs several pages.
+ * `GET /admin/new-issues` is not like those three: per that route's own
+ * doc comment, it has no rows to page through — it recomputes its
+ * *entire* result from a live, cross-project GitHub scan on every single
+ * call, and pagination there only bounds the response body, not the
+ * work done to build it. Walking it at the default 100-per-page limit
+ * means an installation with, say, 250 combined new issues silently
+ * triggers that full expensive scan three times over just to load one
+ * page in the UI — with no loading indicator anywhere in this app, that
+ * reads as "I clicked and nothing happened," not "this is fetching."
+ * `lib/admin/new-issues/api.ts` passes a much larger `pageLimit` so that
+ * realistic installations finish in exactly one call/one scan.
  */
-export async function fetchAllAdminPages<T>(path: string): Promise<FetchAllPagesResult<T>> {
+export async function fetchAllAdminPages<T>(
+  path: string,
+  pageLimit: number = MAX_PAGE_LIMIT,
+): Promise<FetchAllPagesResult<T>> {
   try {
     const items: T[] = [];
     let before: string | undefined;
     let pages = 0;
 
     do {
-      const query = new URLSearchParams({ limit: String(MAX_PAGE_LIMIT) });
+      const query = new URLSearchParams({ limit: String(pageLimit) });
       if (before) query.set("before", before);
 
       const res = await fetch(`${API_BASE_URL}${path}?${query.toString()}`, {

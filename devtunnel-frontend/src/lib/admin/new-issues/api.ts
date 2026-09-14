@@ -33,7 +33,14 @@ type AdminNewIssuesResult =
   | { status: "error" };
 
 export async function getAdminNewIssues(): Promise<AdminNewIssuesResult> {
-  const result = await fetchAllAdminPages<AdminNewIssue>("/admin/new-issues");
+  // 1000, not the shared 100-per-page default — see fetchAllAdminPages's
+  // own doc comment on `pageLimit`. GET /admin/new-issues redoes its full
+  // cross-project GitHub scan on every call it takes to walk this list,
+  // so requesting the largest page the backend allows keeps this to one
+  // call/one scan for any realistic installation, instead of silently
+  // multiplying an already-expensive live scan by however many 100-row
+  // pages the combined new-issue count happens to need.
+  const result = await fetchAllAdminPages<AdminNewIssue>("/admin/new-issues", 1000);
   if (result.status === "error") return { status: "error" };
   if (result.status === "empty") return { status: "empty" };
   return { status: "ok", data: result.data };
