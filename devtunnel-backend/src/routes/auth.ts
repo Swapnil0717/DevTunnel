@@ -20,9 +20,8 @@ import {
   clearSessionCookies,
 } from "../lib/cookies";
 import { upsertUserFromGitHub, toAuthUser, completeOnboarding } from "../db/users";
-import { createSession, getUserForSessionToken, revokeSessionByToken } from "../db/sessions";
+import { createSession, getUserForSessionTokenWithMaintainerStatus, revokeSessionByToken } from "../db/sessions";
 import { persistGithubTokens } from "../db/githubTokens";
-import { getIsMaintainer } from "../db/devtunnelStats";
 import { requireAuth } from "../middleware/auth";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
@@ -233,13 +232,12 @@ auth.get("/me", async (c) => {
   }
 
   const supabase = getSupabase(env);
-  const userRow = await getUserForSessionToken(supabase, token);
-  if (!userRow) {
+  const result = await getUserForSessionTokenWithMaintainerStatus(supabase, token);
+  if (!result) {
     return errorResponse(c, 401, "unauthenticated", "Not signed in");
   }
 
-  const isMaintainer = await getIsMaintainer(supabase, userRow.id);
-  return c.json({ user: toAuthUser(userRow, isMaintainer) }, 200);
+  return c.json({ user: toAuthUser(result.user, result.isMaintainer) }, 200);
 });
 
 /**

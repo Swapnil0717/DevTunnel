@@ -42,8 +42,26 @@ export function SyncAllProjectsGithubDataButton() {
         setMessage(`Synced ${result.synced} of ${result.total} project${result.total === 1 ? "" : "s"}.`);
       } else {
         setIsError(true);
+        // When GitHub told us when its rate limit resets, surface the
+        // earliest one so the Admin knows when a retry is actually worth
+        // trying, instead of a generic "try again shortly" — falls back
+        // to the old generic wording when no failure carried a reset
+        // time (a non-rate-limit failure, or a rate limit whose response
+        // happened to omit the header).
+        const resetTimes = result.failed
+          .map((item) => item.resetAt)
+          .filter((value): value is string => value !== null)
+          .map((value) => new Date(value))
+          .filter((date) => !Number.isNaN(date.getTime()));
+        const earliestReset =
+          resetTimes.length > 0
+            ? new Date(Math.min(...resetTimes.map((date) => date.getTime())))
+            : null;
+        const suffix = earliestReset
+          ? ` GitHub rate limit resets at ${earliestReset.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`
+          : "";
         setMessage(
-          `Synced ${result.synced} of ${result.total} project${result.total === 1 ? "" : "s"} — ${result.failed.length} couldn't be synced.`,
+          `Synced ${result.synced} of ${result.total} project${result.total === 1 ? "" : "s"} — ${result.failed.length} couldn't be synced.${suffix}`,
         );
       }
       router.refresh();

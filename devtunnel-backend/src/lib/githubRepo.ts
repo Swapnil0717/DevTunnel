@@ -39,10 +39,24 @@ export class GitHubRepoError extends Error {
     | "rate_limited"
     | "unauthorized"
     | "github_unavailable";
-  constructor(reason: GitHubRepoError["reason"], message: string) {
+  /**
+   * For `reason: "rate_limited"` only — GitHub's own reported quota-reset
+   * time, read from the `X-RateLimit-Reset` response header (a Unix
+   * epoch-seconds value) on the 403/429 that triggered this error. `null`
+   * for every other reason, and also `null` on a rate-limited response
+   * that (rarely) omits or malforms that header — callers must not assume
+   * it's always present just because `reason === "rate_limited"`.
+   */
+  resetAt: Date | null;
+  constructor(
+    reason: GitHubRepoError["reason"],
+    message: string,
+    resetAt: Date | null = null,
+  ) {
     super(message);
     this.name = "GitHubRepoError";
     this.reason = reason;
+    this.resetAt = resetAt;
   }
 }
 
@@ -127,8 +141,26 @@ async function assertOk(res: Response, context: string): Promise<void> {
     );
   }
   if (res.status === 403 || res.status === 429) {
-    logger.warn("github_api_rate_limited", { context, status: res.status, body: bodySnippet });
-    throw new GitHubRepoError("rate_limited", "GitHub rate limit reached — try again shortly");
+    // GitHub reports the quota-reset time as Unix epoch seconds in this
+    // header on every rate-limited response (secondary as well as primary
+    // limits) — parsed defensively since a missing/non-numeric header
+    // must fall back to the old generic message, not throw here.
+    const resetHeader = res.headers.get("X-RateLimit-Reset");
+    const resetAt =
+      resetHeader && /^\d+$/.test(resetHeader) ? new Date(Number(resetHeader) * 1000) : null;
+    logger.warn("github_api_rate_limited", {
+      context,
+      status: res.status,
+      body: bodySnippet,
+      resetAt: resetAt?.toISOString() ?? null,
+    });
+    throw new GitHubRepoError(
+      "rate_limited",
+      resetAt
+        ? `GitHub rate limit reached — resets at ${resetAt.toISOString()}`
+        : "GitHub rate limit reached — try again shortly",
+      resetAt,
+    );
   }
   logger.error("github_api_unexpected_status", {
     context,

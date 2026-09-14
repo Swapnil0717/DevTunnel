@@ -117,7 +117,13 @@ export async function syncAdminProjectGithubData(id: string): Promise<AdminProje
 export interface SyncAllProjectsGithubDataResult {
   total: number;
   synced: number;
-  failed: Array<{ id: string; slug: string; error: string }>;
+  /**
+   * `resetAt` is an ISO timestamp — present only on a `"rate_limited"`
+   * item whose GitHub response actually included the `X-RateLimit-Reset`
+   * header; `null` for every other failure reason, and for a rate limit
+   * that happened not to include it.
+   */
+  failed: Array<{ id: string; slug: string; error: string; resetAt: string | null }>;
 }
 
 /**

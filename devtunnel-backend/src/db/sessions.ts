@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SessionRow, UserRow } from "../types";
 import { randomToken, sha256Hex } from "../lib/crypto";
+import { getIsMaintainer } from "./devtunnelStats";
 
 /**
  * Sessions are opaque server-side tokens, not stateless JWTs: the raw
@@ -78,4 +79,63 @@ export async function revokeSessionByToken(
   const tokenHash = await sha256Hex(token);
   const { error } = await supabase.from("sessions").delete().eq("token_hash", tokenHash);
   if (error) throw new Error(`Failed to revoke session: ${error.message}`);
+}
+
+export interface SessionUser {
+  user: UserRow;
+  isMaintainer: boolean;
+}
+
+/**
+ * Same lookup as `getUserForSessionToken` above, but also resolves
+ * `isMaintainer` (devtunnel.project_maintainers — db/devtunnelStats.ts
+ * `getIsMaintainer`) as part of the same call.
+ *
+ * Both callers of this (`requireAuth` in src/middleware/auth.ts, and
+ * `GET /auth/me` in src/routes/auth.ts) need exactly this pair — "who is
+ * this" and "are they a maintainer of anything" — on literally every
+ * authenticated request. Fetched separately, that was 3 *sequential*
+ * round trips: session -> user -> maintainer count, each one waiting on
+ * the last to even know what to ask for. In practice, the user row and
+ * the maintainer check only ever depend on `session.user_id`, which is
+ * already known the moment the session lookup returns — so those two
+ * queries have no reason to wait on each other and are fired concurrently
+ * via `Promise.all` instead. Cuts the per-request auth overhead from 3
+ * sequential round trips to 2 (session lookup, then user+maintainer in
+ * parallel) without changing what either caller receives.
+ */
+export async function getUserForSessionTokenWithMaintainerStatus(
+  supabase: SupabaseClient,
+  token: string,
+): Promise<SessionUser | null> {
+  const tokenHash = await sha256Hex(token);
+
+  const { data: session, error } = await supabase
+    .from("sessions")
+    .select("id, user_id, expires_at")
+    .eq("token_hash", tokenHash)
+    .maybeSingle<Pick<SessionRow, "id" | "user_id" | "expires_at">>();
+
+  if (error) throw new Error(`Failed to look up session: ${error.message}`);
+  if (!session) return null;
+  if (new Date(session.expires_at).getTime() <= Date.now()) return null;
+
+  const [userResult, isMaintainer] = await Promise.all([
+    supabase.from("users").select().eq("id", session.user_id).maybeSingle<UserRow>(),
+    getIsMaintainer(supabase, session.user_id),
+  ]);
+
+  if (userResult.error) {
+    throw new Error(`Failed to load session user: ${userResult.error.message}`);
+  }
+  if (!userResult.data) return null;
+
+  // Best-effort touch; do not fail the request if this write fails.
+  void supabase
+    .from("sessions")
+    .update({ last_used_at: new Date().toISOString() })
+    .eq("id", session.id)
+    .then(undefined, () => undefined);
+
+  return { user: userResult.data, isMaintainer };
 }

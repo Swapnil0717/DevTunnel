@@ -3,9 +3,8 @@ import { getCookie } from "hono/cookie";
 import type { Env } from "../types";
 import { getEnv } from "../config/env";
 import { getSupabase } from "../lib/supabase";
-import { getUserForSessionToken } from "../db/sessions";
+import { getUserForSessionTokenWithMaintainerStatus } from "../db/sessions";
 import { toAuthUser } from "../db/users";
-import { getIsMaintainer } from "../db/devtunnelStats";
 import { SESSION_COOKIE } from "../lib/cookies";
 import { errorResponse } from "../lib/response";
 import { logger } from "../lib/logger";
@@ -35,12 +34,11 @@ export const requireAuth: MiddlewareHandler<{ Bindings: Env }> = async (c, next)
 
   try {
     const supabase = getSupabase(env);
-    const userRow = await getUserForSessionToken(supabase, token);
-    if (!userRow) {
+    const result = await getUserForSessionTokenWithMaintainerStatus(supabase, token);
+    if (!result) {
       return errorResponse(c, 401, "unauthenticated", "Sign-in required");
     }
-    const isMaintainer = await getIsMaintainer(supabase, userRow.id);
-    c.set("user", toAuthUser(userRow, isMaintainer));
+    c.set("user", toAuthUser(result.user, result.isMaintainer));
     await next();
   } catch (err) {
     logger.error("session_lookup_failed", { error: String(err), requestId: c.get("requestId") });

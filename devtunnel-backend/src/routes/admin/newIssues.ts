@@ -120,10 +120,49 @@ const listQuerySchema = z.object({
  * and what this cache exists to avoid repeating, is the live GitHub scan
  * itself (see this route's own doc comment, and `fetchAllRepositoryIssues`
  * in src/lib/githubRepo.ts on why that's slow at any real scale).
+ *
+ * Deliberately `NewIssueScanIssue`, not the full `GithubIssueSummary` —
+ * see that type's own comment just below for why.
  */
 interface GithubScanCacheEntry {
   scannedAt: string;
-  projects: Array<{ projectId: string; issues: GithubIssueSummary[] }>;
+  projects: Array<{ projectId: string; issues: NewIssueScanIssue[] }>;
+}
+
+/**
+ * Only the fields this route's response (`AdminNewIssue`, src/types.ts)
+ * actually uses from a scanned GitHub issue — a deliberately narrower
+ * shape than the full `GithubIssueSummary` `fetchAllRepositoryIssues`
+ * returns. `AdminNewIssue` never surfaces `body` (the full issue
+ * markdown description) or `commentCount`, but `GithubScanCacheEntry`
+ * used to cache the *entire* `GithubIssueSummary` — including `body` —
+ * for every open issue across every active project, every 5 minutes.
+ * At this installation's current scale that pushed the cached JSON blob
+ * to ~30.8 MB, past Workers KV's 25 MiB per-value limit
+ * (`KV PUT failed: 413 Value length ... exceeds limit of 26214400`).
+ * `setCached` fails open (see lib/cache.ts), so this never crashed a
+ * request — it just meant the cache write silently failed on *every*
+ * single call, so every request paid the full live cross-project GitHub
+ * scan (the 45s+ response times this was actually causing). Stripping
+ * the two fields this route never uses keeps the cached payload
+ * proportional to what actually gets returned.
+ */
+type NewIssueScanIssue = Pick<
+  GithubIssueSummary,
+  "number" | "title" | "state" | "url" | "labels" | "author" | "createdAt" | "updatedAt"
+>;
+
+function toScanIssue(issue: GithubIssueSummary): NewIssueScanIssue {
+  return {
+    number: issue.number,
+    title: issue.title,
+    state: issue.state,
+    url: issue.url,
+    labels: issue.labels,
+    author: issue.author,
+    createdAt: issue.createdAt,
+    updatedAt: issue.updatedAt,
+  };
 }
 
 const GITHUB_SCAN_CACHE_KEY = "admin-new-issues:github-scan:v1";
@@ -274,7 +313,7 @@ adminNewIssues.get(
       const cachedByProjectId = new Map((cached?.projects ?? []).map((p) => [p.projectId, p.issues]));
       const cacheIsUsable = cached !== null && projectIds.every((id) => cachedByProjectId.has(id));
 
-      let rawIssuesByProjectId: Map<string, GithubIssueSummary[]>;
+      let rawIssuesByProjectId: Map<string, NewIssueScanIssue[]>;
 
       if (cacheIsUsable) {
         rawIssuesByProjectId = cachedByProjectId;
@@ -287,7 +326,10 @@ adminNewIssues.get(
         const perProjectResults = await Promise.allSettled(
           projects.map(async ({ project, owner, repo }) => ({
             projectId: project.id,
-            issues: await fetchAllRepositoryIssues(accessToken, owner, repo),
+            // Trimmed to `NewIssueScanIssue` right at the source — see
+            // that type's own comment on why `body`/`commentCount` never
+            // make it into `rawIssuesByProjectId` or the cache.
+            issues: (await fetchAllRepositoryIssues(accessToken, owner, repo)).map(toScanIssue),
           })),
         );
 

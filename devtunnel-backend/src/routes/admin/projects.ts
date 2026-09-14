@@ -868,9 +868,31 @@ adminProjects.post(
       const accessToken = await getValidGithubAccessToken(supabase, env, admin.id);
 
       const synced: string[] = [];
-      const failed: Array<{ id: string; slug: string; error: string }> = [];
+      const failed: Array<{ id: string; slug: string; error: string; resetAt: string | null }> = [];
+
+      // Once one project in this loop comes back rate-limited, GitHub's
+      // rate limit is a single per-token budget shared by every request —
+      // it will not "come back" mid-loop, so every remaining project is
+      // certain to fail the exact same way. `rateLimitedAt` short-circuits
+      // the rest of the loop the moment that happens: remaining projects
+      // are marked failed immediately, without spending a real (always
+      // 403/429, ~15s-timeout-bound) round trip on each one. This is what
+      // was actually behind the ~32s `sync-all` response time in earlier
+      // rate-limited runs — 20+ projects each still doing a full failing
+      // fetch after the quota was already known to be exhausted.
+      let rateLimitedAt: Date | null | undefined;
 
       for (const ref of refs) {
+        if (rateLimitedAt !== undefined) {
+          failed.push({
+            id: ref.id,
+            slug: ref.slug,
+            error: "rate_limited",
+            resetAt: rateLimitedAt?.toISOString() ?? null,
+          });
+          continue;
+        }
+
         try {
           await refreshProjectGithubData(supabase, accessToken, { owner: ref.owner, repo: ref.repo }, ref.id);
           synced.push(ref.id);
@@ -881,10 +903,20 @@ adminProjects.post(
             error: err instanceof Error ? err.message : String(err),
             requestId: c.get("requestId"),
           });
+          if (err instanceof GitHubRepoError && err.reason === "rate_limited") {
+            rateLimitedAt = err.resetAt;
+          }
           failed.push({
             id: ref.id,
             slug: ref.slug,
             error: err instanceof GitHubRepoError ? err.reason : "internal_error",
+            // Surfaced separately from `error` (the stable reason code the
+            // frontend already branches on) so a rate-limited item can show
+            // "try again at HH:MM" — `null` for every non-rate-limit failure
+            // and for a rate limit whose response happened to omit the
+            // header (see GitHubRepoError.resetAt).
+            resetAt:
+              err instanceof GitHubRepoError && err.resetAt ? err.resetAt.toISOString() : null,
           });
         }
       }
