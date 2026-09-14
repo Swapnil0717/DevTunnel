@@ -6,7 +6,7 @@ import { getAdminOpenSourceToolDetail } from "@/lib/admin/opensource-tools/api";
 import { OpenSourceToolLogo } from "@/components/admin/opensource-tools/opensource-tool-logo";
 import { DeleteOpenSourceToolButton } from "@/components/admin/opensource-tools/delete-opensource-tool-button";
 import { EditOpenSourceToolDetailsPanel } from "@/components/admin/opensource-tools/edit-opensource-tool-details-panel";
-import { GitBranchIcon } from "@/components/layout/nav-icons";
+import { ChevronLeftIcon, GitBranchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
 
@@ -74,6 +74,13 @@ export default async function AdminOpenSourceToolDetailPage({
   if (result.status === "error") {
     return (
       <main className="mx-auto max-w-4xl px-6 py-10">
+        <Link
+          href="/admin/opensource-tools"
+          className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
+        >
+          <ChevronLeftIcon className="h-3.5 w-3.5" />
+          Back to Open Source Tools
+        </Link>
         <nav aria-label="Breadcrumb" className="mb-6 text-[12.5px] text-text-faint">
           <Link href="/admin/opensource-tools" className="hover:text-accent">
             Open Source Tools
@@ -93,6 +100,13 @@ export default async function AdminOpenSourceToolDetailPage({
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
+      <Link
+        href="/admin/opensource-tools"
+        className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
+      >
+        <ChevronLeftIcon className="h-3.5 w-3.5" />
+        Back to Open Source Tools
+      </Link>
       <nav aria-label="Breadcrumb" className="mb-6 text-[12.5px] text-text-faint">
         <Link href="/admin/opensource-tools" className="hover:text-accent">
           Open Source Tools

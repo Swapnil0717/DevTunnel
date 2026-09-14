@@ -11,7 +11,7 @@ import { DeleteProjectButton } from "@/components/admin/projects/delete-project-
 import { ProjectStatusToggle } from "@/components/admin/projects/project-status-toggle";
 import { EditProjectDetailsPanel } from "@/components/admin/projects/edit-project-details-panel";
 import { SyncProjectGithubDataButton } from "@/components/admin/projects/sync-project-github-data-button";
-import { EditIcon, GitBranchIcon, IssueIcon } from "@/components/layout/nav-icons";
+import { ChevronLeftIcon, EditIcon, GitBranchIcon, IssueIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
 
@@ -105,6 +105,13 @@ export default async function AdminProjectDetailPage({
   if (result.status === "error") {
     return (
       <main className="mx-auto max-w-4xl px-6 py-10">
+        <Link
+          href="/admin/projects"
+          className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
+        >
+          <ChevronLeftIcon className="h-3.5 w-3.5" />
+          Back to Projects
+        </Link>
         <nav aria-label="Breadcrumb" className="mb-6 text-[12.5px] text-text-faint">
           <Link href="/admin/projects" className="hover:text-accent">
             Projects
@@ -124,6 +131,13 @@ export default async function AdminProjectDetailPage({
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
+      <Link
+        href="/admin/projects"
+        className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
+      >
+        <ChevronLeftIcon className="h-3.5 w-3.5" />
+        Back to Projects
+      </Link>
       <nav aria-label="Breadcrumb" className="mb-6 text-[12.5px] text-text-faint">
         <Link href="/admin/projects" className="hover:text-accent">
           Projects

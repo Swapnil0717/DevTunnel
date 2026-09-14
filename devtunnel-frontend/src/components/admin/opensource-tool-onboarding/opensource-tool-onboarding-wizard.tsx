@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Logo } from "@/components/layout/logo";
+import { ChevronLeftIcon, HomeIcon } from "@/components/layout/nav-icons";
 import { StepIndicator } from "@/components/onboarding/step-indicator";
 import { LoadingPanel, Spinner } from "@/components/ui/spinner";
 import {
@@ -198,6 +200,14 @@ export function OpenSourceToolOnboardingWizard() {
   return (
     <main className="flex min-h-screen w-full flex-col bg-bg lg:flex-row">
       <aside className="flex flex-shrink-0 flex-col gap-6 border-b border-border-subtle px-4 py-5 sm:px-6 lg:w-[320px] lg:justify-between lg:gap-0 lg:border-b-0 lg:border-r lg:px-10 lg:py-12 xl:w-[380px]">
+        <Link
+          href="/admin/opensource-tools"
+          className="inline-flex w-fit items-center gap-1 text-[12px] font-medium text-text-faint transition-colors hover:text-accent lg:mb-4"
+        >
+          <ChevronLeftIcon className="h-3.5 w-3.5" />
+          Back to Open Source Tools
+        </Link>
+
         <div className="flex items-center justify-between lg:block">
           <Logo asLink={false} />
           <div className="lg:hidden">
@@ -275,14 +285,31 @@ export function OpenSourceToolOnboardingWizard() {
           ) : null}
 
           {createdTool ? (
-            <div className="flex items-center justify-between border-t border-border-subtle pt-5">
-              <button
-                type="button"
-                onClick={startAnother}
-                className="rounded-md bg-text px-5 py-2 text-[13px] font-medium text-bg transition-opacity hover:opacity-90"
+            <div className="flex flex-col gap-4 border-t border-border-subtle pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-[13px] font-medium text-text">Add another tool?</span>
+                <button
+                  type="button"
+                  onClick={startAnother}
+                  className="rounded-md bg-text px-4 py-2 text-[13px] font-medium text-bg transition-opacity hover:opacity-90"
+                >
+                  Yes, add another
+                </button>
+                <Link
+                  href="/admin/opensource-tools"
+                  className="rounded-md border border-border bg-surface px-4 py-2 text-[13px] font-medium text-text-muted transition-colors hover:bg-surface-raised"
+                >
+                  No
+                </Link>
+              </div>
+
+              <Link
+                href="/admin"
+                className="flex items-center justify-center gap-1.5 rounded-md border border-border bg-surface px-4 py-2 text-[13px] font-medium text-text-muted transition-colors hover:bg-surface-raised"
               >
-                Add another tool
-              </button>
+                <HomeIcon className="h-3.5 w-3.5" />
+                Go to Dashboard
+              </Link>
             </div>
           ) : (
             <div className="flex items-center justify-between border-t border-border-subtle pt-5">
@@ -295,23 +322,35 @@ export function OpenSourceToolOnboardingWizard() {
                 Back
               </button>
 
-              {step < TOTAL_STEPS ? (
-                <button
-                  type="button"
-                  onClick={goNext}
-                  disabled={!canContinue || isSavingStep}
-                  className="flex items-center gap-2 rounded-md bg-text px-5 py-2 text-[13px] font-medium text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {isSavingStep ? (
-                    <>
-                      <Spinner size={13} />
-                      Saving…
-                    </>
-                  ) : (
-                    "Continue"
-                  )}
-                </button>
-              ) : null}
+              <div className="flex items-center gap-3">
+                {step === TOTAL_STEPS ? (
+                  <Link
+                    href="/admin"
+                    className="flex items-center gap-1.5 rounded-md border border-border bg-surface px-4 py-2 text-[13px] font-medium text-text-muted transition-colors hover:bg-surface-raised"
+                  >
+                    <HomeIcon className="h-3.5 w-3.5" />
+                    Go to Dashboard
+                  </Link>
+                ) : null}
+
+                {step < TOTAL_STEPS ? (
+                  <button
+                    type="button"
+                    onClick={goNext}
+                    disabled={!canContinue || isSavingStep}
+                    className="flex items-center gap-2 rounded-md bg-text px-5 py-2 text-[13px] font-medium text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {isSavingStep ? (
+                      <>
+                        <Spinner size={13} />
+                        Saving…
+                      </>
+                    ) : (
+                      "Continue"
+                    )}
+                  </button>
+                ) : null}
+              </div>
             </div>
           )}
         </div>

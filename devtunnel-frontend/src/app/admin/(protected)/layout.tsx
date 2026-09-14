@@ -41,13 +41,15 @@ import { AdminMobileNav } from "@/components/admin/admin-mobile-nav";
  * Module A2 dashboard) renders inside `{children}` beneath those two.
  *
  * `FULL_BLEED_PATHS` is the exception to that shell: Project Onboarding
- * (`/admin/projects/new`) is a multi-step wizard with its own sidebar, so
- * stacking it inside `AdminSidebar` + `AdminHeader` would double up the
- * chrome. Same treatment as the contributor `/onboarding` page relative to
+ * (`/admin/projects/new`), Task Onboarding (`/admin/tasks/new`), and Open
+ * Source Tool Onboarding (`/admin/opensource-tools/new`) are each a
+ * multi-step wizard with its own sidebar, so stacking any of them inside
+ * `AdminSidebar` + `AdminHeader` would double up the chrome. Same
+ * treatment as the contributor `/onboarding` page relative to
  * `(protected)/layout.tsx` — the auth/role check still runs unconditionally
  * above, only the shell around `{children}` is skipped.
  */
- const FULL_BLEED_PATHS = ["/admin/projects/new", "/admin/tasks/new"];
+ const FULL_BLEED_PATHS = ["/admin/projects/new", "/admin/tasks/new", "/admin/opensource-tools/new"];
 
 export default async function AdminProtectedLayout({
   children,

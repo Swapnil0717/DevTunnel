@@ -8,7 +8,7 @@ import { AdminStatCard } from "@/components/admin/admin-stat-card";
 import { DeleteTaskButton } from "@/components/admin/tasks/delete-task-button";
 import { EditTaskDetailsPanel } from "@/components/admin/tasks/edit-task-details-panel";
 import { TechIcon } from "@/components/onboarding/tech-icon";
-import { IssueIcon, GitBranchIcon } from "@/components/layout/nav-icons";
+import { ChevronLeftIcon, IssueIcon, GitBranchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
 
@@ -80,6 +80,13 @@ export default async function AdminTaskDetailPage({
   if (result.status === "error") {
     return (
       <main className="mx-auto max-w-4xl px-6 py-10">
+        <Link
+          href="/admin/tasks"
+          className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
+        >
+          <ChevronLeftIcon className="h-3.5 w-3.5" />
+          Back to Tasks
+        </Link>
         <nav aria-label="Breadcrumb" className="mb-6 text-[12.5px] text-text-faint">
           <Link href="/admin/tasks" className="hover:text-accent">
             Tasks
@@ -97,6 +104,13 @@ export default async function AdminTaskDetailPage({
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
+      <Link
+        href="/admin/tasks"
+        className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
+      >
+        <ChevronLeftIcon className="h-3.5 w-3.5" />
+        Back to Tasks
+      </Link>
       <nav aria-label="Breadcrumb" className="mb-6 text-[12.5px] text-text-faint">
         <Link href="/admin/tasks" className="hover:text-accent">
           Tasks
