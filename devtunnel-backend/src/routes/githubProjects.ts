@@ -30,8 +30,12 @@ export const githubProjects = new Hono<{ Bindings: Env; Variables: Variables }>(
  * single-star personal repos that would otherwise dominate a purely
  * `sort=stars` walk's lower pages) — it is not a claim about what counts
  * as "real" open source, just a relevance cutoff for this page.
+ *
+ * Exported so the scheduled cache warmer (`lib/cacheWarmers.ts`) can
+ * re-scan this exact catalog on a cron, without duplicating its
+ * discovery query/cache key here a second time.
  */
-const CATALOG_CONFIG: CatalogRouteConfig = {
+export const CATALOG_CONFIG: CatalogRouteConfig = {
   name: "github-projects",
   // A single query, so no OR-across-qualifiers concern here — see
   // `lib/githubCatalog.ts`'s `CatalogRouteConfig.discoveryQueries` doc

@@ -5,7 +5,7 @@ import { getEnv, type ValidatedEnv } from "../config/env";
 import { checkRateLimit } from "./rateLimit";
 import { errorResponse } from "./response";
 import { logger } from "./logger";
-import { getCached, setCached } from "./cache";
+import { withCacheSWR, warmCacheSWR } from "./cache";
 import { searchOpenSourceCatalog, type GithubCatalogRepoItem } from "./githubDiscovery";
 import { mapGithubTopicsToTechStack } from "./techTopics";
 
@@ -38,10 +38,28 @@ import { mapGithubTopicsToTechStack } from "./techTopics";
  * GITHUB_DISCOVERY_TOKEN's shared rate-limit budget across *every*
  * catalog route: without this, a burst of contributor traffic on any one
  * of them could each trigger their own 10-call GitHub search walk.
+ *
+ * This is the *soft* TTL for `withCacheSWR` below — "how fresh should this
+ * ideally be" — not a hard expiry. A scheduled warmer (lib/cacheWarmers.ts,
+ * `[triggers].crons` in wrangler.toml) re-runs `scanCatalog` for every
+ * catalog on a ~25 minute cadence, comfortably inside this window, so in
+ * steady state no real contributor request should ever actually see a
+ * stale or missing entry — this TTL mainly governs what happens if that
+ * warmer run is ever late or fails.
  */
-const CATALOG_CACHE_TTL_SECONDS = 30 * 60;
+const CATALOG_CACHE_SOFT_TTL_SECONDS = 30 * 60;
 
-interface CatalogCacheEntry {
+/**
+ * How long a catalog entry survives in KV as a usable *stale* fallback if
+ * nothing has refreshed it — three soft-TTL windows, so a warmer outage of
+ * up to a couple of hours still degrades to "serves an older catalog
+ * instantly" rather than "a contributor's request pays for a live GitHub
+ * Search walk". Exported so `lib/cacheWarmers.ts` writes with the exact
+ * same hard TTL this route reads with.
+ */
+export const CATALOG_CACHE_HARD_TTL_SECONDS = CATALOG_CACHE_SOFT_TTL_SECONDS * 3;
+
+export interface CatalogCacheEntry {
   scannedAt: string;
   items: GithubCatalogRepoItem[];
 }
@@ -194,7 +212,7 @@ export interface CatalogRouteConfig {
  * — kept once, sorted by star count descending like a single-query scan
  * would already be from GitHub's own `sort=stars`.
  */
-async function scanCatalog(
+export async function scanCatalog(
   env: ValidatedEnv,
   queries: string[],
 ): Promise<GithubCatalogRepoItem[]> {
@@ -275,29 +293,38 @@ export async function handleCatalogListRequest(
   }
 
   try {
-    let catalog: GithubCatalogRepoItem[];
+    // Stale-while-revalidate: a fresh cache entry is returned as-is; a
+    // stale-but-present one is still returned immediately while a real
+    // refresh happens in the background (`c.executionCtx.waitUntil`), so
+    // this request is never the one that blocks on a live GitHub Search
+    // walk. Only a true miss (nothing in KV at all — see
+    // `CATALOG_CACHE_HARD_TTL_SECONDS`'s doc comment) pays for that walk
+    // synchronously, and in steady state the scheduled warmer
+    // (lib/cacheWarmers.ts) should mean that never happens for real traffic.
+    const catalog = await withCacheSWR<GithubCatalogRepoItem[]>(
+      c.executionCtx,
+      c.env,
+      cacheKey,
+      { softTtlSeconds: CATALOG_CACHE_SOFT_TTL_SECONDS, hardTtlSeconds: CATALOG_CACHE_HARD_TTL_SECONDS },
+      async () => {
+        const scanned = await scanCatalog(env, discoveryQueries);
+        // Only cache a non-empty result — same "don't cache a bad scan"
+        // posture GET /issues takes with GITHUB_SCAN_CACHE_KEY (rule 21).
+        return scanned.length > 0 ? scanned : null;
+      },
+    );
 
-    const cached = await getCached<CatalogCacheEntry>(c.env, cacheKey);
-    if (cached) {
-      catalog = cached.items;
-    } else {
-      catalog = await scanCatalog(env, discoveryQueries);
-      // Only cache a non-empty result — same "don't cache a bad scan"
-      // posture GET /issues takes with GITHUB_SCAN_CACHE_KEY (rule 21).
-      if (catalog.length > 0) {
-        await setCached<CatalogCacheEntry>(
-          c.env,
-          cacheKey,
-          { scannedAt: new Date().toISOString(), items: catalog },
-          CATALOG_CACHE_TTL_SECONDS,
-        );
-      }
-    }
+    // `catalog` is only ever `null` here if this was a true cache miss AND
+    // the synchronous refresh above also came back empty (e.g. GitHub
+    // Search genuinely returned nothing for this query right now) — treat
+    // that the same as "nothing cached yet", an empty catalog, rather than
+    // an error.
+    const items = catalog ?? [];
 
     const { limit, before } = parsed.data;
     const startIndex = before ? Number(before) : 0;
-    const page = catalog.slice(startIndex, startIndex + limit);
-    const hasMore = startIndex + limit < catalog.length;
+    const page = items.slice(startIndex, startIndex + limit);
+    const hasMore = startIndex + limit < items.length;
 
     if (hasMore) {
       c.header("X-Next-Cursor", String(startIndex + limit));
@@ -311,5 +338,47 @@ export async function handleCatalogListRequest(
       requestId: c.get("requestId"),
     });
     return errorResponse(c, 500, "internal_error", "Couldn't load this catalog right now");
+  }
+}
+
+/**
+ * Unconditionally re-scans and re-caches one catalog slot (a route's base
+ * catalog, or one of its named `filters`) — called by the scheduled cache
+ * warmer (`lib/cacheWarmers.ts`), never by a request handler. Uses
+ * `warmCacheSWR` rather than `withCacheSWR`: a cron trigger always wants a
+ * real fresh scan, never whatever's currently cached.
+ */
+export async function warmCatalogCacheKey(
+  env: ValidatedEnv,
+  workerEnv: Env,
+  cacheKey: string,
+  discoveryQueries: string[],
+): Promise<void> {
+  await warmCacheSWR<GithubCatalogRepoItem[]>(
+    workerEnv,
+    cacheKey,
+    CATALOG_CACHE_HARD_TTL_SECONDS,
+    async () => {
+      const scanned = await scanCatalog(env, discoveryQueries);
+      return scanned.length > 0 ? scanned : null;
+    },
+  );
+}
+
+/**
+ * Warms every cache slot a `CatalogRouteConfig` can ever serve — its base
+ * catalog plus every named filter — so the scheduled warmer only needs one
+ * call per route (`lib/cacheWarmers.ts`) regardless of how many filters
+ * that route declares.
+ */
+export async function warmCatalogRoute(
+  env: ValidatedEnv,
+  workerEnv: Env,
+  config: CatalogRouteConfig,
+): Promise<void> {
+  await warmCatalogCacheKey(env, workerEnv, config.cacheKey, config.discoveryQueries);
+
+  for (const filterConfig of Object.values(config.filters ?? {})) {
+    await warmCatalogCacheKey(env, workerEnv, filterConfig.cacheKey, filterConfig.discoveryQueries);
   }
 }

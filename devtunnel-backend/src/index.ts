@@ -13,6 +13,7 @@ import { githubOpenSourceTools } from "./routes/githubOpenSourceTools";
 import { tasks } from "./routes/tasks";
 import { admin } from "./routes/admin/index";
 import { runDailyDiscovery } from "./lib/aiDiscoveryAgent";
+import { warmGithubCatalogs, warmContributorIssuesScan } from "./lib/cacheWarmers";
 import { getEnv } from "./config/env";
 import { logger } from "./lib/logger";
 
@@ -33,21 +34,71 @@ app.route("/admin", admin);
 
 app.onError(handleError);
 
+/**
+ * Cloudflare Cron Triggers (wrangler.toml `[triggers].crons`) — this Worker
+ * has three schedules, and `event.cron` (the exact cron expression that
+ * fired) is how one `scheduled` handler tells them apart:
+ *
+ *  - `"0 3 * * *"` — once daily at 03:00 UTC: the AI Discovery agent
+ *    (unchanged from before this change).
+ *  - `"*//**4 * * * *"` — every 4 minutes: re-scans and re-caches the
+ *    contributor-facing `/issues` GitHub scan (`ISSUES_SCAN_CACHE_KEY`,
+ *    src/routes/issues.ts), comfortably under that cache's 4-minute soft
+ *    TTL so real contributor requests essentially always see a fresh
+ *    entry rather than triggering a scan themselves.
+ *  - `"*//**25 * * * *"` — every 25 minutes: re-scans and re-caches both
+ *    GitHub-wide catalogs (`/github-projects`, `/github-open-source-tools`
+ *    — base catalog plus every named filter), comfortably under their
+ *    30-minute soft TTL for the same reason.
+ *
+ * All three branches run independently and are individually best-effort —
+ * `warmGithubCatalogs`/`warmContributorIssuesScan` catch and log their own
+ * errors rather than throwing (see lib/cacheWarmers.ts), so one warmer
+ * failing never affects another, and a failed run just means the next
+ * scheduled run tries again while `withCacheSWR` readers keep serving
+ * whatever's still in KV in the meantime.
+ */
+async function handleScheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+  const validatedEnv = getEnv(env);
+
+  switch (event.cron) {
+    case "*/4 * * * *":
+      ctx.waitUntil(
+        warmContributorIssuesScan(validatedEnv, env).catch((err) => {
+          logger.error("issues_warm_scheduled_run_failed", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }),
+      );
+      return;
+
+    case "*/25 * * * *":
+      ctx.waitUntil(
+        warmGithubCatalogs(validatedEnv, env).catch((err) => {
+          logger.error("catalog_warm_scheduled_run_failed", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }),
+      );
+      return;
+
+    case "0 3 * * *":
+    default:
+      // Falls through to the daily AI Discovery run for its own schedule,
+      // and defensively for any cron expression this handler doesn't
+      // otherwise recognize (rather than silently doing nothing).
+      ctx.waitUntil(
+        runDailyDiscovery(validatedEnv, env.RATE_LIMIT_KV).catch((err) => {
+          logger.error("ai_discovery_scheduled_run_failed", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }),
+      );
+      return;
+  }
+}
+
 export default {
   fetch: app.fetch,
-
-  /**
-   * Cloudflare Cron Trigger (wrangler.toml [triggers]) — runs the AI
-   * Discovery agent once a day. `ctx.waitUntil` lets it keep running
-   * past the point Cloudflare would otherwise consider the invocation
-   * finished; a crash here is caught and logged, never left unhandled
-   * (it can't surface to any user anyway — this is a background job).
-   */
-  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(
-      runDailyDiscovery(getEnv(env), env.RATE_LIMIT_KV).catch((err) => {
-        logger.error("ai_discovery_scheduled_run_failed", { error: err instanceof Error ? err.message : String(err) });
-      }),
-    );
-  },
+  scheduled: handleScheduled,
 };

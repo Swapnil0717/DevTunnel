@@ -63,15 +63,37 @@ SESSION_TTL_DAYS = "30"
 GROQ_MODEL = "openai/gpt-oss-120b"
 
 # ---------------------------------------------------------------------------
-# AI Discovery cron trigger — runs the daily project/tool/task discovery
-# agent (src/lib/aiDiscoveryAgent.ts) once a day at 03:00 UTC, after most
-# US/EU GitHub activity has settled. The agent is idempotent per UTC date
-# (devtunnel.ai_discovery_daily_counters), so an earlier manual
-# POST /admin/ai/run the same day just tops up whatever quota is left
-# instead of double-running.
+# Cron triggers. `src/index.ts`'s `scheduled` handler tells these apart by
+# the exact cron expression that fired (`event.cron`) — see that file's own
+# doc comment on the `scheduled` export for the full mapping.
+#
+#   "0 3 * * *"    — once daily at 03:00 UTC: the AI Discovery agent
+#                    (src/lib/aiDiscoveryAgent.ts), after most US/EU GitHub
+#                    activity has settled. Idempotent per UTC date
+#                    (devtunnel.ai_discovery_daily_counters), so an earlier
+#                    manual POST /admin/ai/run the same day just tops up
+#                    whatever quota is left instead of double-running.
+#
+#   "*/4 * * * *"  — every 4 minutes: re-warms the contributor-facing
+#                    `/issues` GitHub scan cache (src/routes/issues.ts,
+#                    src/lib/cacheWarmers.ts `warmContributorIssuesScan`).
+#                    Kept comfortably under that cache's 4-minute soft TTL
+#                    so a real contributor's page load essentially never
+#                    has to wait on a live cross-project GitHub scan itself
+#                    — see src/lib/cache.ts's stale-while-revalidate doc
+#                    comment for why this matters.
+#
+#   "*/25 * * * *" — every 25 minutes: re-warms both GitHub-wide catalogs,
+#                    `/github-projects` and `/github-open-source-tools`
+#                    (src/lib/cacheWarmers.ts `warmGithubCatalogs`), base
+#                    catalog plus every named filter. Kept comfortably
+#                    under their 30-minute soft TTL for the same reason.
+#
+# All three are independent, best-effort background jobs — one failing
+# never blocks or delays another (see src/lib/cacheWarmers.ts).
 # ---------------------------------------------------------------------------
 [triggers]
-crons = ["0 3 * * *"]
+crons = ["0 3 * * *", "*/4 * * * *", "*/25 * * * *"]
 
 # ---------------------------------------------------------------------------
 # Per-environment overrides. Deploy with `wrangler deploy --env staging`.
@@ -91,3 +113,10 @@ GROQ_MODEL = "openai/gpt-oss-120b"
 [[env.staging.kv_namespaces]]
 binding = "RATE_LIMIT_KV"
 id = "REPLACE_WITH_STAGING_KV_NAMESPACE_ID"
+
+# Cloudflare cron triggers are per-environment — the top-level [triggers]
+# above only applies when deploying without --env. Mirrored here so the
+# cache warmers (and the AI Discovery agent) also run against staging;
+# drop this block if staging shouldn't run scheduled jobs at all.
+[env.staging.triggers]
+crons = ["0 3 * * *", "*/4 * * * *", "*/25 * * * *"]

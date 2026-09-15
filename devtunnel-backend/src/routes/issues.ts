@@ -7,7 +7,8 @@ import { requireAuth } from "../middleware/auth";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
 import { logger } from "../lib/logger";
-import { getCached, setCached } from "../lib/cache";
+import { withCacheSWR } from "../lib/cache";
+import { scanProjectIssues } from "../lib/issuesScan";
 import {
   getCoveredIssueNumbersByProject,
   getIgnoredIssueKeysByProject,
@@ -15,14 +16,7 @@ import {
   listActiveProjectsWithRepo,
 } from "../db/adminNewIssues";
 import { getValidGithubAccessToken } from "../db/githubTokens";
-import { fetchAllRepositoryIssues } from "../lib/githubRepo";
-import {
-  GITHUB_SCAN_CACHE_KEY,
-  GITHUB_SCAN_CACHE_TTL_SECONDS,
-  toScanIssue,
-  type GithubScanCacheEntry,
-  type NewIssueScanIssue,
-} from "./admin/newIssues";
+import type { GithubScanCacheEntry, NewIssueScanIssue } from "./admin/newIssues";
 
 /**
  * Contributor — All Issues (`/issues` — "All Issues" in
@@ -34,13 +28,27 @@ import {
  * This is the contributor-facing sibling of
  * `GET /admin/new-issues` (src/routes/admin/newIssues.ts): same
  * detection algorithm (every open GitHub issue across active projects,
- * minus anything already covered by a live DevTunnel task), same live
- * cross-project GitHub scan, and — deliberately — the exact same
- * `GITHUB_SCAN_CACHE_KEY` cache entry, so a contributor loading this page
- * within the same 5-minute window as an admin (or another contributor)
- * shares that scan instead of paying for a second independent one. See
- * that file's own doc comment for the full reasoning on why the scan is
- * cached but the diff against `tasks`/`ignored_github_issues` is not.
+ * minus anything already covered by a live DevTunnel task or explicitly
+ * ignored by an admin) and the same shape of live cross-project GitHub
+ * scan (`lib/issuesScan.ts`, shared with that route).
+ *
+ * Unlike an earlier version of this route, this does **not** share
+ * `GET /admin/new-issues`'s `GITHUB_SCAN_CACHE_KEY` / 5-minute cache
+ * entry anymore. It now has its own `ISSUES_SCAN_CACHE_KEY`, read through
+ * `withCacheSWR` (see `lib/cache.ts`) instead of a plain get/set:
+ *  - This is by far the highest-traffic page of the two (every
+ *    contributor, not just admins), so it gets a cadence tuned for that
+ *    — see `ISSUES_SCAN_SOFT_TTL_SECONDS` below.
+ *  - Splitting the key means a contributor's page load can never be the
+ *    request that pays for a synchronous re-scan just because an admin's
+ *    5-minute cache window happened to lapse (or vice versa) — each
+ *    route's cache now lives and dies on its own schedule.
+ *  - `withCacheSWR` means even *this* route's own cache misses stop
+ *    blocking a real request in steady state: the scheduled warmer
+ *    (`lib/cacheWarmers.ts`, cron in wrangler.toml) keeps this key
+ *    refreshed in the background, so a contributor's request should
+ *    almost always find a fresh-or-stale-but-present entry rather than a
+ *    true miss.
  *
  * Two differences from the admin route, both deliberate:
  *  - `requireAuth` only — no `requireAdminRole` / `requirePermission`.
@@ -69,16 +77,40 @@ import {
 export const issues = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 /**
+ * KV key for this route's own SWR-managed scan cache — deliberately not
+ * `GET /admin/new-issues`'s `GITHUB_SCAN_CACHE_KEY` (see this file's own
+ * doc comment above for why the two routes no longer share one entry).
+ */
+export const ISSUES_SCAN_CACHE_KEY = "issues:github-scan:v2";
+
+/**
+ * 4 minutes: short enough that "All Issues" still feels current on any
+ * normal contributor visit, comfortably under the ~4-5 minute cadence the
+ * scheduled warmer (`lib/cacheWarmers.ts`) re-scans this key on, so in
+ * steady state a contributor's request finds a *fresh* entry from the
+ * warmer, not a stale one it has to wait out a background refresh for.
+ */
+export const ISSUES_SCAN_SOFT_TTL_SECONDS = 4 * 60;
+
+/**
+ * How long a scan result survives in KV as a stale-but-usable fallback —
+ * comfortably longer than the soft TTL so a warmer outage of up to half an
+ * hour still serves instantly (if slightly old) instead of falling through
+ * to a synchronous live scan on some unlucky contributor's request.
+ */
+export const ISSUES_SCAN_HARD_TTL_SECONDS = 30 * 60;
+
+/**
  * Query validation for `GET /issues` — same shape, bounds, and reasoning
  * as `listQuerySchema` in src/routes/admin/newIssues.ts (`limit` capped
  * at 1000 since there's no database table to page through here either —
  * every call recomputes its result from the same live/cached GitHub
- * scan). No `refresh` param: forcing a bypass of the shared scan cache is
- * an admin-only affordance (`SyncAllIssuesButton`) — a contributor
- * forcing a fresh cross-project GitHub re-scan on every page load would
- * undermine the exact cost-sharing this cache exists for, with no
- * curation action on this page that a stale-by-at-most-5-minutes read
- * would actually block.
+ * scan). No `refresh` param: forcing a bypass of this route's own scan
+ * cache is an admin-only affordance on the admin route
+ * (`SyncAllIssuesButton`) — a contributor forcing a fresh cross-project
+ * GitHub re-scan on every page load would undermine the exact cost-sharing
+ * this cache exists for, with no curation action on this page that a
+ * stale-by-a-few-minutes read would actually block.
  */
 const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(1000).optional().default(50),
@@ -103,11 +135,12 @@ issues.get("/issues", requireAuth, async (c) => {
     return errorResponse(c, 401, "unauthenticated", "Sign-in required");
   }
 
-  // Same cost profile as `GET /admin/new-issues` on a cache miss (a live
-  // cross-project GitHub scan) — rate limited the same way (rule 42:
-  // protect expensive endpoints), in its own bucket so contributor
-  // traffic here can never exhaust the admin route's budget or vice
-  // versa.
+  // Rate limited the same way `GET /admin/new-issues` is (rule 42: protect
+  // expensive endpoints) — in its own bucket so contributor traffic here
+  // can never exhaust the admin route's budget or vice versa. Note this
+  // now mostly guards the *synchronous* cache-miss path: in steady state
+  // with the scheduled warmer running, most requests here are cheap KV
+  // reads, not live GitHub scans.
   const withinLimit = await checkRateLimit(c, {
     bucket: "issues-list",
     limit: 20,
@@ -145,60 +178,59 @@ issues.get("/issues", requireAuth, async (c) => {
       getIgnoredIssueKeysByProject(supabase, projectIds),
     ]);
 
-    // Same cache-first strategy as `GET /admin/new-issues`, reading the
-    // exact same `GITHUB_SCAN_CACHE_KEY` entry that route writes (and
-    // this route also writes, on its own cache miss) — see this file's
-    // doc comment for why sharing one cache entry across both routes
-    // matters.
-    const cached = await getCached<GithubScanCacheEntry>(c.env, GITHUB_SCAN_CACHE_KEY);
-    const cachedByProjectId = new Map((cached?.projects ?? []).map((p) => [p.projectId, p.issues]));
-    const cacheIsUsable = cached !== null && projectIds.every((id) => cachedByProjectId.has(id));
+    // Stale-while-revalidate read of this route's own scan cache (see
+    // `ISSUES_SCAN_CACHE_KEY`'s doc comment above for why this is no
+    // longer the same KV entry `GET /admin/new-issues` uses). A fresh or
+    // stale cached entry is returned without ever blocking this request
+    // on a live scan; only a true miss falls through to the synchronous
+    // scan below, using *this* contributor's own GitHub access token —
+    // exactly the pre-existing miss-path behavior, just reached through
+    // `withCacheSWR` instead of a hand-rolled get/set.
+    const scan = await withCacheSWR<GithubScanCacheEntry>(
+      c.executionCtx,
+      c.env,
+      ISSUES_SCAN_CACHE_KEY,
+      { softTtlSeconds: ISSUES_SCAN_SOFT_TTL_SECONDS, hardTtlSeconds: ISSUES_SCAN_HARD_TTL_SECONDS },
+      async () => {
+        const accessToken = await getValidGithubAccessToken(supabase, env, user.id);
+        const scanned = await scanProjectIssues(accessToken, projects, (project, error) => {
+          logger.error("issues_project_scan_failed", {
+            projectId: project.id,
+            repositoryFullName: project.repositoryFullName,
+            error: error instanceof Error ? error.message : String(error),
+            requestId: c.get("requestId"),
+          });
+        });
+        // Only cache what actually succeeded (rule 21: never fake data
+        // that wasn't really fetched).
+        return scanned.length > 0
+          ? ({ scannedAt: new Date().toISOString(), projects: scanned } satisfies GithubScanCacheEntry)
+          : null;
+      },
+    );
 
-    let rawIssuesByProjectId: Map<string, NewIssueScanIssue[]>;
+    // A cached entry is only usable if it covers every currently active
+    // project — a project onboarded since the cache was last written
+    // would otherwise silently contribute zero issues until the next
+    // refresh. When it doesn't, fall back to scanning just the missing
+    // projects live rather than discarding an otherwise-good cache entry.
+    const cachedByProjectId = new Map((scan?.projects ?? []).map((p) => [p.projectId, p.issues]));
+    const missingProjects = projects.filter(({ project }) => !cachedByProjectId.has(project.id));
 
-    if (cacheIsUsable) {
-      rawIssuesByProjectId = cachedByProjectId;
-    } else {
-      // Cache miss, expired, or stale (a project onboarded since the
-      // cache was last written) — fall back to a real live
-      // cross-project GitHub scan, same as the admin route's own
-      // fallback.
+    let rawIssuesByProjectId = cachedByProjectId;
+    if (missingProjects.length > 0) {
       const accessToken = await getValidGithubAccessToken(supabase, env, user.id);
-
-      const perProjectResults = await Promise.allSettled(
-        projects.map(async ({ project, owner, repo }) => ({
-          projectId: project.id,
-          issues: (await fetchAllRepositoryIssues(accessToken, owner, repo)).map(toScanIssue),
-        })),
-      );
-
-      rawIssuesByProjectId = new Map();
-      const scannedForCache: GithubScanCacheEntry["projects"] = [];
-      perProjectResults.forEach((result, index) => {
-        if (result.status === "fulfilled") {
-          rawIssuesByProjectId.set(result.value.projectId, result.value.issues);
-          scannedForCache.push(result.value);
-          return;
-        }
-        const { project } = projects[index]!;
+      const freshlyScanned = await scanProjectIssues(accessToken, missingProjects, (project, error) => {
         logger.error("issues_project_scan_failed", {
           projectId: project.id,
           repositoryFullName: project.repositoryFullName,
-          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+          error: error instanceof Error ? error.message : String(error),
           requestId: c.get("requestId"),
         });
       });
-
-      // Only cache what actually succeeded — same rule 21 reasoning as
-      // the admin route. Written to the *shared* key, so an admin's next
-      // request (or another contributor's) benefits from this scan too.
-      if (scannedForCache.length > 0) {
-        await setCached(
-          c.env,
-          GITHUB_SCAN_CACHE_KEY,
-          { scannedAt: new Date().toISOString(), projects: scannedForCache } satisfies GithubScanCacheEntry,
-          GITHUB_SCAN_CACHE_TTL_SECONDS,
-        );
+      rawIssuesByProjectId = new Map(cachedByProjectId);
+      for (const { projectId, issues: projectIssues } of freshlyScanned) {
+        rawIssuesByProjectId.set(projectId, projectIssues);
       }
     }
 

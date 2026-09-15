@@ -44,6 +44,9 @@ export const githubOpenSourceTools = new Hono<{ Bindings: Env; Variables: Variab
  * each of these separately and merges/de-duplicates the results, which
  * is the only way to get true OR-of-topics behavior out of this API.
  */
+// Exported below so the scheduled cache warmer (`lib/cacheWarmers.ts`) can
+// re-scan this exact catalog (base + every filter) on a cron, without
+// duplicating its discovery queries/cache keys here a second time.
 const OPEN_SOURCE_TOOL_TOPICS = [
   "cli",
   "developer-tools",
@@ -54,7 +57,7 @@ const OPEN_SOURCE_TOOL_TOPICS = [
   "utility",
 ];
 
-const CATALOG_CONFIG: CatalogRouteConfig = {
+export const CATALOG_CONFIG: CatalogRouteConfig = {
   name: "github-open-source-tools",
   discoveryQueries: OPEN_SOURCE_TOOL_TOPICS.map(
     (topic) => `is:public archived:false fork:false stars:>=20 topic:${topic}`,
