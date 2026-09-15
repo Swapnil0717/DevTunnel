@@ -94,7 +94,11 @@ const DIFFICULTY_FILTERS: { value: DifficultyFilter; label: string }[] = [
  * "Full stack developer" would hide most of what they're actually
  * qualified for — "can handle everything" means Role stays at "All
  * roles" for them, even while Difficulty/Tech stack still apply from
- * their profile as normal.
+ * their profile as normal. This exception also covers a contributor
+ * *manually* selecting "Full stack developer" from the Role dropdown
+ * itself (see `filteredTasks` below) — either way, Role = FULL_STACK
+ * means "any role-tagged task", never "only tasks literally tagged
+ * FULL_STACK".
  */
 export function TasksExplorer({ tasks }: { tasks: Task[] }) {
   const { user } = useAuth();
@@ -121,7 +125,7 @@ export function TasksExplorer({ tasks }: { tasks: Task[] }) {
    * actually *hide* every task tagged only FRONTEND/BACKEND/etc, the
    * opposite of "can handle everything." So Role only narrows anything
    * for a single, non-Full-Stack developerRole; Full Stack leaves Role
-   * at "All roles" instead.
+   * at "All roles" instead for the auto "Match my profile" flow.
    */
   const isFullStack = user?.developerRoles.includes("FULL_STACK") ?? false;
 
@@ -183,7 +187,21 @@ export function TasksExplorer({ tasks }: { tasks: Task[] }) {
 
     return tasks.filter((task) => {
       if (status !== "ALL" && task.status !== status) return false;
-      if (role !== "ALL" && !task.roles.includes(role)) return false;
+      // A Full Stack task list should include every role-tagged task, not
+      // only tasks literally tagged FULL_STACK — this applies whether
+      // "Full stack developer" got into the Role dropdown via manual
+      // selection or via `applyProfileMatch` above (in practice the
+      // latter never sets `role` to FULL_STACK — see `isFullStack` — but
+      // the check is written against `role` itself so both paths behave
+      // identically, same "can handle everything" reasoning documented
+      // on `isFullStack`).
+      if (role !== "ALL") {
+        if (role === "FULL_STACK") {
+          if (task.roles.length === 0) return false;
+        } else if (!task.roles.includes(role)) {
+          return false;
+        }
+      }
       if (difficulty !== "ALL" && task.difficulty !== difficulty) return false;
       if (techStack !== "ALL" && !task.techStack.includes(techStack)) return false;
       if (projectSlug !== "ALL" && task.project.slug !== projectSlug) return false;

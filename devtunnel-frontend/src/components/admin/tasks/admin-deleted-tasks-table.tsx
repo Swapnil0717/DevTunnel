@@ -56,7 +56,7 @@ export function AdminDeletedTasksTable({
               {/* Issue # */}
               <td className="px-4 py-3">
                 {task.githubIssue ? (
-                  <a
+                  
                     href={task.githubIssue.url}
                     target="_blank"
                     rel="noreferrer noopener"
@@ -116,7 +116,7 @@ function formatDate(iso: string): string {
     return iso;
   }
 
-  return date.toLocaleDateString(undefined, {
+  return date.toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",

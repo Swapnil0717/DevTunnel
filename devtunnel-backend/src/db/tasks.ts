@@ -144,6 +144,11 @@ export interface ListTasksOptions {
    * `ExperienceLevel` / `AdminTaskStatus` enums the onboarding wizard
    * itself uses (never a second, invented vocabulary) — mirrors the
    * Role / Difficulty / Status filters `TasksExplorer` already exposes.
+   * Exception: `role: "FULL_STACK"` matches any task with at least one
+   * role tagged, not only tasks literally tagged FULL_STACK — same
+   * "can handle everything" reasoning `TasksExplorer` documents for its
+   * own `isFullStack` bypass, and the same exception `matchProfile` below
+   * applies for a full-stack contributor's onboarding profile.
    */
   role?: DeveloperRole;
   difficulty?: ExperienceLevel;
@@ -158,7 +163,12 @@ export interface ListTasksOptions {
    * profile are returned — a task matches when its `roles` intersect the
    * contributor's `developerRoles`, its `difficulty` equals the
    * contributor's `experienceLevel`, or its tech stack intersects the
-   * contributor's `technologies`. Backs `GET /tasks?recommended=true`.
+   * contributor's `technologies`. Exception: a contributor whose
+   * `developerRoles` includes `FULL_STACK` matches on any task that has
+   * *any* role tagged at all, not just tasks literally tagged FULL_STACK —
+   * a full-stack contributor can pick up frontend-only/backend-only/etc.
+   * tasks too, same reasoning `TasksExplorer` documents for its own
+   * `isFullStack` bypass on the frontend. Backs `GET /tasks?recommended=true`.
    */
   matchProfile?: ContributorProfile;
 }
@@ -193,19 +203,32 @@ const IN_MEMORY_SCAN_LIMIT = 2000;
  *
  * `role`, `difficulty`, `status`, and `projectSlug` are plain equality/
  * overlap checks against indexed columns, so — when none of the
- * memory-only filters (`techStack`, `q`, `matchProfile`) are requested —
- * this takes the fast path: real SQL-side keyset pagination, identical in
- * shape to `listAdminTasks` (src/db/adminTasks.ts). The moment a
- * memory-only filter is present, this falls back to the bounded scan +
- * in-memory filter/paginate path described on `IN_MEMORY_SCAN_LIMIT`
- * above — same trade-off `GET /issues` already makes for its own list.
+ * memory-only filters (`techStack`, `q`, `matchProfile`, or `role:
+ * "FULL_STACK"` — see below) are requested — this takes the fast path:
+ * real SQL-side keyset pagination, identical in shape to `listAdminTasks`
+ * (src/db/adminTasks.ts). The moment a memory-only filter is present, this
+ * falls back to the bounded scan + in-memory filter/paginate path
+ * described on `IN_MEMORY_SCAN_LIMIT` above — same trade-off `GET /issues`
+ * already makes for its own list.
  */
 export async function listTasks(
   supabase: SupabaseClient,
   options: ListTasksOptions,
 ): Promise<TasksPage> {
+  // `role=FULL_STACK` gets the same "any role tagged counts" bypass
+  // `matchProfile` applies below, for the same reason: a Full Stack
+  // contributor's own explicit Role filter should still surface every
+  // frontend-only/backend-only/etc. task, not just ones literally tagged
+  // FULL_STACK. That can't be expressed as a plain `overlaps` equality
+  // check against the indexed `roles` column, so it rides the existing
+  // in-memory slow path instead of a new SQL operator.
+  const isFullStackRoleFilter = options.role === "FULL_STACK";
+
   const needsInMemoryFiltering =
-    options.techStack !== undefined || options.q !== undefined || options.matchProfile !== undefined;
+    options.techStack !== undefined ||
+    options.q !== undefined ||
+    options.matchProfile !== undefined ||
+    isFullStackRoleFilter;
 
   let query = supabase
     .from("admin_task_list")
@@ -216,7 +239,9 @@ export async function listTasks(
   if (options.status) query = query.eq("status", options.status);
   if (options.difficulty) query = query.eq("difficulty", options.difficulty);
   if (options.projectSlug) query = query.eq("project_slug", options.projectSlug);
-  if (options.role) query = query.overlaps("roles", [options.role]);
+  // Skip the literal overlaps check for FULL_STACK — it's resolved
+  // in-memory below instead, against every role-tagged task.
+  if (options.role && !isFullStackRoleFilter) query = query.overlaps("roles", [options.role]);
 
   if (!needsInMemoryFiltering) {
     // Fast path — pure SQL-side keyset pagination, same pattern as
@@ -249,6 +274,10 @@ export async function listTasks(
 
   let rows = (data ?? []) as unknown as AdminTaskListRow[];
 
+  if (isFullStackRoleFilter) {
+    rows = rows.filter((row) => (row.roles ?? []).length > 0);
+  }
+
   if (options.techStack) {
     const needle = options.techStack.toLowerCase();
     rows = rows.filter((row) =>
@@ -277,8 +306,20 @@ export async function listTasks(
     const { developerRoles, experienceLevel, technologies } = options.matchProfile;
     const technologiesLower = new Set(technologies.map((t) => t.toLowerCase()));
 
+    // A Full Stack contributor can pick up a frontend-only, backend-only,
+    // docs, testing, or DevOps task just as well as one tagged FULL_STACK —
+    // so, same reasoning `TasksExplorer` documents for its own `isFullStack`
+    // client-side bypass (devtunnel-frontend's
+    // components/tasks/tasks-explorer.tsx), a task with *any* roles tagged
+    // at all counts as a role match for them instead of requiring the
+    // literal "FULL_STACK" tag. Non-full-stack contributors keep the exact
+    // overlap check.
+    const isFullStack = developerRoles.includes("FULL_STACK");
+
     rows = rows.filter((row) => {
-      const roleMatch = (row.roles ?? []).some((role) => developerRoles.includes(role));
+      const roleMatch = isFullStack
+        ? (row.roles ?? []).length > 0
+        : (row.roles ?? []).some((role) => developerRoles.includes(role));
       const difficultyMatch = experienceLevel !== null && row.difficulty === experienceLevel;
       const techMatch = flattenTechStack(row.project_tech_stack).some((tag) =>
         technologiesLower.has(tag.toLowerCase()),
