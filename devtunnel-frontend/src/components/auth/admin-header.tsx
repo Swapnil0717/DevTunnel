@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "../auth/logout-button";
+import { PortalSwitchLink } from "./portal-switch-link";
 import { useAuth } from "@/lib/auth/use-auth";
 import { Logo } from "../layout/logo";
 import { findActiveAdminNavItem } from "../admin/admin-nav-items";
@@ -41,6 +42,7 @@ export function AdminHeader() {
       </div>
 
       <div className="flex items-center gap-3">
+        <PortalSwitchLink from="admin" />
         {user ? (
           <span className="hidden text-xs text-text-dim sm:inline">
             {user.name || user.username}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "./logo";
 import { LogoutButton } from "../auth/logout-button";
+import { PortalSwitchLink } from "../auth/portal-switch-link";
 import { HomeIcon, FolderIcon, UserIcon, SettingsIcon } from "./nav-icons";
 import { useAuth } from "@/lib/auth/use-auth";
 
@@ -53,6 +54,8 @@ export function AppSidebar() {
           })}
         </ul>
       </nav>
+
+      <PortalSwitchLink from="user" className="mb-2 w-full justify-center" />
 
       <div className="flex items-center gap-2.5 border-t border-border-subtle pt-4">
         {user?.avatarUrl ? (

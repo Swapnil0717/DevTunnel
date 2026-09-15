@@ -6,6 +6,7 @@ import { AppBottomNav } from "@/components/layout/app-bottom-nav";
 import { getServerUser } from "@/lib/auth/get-server-user";
 import { needsOnboarding } from "@/lib/onboarding/needs-onboarding";
 import { isAdmin } from "@/lib/auth/is-admin";
+import { getServerViewMode } from "@/lib/auth/view-mode.server";
 
 /**
  * Real route protection for /dashboard, /home, /profile, /onboarding, and
@@ -18,11 +19,15 @@ import { isAdmin } from "@/lib/auth/is-admin";
  * `GET /auth/me` and only renders the page if the backend confirms a valid
  * session. The flag cookie alone is never trusted (see lib/auth/session.ts).
  *
- * Admin redirect: an `ADMIN` user is never shown the contributor shell,
- * regardless of how they got here — a fresh sign-in, a role that was just
- * promoted to ADMIN mid-session, or a stale bookmark to /home. This check
- * runs first, before the onboarding check, so a promoted admin always ends
- * up on the Admin Portal (`/admin`) rather than contributor `/home`.
+ * Admin redirect: an `ADMIN` user is bounced to the Admin Portal (`/admin`)
+ * unless they've explicitly picked "Continue as User" / "Switch to User
+ * view", which sets the `dt_view_mode` cookie to `"user"` (see
+ * lib/auth/view-mode.ts and portal-switch-link.tsx). That covers a fresh
+ * sign-in, a role that was just promoted to ADMIN mid-session, or a stale
+ * bookmark to /home — all default to `/admin` — while still letting an
+ * admin who deliberately switched into the contributor shell actually stay
+ * there instead of being bounced straight back out. This check runs first,
+ * before the onboarding check.
  *
  * This is also the *one* place that enforces "signed in but hasn't
  * finished onboarding" for every route in this group — instead of each
@@ -52,7 +57,7 @@ export default async function ProtectedLayout({
     redirect("/login");
   }
 
-  if (isAdmin(user)) {
+  if (isAdmin(user) && getServerViewMode() !== "user") {
     redirect("/admin");
   }
 
