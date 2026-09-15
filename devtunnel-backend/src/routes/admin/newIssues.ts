@@ -124,7 +124,7 @@ const listQuerySchema = z.object({
  * Deliberately `NewIssueScanIssue`, not the full `GithubIssueSummary` —
  * see that type's own comment just below for why.
  */
-interface GithubScanCacheEntry {
+export interface GithubScanCacheEntry {
   scannedAt: string;
   projects: Array<{ projectId: string; issues: NewIssueScanIssue[] }>;
 }
@@ -147,12 +147,12 @@ interface GithubScanCacheEntry {
  * the two fields this route never uses keeps the cached payload
  * proportional to what actually gets returned.
  */
-type NewIssueScanIssue = Pick<
+export type NewIssueScanIssue = Pick<
   GithubIssueSummary,
   "number" | "title" | "state" | "url" | "labels" | "author" | "createdAt" | "updatedAt"
 >;
 
-function toScanIssue(issue: GithubIssueSummary): NewIssueScanIssue {
+export function toScanIssue(issue: GithubIssueSummary): NewIssueScanIssue {
   return {
     number: issue.number,
     title: issue.title,
@@ -165,7 +165,16 @@ function toScanIssue(issue: GithubIssueSummary): NewIssueScanIssue {
   };
 }
 
-const GITHUB_SCAN_CACHE_KEY = "admin-new-issues:github-scan:v1";
+/**
+ * Shared with `GET /issues` (src/routes/issues.ts) — the contributor
+ * "All Issues" list is the same live cross-project GitHub scan as this
+ * admin route, just filtered/shaped differently for a non-admin
+ * audience, so it deliberately reads and writes this exact cache entry
+ * rather than running (and paying for) a second independent scan. Keep
+ * this key, `GithubScanCacheEntry`, `NewIssueScanIssue`, and
+ * `toScanIssue` in sync with that file if any of them change shape.
+ */
+export const GITHUB_SCAN_CACHE_KEY = "admin-new-issues:github-scan:v1";
 
 // 5 minutes: long enough that a burst of page loads/pagination walks
 // (previously the actual cause of multi-minute waits — see
@@ -175,7 +184,7 @@ const GITHUB_SCAN_CACHE_KEY = "admin-new-issues:github-scan:v1";
 // normal admin workflow without needing the Sync button. The Sync
 // button (`?refresh=true`) always bypasses this when an admin wants a
 // guaranteed-fresh read regardless of TTL.
-const GITHUB_SCAN_CACHE_TTL_SECONDS = 5 * 60;
+export const GITHUB_SCAN_CACHE_TTL_SECONDS = 5 * 60;
 
 /**
  * `GET /admin/new-issues` (admin_workflow.txt section 16 ▸ Backend;

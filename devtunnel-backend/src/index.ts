@@ -7,6 +7,7 @@ import { health } from "./routes/health";
 import { auth } from "./routes/auth";
 import { contributions } from "./routes/contributions";
 import { devtunnelStats } from "./routes/devtunnelStats";
+import { issues } from "./routes/issues";
 import { admin } from "./routes/admin/index";
 import { runDailyDiscovery } from "./lib/aiDiscoveryAgent";
 import { getEnv } from "./config/env";
@@ -21,6 +22,7 @@ app.route("/", health);
 app.route("/auth", auth);
 app.route("/", contributions);
 app.route("/", devtunnelStats);
+app.route("/", issues);
 app.route("/admin", admin);
 
 app.onError(handleError);

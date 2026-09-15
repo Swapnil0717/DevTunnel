@@ -1,17 +1,22 @@
+// devtunnel-frontend/src/components/layout/app-bottom-nav.tsx
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { HomeIcon, FolderIcon, UserIcon } from "./nav-icons";
+import { HomeIcon, FolderIcon, ChecklistIcon, UserIcon } from "./nav-icons";
 
 /**
  * Fixed bottom tab bar, shown only below the `sm` breakpoint — the
- * mobile counterpart to `AppSidebar`. Same three real, crawlable links,
- * just rearranged for a narrow viewport.
+ * mobile counterpart to `AppSidebar`. `AppSidebar` now lists 8 items
+ * (Home, Open Source Tools, GitHub Projects, Projects on DevTunnel,
+ * Tasks / Issues, All Issues, Profile, Settings); a phone-width tab bar
+ * can't hold all of them legibly, so this keeps the 4 most-used, in the
+ * same relative order as the sidebar.
  */
 const NAV_LINKS = [
   { href: "/home", label: "Home", Icon: HomeIcon },
   { href: "/projects", label: "Projects", Icon: FolderIcon },
+  { href: "/tasks", label: "Tasks", Icon: ChecklistIcon },
   { href: "/profile", label: "Profile", Icon: UserIcon },
 ] as const;
 

@@ -1,3 +1,4 @@
+// devtunnel-frontend/src/components/layout/app-sidebar.tsx
 "use client";
 
 import Link from "next/link";
@@ -5,18 +6,33 @@ import { usePathname } from "next/navigation";
 import { Logo } from "./logo";
 import { LogoutButton } from "../auth/logout-button";
 import { PortalSwitchLink } from "../auth/portal-switch-link";
-import { HomeIcon, FolderIcon, UserIcon, SettingsIcon } from "./nav-icons";
+import {
+  HomeIcon,
+  ToolIcon,
+  GitBranchIcon,
+  FolderIcon,
+  ChecklistIcon,
+  IssueIcon,
+  UserIcon,
+  SettingsIcon,
+} from "./nav-icons";
 import { useAuth } from "@/lib/auth/use-auth";
 
 /**
  * Left app-shell navigation for sm and up. Below sm, `AppBottomNav`
  * (a fixed bottom tab bar) takes over instead — a full-height sidebar
  * eats too much of a phone-width screen, and a bottom bar is the more
- * usual mobile pattern.
+ * usual mobile pattern. `AppBottomNav` only surfaces a subset of these
+ * (all 8 don't fit a phone-width tab bar), so keep the two lists in sync
+ * deliberately rather than assuming they should always match.
  */
 const NAV_LINKS = [
   { href: "/home", label: "Home", Icon: HomeIcon },
-  { href: "/projects", label: "Projects", Icon: FolderIcon },
+  { href: "/opensource-tools", label: "Open Source Tools", Icon: ToolIcon },
+  { href: "/github-projects", label: "GitHub Projects", Icon: GitBranchIcon },
+  { href: "/projects", label: "Projects on DevTunnel", Icon: FolderIcon },
+  { href: "/tasks", label: "Tasks / Issues", Icon: ChecklistIcon },
+  { href: "/issues", label: "All Issues", Icon: IssueIcon },
   { href: "/profile", label: "Profile", Icon: UserIcon },
   { href: "/settings", label: "Settings", Icon: SettingsIcon },
 ] as const;

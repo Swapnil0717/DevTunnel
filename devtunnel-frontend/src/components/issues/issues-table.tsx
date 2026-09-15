@@ -1,0 +1,160 @@
+import { AdminTableRow } from "@/components/admin/admin-table-row";
+import { RepoLogo } from "@/components/admin/repo-logo";
+import { IssueIcon } from "@/components/layout/nav-icons";
+import type { Issue } from "@/lib/issues/types";
+
+/** How many labels to show inline before collapsing into "+N". */
+const MAX_VISIBLE_LABELS = 3;
+
+function formatDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/**
+ * All Issues table (`/issues`) — the contributor-facing counterpart to
+ * `AdminNewIssuesTable`: Issue #, Issue Title, Project, GitHub Author,
+ * Labels, Created, Updated, Actions. Same columns, but the only action a
+ * contributor gets is "View on GitHub" — "Create Task" and "Ignore"
+ * curate DevTunnel's task list, which is an Admin/Maintainer
+ * responsibility (see `AdminNewIssuesTable`'s own doc comment), not
+ * something a contributor does from this browse view.
+ *
+ * `AdminTableRow` and `RepoLogo` are reused as-is rather than
+ * duplicated: both are already generic, role-agnostic presentational
+ * components (no admin API calls, no admin-only state, no auth check),
+ * so copying them here would just be the same logic twice
+ * (Frontend_Development_Rules.txt rule 51 — keep this kind of logic
+ * centralized).
+ *
+ * Dates are shown as readable text plus a machine-readable `<time
+ * datetime>` (rule 46), and the state badge is always paired with the
+ * word "Open"/"Closed" — never color alone (rule 43). The whole row also
+ * opens the GitHub issue in a new tab on click (`AdminTableRow`), same
+ * destination as the "View on GitHub" link.
+ */
+export function IssuesTable({ issues }: { issues: Issue[] }) {
+  return (
+    <div className="overflow-x-auto rounded-[10px] border border-border">
+      <table className="w-full min-w-[960px] border-collapse text-left text-[12.5px]">
+        <thead>
+          <tr className="border-b border-border bg-surface">
+            {["Issue", "Project", "GitHub author", "Labels", "Created", "Updated", "Actions"].map(
+              (heading) => (
+                <th
+                  key={heading}
+                  scope="col"
+                  className="px-4 py-3 text-[11px] font-normal uppercase tracking-wide text-text-faint"
+                >
+                  {heading}
+                </th>
+              ),
+            )}
+          </tr>
+        </thead>
+
+        <tbody>
+          {issues.map((issue) => {
+            const visibleLabels = issue.labels.slice(0, MAX_VISIBLE_LABELS);
+            const hiddenLabelCount = issue.labels.length - visibleLabels.length;
+
+            return (
+              <AdminTableRow
+                key={`${issue.project.slug}-${issue.number}`}
+                externalHref={issue.url}
+                className="border-b border-border-subtle last:border-b-0 hover:bg-surface/60"
+              >
+                {/* Issue # + title + open/closed state */}
+                <th scope="row" className="px-4 py-3 align-top font-medium text-text">
+                  <a
+                    href={issue.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="inline-flex items-start gap-1.5 hover:text-accent"
+                  >
+                    <IssueIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      <span className="block">{issue.title}</span>
+                      <span className="mt-0.5 block font-mono text-[11px] text-text-faint">
+                        #{issue.number} · {issue.state === "OPEN" ? "Open" : "Closed"}
+                      </span>
+                    </span>
+                  </a>
+                </th>
+
+                {/* Project (+ repository) */}
+                <td className="px-4 py-3 align-top">
+                  <p className="m-0 text-text-secondary">{issue.project.name}</p>
+                  <p className="m-0 mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-text-faint">
+                    <RepoLogo repositoryFullName={issue.project.repositoryFullName} size={14} />
+                    {issue.project.repositoryFullName}
+                  </p>
+                </td>
+
+                {/* GitHub author */}
+                <td className="px-4 py-3 align-top text-text-secondary">
+                  <a
+                    href={issue.author.profileUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="hover:text-accent"
+                  >
+                    @{issue.author.username}
+                  </a>
+                </td>
+
+                {/* Labels */}
+                <td className="px-4 py-3 align-top">
+                  {issue.labels.length === 0 ? (
+                    <span className="text-text-faint">—</span>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-1">
+                      {visibleLabels.map((label) => (
+                        <span
+                          key={label}
+                          className="inline-flex items-center rounded-md border border-border bg-surface px-1.5 py-0.5 text-[11px] text-text-secondary"
+                        >
+                          {label}
+                        </span>
+                      ))}
+                      {hiddenLabelCount > 0 ? (
+                        <span className="text-[11px] text-text-faint">+{hiddenLabelCount}</span>
+                      ) : null}
+                    </div>
+                  )}
+                </td>
+
+                {/* Created */}
+                <td className="whitespace-nowrap px-4 py-3 align-top text-text-secondary">
+                  <time dateTime={issue.createdAt}>{formatDate(issue.createdAt)}</time>
+                </td>
+
+                {/* Updated */}
+                <td className="whitespace-nowrap px-4 py-3 align-top text-text-secondary">
+                  <time dateTime={issue.updatedAt}>{formatDate(issue.updatedAt)}</time>
+                </td>
+
+                {/* Actions — View only; task creation/curation is an Admin action */}
+                <td className="px-4 py-3 align-top">
+                  <a
+                    href={issue.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="rounded-md px-2 py-1 text-[11.5px] font-medium text-text-secondary hover:text-accent"
+                  >
+                    View on GitHub
+                  </a>
+                </td>
+              </AdminTableRow>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
