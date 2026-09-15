@@ -19,8 +19,15 @@ import type {
  * added to the view later doesn't silently start flowing into
  * `AdminTaskSummary`/`AdminTaskDetail` without a conscious update to the
  * mapping functions below.
+ *
+ * Exported (along with `flattenTechStack`, `toGithubIssueRef`, and
+ * `contributorCounts` below) so the contributor-facing task list
+ * (src/db/tasks.ts, backing `GET /tasks`) reads the exact same view with
+ * the exact same column set and mapping logic, rather than duplicating
+ * this query shape a second time (Backend_Development_Rules.txt rule 51 —
+ * don't implement the same logic twice).
  */
-const LIST_COLUMNS =
+export const LIST_COLUMNS =
   "id, slug, title, status, roles, difficulty, assignee_id, github_issue_number, " +
   "github_issue_url, github_issue_snapshot, custom_description, deleted_at, created_at, " +
   "project_id, project_slug, project_name, project_repo_url, project_github_full_name, " +
@@ -37,7 +44,7 @@ const LIST_COLUMNS =
  * project's existing curation, never a second, independent source of
  * truth (rule 37/38: never fabricate/duplicate a metric).
  */
-function flattenTechStack(techStack: OnboardingTechStack | null): string[] {
+export function flattenTechStack(techStack: OnboardingTechStack | null): string[] {
   if (!techStack) return [];
   return [
     ...(techStack.languages ?? []),
@@ -57,7 +64,7 @@ function flattenTechStack(techStack: OnboardingTechStack | null): string[] {
  * task produced by `complete_task_onboarding()` (sql/012) always has one
  * — rule 73: never trust a database result blindly).
  */
-function toGithubIssueRef(row: AdminTaskListRow): AdminTaskGithubIssueRef | null {
+export function toGithubIssueRef(row: AdminTaskListRow): AdminTaskGithubIssueRef | null {
   const snapshot = row.github_issue_snapshot;
   if (!snapshot || row.github_issue_number === null) return null;
 
@@ -80,7 +87,7 @@ function toGithubIssueRef(row: AdminTaskListRow): AdminTaskGithubIssueRef | null
  * already computed in SQL (`devtunnel.admin_task_list`, sql/013) from
  * actual `devtunnel.pull_requests` rows.
  */
-function contributorCounts(row: AdminTaskListRow): {
+export function contributorCounts(row: AdminTaskListRow): {
   activeContributorCount: number;
   completedContributorCount: number;
 } {
