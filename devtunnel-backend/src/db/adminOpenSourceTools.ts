@@ -41,8 +41,14 @@ interface OpenSourceToolDetailRow extends OpenSourceToolListRow {
  * only (the column default is `'[]'::jsonb` and every write path here
  * always stores a string array), but never trusts a database result
  * blindly (rule 73).
+ *
+ * Exported so the contributor-facing list (src/db/openSourceTools.ts,
+ * backing `GET /opensource-tools/available`) reads the exact same
+ * normalization rather than a second, possibly-diverging copy
+ * (Backend_Development_Rules.md rule 51 — don't implement the same logic
+ * twice).
  */
-function toLabels(raw: unknown): string[] {
+export function toLabels(raw: unknown): string[] {
   return Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string") : [];
 }
 
