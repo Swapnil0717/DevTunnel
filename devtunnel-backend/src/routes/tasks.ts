@@ -7,7 +7,7 @@ import { requireAuth } from "../middleware/auth";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
 import { logger } from "../lib/logger";
-import { listTasks } from "../db/tasks";
+import { getTaskDetailByProjectAndId, listTasks } from "../db/tasks";
 
 /**
  * Contributor — Tasks (`/tasks` — "Tasks" in `AppSidebar` / `AppBottomNav`,
@@ -50,8 +50,14 @@ import { listTasks } from "../db/tasks";
  * combination is rejected with a clear 422 rather than silently either
  * returning every task (misleading — it looks like filtering happened) or
  * an empty list (looks like a bug).
+ *
+ * Also mounts `GET /projects/:projectSlug/tasks/:taskId` — one task's own
+ * detail page, the "View Task" destination `TaskRow` / `TasksTable`
+ * already link to. See that route's own doc comment below.
  */
 export const tasks = new Hono<{ Bindings: Env; Variables: Variables }>();
+
+const taskIdSchema = z.string().uuid("Invalid task id");
 
 const ROLE_VALUES = [
   "FRONTEND",
@@ -199,5 +205,60 @@ tasks.get("/tasks", requireAuth, async (c) => {
       requestId: c.get("requestId"),
     });
     return errorResponse(c, 500, "internal_error", "Couldn't load tasks right now");
+  }
+});
+
+/**
+ * `GET /projects/:projectSlug/tasks/:taskId` — the contributor-facing
+ * "View Task" destination `TaskRow` (devtunnel-frontend's
+ * `components/home/task-row.tsx`) and `TasksTable`
+ * (`components/tasks/tasks-table.tsx`) already link to. The single-task
+ * sibling of `GET /tasks` above, same relationship
+ * `GET /admin/tasks/:id` has to `GET /admin/tasks`.
+ *
+ * `requireAuth` only, same reasoning as `GET /tasks` — reading one task's
+ * detail page to decide whether to pick it up is not an admin action.
+ *
+ * Both `projectSlug` and `taskId` are part of the lookup (see
+ * `getTaskDetailByProjectAndId`'s own comment) — a task id that's real
+ * but doesn't belong to `projectSlug` 404s exactly like an id that
+ * doesn't exist at all, rather than silently ignoring the URL's project
+ * segment.
+ */
+tasks.get("/projects/:projectSlug/tasks/:taskId", requireAuth, async (c) => {
+  const env = getEnv(c.env);
+
+  const projectSlug = c.req.param("projectSlug")?.trim();
+  const taskIdResult = taskIdSchema.safeParse(c.req.param("taskId"));
+
+  if (!projectSlug) {
+    return errorResponse(c, 400, "invalid_request", "Invalid project slug");
+  }
+  if (!taskIdResult.success) {
+    return errorResponse(c, 400, "invalid_request", taskIdResult.error.issues[0]!.message);
+  }
+
+  const withinLimit = await checkRateLimit(c, {
+    bucket: "tasks-detail",
+    limit: 120,
+    windowSeconds: 60,
+  });
+  if (!withinLimit) {
+    return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+  }
+
+  try {
+    const supabase = getSupabase(env);
+    const task = await getTaskDetailByProjectAndId(supabase, projectSlug, taskIdResult.data);
+    if (!task) {
+      return errorResponse(c, 404, "task_not_found", "Task not found");
+    }
+    return c.json(task, 200);
+  } catch (err) {
+    logger.error("task_detail_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      requestId: c.get("requestId"),
+    });
+    return errorResponse(c, 500, "internal_error", "Couldn't load this task right now");
   }
 });

@@ -65,6 +65,36 @@ export interface TaskSummary {
   completedContributorCount: number;
 }
 
+/**
+ * `GET /projects/:projectSlug/tasks/:taskId` (the contributor-facing
+ * "View Task" destination `TaskRow` and `TasksTable` already link to —
+ * devtunnel-frontend's `components/home/task-row.tsx` /
+ * `components/tasks/tasks-table.tsx`). Extends `TaskSummary` with the
+ * task's own curated description, the same two detail-only fields
+ * `AdminTaskDetail` adds over `AdminTaskSummary` (`customDescription`,
+ * `githubIssueBody`) — a contributor deciding whether to pick up a task
+ * needs to actually read it, not just see the summary row.
+ *
+ * Deliberately omits `submissionCount` and `deletedAt`, same as
+ * `TaskSummary` itself: `submissionCount` is an admin throughput metric,
+ * and a soft-deleted task never reaches this shape at all (see
+ * `getTaskDetailByProjectAndId` below — it 404s instead).
+ */
+export interface TaskDetail extends TaskSummary {
+  /** Only set when the task was onboarded/edited with a DevTunnel-specific description layered on the issue. */
+  customDescription: string | null;
+  /** The original GitHub issue body, exactly as imported — never rewritten (rule: "Do not modify the original GitHub issue"). */
+  githubIssueBody: string | null;
+}
+
+function toTaskDetail(row: AdminTaskListRow): TaskDetail {
+  return {
+    ...toTaskSummary(row),
+    customDescription: row.custom_description,
+    githubIssueBody: row.github_issue_snapshot?.body ?? null,
+  };
+}
+
 function toTaskSummary(row: AdminTaskListRow): TaskSummary {
   const { activeContributorCount, completedContributorCount } = contributorCounts(row);
   const techStack = flattenTechStack(row.project_tech_stack);
@@ -269,4 +299,40 @@ export async function listTasks(
     tasks: page.map(toTaskSummary),
     nextCursor: hasMore ? (page[page.length - 1] as AdminTaskListRow).created_at : null,
   };
+}
+
+/**
+ * Single-task detail lookup backing
+ * `GET /projects/:projectSlug/tasks/:taskId` (src/routes/tasks.ts) — the
+ * contributor-facing counterpart to `getAdminTaskDetailById`
+ * (src/db/adminTasks.ts). Matches on `id` **and** `project_slug`
+ * together, not `id` alone: the URL a contributor lands on is scoped to
+ * a project (`/projects/:projectSlug/tasks/:taskId`), so a task id that
+ * exists but belongs to a *different* project's slug is treated as "not
+ * found here" and 404s — same as a real id that doesn't exist at all —
+ * rather than silently ignoring the project segment and serving the
+ * task anyway.
+ *
+ * Returns `null` for a task that doesn't exist, belongs to a different
+ * project, or has been soft-deleted — a contributor has no more use for
+ * a deleted task's detail page than `listTasks` gives them a use for it
+ * in the list (`deleted_at is null` there; the same exclusion here, just
+ * expressed as "not found" instead of "filtered out of a list").
+ */
+export async function getTaskDetailByProjectAndId(
+  supabase: SupabaseClient,
+  projectSlug: string,
+  taskId: string,
+): Promise<TaskDetail | null> {
+  const { data, error } = await supabase
+    .from("admin_task_list")
+    .select(LIST_COLUMNS)
+    .eq("id", taskId)
+    .eq("project_slug", projectSlug)
+    .maybeSingle<AdminTaskListRow>();
+
+  if (error) throw new Error(`Failed to load task: ${error.message}`);
+  if (!data || data.deleted_at) return null;
+
+  return toTaskDetail(data);
 }
