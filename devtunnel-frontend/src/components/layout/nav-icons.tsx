@@ -272,3 +272,17 @@
       </svg>
     );
   }
+    /**
+   * `/github-projects` ("GitHub Projects") card grid (`GithubProjectCard`)
+   * and its loading skeleton — GitHub star count. A plain 5-point outline
+   * star, same stroke-only convention as every other icon in this file.
+   * Never the only cue for the count (rule 43): the card always pairs
+   * this with an `aria-label` stating the real number, e.g. "1.2K stars".
+   */
+     export function StarIcon({ className = "" }: IconProps) {
+      return (
+        <svg {...base} className={className}>
+          <path d="M12 3.75l2.46 5.06 5.54.62-4.06 3.9.98 5.52L12 16.1l-4.92 2.75.98-5.52-4.06-3.9 5.54-.62Z" />
+        </svg>
+      );
+    }

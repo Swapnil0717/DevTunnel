@@ -272,3 +272,42 @@ export function SkeletonToolCardGrid({ count = 6 }: { count?: number }) {
     </div>
   );
 }
+/**
+ * N `GithubProjectCard`-shaped placeholders for `/github-projects`'s
+ * card grid: a left-aligned repo-logo + name/`owner-repo` row, a
+ * two-line description, a row of language/tag chips, then a bordered
+ * stars/forks/issues + "updated" footer row — sized for
+ * `GithubProjectCard` specifically (left-aligned repo row) rather than
+ * `SkeletonToolCardGrid`'s centered-square-logo layout, same "match the
+ * real card's own internal shape" approach as that helper.
+ */
+ export function SkeletonGithubProjectCardGrid({ count = 12 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-hidden="true">
+      {Array.from({ length: count }).map((_, index) => (
+        <div
+          key={index}
+          className="flex flex-col rounded-[10px] border border-border bg-surface p-4"
+        >
+          <div className="mb-2.5 flex items-start gap-2.5">
+            <SkeletonBlock className="h-8 w-8 shrink-0 rounded-full" />
+            <div className="flex-1">
+              <SkeletonBlock className="h-3 w-28" />
+              <SkeletonBlock className="mt-1.5 h-2.5 w-20" />
+            </div>
+          </div>
+          <SkeletonBlock className="mb-1.5 h-2.5 w-full" />
+          <SkeletonBlock className="mb-3 h-2.5 w-3/5" />
+          <div className="mb-3 flex gap-1.5">
+            <SkeletonBlock className="h-4 w-14 rounded-full" />
+            <SkeletonBlock className="h-4 w-12 rounded-full" />
+          </div>
+          <div className="mt-auto flex items-center justify-between gap-2 border-t border-border-subtle pt-2.5">
+            <SkeletonBlock className="h-3 w-24" />
+            <SkeletonBlock className="h-3 w-16" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

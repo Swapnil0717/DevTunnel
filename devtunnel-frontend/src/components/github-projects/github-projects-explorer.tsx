@@ -1,0 +1,247 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { SearchIcon } from "@/components/layout/nav-icons";
+import { SectionMessage } from "@/components/home/section-message";
+import { FilterSelect } from "@/components/ui/filter-select";
+import { PagePaginationControls } from "@/components/admin/page-pagination-controls";
+import { usePagePagination } from "@/lib/admin/use-page-pagination";
+import { GithubProjectCard } from "./github-project-card";
+import type { GithubProjectSummary } from "@/lib/github-projects/types";
+
+type SortOption = "TRENDING" | "MOST_STARS" | "NEWEST" | "RECENTLY_UPDATED";
+
+const SORT_FILTERS: { value: SortOption; label: string }[] = [
+  { value: "TRENDING", label: "Trending" },
+  { value: "MOST_STARS", label: "Most stars (Popular)" },
+  { value: "NEWEST", label: "Newest" },
+  { value: "RECENTLY_UPDATED", label: "Recently updated" },
+];
+
+const ALL_TECH = "ALL";
+const ALL_STARS = "ALL";
+
+/** "500+ stars" style thresholds — a project matches when `stars >= value`. */
+const STARS_FILTERS: { value: string; label: string }[] = [
+  { value: ALL_STARS, label: "Any stars" },
+  { value: "10", label: "10+ stars" },
+  { value: "100", label: "100+ stars" },
+  { value: "500", label: "500+ stars" },
+  { value: "1000", label: "1,000+ stars" },
+  { value: "5000", label: "5,000+ stars" },
+  { value: "10000", label: "10,000+ stars" },
+];
+
+/**
+ * Contributor-facing page size — a 3-column grid at the `lg` breakpoint,
+ * so 12 fills exactly 4 full rows. Deliberately smaller than
+ * `ADMIN_PAGE_SIZE` (20), same reasoning `IssuesExplorer` documents for
+ * its own `ISSUES_PAGE_SIZE`: a contributor browsing benefits from a
+ * shorter, less overwhelming page than an admin scanning a queue does.
+ */
+const GITHUB_PROJECTS_PAGE_SIZE = 12;
+
+/**
+ * Recency window "Trending" treats a repository as currently active.
+ * There's no historical star-delta data available (no backend field for
+ * "stars gained in the last 30 days"), so this can never be a genuine
+ * trending *score* — only a heuristic re-ordering of real fields the API
+ * already returned (`stars`, `pushedAt`). Frontend_Development_Rules.txt
+ * rules 58/59: never invent a statistic the backend hasn't actually
+ * given us.
+ */
+const TRENDING_RECENCY_MS = 30 * 24 * 60 * 60 * 1000;
+
+function sortProjects(
+  projects: GithubProjectSummary[],
+  sortBy: SortOption,
+): GithubProjectSummary[] {
+  const sorted = [...projects];
+
+  switch (sortBy) {
+    case "TRENDING": {
+      const now = Date.now();
+      sorted.sort((a, b) => {
+        const aRecent = now - new Date(a.pushedAt).getTime() <= TRENDING_RECENCY_MS;
+        const bRecent = now - new Date(b.pushedAt).getTime() <= TRENDING_RECENCY_MS;
+        if (aRecent !== bRecent) return aRecent ? -1 : 1;
+        return b.stars - a.stars;
+      });
+      return sorted;
+    }
+    case "MOST_STARS":
+      sorted.sort((a, b) => b.stars - a.stars);
+      return sorted;
+    case "NEWEST":
+      sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      return sorted;
+    case "RECENTLY_UPDATED":
+      sorted.sort((a, b) => new Date(b.pushedAt).getTime() - new Date(a.pushedAt).getTime());
+      return sorted;
+  }
+}
+
+/**
+ * Client-side search + filter + sort bar for `/github-projects`
+ * ("GitHub Projects"), driven by the fully-fetched `GET /github-projects`
+ * list (`lib/github-projects/api.ts`) — narrowed and re-ordered here,
+ * then paginated 12-per-page (`GITHUB_PROJECTS_PAGE_SIZE`), never a
+ * second fabricated data source (Frontend_Development_Rules.txt rule
+ * 58). Same convention as `IssuesExplorer` and `AdminProjectsExplorer`:
+ * one real fetch, filtered/sorted/paginated entirely in the browser.
+ *
+ * Three filters, matching what a contributor exploring GitHub
+ * repositories actually reaches for: **Tech stack** (built from the
+ * tags the fetched projects actually carry — never a hardcoded catalog,
+ * so the dropdown can't offer an option nothing here could match),
+ * **Minimum stars** (a real threshold on the real `stars` field, not a
+ * cosmetic label), and **Sort by** (Trending / Most stars / Newest /
+ * Recently updated — see `sortProjects`'s doc comment on "Trending").
+ */
+export function GithubProjectsExplorer({ projects }: { projects: GithubProjectSummary[] }) {
+  const [query, setQuery] = useState("");
+  const [techStack, setTechStack] = useState(ALL_TECH);
+  const [minStars, setMinStars] = useState(ALL_STARS);
+  const [sortBy, setSortBy] = useState<SortOption>("TRENDING");
+
+  const techStackOptions = useMemo(() => {
+    const values = new Set<string>();
+    for (const project of projects) {
+      for (const value of project.techStack) values.add(value);
+    }
+    return Array.from(values).sort((a, b) => a.localeCompare(b));
+  }, [projects]);
+
+  const filteredProjects = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    const minStarsThreshold = minStars === ALL_STARS ? 0 : Number(minStars);
+
+    const filtered = projects.filter((project) => {
+      if (techStack !== ALL_TECH && !project.techStack.includes(techStack)) return false;
+      if (project.stars < minStarsThreshold) return false;
+
+      if (!normalizedQuery) return true;
+
+      const haystack = [
+        project.name,
+        project.repositoryFullName,
+        project.description ?? "",
+        project.primaryLanguage ?? "",
+        project.owner.username,
+        project.owner.name ?? "",
+        ...project.techStack,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(normalizedQuery);
+    });
+
+    return sortProjects(filtered, sortBy);
+  }, [projects, query, techStack, minStars, sortBy]);
+
+  const hasActiveFilters =
+    query.trim().length > 0 || techStack !== ALL_TECH || minStars !== ALL_STARS;
+
+  const paged = usePagePagination(filteredProjects, GITHUB_PROJECTS_PAGE_SIZE);
+
+  return (
+    <div>
+      <div className="mb-4 flex flex-col gap-3">
+        <div className="relative w-full sm:max-w-xs">
+          <label htmlFor="github-projects-search" className="sr-only">
+            Search GitHub projects by name, description, owner, or tech stack
+          </label>
+
+          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
+
+          <input
+            id="github-projects-search"
+            name="github-projects-search"
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search by project, description, owner, or tech stack"
+            className="w-full rounded-[8px] border border-border bg-surface py-2 pl-8 pr-3 text-[12.5px] text-text placeholder:text-text-faint focus:outline-none focus:ring-2 focus:ring-accent/40"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="github-projects-techstack"
+              className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
+            >
+              Tech stack
+            </label>
+            <FilterSelect
+              id="github-projects-techstack"
+              value={techStack}
+              onChange={setTechStack}
+              options={[
+                { value: ALL_TECH, label: "All tech stacks" },
+                ...techStackOptions.map((value) => ({ value, label: value })),
+              ]}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="github-projects-stars"
+              className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
+            >
+              Minimum stars
+            </label>
+            <FilterSelect
+              id="github-projects-stars"
+              value={minStars}
+              onChange={setMinStars}
+              options={STARS_FILTERS}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="github-projects-sort"
+              className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
+            >
+              Sort by
+            </label>
+            <FilterSelect
+              id="github-projects-sort"
+              value={sortBy}
+              onChange={(value) => setSortBy(value as SortOption)}
+              options={SORT_FILTERS}
+            />
+          </div>
+        </div>
+      </div>
+
+      {filteredProjects.length === 0 ? (
+        <SectionMessage>
+          {hasActiveFilters
+            ? "No GitHub projects match your search or the selected filters. Try different search terms or filters."
+            : "No GitHub projects have been added yet — check back soon."}
+        </SectionMessage>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {paged.pageItems.map((project) => (
+              <GithubProjectCard key={project.id} project={project} />
+            ))}
+          </div>
+
+          <PagePaginationControls
+            page={paged.page}
+            totalPages={paged.totalPages}
+            onPageChange={paged.setPage}
+            rangeStart={paged.rangeStart}
+            rangeEnd={paged.rangeEnd}
+            totalItems={paged.totalItems}
+            itemLabel="project"
+          />
+        </>
+      )}
+    </div>
+  );
+}
