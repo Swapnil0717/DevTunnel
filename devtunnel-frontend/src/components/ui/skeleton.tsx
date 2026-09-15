@@ -311,3 +311,81 @@ export function SkeletonToolCardGrid({ count = 6 }: { count?: number }) {
     </div>
   );
 }
+/**
+ * N `DevtunnelProjectCard`-shaped placeholders for `/projects`'s card
+ * grid: a left-aligned square-logo + name/subtitle row, a two-line
+ * description, a single tech-stack tag, then a bordered match-badge +
+ * "View project" footer row — the `/projects` counterpart to
+ * `SkeletonGithubProjectCardGrid` above, sized for
+ * `DevtunnelProjectCard`'s own shape (one tag, no stars/forks/issues
+ * row) rather than reused as-is, same "match the real card's own
+ * internal shape" approach that helper documents.
+ */
+ export function SkeletonDevtunnelProjectCardGrid({ count = 12 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-hidden="true">
+      {Array.from({ length: count }).map((_, index) => (
+        <div
+          key={index}
+          className="flex flex-col rounded-[10px] border border-border bg-surface p-4"
+        >
+          <div className="mb-2.5 flex items-start gap-2.5">
+            <SkeletonBlock className="h-8 w-8 shrink-0 rounded-[10px]" />
+            <div className="flex-1">
+              <SkeletonBlock className="h-3 w-28" />
+              <SkeletonBlock className="mt-1.5 h-2.5 w-24" />
+            </div>
+          </div>
+          <SkeletonBlock className="mb-1.5 h-2.5 w-full" />
+          <SkeletonBlock className="mb-3 h-2.5 w-3/5" />
+          <div className="mb-3 flex gap-1.5">
+            <SkeletonBlock className="h-4 w-14 rounded-full" />
+          </div>
+          <div className="mt-auto flex items-center justify-between gap-2 border-t border-border-subtle pt-2.5">
+            <SkeletonBlock className="h-3 w-24" />
+            <SkeletonBlock className="h-3 w-16" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+/**
+ * N `DevtunnelOpenSourceToolCard`-shaped placeholders for
+ * `/opensource-tools`'s card grid — same left-aligned logo + name/source
+ * row, two-line description, tag row, and bordered footer shape as
+ * `SkeletonGithubProjectCardGrid` above (this card was deliberately
+ * styled to match `GithubProjectCard`), kept as its own export so this
+ * page's `loading.tsx` isn't coupled to a name that documents a
+ * different route.
+ */
+ export function SkeletonDevtunnelOpenSourceToolCardGrid({ count = 12 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-hidden="true">
+      {Array.from({ length: count }).map((_, index) => (
+        <div
+          key={index}
+          className="flex flex-col rounded-[10px] border border-border bg-surface p-4"
+        >
+          <div className="mb-2.5 flex items-start gap-2.5">
+            <SkeletonBlock className="h-8 w-8 shrink-0 rounded-[10px]" />
+            <div className="flex-1">
+              <SkeletonBlock className="h-3 w-28" />
+              <SkeletonBlock className="mt-1.5 h-2.5 w-20" />
+            </div>
+          </div>
+          <SkeletonBlock className="mb-1.5 h-2.5 w-full" />
+          <SkeletonBlock className="mb-3 h-2.5 w-3/5" />
+          <div className="mb-3 flex gap-1.5">
+            <SkeletonBlock className="h-4 w-14 rounded-full" />
+            <SkeletonBlock className="h-4 w-12 rounded-full" />
+          </div>
+          <div className="mt-auto flex items-center justify-between gap-2 border-t border-border-subtle pt-2.5">
+            <SkeletonBlock className="h-3 w-16" />
+            <SkeletonBlock className="h-3 w-20" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
