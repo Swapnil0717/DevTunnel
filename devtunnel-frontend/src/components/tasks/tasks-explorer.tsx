@@ -6,6 +6,7 @@ import { SectionMessage } from "@/components/home/section-message";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { PagePaginationControls } from "@/components/admin/page-pagination-controls";
 import { usePagePagination } from "@/lib/admin/use-page-pagination";
+import { useAuth } from "@/lib/auth/use-auth";
 import { TasksTable } from "./tasks-table";
 import { DEVELOPER_ROLE_LABEL, EXPERIENCE_LEVEL_LABEL } from "@/lib/onboarding/types";
 import type { DeveloperRole, ExperienceLevel } from "@/lib/onboarding/types";
@@ -67,8 +68,37 @@ const DIFFICULTY_FILTERS: { value: DifficultyFilter; label: string }[] = [
  * pagination utilities over an already-filtered in-memory array with no
  * admin-only coupling (rule 51). Only the page size (`TASKS_PAGE_SIZE`)
  * differs from the Admin Tasks page's own 20-per-page default.
+ *
+ * Filters start at "All" — every task is visible on first load, same as
+ * before onboarding data was wired in at all. Role/Difficulty/Tech
+ * stack still don't just *offer* the same choices the onboarding form
+ * asked (see `ROLE_FILTERS`/`DIFFICULTY_FILTERS` above); a "Match my
+ * profile" toggle (`profileMatch` below, sourced from `useAuth().user.
+ * developerRoles` / `.experienceLevel` / `.technologies` — the exact
+ * fields `AuthUser` documents as "every field asked for during
+ * onboarding") lets the contributor apply those three filters in one
+ * click instead of hunting for their own role/difficulty/stack across
+ * three dropdowns — but it's opt-in, not the default view. Only the
+ * *first* saved value is used per filter — these are single-select
+ * dropdowns, `developerRoles`/`technologies` are multi-select
+ * onboarding answers — and only when that value is also present in
+ * this task list's own options (`techStackOptions` below); a
+ * preference for a tech stack nothing here currently uses is left out
+ * of the toggle rather than silently offering a dead option. The
+ * toggle only appears when the contributor actually has a matching
+ * profile answer to apply.
+ *
+ * Exception: Full Stack (`isFullStack` below). A Full Stack contributor
+ * can pick up a frontend-only, backend-only, docs, testing, or DevOps
+ * task just as well as one tagged Full Stack, so matching Role to
+ * "Full stack developer" would hide most of what they're actually
+ * qualified for — "can handle everything" means Role stays at "All
+ * roles" for them, even while Difficulty/Tech stack still apply from
+ * their profile as normal.
  */
 export function TasksExplorer({ tasks }: { tasks: Task[] }) {
+  const { user } = useAuth();
+
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("ALL");
   const [role, setRole] = useState<RoleFilter>("ALL");
@@ -83,6 +113,60 @@ export function TasksExplorer({ tasks }: { tasks: Task[] }) {
     }
     return Array.from(values).sort((a, b) => a.localeCompare(b));
   }, [tasks]);
+
+  /**
+   * Full Stack contributors can pick up frontend-only, backend-only,
+   * documentation, testing, or DevOps tasks just as well as anything
+   * tagged Full Stack — narrowing Role to "Full stack developer" would
+   * actually *hide* every task tagged only FRONTEND/BACKEND/etc, the
+   * opposite of "can handle everything." So Role only narrows anything
+   * for a single, non-Full-Stack developerRole; Full Stack leaves Role
+   * at "All roles" instead.
+   */
+  const isFullStack = user?.developerRoles.includes("FULL_STACK") ?? false;
+
+  /**
+   * The contributor's own onboarding answers, narrowed to only the
+   * ones that are actually selectable right now (a saved tech-stack
+   * preference nothing in this task list uses is left as `null` rather
+   * than offered as a dead filter). `null` across the board hides the
+   * "Match my profile" toggle entirely — nothing to apply.
+   */
+  const profileMatch = useMemo(
+    () => ({
+      role: isFullStack ? null : user?.developerRoles[0] ?? null,
+      difficulty: user?.experienceLevel ?? null,
+      techStack: user?.technologies.find((value) => techStackOptions.includes(value)) ?? null,
+    }),
+    [user, isFullStack, techStackOptions],
+  );
+
+  const hasProfileMatch =
+    profileMatch.role !== null || profileMatch.difficulty !== null || profileMatch.techStack !== null;
+
+  const isFilteredToProfile =
+    (profileMatch.role === null || role === profileMatch.role) &&
+    (isFullStack ? role === "ALL" : true) &&
+    (profileMatch.difficulty === null || difficulty === profileMatch.difficulty) &&
+    (profileMatch.techStack === null || techStack === profileMatch.techStack) &&
+    hasProfileMatch &&
+    (role !== "ALL" || difficulty !== "ALL" || techStack !== "ALL");
+
+  function applyProfileMatch() {
+    if (isFullStack) {
+      setRole("ALL");
+    } else if (profileMatch.role !== null) {
+      setRole(profileMatch.role);
+    }
+    if (profileMatch.difficulty !== null) setDifficulty(profileMatch.difficulty);
+    if (profileMatch.techStack !== null) setTechStack(profileMatch.techStack);
+  }
+
+  function clearProfileMatch() {
+    setRole("ALL");
+    setDifficulty("ALL");
+    setTechStack("ALL");
+  }
 
   const projectOptions = useMemo(() => {
     const seen = new Map<string, string>();
@@ -151,6 +235,31 @@ export function TasksExplorer({ tasks }: { tasks: Task[] }) {
             className="w-full rounded-[8px] border border-border bg-surface py-2 pl-8 pr-3 text-[12.5px] text-text placeholder:text-text-faint focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
         </div>
+
+        {hasProfileMatch ? (
+          isFilteredToProfile ? (
+            <p className="m-0 flex items-center gap-2 text-[11.5px] text-text-faint">
+              Filtered to your profile.
+              <button
+                type="button"
+                onClick={clearProfileMatch}
+                className="font-medium text-accent hover:underline"
+              >
+                Show all tasks
+              </button>
+            </p>
+          ) : (
+            <div>
+              <button
+                type="button"
+                onClick={applyProfileMatch}
+                className="inline-flex items-center gap-1.5 rounded-[8px] border border-border bg-surface px-3 py-1.5 text-[11.5px] font-medium text-text-secondary transition-colors hover:border-accent/40 hover:text-accent"
+              >
+                Match my profile
+              </button>
+            </div>
+          )
+        ) : null}
 
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex flex-col gap-1">

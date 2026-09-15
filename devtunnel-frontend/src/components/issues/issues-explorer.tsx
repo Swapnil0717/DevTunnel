@@ -6,6 +6,7 @@ import { SectionMessage } from "@/components/home/section-message";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { PagePaginationControls } from "@/components/admin/page-pagination-controls";
 import { usePagePagination } from "@/lib/admin/use-page-pagination";
+import { useAuth } from "@/lib/auth/use-auth";
 import { IssuesTable } from "./issues-table";
 import type { Issue, IssueState } from "@/lib/issues/types";
 
@@ -40,8 +41,19 @@ const ISSUES_PAGE_SIZE = 10;
  * pagination utilities over an already-filtered in-memory array, with no
  * admin-only coupling — copying them here would just be the same logic
  * twice (rule 51).
+ *
+ * Tech stack starts at "All" like every other filter here — a "Match my
+ * profile" toggle (`profileTechStack` below, sourced from
+ * `useAuth().user.technologies`) lets the contributor apply their own
+ * onboarding answer in one click when it's actually one of this issue
+ * list's own `techStackOptions`; the toggle simply doesn't render when
+ * there's no match to apply. State/Repository/Author/Project have no
+ * onboarding equivalent, so they stay at "All" until the contributor
+ * picks one manually.
  */
 export function IssuesExplorer({ issues }: { issues: Issue[] }) {
+  const { user } = useAuth();
+
   const [query, setQuery] = useState("");
   const [state, setState] = useState<StateFilter>("ALL");
   const [repository, setRepository] = useState("ALL");
@@ -68,6 +80,13 @@ export function IssuesExplorer({ issues }: { issues: Issue[] }) {
     }
     return Array.from(values).sort((a, b) => a.localeCompare(b));
   }, [issues]);
+
+  const profileTechStack = useMemo(
+    () => user?.technologies.find((value) => techStackOptions.includes(value)) ?? null,
+    [user, techStackOptions],
+  );
+
+  const isFilteredToProfile = profileTechStack !== null && techStack === profileTechStack;
 
   const projectOptions = useMemo(() => {
     const seen = new Map<string, string>();
@@ -137,6 +156,31 @@ export function IssuesExplorer({ issues }: { issues: Issue[] }) {
             className="w-full rounded-[8px] border border-border bg-surface py-2 pl-8 pr-3 text-[12.5px] text-text placeholder:text-text-faint focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
         </div>
+
+        {profileTechStack !== null ? (
+          isFilteredToProfile ? (
+            <p className="m-0 flex items-center gap-2 text-[11.5px] text-text-faint">
+              Filtered to your profile.
+              <button
+                type="button"
+                onClick={() => setTechStack("ALL")}
+                className="font-medium text-accent hover:underline"
+              >
+                Show all issues
+              </button>
+            </p>
+          ) : (
+            <div>
+              <button
+                type="button"
+                onClick={() => setTechStack(profileTechStack)}
+                className="inline-flex items-center gap-1.5 rounded-[8px] border border-border bg-surface px-3 py-1.5 text-[11.5px] font-medium text-text-secondary transition-colors hover:border-accent/40 hover:text-accent"
+              >
+                Match my profile
+              </button>
+            </div>
+          )
+        ) : null}
 
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex flex-col gap-1">
