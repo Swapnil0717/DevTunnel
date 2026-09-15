@@ -1,6 +1,8 @@
-// Server Component only — reads request cookies via fetchAllAdminPages, don't import from client code.
+// Server Component only — reads request cookies via fetchAllAdminPages / cookies(), don't import from client code.
+import { cookies } from "next/headers";
+import { API_BASE_URL } from "@/lib/config";
 import { fetchAllAdminPages } from "@/lib/admin/fetch-all-pages";
-import type { Task } from "./types";
+import type { Task, TaskDetail } from "./types";
 
 /**
  * `GET /tasks` — the contributor-facing counterpart to
@@ -28,6 +30,9 @@ import type { Task } from "./types";
  * `devtunnel.tasks` table this app already has — a cheap indexed query,
  * not a live external scan, so this walk uses the same default page size
  * every other database-backed list endpoint does.
+ *
+ * `getTaskDetail` below is the single-task sibling, backing the
+ * `/projects/:projectSlug/tasks/:taskId` page.
  */
 type TasksResult =
   | { status: "ok"; data: Task[] }
@@ -39,4 +44,50 @@ export async function getTasks(): Promise<TasksResult> {
   if (result.status === "error") return { status: "error" };
   if (result.status === "empty") return { status: "empty" };
   return { status: "ok", data: result.data };
+}
+
+/**
+ * `GET /projects/:projectSlug/tasks/:taskId` — backs the task's own
+ * DevTunnel page (`/projects/:projectSlug/tasks/:taskId`), the "View
+ * Task" destination `TaskRow` (`components/home/task-row.tsx`) and
+ * `TasksTable` (`components/tasks/tasks-table.tsx`) already link to.
+ *
+ * A `404` is kept as its own explicit state (`not-found`), same reason
+ * `getAdminTaskDetail` (`lib/admin/tasks/api.ts`) keeps one — a task id
+ * that doesn't exist, or doesn't belong to `projectSlug`, is a real
+ * "this page doesn't exist" outcome that should render Next's real
+ * `notFound()`, not the same "come back later" messaging as a network
+ * failure (Frontend_Development_Rules.txt rule 25).
+ */
+type TaskDetailResult =
+  | { status: "ok"; data: TaskDetail }
+  | { status: "not-found" }
+  | { status: "error" };
+
+export async function getTaskDetail(
+  projectSlug: string,
+  taskId: string,
+): Promise<TaskDetailResult> {
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectSlug)}/tasks/${encodeURIComponent(taskId)}`,
+      {
+        headers: { cookie: cookies().toString() },
+        cache: "no-store",
+      },
+    );
+
+    if (res.status === 404) {
+      return { status: "not-found" };
+    }
+
+    if (!res.ok) {
+      return { status: "error" };
+    }
+
+    const data = (await res.json()) as TaskDetail;
+    return { status: "ok", data };
+  } catch {
+    return { status: "error" };
+  }
 }

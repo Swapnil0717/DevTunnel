@@ -95,3 +95,18 @@
    activeContributorCount: number;
    completedContributorCount: number;
  }
+
+ /**
+  * `GET /projects/:projectSlug/tasks/:taskId` — the "View Task" page
+  * `TaskRow` and `TasksTable` link to. Extends `Task` with the task's own
+  * curated description, the same two detail-only fields
+  * `AdminTaskDetail` (`lib/admin/tasks/types.ts`) adds over
+  * `AdminTaskSummary` — a contributor deciding whether to pick up a task
+  * needs to actually read it, not just see the summary row.
+  */
+ export interface TaskDetail extends Task {
+   /** Only set when the task was onboarded/edited with a DevTunnel-specific description layered on the issue. */
+   customDescription: string | null;
+   /** The original GitHub issue body, exactly as imported — never rewritten. */
+   githubIssueBody: string | null;
+ }

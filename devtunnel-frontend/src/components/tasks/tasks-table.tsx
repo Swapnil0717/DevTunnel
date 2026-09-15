@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AdminTableRow } from "@/components/admin/admin-table-row";
 import { AdminTaskStatusBadge } from "@/components/admin/tasks/admin-task-status-badge";
 import { RepoLogo } from "@/components/admin/repo-logo";
@@ -5,6 +6,15 @@ import { IssueIcon } from "@/components/layout/nav-icons";
 import { TechIcon } from "@/components/onboarding/tech-icon";
 import { DEVELOPER_ROLE_LABEL, EXPERIENCE_LEVEL_LABEL } from "@/lib/onboarding/types";
 import type { Task } from "@/lib/tasks/types";
+
+/**
+ * Task's own internal page — same `/projects/:projectSlug/tasks/:taskId`
+ * pattern `TaskRow` (`components/home/task-row.tsx`) already links to,
+ * reused here rather than invented fresh (rule 51).
+ */
+function taskHref(task: Task): string {
+  return `/projects/${task.project.slug}/tasks/${task.id}`;
+}
 
 /** How many tech-stack chips to show inline before collapsing into "+N". */
 const MAX_VISIBLE_TECH = 3;
@@ -15,7 +25,9 @@ const MAX_VISIBLE_TECH = 3;
  * Stack, Contributors, Status, Actions. Same columns minus "Submissions"
  * (see `lib/tasks/types.ts`'s doc comment on why) and minus Edit/Delete —
  * those curate DevTunnel's task list, an Admin responsibility; the only
- * action a contributor gets here is opening the underlying GitHub issue.
+ * action a contributor gets here is opening the task's own page
+ * ("View Task"), with the underlying GitHub issue reachable separately
+ * from the "GitHub issue" cell.
  *
  * `AdminTableRow`, `RepoLogo`, and `AdminTaskStatusBadge` are reused as-is
  * rather than duplicated: all three are already generic, role-agnostic
@@ -26,10 +38,15 @@ const MAX_VISIBLE_TECH = 3;
  * `DEVELOPER_ROLE_LABEL` / `EXPERIENCE_LEVEL_LABEL`, which already back
  * the onboarding form these tasks are filtered against.
  *
- * Every row opens the GitHub issue in a new tab on click
- * (`AdminTableRow`), same destination as the "View on GitHub" action —
- * important facts (role, difficulty, status) are always shown as text
- * next to any icon, never color/icon alone (rule 43).
+ * Every row opens the task's own DevTunnel page — same
+ * `/projects/:projectSlug/tasks/:taskId` destination as the "View Task"
+ * action (`AdminTableRow`'s internal `href`, real client-side navigation
+ * rather than a new tab, per rule 10) — on click anywhere in the row.
+ * The underlying GitHub issue is still one click away from the
+ * "GitHub issue" cell's own link; it just isn't what the row itself
+ * opens, since the row's job is to show what *this task* is, not the
+ * raw issue. Important facts (role, difficulty, status) are always
+ * shown as text next to any icon, never color/icon alone (rule 43).
  */
 export function TasksTable({ tasks }: { tasks: Task[] }) {
   return (
@@ -67,12 +84,14 @@ export function TasksTable({ tasks }: { tasks: Task[] }) {
             return (
               <AdminTableRow
                 key={task.id}
-                externalHref={task.githubIssue?.url}
+                href={taskHref(task)}
                 className="border-b border-border-subtle last:border-b-0 hover:bg-surface/60"
               >
                 {/* Task */}
                 <th scope="row" className="px-4 py-3 align-top font-medium text-text">
-                  {task.title}
+                  <Link href={taskHref(task)} className="hover:text-accent">
+                    {task.title}
+                  </Link>
                 </th>
 
                 {/* Project (+ repository) */}
@@ -145,19 +164,13 @@ export function TasksTable({ tasks }: { tasks: Task[] }) {
                 </td>
 
                 {/* Actions — View only; editing/deleting a task is an Admin action */}
-                <td className="px-4 py-3 align-top">
-                  {task.githubIssue ? (
-                    <a
-                      href={task.githubIssue.url}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="rounded-md px-2 py-1 text-[11.5px] font-medium text-text-secondary hover:text-accent"
-                    >
-                      View on GitHub
-                    </a>
-                  ) : (
-                    <span className="text-text-faint">—</span>
-                  )}
+                <td className="whitespace-nowrap px-4 py-3 align-top">
+                  <Link
+                    href={taskHref(task)}
+                    className="inline-block rounded-md px-2 py-1 text-[11.5px] font-medium text-text-secondary hover:text-accent"
+                  >
+                    View Task
+                  </Link>
                 </td>
               </AdminTableRow>
             );

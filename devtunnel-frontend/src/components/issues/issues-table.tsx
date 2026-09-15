@@ -140,12 +140,12 @@ export function IssuesTable({ issues }: { issues: Issue[] }) {
                 </td>
 
                 {/* Actions — View only; task creation/curation is an Admin action */}
-                <td className="px-4 py-3 align-top">
+                <td className="whitespace-nowrap px-4 py-3 align-top">
                   <a
                     href={issue.url}
                     target="_blank"
                     rel="noreferrer noopener"
-                    className="rounded-md px-2 py-1 text-[11.5px] font-medium text-text-secondary hover:text-accent"
+                    className="inline-block rounded-md px-2 py-1 text-[11.5px] font-medium text-text-secondary hover:text-accent"
                   >
                     View on GitHub
                   </a>
