@@ -8,6 +8,8 @@ import { auth } from "./routes/auth";
 import { contributions } from "./routes/contributions";
 import { devtunnelStats } from "./routes/devtunnelStats";
 import { issues } from "./routes/issues";
+import { githubProjects } from "./routes/githubProjects";
+import { githubOpenSourceTools } from "./routes/githubOpenSourceTools";
 import { tasks } from "./routes/tasks";
 import { admin } from "./routes/admin/index";
 import { runDailyDiscovery } from "./lib/aiDiscoveryAgent";
@@ -24,6 +26,8 @@ app.route("/auth", auth);
 app.route("/", contributions);
 app.route("/", devtunnelStats);
 app.route("/", issues);
+app.route("/", githubProjects);
+app.route("/", githubOpenSourceTools);
 app.route("/", tasks);
 app.route("/admin", admin);
 

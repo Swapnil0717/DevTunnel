@@ -169,3 +169,89 @@ export async function getRepositoryOpenIssues(
 export function normalizeLabels(labels: Array<{ name: string } | string>): string[] {
   return labels.map((l) => (typeof l === "string" ? l : l.name)).filter(Boolean);
 }
+
+/**
+ * One repository as returned by GitHub's `/search/repositories`, trimmed
+ * to the fields `GET /github-projects` (src/routes/githubProjects.ts)
+ * needs to build a `GithubProjectSummary` (devtunnel-frontend's
+ * `lib/github-projects/types.ts`). Deliberately a separate type from
+ * `GithubSearchRepoItem` above rather than an extension of it — that
+ * type is shared with the AI Discovery agent's tool-calling loop and
+ * kept minimal on purpose (see its own field-by-field comments); this
+ * catalog has different, additional needs (license, timestamps, topics)
+ * that agent has no use for.
+ */
+export interface GithubCatalogRepoItem {
+  name: string;
+  full_name: string;
+  html_url: string;
+  description: string | null;
+  language: string | null;
+  stargazers_count: number;
+  forks_count: number;
+  open_issues_count: number;
+  owner: { login: string; avatar_url: string | null; html_url: string };
+  archived: boolean;
+  fork: boolean;
+  private: boolean;
+  license: { spdx_id: string | null; name: string } | null;
+  created_at: string;
+  pushed_at: string;
+  topics?: string[];
+}
+
+/**
+ * GitHub's Search API hard-caps any single query at 1,000 results total
+ * (`page` * `per_page` beyond that just 422s) — there is no way to
+ * paginate past it, so this is a genuine ceiling, not a tuning knob.
+ * 100 is the largest `per_page` GitHub allows, so 10 pages is the most
+ * results one query can ever return.
+ */
+const MAX_CATALOG_PAGES = 10;
+const CATALOG_PER_PAGE = 100;
+
+/**
+ * Walks GitHub's `/search/repositories` for `GET /github-projects`
+ * (src/routes/githubProjects.ts) — "every open-source project on
+ * GitHub", not just repositories DevTunnel has onboarded. There is no
+ * GitHub endpoint that literally lists all ~400M repositories on the
+ * platform, and returning that many rows would be useless to a
+ * contributor anyway, so this samples the slice an "explore open source"
+ * page actually wants: real, public, non-archived, non-fork projects,
+ * ordered by popularity (`sort=stars`), up to the Search API's own
+ * 1,000-result ceiling (see `MAX_CATALOG_PAGES`).
+ *
+ * `archived`, `fork`, and `private` are all re-checked here even though
+ * `query` already asks for `archived:false fork:false is:public` —
+ * defense in depth (same "don't rely on the query string alone" posture
+ * `searchRepositories` above already takes for archived/fork), and
+ * because `is:public` is a *search* filter, not a guarantee GitHub can
+ * never regress — an explicit client-side `!item.private` check is a
+ * second, independent guard against ever surfacing a private repository
+ * to a contributor via this discovery-token-backed catalog.
+ */
+export async function searchOpenSourceCatalog(
+  env: ValidatedEnv,
+  query: string,
+): Promise<GithubCatalogRepoItem[]> {
+  const results: GithubCatalogRepoItem[] = [];
+
+  for (let page = 1; page <= MAX_CATALOG_PAGES; page++) {
+    const data = await githubGet<{ items: GithubCatalogRepoItem[] }>(
+      env,
+      `/search/repositories?q=${encodeURIComponent(query)}&sort=stars&order=desc&per_page=${CATALOG_PER_PAGE}&page=${page}`,
+    );
+    const items = data?.items ?? [];
+    if (items.length === 0) break;
+
+    for (const item of items) {
+      if (!item.archived && !item.fork && !item.private) results.push(item);
+    }
+
+    // A short page means this was GitHub's last page — stop rather than
+    // spending an extra call to confirm an empty page 11.
+    if (items.length < CATALOG_PER_PAGE) break;
+  }
+
+  return results;
+}

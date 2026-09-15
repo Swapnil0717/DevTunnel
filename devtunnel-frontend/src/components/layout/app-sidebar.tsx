@@ -10,6 +10,7 @@ import {
   HomeIcon,
   ToolIcon,
   GitBranchIcon,
+  GridIcon,
   FolderIcon,
   ChecklistIcon,
   IssueIcon,
@@ -23,14 +24,25 @@ import { useAuth } from "@/lib/auth/use-auth";
  * (a fixed bottom tab bar) takes over instead — a full-height sidebar
  * eats too much of a phone-width screen, and a bottom bar is the more
  * usual mobile pattern. `AppBottomNav` only surfaces a subset of these
- * (all 8 don't fit a phone-width tab bar), so keep the two lists in sync
+ * (all 9 don't fit a phone-width tab bar), so keep the two lists in sync
  * deliberately rather than assuming they should always match.
+ *
+ * The four GitHub/DevTunnel entries are deliberately paired and ordered
+ * as two "GitHub-wide catalog, then DevTunnel's own curated list" pairs
+ * — Github Open source tools / Github Projects (live, unfiltered GitHub
+ * search results, src/routes/githubOpenSourceTools.ts and
+ * githubProjects.ts) followed by Open Source Tools on Devtunnel /
+ * Projects on Devtunnel (Supabase-backed, admin-onboarded lists) — so
+ * the nav itself communicates which two entries are "everything on
+ * GitHub" versus which two are "what DevTunnel has specifically
+ * curated," rather than interleaving them.
  */
 const NAV_LINKS = [
   { href: "/home", label: "Home", Icon: HomeIcon },
-  { href: "/opensource-tools", label: "Open Source Tools", Icon: ToolIcon },
-  { href: "/github-projects", label: "GitHub Projects", Icon: GitBranchIcon },
-  { href: "/projects", label: "Projects on DevTunnel", Icon: FolderIcon },
+  { href: "/github-open-source-tools", label: "Github Open source tools", Icon: GridIcon },
+  { href: "/github-projects", label: "Github Projects", Icon: GitBranchIcon },
+  { href: "/opensource-tools", label: "Open Source Tools on Devtunnel", Icon: ToolIcon },
+  { href: "/projects", label: "Projects on Devtunnel", Icon: FolderIcon },
   { href: "/tasks", label: "Tasks / Issues", Icon: ChecklistIcon },
   { href: "/issues", label: "All Issues", Icon: IssueIcon },
   { href: "/profile", label: "Profile", Icon: UserIcon },

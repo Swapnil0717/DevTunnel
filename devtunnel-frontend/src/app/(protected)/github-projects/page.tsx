@@ -7,7 +7,7 @@ import { SectionMessage } from "@/components/home/section-message";
 export const metadata: Metadata = buildMetadata({
   title: "GitHub Projects",
   description:
-    "Every GitHub repository DevTunnel tracks, searchable and filterable by tech stack, star count, and activity.",
+    "Explore real open-source repositories from across GitHub, searchable and filterable by tech stack, star count, and activity.",
   path: "/github-projects",
   // Private, authenticated-only application UI — never public content
   // (Frontend_Development_Rules.txt rule 18), same treatment
@@ -23,11 +23,12 @@ export const metadata: Metadata = buildMetadata({
  * `/github-projects` — "GitHub Projects" in `AppSidebar`, previously a
  * dead link (the nav item existed, but no route did). Distinct from
  * `/projects` ("Projects on DevTunnel"): that's the curated list of
- * projects with DevTunnel-side tasks and contributors; this is the raw,
- * GitHub-repository-centric catalog every tracked repo appears in —
- * stars, forks, license, tech stack, activity (see
- * `lib/github-projects/types.ts`) — for a contributor who just wants to
- * browse what's out there before picking something to dig into.
+ * projects with DevTunnel-side tasks and contributors; this is a live,
+ * GitHub-wide catalog of real open-source repositories — not limited to
+ * projects DevTunnel has onboarded — stars, forks, license, topics,
+ * activity (see `lib/github-projects/types.ts`) — for a contributor who
+ * just wants to browse what's out there on GitHub before picking
+ * something to dig into.
  *
  * Browsable with search + filters (tech stack, minimum stars, sort by
  * trending/most stars/newest/recently updated) and 12-per-page grid
@@ -44,8 +45,8 @@ export default async function GithubProjectsPage() {
       <div className="mb-8">
         <h1 className="m-0 mb-1 text-xl font-medium text-text">GitHub Projects</h1>
         <p className="m-0 text-sm text-text-muted">
-          Every GitHub repository DevTunnel tracks — search or filter by tech stack, stars, and
-          activity to find one worth exploring.
+          Real open-source projects from across GitHub — search or filter by tech stack, stars,
+          and activity to find one worth exploring.
         </p>
       </div>
 

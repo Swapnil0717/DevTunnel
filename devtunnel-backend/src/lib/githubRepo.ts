@@ -299,6 +299,103 @@ export async function fetchRepositoryMetadata(
   };
 }
 
+const repoCatalogSchema = z.object({
+  name: z.string().min(1),
+  full_name: z.string().min(1),
+  html_url: z.string().url(),
+  description: z.string().nullable().optional(),
+  language: z.string().nullable().optional(),
+  stargazers_count: z.number().int().nonnegative(),
+  forks_count: z.number().int().nonnegative(),
+  open_issues_count: z.number().int().nonnegative(),
+  license: z
+    .object({
+      name: z.string().nullable().optional(),
+      spdx_id: z.string().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
+  created_at: z.string(),
+  pushed_at: z.string(),
+  private: z.boolean(),
+  owner: githubIdentitySchema,
+});
+
+export interface GitHubRepoCatalogSummary {
+  name: string;
+  fullName: string;
+  htmlUrl: string;
+  description: string | null;
+  primaryLanguage: string | null;
+  stars: number;
+  forks: number;
+  openIssues: number;
+  /** SPDX-style license identifier (e.g. "MIT"), or `null` if GitHub reports none/unrecognized. */
+  license: string | null;
+  createdAt: string;
+  pushedAt: string;
+  isPrivate: boolean;
+  owner: OnboardingGithubIdentity;
+}
+
+/**
+ * "Fetch repository catalog summary" — the read-only, publish-a-catalog-
+ * page counterpart to `fetchRepositoryMetadata` above. Deliberately a
+ * separate function rather than widening `fetchRepositoryMetadata` /
+ * `GitHubRepoMetadata`: that pair is already relied on by Project
+ * Onboarding (src/routes/projectOnboarding.ts), the Admin Projects sync
+ * (src/db/adminProjects.ts), and Open Source Tool onboarding
+ * (src/lib/toolSource.ts) — changing its shape risks breaking three
+ * unrelated call sites for a set of fields (`license`, `createdAt`,
+ * `pushedAt`, full owner identity) only the GitHub Projects catalog
+ * (`GET /github-projects`, src/routes/githubProjects.ts) actually needs
+ * (Backend_Development_Rules.txt rule 4: never rewrite working
+ * functionality unnecessarily).
+ *
+ * `license` prefers GitHub's own SPDX identifier (`spdx_id`, e.g. "MIT"),
+ * falling back to the license's plain `name` only when GitHub reports
+ * `"NOASSERTION"` (its sentinel for "has a LICENSE file GitHub couldn't
+ * confidently classify") — never fabricates a license GitHub didn't
+ * actually detect (rule 38).
+ */
+export async function fetchRepositoryCatalogSummary(
+  accessToken: string | null,
+  owner: string,
+  repo: string,
+): Promise<GitHubRepoCatalogSummary> {
+  const res = await fetchWithTimeout(`${GITHUB_API_BASE}/repos/${owner}/${repo}`, {
+    headers: authHeaders(accessToken),
+  });
+  await assertOk(res, "repository catalog lookup");
+
+  const parsed = repoCatalogSchema.safeParse(await res.json());
+  if (!parsed.success) {
+    throw new GitHubRepoError("github_unavailable", "Unexpected GitHub repository response shape");
+  }
+  const data = parsed.data;
+
+  const license =
+    data.license?.spdx_id && data.license.spdx_id !== "NOASSERTION"
+      ? data.license.spdx_id
+      : (data.license?.name ?? null);
+
+  return {
+    name: data.name,
+    fullName: data.full_name,
+    htmlUrl: data.html_url,
+    description: data.description ?? null,
+    primaryLanguage: data.language ?? null,
+    stars: data.stargazers_count,
+    forks: data.forks_count,
+    openIssues: data.open_issues_count,
+    license,
+    createdAt: data.created_at,
+    pushedAt: data.pushed_at,
+    isPrivate: data.private,
+    owner: toIdentity(data.owner),
+  };
+}
+
 const issueSearchCountSchema = z.object({
   total_count: z.number().int().nonnegative(),
 });
