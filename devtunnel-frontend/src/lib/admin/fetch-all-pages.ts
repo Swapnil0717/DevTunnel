@@ -58,10 +58,19 @@ export type FetchAllPagesResult<T> =
  * reads as "I clicked and nothing happened," not "this is fetching."
  * `lib/admin/new-issues/api.ts` passes a much larger `pageLimit` so that
  * realistic installations finish in exactly one call/one scan.
+ *
+ * `extraQuery` (optional) is forwarded as additional query params on
+ * every page of the walk, alongside `limit`/`before` — e.g.
+ * `lib/github-open-source-tools/api.ts` uses it to pass `?filter=...`
+ * through to a catalog route's named filters
+ * (`lib/githubCatalog.ts`'s `CatalogRouteConfig.filters` backend-side).
+ * A plain object rather than a `URLSearchParams` so call sites don't
+ * need to import that type just to pass one value through.
  */
 export async function fetchAllAdminPages<T>(
   path: string,
   pageLimit: number = MAX_PAGE_LIMIT,
+  extraQuery?: Record<string, string>,
 ): Promise<FetchAllPagesResult<T>> {
   try {
     const items: T[] = [];
@@ -71,6 +80,11 @@ export async function fetchAllAdminPages<T>(
     do {
       const query = new URLSearchParams({ limit: String(pageLimit) });
       if (before) query.set("before", before);
+      if (extraQuery) {
+        for (const [key, value] of Object.entries(extraQuery)) {
+          query.set(key, value);
+        }
+      }
 
       const res = await fetch(`${API_BASE_URL}${path}?${query.toString()}`, {
         headers: { cookie: cookies().toString() },

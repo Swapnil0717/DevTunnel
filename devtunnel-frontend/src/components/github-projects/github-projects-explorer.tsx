@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { SearchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
 import { FilterSelect } from "@/components/ui/filter-select";
@@ -20,6 +21,23 @@ const SORT_FILTERS: { value: SortOption; label: string }[] = [
 
 const ALL_TECH = "ALL";
 const ALL_STARS = "ALL";
+
+/** Sentinel `catalogFilter` value meaning "no named filter selected" — mirrors `ALL_TECH`/`ALL_STARS` above. */
+export const NO_CATALOG_FILTER = "ALL";
+
+export interface CatalogFilterOption {
+  value: string;
+  label: string;
+}
+
+export interface CatalogFilterConfig {
+  /** Query param name this filter reads from/writes to, e.g. `"filter"`. */
+  paramName: string;
+  /** Currently active value — `NO_CATALOG_FILTER` means none selected. */
+  value: string;
+  /** Options shown in the dropdown, including a `NO_CATALOG_FILTER` "no filter" entry. */
+  options: CatalogFilterOption[];
+}
 
 /** "500+ stars" style thresholds — a project matches when `stars >= value`. */
 const STARS_FILTERS: { value: string; label: string }[] = [
@@ -98,11 +116,47 @@ function sortProjects(
  * cosmetic label), and **Sort by** (Trending / Most stars / Newest /
  * Recently updated — see `sortProjects`'s doc comment on "Trending").
  */
-export function GithubProjectsExplorer({ projects }: { projects: GithubProjectSummary[] }) {
+export function GithubProjectsExplorer({
+  projects,
+  catalogFilter,
+}: {
+  projects: GithubProjectSummary[];
+  /**
+   * Optional server-driven catalog filter — e.g. "Alternative to paid
+   * software" on `/github-open-source-tools`
+   * (`app/(protected)/github-open-source-tools/page.tsx`). Deliberately
+   * NOT handled like the Tech stack/Minimum stars filters below: those
+   * narrow the `projects` array this component already has in memory,
+   * but a catalog filter selects a *different backend discovery query*
+   * (`lib/githubCatalog.ts`'s `CatalogRouteConfig.filters`
+   * backend-side) — a different population of repositories entirely,
+   * which only the server can fetch. So instead of filtering in place,
+   * selecting an option here navigates to a new `?<paramName>=` URL and
+   * lets the page's Server Component re-fetch and pass down a new
+   * `projects` array. Omitted entirely on `/github-projects`, which has
+   * no named filters to offer.
+   */
+  catalogFilter?: CatalogFilterConfig;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [techStack, setTechStack] = useState(ALL_TECH);
   const [minStars, setMinStars] = useState(ALL_STARS);
   const [sortBy, setSortBy] = useState<SortOption>("TRENDING");
+
+  function handleCatalogFilterChange(nextValue: string) {
+    if (!catalogFilter) return;
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextValue === NO_CATALOG_FILTER) {
+      params.delete(catalogFilter.paramName);
+    } else {
+      params.set(catalogFilter.paramName, nextValue);
+    }
+    const queryString = params.toString();
+    router.push(queryString ? `${pathname}?${queryString}` : pathname);
+  }
 
   const techStackOptions = useMemo(() => {
     const values = new Set<string>();
@@ -167,6 +221,23 @@ export function GithubProjectsExplorer({ projects }: { projects: GithubProjectSu
         </div>
 
         <div className="flex flex-wrap items-end gap-2">
+          {catalogFilter ? (
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="github-projects-catalog-filter"
+                className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
+              >
+                Show
+              </label>
+              <FilterSelect
+                id="github-projects-catalog-filter"
+                value={catalogFilter.value}
+                onChange={handleCatalogFilterChange}
+                options={catalogFilter.options}
+              />
+            </div>
+          ) : null}
+
           <div className="flex flex-col gap-1">
             <label
               htmlFor="github-projects-techstack"

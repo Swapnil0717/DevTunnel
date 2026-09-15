@@ -109,6 +109,12 @@ function toSummary(item: GithubCatalogRepoItem) {
  * catalog's sort key is GitHub's own search ranking, not a timestamp —
  * the frontend never parses it, only round-trips whatever `X-Next-Cursor`
  * it was last given.
+ *
+ * `filter` is optional and, when present, must be one of the named
+ * filters a given route's `CatalogRouteConfig.filters` declares (see
+ * below) — validated against that specific route's filter set inside
+ * `handleCatalogListRequest`, not here, since the set of valid values
+ * differs per route and this schema is shared by all of them.
  */
 export const catalogListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(24),
@@ -116,7 +122,28 @@ export const catalogListQuerySchema = z.object({
     .string()
     .regex(/^\d+$/, "before must be a cursor returned by this endpoint")
     .optional(),
+  filter: z.string().optional(),
 });
+
+/**
+ * One named, selectable narrowing of a catalog's base population —
+ * e.g. "Alternative to paid software" on `/github-open-source-tools`.
+ * Deliberately a *whole replacement* discovery query rather than a
+ * fragment appended to `CatalogRouteConfig.discoveryQuery`: GitHub
+ * Search's qualifiers don't compose safely by string concatenation
+ * (parenthesized OR-groups, `in:` qualifiers, etc. can conflict when
+ * naively joined), so each filter spells out its own complete,
+ * self-contained query instead. `cacheKey` must be unique per filter
+ * (and distinct from the route's own base `cacheKey`) since a filtered
+ * catalog is a different result set from the unfiltered one and both
+ * may be warm in cache at once.
+ */
+export interface CatalogFilterConfig {
+  /** GitHub Search API `q` value for this filter's narrowed population. */
+  discoveryQuery: string;
+  /** KV cache key this filter's scan is stored under. Must be unique across the whole app. */
+  cacheKey: string;
+}
 
 export interface CatalogRouteConfig {
   /** Logical name used only in log lines and the rate-limit bucket, e.g. "github-projects". */
@@ -125,6 +152,16 @@ export interface CatalogRouteConfig {
   discoveryQuery: string;
   /** KV cache key this catalog's scan is stored under. Must be unique per catalog. */
   cacheKey: string;
+  /**
+   * Optional named filters a caller can select via `?filter=<key>`
+   * instead of the base `discoveryQuery`/`cacheKey` above. Keyed by the
+   * value the frontend sends on the wire (e.g. `"alternative-to-paid"`).
+   * A route with no filters simply omits this — `?filter=` on such a
+   * route is rejected the same way an unrecognized key is (see
+   * `handleCatalogListRequest`), rather than silently ignored, so a
+   * frontend typo never quietly falls back to the unfiltered catalog.
+   */
+  filters?: Record<string, CatalogFilterConfig>;
 }
 
 /**
@@ -152,6 +189,7 @@ export async function handleCatalogListRequest(
   const parsed = catalogListQuerySchema.safeParse({
     limit: c.req.query("limit"),
     before: c.req.query("before"),
+    filter: c.req.query("filter"),
   });
   if (!parsed.success) {
     return errorResponse(
@@ -162,20 +200,43 @@ export async function handleCatalogListRequest(
     );
   }
 
+  // Resolve which discovery query/cache key this request actually uses:
+  // the route's base catalog, or — when `?filter=` names one of this
+  // route's declared `filters` — that filter's own complete query and
+  // cache slot. An unrecognized filter (including any `?filter=` on a
+  // route that declares none) is a 400, not a silent fallback to the
+  // unfiltered catalog, so a frontend bug surfaces immediately instead
+  // of quietly serving the wrong list.
+  let discoveryQuery = config.discoveryQuery;
+  let cacheKey = config.cacheKey;
+  if (parsed.data.filter !== undefined) {
+    const filterConfig = config.filters?.[parsed.data.filter];
+    if (!filterConfig) {
+      return errorResponse(
+        c,
+        400,
+        "invalid_filter",
+        `Unknown filter "${parsed.data.filter}" for this catalog`,
+      );
+    }
+    discoveryQuery = filterConfig.discoveryQuery;
+    cacheKey = filterConfig.cacheKey;
+  }
+
   try {
     let catalog: GithubCatalogRepoItem[];
 
-    const cached = await getCached<CatalogCacheEntry>(c.env, config.cacheKey);
+    const cached = await getCached<CatalogCacheEntry>(c.env, cacheKey);
     if (cached) {
       catalog = cached.items;
     } else {
-      catalog = await searchOpenSourceCatalog(env, config.discoveryQuery);
+      catalog = await searchOpenSourceCatalog(env, discoveryQuery);
       // Only cache a non-empty result — same "don't cache a bad scan"
       // posture GET /issues takes with GITHUB_SCAN_CACHE_KEY (rule 21).
       if (catalog.length > 0) {
         await setCached<CatalogCacheEntry>(
           c.env,
-          config.cacheKey,
+          cacheKey,
           { scannedAt: new Date().toISOString(), items: catalog },
           CATALOG_CACHE_TTL_SECONDS,
         );
@@ -195,6 +256,7 @@ export async function handleCatalogListRequest(
   } catch (err) {
     logger.error(`${config.name}_list_failed`, {
       error: err instanceof Error ? err.message : String(err),
+      filter: parsed.data.filter ?? null,
       requestId: c.get("requestId"),
     });
     return errorResponse(c, 500, "internal_error", "Couldn't load this catalog right now");

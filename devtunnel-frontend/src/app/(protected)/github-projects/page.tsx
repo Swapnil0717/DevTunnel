@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { buildMetadata } from "@/lib/seo";
 import { getGithubProjects } from "@/lib/github-projects/api";
 import { GithubProjectsExplorer } from "@/components/github-projects/github-projects-explorer";
 import { SectionMessage } from "@/components/home/section-message";
+import { SkeletonFilterBar, SkeletonGithubProjectCardGrid } from "@/components/ui/skeleton";
 
 export const metadata: Metadata = buildMetadata({
   title: "GitHub Projects",
@@ -57,7 +59,21 @@ export default async function GithubProjectsPage() {
       ) : result.status === "empty" ? (
         <SectionMessage>No GitHub projects have been added yet — check back soon.</SectionMessage>
       ) : (
-        <GithubProjectsExplorer projects={result.data} />
+        // GithubProjectsExplorer calls useSearchParams (to support an
+        // optional catalog filter on sibling routes) — the App Router
+        // requires that behind a Suspense boundary. `projects` is
+        // already-resolved data, not something this Suspense is actually
+        // waiting on, so the fallback below realistically never renders.
+        <Suspense
+          fallback={
+            <>
+              <SkeletonFilterBar filters={3} />
+              <SkeletonGithubProjectCardGrid />
+            </>
+          }
+        >
+          <GithubProjectsExplorer projects={result.data} />
+        </Suspense>
       )}
     </main>
   );
