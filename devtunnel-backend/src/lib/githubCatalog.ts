@@ -128,19 +128,34 @@ export const catalogListQuerySchema = z.object({
 /**
  * One named, selectable narrowing of a catalog's base population —
  * e.g. "Alternative to paid software" on `/github-open-source-tools`.
- * Deliberately a *whole replacement* discovery query rather than a
- * fragment appended to `CatalogRouteConfig.discoveryQuery`: GitHub
- * Search's qualifiers don't compose safely by string concatenation
- * (parenthesized OR-groups, `in:` qualifiers, etc. can conflict when
- * naively joined), so each filter spells out its own complete,
- * self-contained query instead. `cacheKey` must be unique per filter
- * (and distinct from the route's own base `cacheKey`) since a filtered
- * catalog is a different result set from the unfiltered one and both
- * may be warm in cache at once.
+ * Deliberately a *whole replacement* set of discovery queries rather
+ * than a fragment appended to `CatalogRouteConfig.discoveryQueries`:
+ * GitHub Search's qualifiers don't compose safely by string
+ * concatenation (parenthesized OR-groups, `in:` qualifiers, etc. can
+ * conflict when naively joined), so each filter spells out its own
+ * complete, self-contained queries instead. `cacheKey` must be unique
+ * per filter (and distinct from the route's own base `cacheKey`) since
+ * a filtered catalog is a different result set from the unfiltered one
+ * and both may be warm in cache at once.
  */
 export interface CatalogFilterConfig {
-  /** GitHub Search API `q` value for this filter's narrowed population. */
-  discoveryQuery: string;
+  /**
+   * One or more GitHub Search API `q` values for this filter's
+   * narrowed population, each run as its own separate search and
+   * merged/de-duplicated by `scanCatalog` below. Must be more than one
+   * entry whenever the population is naturally an OR of several
+   * `qualifier:value` pairs (e.g. several `topic:` values) — GitHub's
+   * Search API does not support OR between qualifiers in a single
+   * query. Confirmed directly against the live API: an unparenthesized
+   * `topic:a OR topic:b` 422s with "Logical operators only apply to
+   * text, not to qualifiers", and parenthesizing it
+   * (`(topic:a OR topic:b)`) avoids that error but silently matches
+   * close to nothing instead — GitHub simply doesn't group qualifiers
+   * that way. A single-element array is fine (and equivalent to the
+   * old single-query shape) when the population needs no OR at all,
+   * e.g. `/github-projects`'s base catalog.
+   */
+  discoveryQueries: string[];
   /** KV cache key this filter's scan is stored under. Must be unique across the whole app. */
   cacheKey: string;
 }
@@ -148,20 +163,56 @@ export interface CatalogFilterConfig {
 export interface CatalogRouteConfig {
   /** Logical name used only in log lines and the rate-limit bucket, e.g. "github-projects". */
   name: string;
-  /** GitHub Search API `q` value defining this catalog's population. */
-  discoveryQuery: string;
+  /** One or more GitHub Search API `q` values defining this catalog's population — see `CatalogFilterConfig.discoveryQueries` above for why this is an array. */
+  discoveryQueries: string[];
   /** KV cache key this catalog's scan is stored under. Must be unique per catalog. */
   cacheKey: string;
   /**
    * Optional named filters a caller can select via `?filter=<key>`
-   * instead of the base `discoveryQuery`/`cacheKey` above. Keyed by the
-   * value the frontend sends on the wire (e.g. `"alternative-to-paid"`).
-   * A route with no filters simply omits this — `?filter=` on such a
-   * route is rejected the same way an unrecognized key is (see
-   * `handleCatalogListRequest`), rather than silently ignored, so a
-   * frontend typo never quietly falls back to the unfiltered catalog.
+   * instead of the base `discoveryQueries`/`cacheKey` above. Keyed by
+   * the value the frontend sends on the wire (e.g.
+   * `"alternative-to-paid"`). A route with no filters simply omits
+   * this — `?filter=` on such a route is rejected the same way an
+   * unrecognized key is (see `handleCatalogListRequest`), rather than
+   * silently ignored, so a frontend typo never quietly falls back to
+   * the unfiltered catalog.
    */
   filters?: Record<string, CatalogFilterConfig>;
+}
+
+/**
+ * Runs each of `queries` as its own independent `searchOpenSourceCatalog`
+ * scan and merges the results into one de-duplicated, stars-sorted list.
+ * This is the OR-across-qualifiers workaround `CatalogFilterConfig`'s
+ * doc comment describes: GitHub Search can't OR multiple `topic:`
+ * qualifiers in a single query, so a catalog that's conceptually "topic
+ * A OR topic B OR topic C" has to be built from separate per-topic
+ * searches instead, unioned here.
+ *
+ * De-duplicates by `full_name` (a repo can legitimately match more than
+ * one query, e.g. a repo tagged both `topic:cli` and `topic:devtools`)
+ * — kept once, sorted by star count descending like a single-query scan
+ * would already be from GitHub's own `sort=stars`.
+ */
+async function scanCatalog(
+  env: ValidatedEnv,
+  queries: string[],
+): Promise<GithubCatalogRepoItem[]> {
+  const byFullName = new Map<string, GithubCatalogRepoItem>();
+
+  for (const query of queries) {
+    const items = await searchOpenSourceCatalog(env, query);
+    for (const item of items) {
+      const existing = byFullName.get(item.full_name);
+      if (!existing || item.stargazers_count > existing.stargazers_count) {
+        byFullName.set(item.full_name, item);
+      }
+    }
+  }
+
+  return Array.from(byFullName.values()).sort(
+    (a, b) => b.stargazers_count - a.stargazers_count,
+  );
 }
 
 /**
@@ -207,7 +258,7 @@ export async function handleCatalogListRequest(
   // route that declares none) is a 400, not a silent fallback to the
   // unfiltered catalog, so a frontend bug surfaces immediately instead
   // of quietly serving the wrong list.
-  let discoveryQuery = config.discoveryQuery;
+  let discoveryQueries = config.discoveryQueries;
   let cacheKey = config.cacheKey;
   if (parsed.data.filter !== undefined) {
     const filterConfig = config.filters?.[parsed.data.filter];
@@ -219,7 +270,7 @@ export async function handleCatalogListRequest(
         `Unknown filter "${parsed.data.filter}" for this catalog`,
       );
     }
-    discoveryQuery = filterConfig.discoveryQuery;
+    discoveryQueries = filterConfig.discoveryQueries;
     cacheKey = filterConfig.cacheKey;
   }
 
@@ -230,7 +281,7 @@ export async function handleCatalogListRequest(
     if (cached) {
       catalog = cached.items;
     } else {
-      catalog = await searchOpenSourceCatalog(env, discoveryQuery);
+      catalog = await scanCatalog(env, discoveryQueries);
       // Only cache a non-empty result — same "don't cache a bad scan"
       // posture GET /issues takes with GITHUB_SCAN_CACHE_KEY (rule 21).
       if (catalog.length > 0) {

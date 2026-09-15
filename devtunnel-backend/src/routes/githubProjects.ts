@@ -33,7 +33,10 @@ export const githubProjects = new Hono<{ Bindings: Env; Variables: Variables }>(
  */
 const CATALOG_CONFIG: CatalogRouteConfig = {
   name: "github-projects",
-  discoveryQuery: "is:public archived:false fork:false stars:>=50",
+  // A single query, so no OR-across-qualifiers concern here — see
+  // `lib/githubCatalog.ts`'s `CatalogRouteConfig.discoveryQueries` doc
+  // comment for why this is an array at all.
+  discoveryQueries: ["is:public archived:false fork:false stars:>=50"],
   cacheKey: "github-projects:catalog:v1",
 };
 
