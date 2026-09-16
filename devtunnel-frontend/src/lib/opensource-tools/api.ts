@@ -1,6 +1,6 @@
 // Server Component only — reads request cookies, don't import from client code.
 import { cookies } from "next/headers";
-import type { OpenSourceToolSummary } from "./types";
+import type { OpenSourceToolSummary, OpenSourceToolDetail } from "./types";
 
 /**
  * `GET /opensource-tools/available` is NOT a confirmed backend route —
@@ -35,6 +35,52 @@ export async function getOpenSourceTools(): Promise<FetchResult<OpenSourceToolSu
       return { status: "empty" };
     }
 
+    return { status: "ok", data };
+  } catch {
+    return { status: "error" };
+  }
+}
+
+/**
+ * `GET /opensource-tools/:slug` — backs the Tool Detail page
+ * (`/opensource-tools/:toolSlug`).
+ *
+ * Three outcomes rather than the list's `ok`/`empty`/`error`, the same
+ * split `getDevtunnelProjectBySlug` (`lib/projects/api.ts`) and
+ * `getTaskDetail` use: a slug matching no tool is a real "this page
+ * doesn't exist" result and renders Next's `notFound()`, never a
+ * fabricated empty tool (Frontend_Development_Rules.txt rule 25), while a
+ * network failure is a separate, temporary state with its own messaging.
+ *
+ * Same documented-assumption caveat as the list route above — TODO:
+ * confirm the real path and payload with backend.
+ */
+export type OpenSourceToolResult =
+  | { status: "ok"; data: OpenSourceToolDetail }
+  | { status: "not-found" }
+  | { status: "error" };
+
+export async function getOpenSourceToolBySlug(
+  slug: string,
+): Promise<OpenSourceToolResult> {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/opensource-tools/${encodeURIComponent(slug)}`,
+      {
+        headers: { Cookie: cookies().toString() },
+        cache: "no-store",
+      },
+    );
+
+    if (response.status === 404) {
+      return { status: "not-found" };
+    }
+
+    if (!response.ok) {
+      return { status: "error" };
+    }
+
+    const data = (await response.json()) as OpenSourceToolDetail;
     return { status: "ok", data };
   } catch {
     return { status: "error" };

@@ -1,11 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { toLabels } from "./adminOpenSourceTools";
+import { parseGithubRepoUrl } from "../lib/githubRepo";
 
 /**
  * Contributor — Open Source Tools on DevTunnel (`/opensource-tools` —
  * "Open Source Tools on Devtunnel" in `AppSidebar`/`AppBottomNav`,
  * devtunnel-frontend's `lib/opensource-tools/{types,api}.ts`). Backs
- * `GET /opensource-tools/available` (src/routes/openSourceTools.ts).
+ * `GET /opensource-tools/available` and `GET /opensource-tools/:slug`
+ * (src/routes/openSourceTools.ts).
  *
  * Deliberately NOT the same data source as `GET /github-open-source-tools`
  * (src/routes/githubOpenSourceTools.ts): that route never touches
@@ -92,7 +94,11 @@ const AVAILABLE_TOOLS_LIMIT = 500;
  * falling back to `fetched_description` in that case instead of
  * returning a blank string.
  */
-function resolveDescription(row: AvailableOpenSourceToolRow): string | null {
+function resolveDescription(row: {
+  description_source: "EXISTING" | "CUSTOM";
+  custom_description: string | null;
+  fetched_description: string | null;
+}): string | null {
   if (row.description_source === "CUSTOM" && row.custom_description?.trim()) {
     return row.custom_description;
   }
@@ -139,4 +145,72 @@ export async function listAvailableOpenSourceTools(
 
   const rows = (data ?? []) as unknown as AvailableOpenSourceToolRow[];
   return rows.map(toOpenSourceToolSummary);
+}
+
+/* ---------------------------------------------------------------------------
+ * Single-tool detail — `GET /opensource-tools/:slug`
+ * (src/routes/openSourceTools.ts), the Tool Detail page
+ * devtunnel-frontend's `lib/opensource-tools/{types,api}.ts` calls.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Everything the detail route reads out of Supabase for one tool: the
+ * summary fields, plus the two columns only the detail view needs
+ * (`readme`, `setup_guide`) and the resolved GitHub owner/repo when the
+ * tool's `source_url` actually points at a repository.
+ *
+ * `repo` being `null` is a normal, expected state, not an error: sql/017
+ * stores a `source_url`, not a repository, precisely because a tool's
+ * home can be a docs site or a vendor page. The route uses that to decide
+ * whether there's any GitHub data to fetch at all.
+ */
+export interface OpenSourceToolDetailRecord extends OpenSourceToolSummary {
+  /** Imported at onboarding time (Step 1), never re-fetched on read. */
+  readme: string | null;
+  /** Admin-authored Markdown from Step 4 — never derived from `readme`. Always a string (sql/017 defaults it to ''). */
+  setupGuide: string;
+  /** Resolved from `source_url` — `null` when the tool isn't hosted on GitHub. */
+  repo: { owner: string; repo: string } | null;
+}
+
+interface OpenSourceToolDetailRow extends AvailableOpenSourceToolRow {
+  readme: string | null;
+  setup_guide: string;
+}
+
+/** Explicit column list, never `select("*")` (rule 23). */
+const DETAIL_TOOL_COLUMNS = `${AVAILABLE_TOOL_COLUMNS}, readme, setup_guide`;
+
+/**
+ * One published tool by slug, or `null` when no such tool exists — which
+ * the route turns into a 404. There's no soft-delete or status column to
+ * filter on here (see `listAvailableOpenSourceTools` above): a row
+ * existing at all means the tool is published.
+ *
+ * `parseGithubRepoUrl` (src/lib/githubRepo.ts) is reused for the
+ * owner/repo resolution rather than a second URL parser — it already
+ * handles the https/ssh/bare `owner/repo` forms an admin might have
+ * pasted during onboarding, and returns `null` for any non-GitHub host,
+ * which is exactly the "this tool has no repository" signal the detail
+ * route needs (rule 51).
+ */
+export async function getOpenSourceToolDetailBySlug(
+  supabase: SupabaseClient,
+  slug: string,
+): Promise<OpenSourceToolDetailRecord | null> {
+  const { data, error } = await supabase
+    .from("opensource_tools")
+    .select(DETAIL_TOOL_COLUMNS)
+    .eq("slug", slug)
+    .maybeSingle<OpenSourceToolDetailRow>();
+
+  if (error) throw new Error(`Failed to load open source tool: ${error.message}`);
+  if (!data) return null;
+
+  return {
+    ...toOpenSourceToolSummary(data),
+    readme: data.readme,
+    setupGuide: data.setup_guide ?? "",
+    repo: parseGithubRepoUrl(data.source_url),
+  };
 }

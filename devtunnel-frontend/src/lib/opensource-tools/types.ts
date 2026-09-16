@@ -1,3 +1,6 @@
+import type { OnboardingGithubIdentity } from "@/lib/admin/project-onboarding/types";
+import type { GithubProjectIssuePreview } from "@/lib/github-projects/types";
+
 /**
  * Local, frontend-only shape for the contributor-facing **Open Source
  * Tools on Devtunnel** page (`/opensource-tools` — "Open Source Tools on
@@ -35,3 +38,95 @@
     labels: string[];
     createdAt: string;
   }
+
+/**
+ * The tool's underlying GitHub repository, when it has one.
+ *
+ * Nullable on purpose, and this is the field that makes the Tool Detail
+ * page differ from the Project Detail page rather than being a copy of
+ * it: `devtunnel.opensource_tools` (sql/017) stores a `source_url`, not a
+ * repository — a tool's source can perfectly well be a docs site, a
+ * vendor page, or a self-hosted Git instance. Everything GitHub-shaped
+ * (stars, forks, issues, license, maintainer) therefore hangs off this
+ * object instead of sitting on the tool itself, so the page can hide
+ * that whole block honestly when there's no repository behind the tool,
+ * rather than rendering a row of zeroes that look like real counts
+ * (Frontend_Development_Rules.txt rules 38/58).
+ *
+ * Fields mirror `GithubProjectDetail` (`lib/github-projects/types.ts`)
+ * one-for-one where they overlap, so the sidebar renders the same facts
+ * the same way on both sides of the app.
+ */
+export interface OpenSourceToolRepository {
+  fullName: string;
+  url: string;
+  owner: OnboardingGithubIdentity;
+  stars: number;
+  forks: number;
+  openIssuesCount: number;
+  contributorCount: number;
+  /** SPDX-style license name (e.g. "MIT"), or `null` if GitHub reports none. */
+  license: string | null;
+  /** Last GitHub push/activity. */
+  pushedAt: string;
+}
+
+/**
+ * One row in the Tool Detail page's Issues tab. Reused verbatim from the
+ * GitHub catalog rather than redeclared — a tool's issues are the same
+ * GitHub objects, shown the same way, and a second near-identical shape
+ * would only let the two drift (rule 51).
+ */
+export type OpenSourceToolIssuePreview = GithubProjectIssuePreview;
+
+/**
+ * `GET /opensource-tools/:slug` — backs the Tool Detail page
+ * (`/opensource-tools/:toolSlug`), the DevTunnel-side counterpart to
+ * `/github-open-source-tools/:slug`.
+ *
+ * Extends the grid summary with what only the single-tool view needs:
+ * the imported README, the Admin-authored setup guide (sql/017
+ * `setup_guide` — the one thing this catalog has that no other page in
+ * the app does), the repository block above, and the two pieces of
+ * per-viewer state the page's own actions need.
+ *
+ * Not confirmed against the backend yet — same documented-assumption
+ * note as the summary shape above. TODO: confirm `GET
+ * /opensource-tools/:slug` and its payload with backend.
+ */
+export interface OpenSourceToolDetail extends OpenSourceToolSummary {
+  /** Imported README from the tool's repository, or `null` when there's none to import. */
+  readme: string | null;
+  /**
+   * The Admin's Step 4 setup guide — how to actually get this tool
+   * running. Always a string (onboarding requires it), so the Setup tab
+   * never renders an empty panel.
+   */
+  setupGuide: string;
+  /** `null` when the tool's `sourceUrl` isn't a GitHub repository — see above. */
+  repository: OpenSourceToolRepository | null;
+  /**
+   * A page of the repository's currently-open issues, newest first —
+   * empty when `repository` is `null`. Never the full issue tracker;
+   * GitHub stays the source of truth, which is why every row carries its
+   * own `url`.
+   */
+  openIssues: OpenSourceToolIssuePreview[];
+
+  /**
+   * Whether the signed-in contributor has starred this tool through
+   * DevTunnel, and how many have — same pair, same meaning, as
+   * `GithubProjectDetail.isStarredByViewer` / `.localStarCount`.
+   * Computed fresh per viewer, never cached with the rest of the payload.
+   */
+  isStarredByViewer: boolean;
+  localStarCount: number;
+
+  /**
+   * Whether the viewer has already put their hand up to help maintain or
+   * improve this tool ("Contribute to this tool"). Drives the header
+   * button's joined state so a returning contributor isn't invited to
+   * join something they already joined.
+   */
+  viewerIsContributing: boolean;
+}
