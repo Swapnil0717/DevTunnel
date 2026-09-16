@@ -4,27 +4,6 @@ import { SparkleIcon, ChevronRightIcon } from "@/components/layout/nav-icons";
 import { getTechTagClasses } from "@/lib/home/tag-style";
 import type { ProjectSummary } from "@/lib/home/types";
 
-/**
- * One card on the `/projects` grid ("Projects on Devtunnel" in
- * `AppSidebar`) — the curated, DevTunnel-side counterpart to
- * `GithubProjectCard` on `/github-projects`
- * (`components/github-projects/github-project-card.tsx`), built from the
- * same real fetch every other `ProjectCard` on the home page already
- * uses (`lib/home/api.ts`'s `getRecommendedProjects`,
- * `GET /projects/available`) rather than a duplicated data source.
- *
- * Deliberately not a byte-for-byte reuse of `components/home/project-card.tsx`:
- * that card is sized for a dense 3-up sidebar list, while this page's grid
- * has the room `GithubProjectCard` does — a logo, a two-line description,
- * and a bordered footer — so this mirrors that card's shape instead,
- * substituting the fields this page's data actually has (`primaryTech`,
- * `matchPercent`/`matchRole`) for the ones only the GitHub catalog carries
- * (stars/forks/issues/updated-at — `ProjectSummary` has none of those,
- * and rule 58 rules out inventing them).
- *
- * The whole card links to `/projects/:slug`, same destination every other
- * `ProjectCard` on the home page already points at.
- */
 export function DevtunnelProjectCard({ project }: { project: ProjectSummary }) {
   return (
     <article className="flex flex-col rounded-[10px] border border-border bg-surface p-4 transition-colors hover:border-border-subtle">
@@ -32,7 +11,7 @@ export function DevtunnelProjectCard({ project }: { project: ProjectSummary }) {
         href={`/projects/${project.slug}`}
         className="mb-2.5 flex items-start gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded-md"
       >
-        <DevtunnelProjectLogo size={32} />
+        <DevtunnelProjectLogo repositoryFullName={project.repositoryFullName} size={32} />
         <div className="min-w-0 flex-1">
           <h3 className="m-0 truncate text-[13px] font-medium leading-tight text-text hover:text-accent">
             {project.name}

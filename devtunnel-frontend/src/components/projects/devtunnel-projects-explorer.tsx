@@ -6,6 +6,7 @@ import { SectionMessage } from "@/components/home/section-message";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { PagePaginationControls } from "@/components/admin/page-pagination-controls";
 import { usePagePagination } from "@/lib/admin/use-page-pagination";
+import { useAuth } from "@/lib/auth/use-auth";
 import { DevtunnelProjectCard } from "./devtunnel-project-card";
 import type { ProjectSummary } from "@/lib/home/types";
 
@@ -25,12 +26,6 @@ const SHOW_FILTERS: { value: ShowFilter; label: string }[] = [
   { value: "RECOMMENDED", label: "Recommended for you" },
 ];
 
-/**
- * Same 3-column / 12-per-page sizing `GithubProjectsExplorer` uses for
- * its own contributor-facing grid (`GITHUB_PROJECTS_PAGE_SIZE`) — kept
- * as its own constant rather than importing that one, since the two
- * pages' data (and the component reading it) are otherwise unrelated.
- */
 const DEVTUNNEL_PROJECTS_PAGE_SIZE = 12;
 
 function sortProjects(projects: ProjectSummary[], sortBy: SortOption): ProjectSummary[] {
@@ -38,9 +33,6 @@ function sortProjects(projects: ProjectSummary[], sortBy: SortOption): ProjectSu
 
   switch (sortBy) {
     case "BEST_MATCH":
-      // Undefined matchPercent (no recommendation yet) sorts after every
-      // real match score, never treated as 0 — that would misrepresent
-      // "no data" as "a 0% match" (rule 58).
       sorted.sort((a, b) => {
         const aMatch = a.matchPercent ?? -1;
         const bMatch = b.matchPercent ?? -1;
@@ -54,37 +46,15 @@ function sortProjects(projects: ProjectSummary[], sortBy: SortOption): ProjectSu
   }
 }
 
-/**
- * Client-side search + filter + sort bar for `/projects` ("Projects on
- * Devtunnel"), driven by one already-fetched `ProjectSummary[]`
- * (`getRecommendedProjects`, `GET /projects/available` —
- * `lib/home/api.ts`) — narrowed and re-ordered here, then paginated
- * 12-per-page, the same "one real fetch, filtered/sorted/paginated
- * entirely in the browser" convention `GithubProjectsExplorer` and
- * `AdminProjectsExplorer` both already follow (Frontend_Development_Rules.txt
- * rule 58: never stand up a second, fabricated data source just to
- * support a filter).
- *
- * Three controls, matching what this page's real data can actually
- * support: **Tech stack** (built from the `primaryTech` values the
- * fetched projects actually carry, never a hardcoded catalog), **Show**
- * (All projects / Recommended for you — recommended meaning a real
- * `matchPercent` came back for that project, not a separate backend
- * query, since `/projects/available` already returns match data inline;
- * this is also what `RecommendedProjectsSection`'s "See all" link on the
- * home page points at via `?recommended=true`), and **Sort by** (Best
- * match / Name A–Z — no stars/forks/recency to sort by here, unlike
- * `GithubProjectsExplorer`, since `ProjectSummary` doesn't carry any of
- * that).
- */
 export function DevtunnelProjectsExplorer({
   projects,
   initialShowFilter = "ALL",
 }: {
   projects: ProjectSummary[];
-  /** Seeds the "Show" filter from `?recommended=true` on first render. */
   initialShowFilter?: ShowFilter;
 }) {
+  const { user } = useAuth();
+
   const [query, setQuery] = useState("");
   const [techStack, setTechStack] = useState(ALL_TECH);
   const [show, setShow] = useState<ShowFilter>(initialShowFilter);
@@ -95,6 +65,13 @@ export function DevtunnelProjectsExplorer({
     for (const project of projects) values.add(project.primaryTech);
     return Array.from(values).sort((a, b) => a.localeCompare(b));
   }, [projects]);
+
+  const profileTechStack = useMemo(
+    () => user?.technologies.find((value) => techStackOptions.includes(value)) ?? null,
+    [user, techStackOptions],
+  );
+
+  const isFilteredToProfile = profileTechStack !== null && techStack === profileTechStack;
 
   const filteredProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -145,6 +122,31 @@ export function DevtunnelProjectsExplorer({
             className="w-full rounded-[8px] border border-border bg-surface py-2 pl-8 pr-3 text-[12.5px] text-text placeholder:text-text-faint focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
         </div>
+
+        {profileTechStack !== null ? (
+          isFilteredToProfile ? (
+            <p className="m-0 flex items-center gap-2 text-[11.5px] text-text-faint">
+              Filtered to your profile.
+              <button
+                type="button"
+                onClick={() => setTechStack(ALL_TECH)}
+                className="font-medium text-accent hover:underline"
+              >
+                Show all projects
+              </button>
+            </p>
+          ) : (
+            <div>
+              <button
+                type="button"
+                onClick={() => setTechStack(profileTechStack)}
+                className="inline-flex items-center gap-1.5 rounded-[8px] border border-border bg-surface px-3 py-1.5 text-[11.5px] font-medium text-text-secondary transition-colors hover:border-accent/40 hover:text-accent"
+              >
+                Match my profile
+              </button>
+            </div>
+          )
+        ) : null}
 
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex flex-col gap-1">
