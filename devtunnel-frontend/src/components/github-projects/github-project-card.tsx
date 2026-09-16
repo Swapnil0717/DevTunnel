@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { RepoLogo } from "@/components/admin/repo-logo";
 import { StarIcon, GitBranchIcon, IssueIcon } from "@/components/layout/nav-icons";
 import { formatCompactNumber } from "@/lib/github-projects/format-compact-number";
@@ -10,20 +11,29 @@ const MAX_VISIBLE_TAGS = 3;
 
 /**
  * One card on the `/github-projects` grid ("GitHub Projects" in
- * `AppSidebar`). Repo logo + name + `owner/repo`, GitHub's own
- * description, a language/tech-stack tag row, then a bordered footer of
- * stars / forks / open issues plus a relative "Updated" timestamp.
+ * `AppSidebar`; also reused as-is by `/github-open-source-tools` via
+ * `GithubProjectsExplorer` — see that component's doc comment). Repo
+ * logo + name + `owner/repo`, GitHub's own description, a
+ * language/tech-stack tag row, then a bordered footer of stars / forks /
+ * open issues plus a relative "Updated" timestamp.
+ *
+ * The whole card is now the click target for this project's own
+ * DevTunnel detail page (`/github-projects/:slug` —
+ * `GithubProjectDetailPage`) — Project Info, README, and Issues in one
+ * place, plus the "Nominate for DevTunnel" action — not just the
+ * project name as before. Built with the standard "stretched link"
+ * pattern: one real `Link` absolutely positioned over the entire card
+ * (`inset-0`, `z-0`) carries the click/keyboard-focus target and its own
+ * accessible name, while the footer's direct external GitHub link is
+ * lifted above it (`relative z-10`) so it still opens the real
+ * repository on its own — clicking anywhere else on the card, including
+ * the logo, description, and tag row that previously did nothing at
+ * all, now opens the view page.
  *
  * `RepoLogo` is reused as-is rather than duplicated — already a generic,
  * role-agnostic presentational component (no admin API calls, no
  * admin-only state), same reuse `IssuesTable`'s doc comment documents
  * for the same reason (Frontend_Development_Rules.txt rule 51).
- *
- * The whole card's primary click target is the repository name, which
- * opens the actual GitHub repository in a new tab — this page is a
- * read-only GitHub catalog (see `lib/github-projects/types.ts`), not a
- * DevTunnel project with its own detail route, so there's nowhere
- * internal for it to link to instead.
  *
  * Every stat pairs its icon with a real `aria-label` stating the full
  * number and unit ("1.2K stars", not just a bare compact number next to
@@ -36,19 +46,19 @@ export function GithubProjectCard({ project }: { project: GithubProjectSummary }
   const hiddenTagCount = project.techStack.length - visibleTags.length;
 
   return (
-    <article className="flex flex-col rounded-[10px] border border-border bg-surface p-4 transition-colors hover:border-border-subtle">
+    <article className="relative flex flex-col rounded-[10px] border border-border bg-surface p-4 transition-colors hover:border-border-subtle">
+      <Link
+        href={`/github-projects/${project.slug}`}
+        className="absolute inset-0 z-0 rounded-[10px] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      >
+        <span className="sr-only">View {project.name} project details</span>
+      </Link>
+
       <div className="mb-2.5 flex items-start gap-2.5">
         <RepoLogo repositoryFullName={project.repositoryFullName} size={32} />
         <div className="min-w-0 flex-1">
           <h3 className="m-0 truncate text-[13px] font-medium leading-tight text-text">
-            <a
-              href={project.repositoryUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="hover:text-accent focus-visible:text-accent"
-            >
-              {project.name}
-            </a>
+            {project.name}
           </h3>
           <p className="m-0 mt-0.5 truncate font-mono text-[11px] text-text-faint">
             {project.repositoryFullName}
@@ -116,9 +126,18 @@ export function GithubProjectCard({ project }: { project: GithubProjectSummary }
           </span>
         </div>
 
-        <p className="m-0 shrink-0 text-[10.5px] text-text-faint">
+        {/* Lifted above the card-wide `Link` overlay (`relative z-10`) so
+            this stays a working, independent link straight out to the
+            real GitHub repository — the one click target on this card
+            that deliberately does NOT go to the internal detail page. */}
+        <a
+          href={project.repositoryUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="relative z-10 m-0 shrink-0 text-[10.5px] text-text-faint hover:text-accent"
+        >
           Updated <time dateTime={project.pushedAt}>{formatRelativeTime(project.pushedAt)}</time>
-        </p>
+        </a>
       </div>
     </article>
   );

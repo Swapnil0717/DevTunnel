@@ -315,6 +315,14 @@ const repoCatalogSchema = z.object({
     })
     .nullable()
     .optional(),
+  // GitHub's own repository topics (the same field
+  // src/lib/githubDiscovery.ts's search results already carry as
+  // `GithubCatalogRepoItem.topics`). Optional here because this schema
+  // is also relied on by callers that fetched a repo before topics were
+  // read from it — a repo response missing this key simply yields no
+  // topics rather than failing to parse (rule 52: validate the shape,
+  // but don't make an unrelated field mandatory retroactively).
+  topics: z.array(z.string()).optional(),
   created_at: z.string(),
   pushed_at: z.string(),
   private: z.boolean(),
@@ -332,6 +340,8 @@ export interface GitHubRepoCatalogSummary {
   openIssues: number;
   /** SPDX-style license identifier (e.g. "MIT"), or `null` if GitHub reports none/unrecognized. */
   license: string | null;
+  /** Raw GitHub repository topics — see `mapGithubTopicsToTechStack` (src/lib/techTopics.ts) for turning these into a tech-stack tag list. */
+  topics: string[];
   createdAt: string;
   pushedAt: string;
   isPrivate: boolean;
@@ -389,6 +399,7 @@ export async function fetchRepositoryCatalogSummary(
     forks: data.forks_count,
     openIssues: data.open_issues_count,
     license,
+    topics: data.topics ?? [],
     createdAt: data.created_at,
     pushedAt: data.pushed_at,
     isPrivate: data.private,

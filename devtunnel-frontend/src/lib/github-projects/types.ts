@@ -54,3 +54,45 @@
    /** Last GitHub push/activity — powers "Trending" and "Recently updated". */
    pushedAt: string;
  }
+ 
+ /**
+  * One row in the Project Detail page's Issues tab — a lightweight,
+  * read-only preview of a single open GitHub issue on the repository.
+  * Deliberately thin (no body, no comments) — same "list view only needs
+  * enough to link out" posture `IssuesTable`'s row shape already takes
+  * for `/issues`; a contributor who wants the full issue opens it on
+  * GitHub itself via `url` rather than reading it rendered here.
+  */
+ export interface GithubProjectIssuePreview {
+   id: string;
+   number: number;
+   title: string;
+   url: string;
+   /** Issue labels as GitHub reports them — flat list, no color/category metadata. */
+   labels: string[];
+   commentCount: number;
+   createdAt: string;
+ }
+ 
+ /**
+  * `GET /github-projects/:slug` response — everything `GithubProjectSummary`
+  * already carries, plus what only the single-project detail view needs:
+  * the repository's own README (rendered with `MarkdownReadme`, same
+  * component the onboarding flow and Admin Project Detail already use)
+  * and a page of its currently-open issues. Extends rather than
+  * duplicates `GithubProjectSummary` — same "detail = summary + more"
+  * shape `TaskDetail` takes over `Task` in `lib/tasks/types.ts`, so the
+  * grid card and the detail header never drift into two different ideas
+  * of what a project's core fields are.
+  */
+ export interface GithubProjectDetail extends GithubProjectSummary {
+   /** Raw README markdown from the repository's default branch, or `null` if GitHub has none. */
+   readme: string | null;
+   /**
+    * A page of the repository's currently-open issues, newest first.
+    * Not the full issue tracker — GitHub's own issue list is the source
+    * of truth for anything beyond this preview, which is why every row
+    * also carries its own `url`.
+    */
+   openIssues: GithubProjectIssuePreview[];
+ }
