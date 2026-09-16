@@ -41,17 +41,30 @@ const MAX_VISIBLE_TAGS = 3;
  * accessible text must be meaningful on its own, not just an abbreviated
  * digit string.
  */
-export function GithubProjectCard({ project }: { project: GithubProjectSummary }) {
+export function GithubProjectCard({
+  project,
+  basePath = "/github-projects",
+}: {
+  project: GithubProjectSummary;
+  /**
+   * Route prefix the whole-card click target and any anywhere-on-tool
+   * click points at — `/github-projects/:slug` by default, but
+   * `/github-open-source-tools` passes `/github-open-source-tools` so
+   * this same card (reused as-is via `GithubProjectsExplorer`) opens the
+   * tool's own detail view instead of the GitHub Projects one.
+   */
+  basePath?: string;
+}) {
   const visibleTags = project.techStack.slice(0, MAX_VISIBLE_TAGS);
   const hiddenTagCount = project.techStack.length - visibleTags.length;
 
   return (
     <article className="relative flex flex-col rounded-[10px] border border-border bg-surface p-4 transition-colors hover:border-border-subtle">
       <Link
-        href={`/github-projects/${project.slug}`}
+        href={`${basePath}/${project.slug}`}
         className="absolute inset-0 z-0 rounded-[10px] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
       >
-        <span className="sr-only">View {project.name} project details</span>
+        <span className="sr-only">View {project.name} details</span>
       </Link>
 
       <div className="mb-2.5 flex items-start gap-2.5">

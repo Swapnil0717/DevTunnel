@@ -119,6 +119,7 @@ function sortProjects(
 export function GithubProjectsExplorer({
   projects,
   catalogFilter,
+  cardBasePath = "/github-projects",
 }: {
   projects: GithubProjectSummary[];
   /**
@@ -137,6 +138,13 @@ export function GithubProjectsExplorer({
    * no named filters to offer.
    */
   catalogFilter?: CatalogFilterConfig;
+  /**
+   * Forwarded straight to `GithubProjectCard` — lets a page reusing this
+   * explorer (like `/github-open-source-tools`) send every card's click
+   * target to its own `:slug` detail route instead of
+   * `/github-projects/:slug`.
+   */
+  cardBasePath?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -298,7 +306,7 @@ export function GithubProjectsExplorer({
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {paged.pageItems.map((project) => (
-              <GithubProjectCard key={project.id} project={project} />
+              <GithubProjectCard key={project.id} project={project} basePath={cardBasePath} />
             ))}
           </div>
 

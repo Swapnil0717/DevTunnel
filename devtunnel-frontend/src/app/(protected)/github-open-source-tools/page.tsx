@@ -123,7 +123,11 @@ export default async function GithubOpenSourceToolsPage({
             </>
           }
         >
-          <GithubProjectsExplorer projects={result.data} catalogFilter={catalogFilter} />
+          <GithubProjectsExplorer
+            projects={result.data}
+            catalogFilter={catalogFilter}
+            cardBasePath="/github-open-source-tools"
+          />
         </Suspense>
       )}
     </main>
