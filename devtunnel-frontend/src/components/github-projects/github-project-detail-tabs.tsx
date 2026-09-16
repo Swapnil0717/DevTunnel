@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
+import { GithubEmptyState } from "@/components/github-projects/github-empty-state";
 import { GridIcon, FileIcon, IssueIcon } from "@/components/layout/nav-icons";
 import { getTechTagClasses } from "@/lib/home/tag-style";
 import type { GithubProjectDetail } from "@/lib/github-projects/types";
@@ -27,13 +28,18 @@ const TABS = [
  * - **README** — the repository's own README, rendered exactly the way
  *   `MarkdownReadme` already renders it on the onboarding flow and the
  *   Admin Project Detail page, so a contributor never has to leave this
- *   page to read it.
+ *   page to read it. When GitHub reports no README, this now shows the
+ *   illustrated `GithubEmptyState` ("readme" variant) with a real link
+ *   out to the repository instead of one faint line of text.
  * - **Issues** — a page of the repository's currently-open issues
  *   (`GithubProjectIssuePreview[]`), each linking straight out to the
  *   real GitHub issue — this app has no issue tracker of its own for a
  *   repository DevTunnel hasn't onboarded yet, so "read more on GitHub"
  *   is the honest destination, same posture `IssuesTable` already takes
- *   for `/issues`.
+ *   for `/issues`. A repository with zero open issues now gets the
+ *   "issues-clear" variant — framed as a good result (a checkmark, not
+ *   a "nothing here" box), since an empty issue queue is something to
+ *   feel good about.
  */
 export function GithubProjectDetailTabs({ project }: { project: GithubProjectDetail }) {
   const [activeId, setActiveId] = useState<(typeof TABS)[number]["id"]>("info");
@@ -136,9 +142,17 @@ export function GithubProjectDetailTabs({ project }: { project: GithubProjectDet
           {project.readme ? (
             <MarkdownReadme content={project.readme} sourceUrl={project.repositoryUrl} />
           ) : (
-            <p className="m-0 text-[12px] text-text-faint">
-              This repository doesn&apos;t have a README.
-            </p>
+            <GithubEmptyState
+              compact
+              variant="readme"
+              title="No README yet"
+              description="This repository doesn't have a README file. The source is still browsable directly on GitHub."
+              primaryAction={{
+                label: "View source on GitHub",
+                href: project.repositoryUrl,
+                external: true,
+              }}
+            />
           )}
         </div>
       ) : null}
@@ -151,9 +165,17 @@ export function GithubProjectDetailTabs({ project }: { project: GithubProjectDet
           className="rounded-[10px] border border-border bg-surface p-2"
         >
           {project.openIssues.length === 0 ? (
-            <p className="m-0 p-3 text-[12px] text-text-faint">
-              No open issues right now — this repository is all caught up.
-            </p>
+            <GithubEmptyState
+              compact
+              variant="issues-clear"
+              title="All caught up"
+              description="No open issues right now — this repository has nothing waiting on it."
+              primaryAction={{
+                label: "View issues on GitHub",
+                href: `${project.repositoryUrl}/issues`,
+                external: true,
+              }}
+            />
           ) : (
             <ul className="m-0 flex list-none flex-col divide-y divide-border-subtle p-0">
               {project.openIssues.map((issue) => (

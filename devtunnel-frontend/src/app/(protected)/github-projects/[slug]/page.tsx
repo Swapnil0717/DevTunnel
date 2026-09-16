@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { buildMetadata } from "@/lib/seo";
+import { SITE_URL } from "@/lib/config";
 import { getGithubProjectBySlug } from "@/lib/github-projects/api";
 import { RepoLogo } from "@/components/admin/repo-logo";
-import { ChevronLeftIcon, GitBranchIcon, StarIcon, IssueIcon } from "@/components/layout/nav-icons";
-import { formatCompactNumber } from "@/lib/github-projects/format-compact-number";
+import { ChevronLeftIcon, GitBranchIcon } from "@/components/layout/nav-icons";
 import { formatRelativeTime } from "@/lib/home/format-relative-time";
-import { SectionMessage } from "@/components/home/section-message";
+import { GithubEmptyState } from "@/components/github-projects/github-empty-state";
 import { GithubProjectDetailTabs } from "@/components/github-projects/github-project-detail-tabs";
+import { GithubProjectSidebar } from "@/components/github-projects/github-project-sidebar";
 import { RequestOnboardingButton } from "@/components/github-projects/request-onboarding-button";
 import { StarButton } from "@/components/github-projects/star-button";
 
@@ -48,21 +49,28 @@ export async function generateMetadata({
  * GitHub. Fetches `GET /github-projects/:slug`
  * (`lib/github-projects/api.ts`) server-side and renders the repository
  * the way a contributor deciding whether to get involved would want to
- * see it: identity and stats up top, then Project Info / README / Issues
- * as tabs (`GithubProjectDetailTabs`) so all three live on one page
- * without a wall of scrolling.
+ * see it.
  *
- * Two actions sit next to the header: "View on GitHub" (unchanged —
- * always the real repository), and "Nominate for DevTunnel"
- * (`RequestOnboardingButton`) — a contributor-facing way to flag a
- * repository they think is worth an Admin running the full onboarding
- * flow on, without needing Admin access themselves or leaving this page.
+ * Two-column layout: the tabbed body (`GithubProjectDetailTabs` — Project
+ * Info / README / Issues) on the left, and a persistent
+ * `GithubProjectSidebar` ("About" card, maintainer, clone command, share
+ * link) pinned on the right — the same shape GitHub's own repository
+ * page uses (file tree + tabs on the left, an "About" rail on the
+ * right), rather than making every fact compete for space inside one
+ * tab. `project.owner` was already part of the fetched
+ * `GithubProjectDetail` shape (`lib/github-projects/types.ts`) but had no
+ * home anywhere on this page before the sidebar existed.
+ *
+ * Header is deliberately slimmer than before: name, the real
+ * `repositoryFullName` link, and "Updated <relative time>" — the
+ * stars/forks/issues counts that used to live here now live once, in
+ * the sidebar, instead of being repeated in two places on the same page.
  *
  * Same three-outcome handling `TaskDetailPage` already establishes: a
  * slug that doesn't match any catalog entry renders Next's real 404 via
  * `notFound()` rather than a fabricated "empty project" page
  * (Frontend_Development_Rules.txt rule 25); a network failure degrades
- * to one honest `SectionMessage` instead.
+ * to the illustrated `GithubEmptyState` instead.
  */
 export default async function GithubProjectDetailPage({
   params,
@@ -75,7 +83,7 @@ export default async function GithubProjectDetailPage({
 
   if (result.status === "error") {
     return (
-      <main className="mx-auto max-w-4xl px-6 py-10">
+      <main className="mx-auto max-w-5xl px-6 py-10">
         <Link
           href="/github-projects"
           className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
@@ -90,16 +98,22 @@ export default async function GithubProjectDetailPage({
           {" / "}
           <span className="text-text-muted">Project</span>
         </nav>
-        <h1 className="m-0 mb-4 text-xl font-medium text-text">GitHub Project</h1>
-        <SectionMessage>This project isn&apos;t available right now — check back soon.</SectionMessage>
+        <h1 className="m-0 mb-6 text-xl font-medium text-text">GitHub Project</h1>
+        <GithubEmptyState
+          variant="no-results"
+          title="This project isn't available right now"
+          description="We couldn't reach GitHub for this repository just now. Check back soon, or head back to the full catalog."
+          primaryAction={{ label: "Back to GitHub Projects", href: "/github-projects" }}
+        />
       </main>
     );
   }
 
   const project = result.data;
+  const shareUrl = `${SITE_URL}/github-projects/${project.slug}`;
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
+    <main className="mx-auto max-w-5xl px-6 py-10">
       <Link
         href="/github-projects"
         className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
@@ -115,7 +129,7 @@ export default async function GithubProjectDetailPage({
         <span className="text-text-muted">{project.name}</span>
       </nav>
 
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-4">
           <RepoLogo repositoryFullName={project.repositoryFullName} size={56} />
           <div className="flex flex-col gap-1.5">
@@ -130,26 +144,6 @@ export default async function GithubProjectDetailPage({
                 <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
                 {project.repositoryFullName}
               </a>
-              <span aria-hidden="true" className="text-text-faint">
-                ·
-              </span>
-              <span
-                className="inline-flex items-center gap-1"
-                aria-label={`${project.stars.toLocaleString()} stars`}
-              >
-                <StarIcon className="h-3.5 w-3.5" />
-                {formatCompactNumber(project.stars)}
-              </span>
-              <span aria-hidden="true" className="text-text-faint">
-                ·
-              </span>
-              <span
-                className="inline-flex items-center gap-1"
-                aria-label={`${project.openIssuesCount.toLocaleString()} open issues`}
-              >
-                <IssueIcon className="h-3.5 w-3.5" />
-                {formatCompactNumber(project.openIssuesCount)} open
-              </span>
               <span aria-hidden="true" className="text-text-faint">
                 ·
               </span>
@@ -179,7 +173,12 @@ export default async function GithubProjectDetailPage({
         </div>
       </div>
 
-      <GithubProjectDetailTabs project={project} />
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        <div className="min-w-0 flex-1">
+          <GithubProjectDetailTabs project={project} />
+        </div>
+        <GithubProjectSidebar project={project} shareUrl={shareUrl} />
+      </div>
     </main>
   );
 }

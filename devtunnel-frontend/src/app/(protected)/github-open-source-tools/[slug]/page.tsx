@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { buildMetadata } from "@/lib/seo";
+import { SITE_URL } from "@/lib/config";
 import { getGithubOpenSourceToolBySlug } from "@/lib/github-open-source-tools/api";
 import { RepoLogo } from "@/components/admin/repo-logo";
-import { ChevronLeftIcon, GitBranchIcon, StarIcon, IssueIcon } from "@/components/layout/nav-icons";
-import { formatCompactNumber } from "@/lib/github-projects/format-compact-number";
+import { ChevronLeftIcon, GitBranchIcon } from "@/components/layout/nav-icons";
 import { formatRelativeTime } from "@/lib/home/format-relative-time";
-import { SectionMessage } from "@/components/home/section-message";
+import { GithubEmptyState } from "@/components/github-projects/github-empty-state";
 import { GithubProjectDetailTabs } from "@/components/github-projects/github-project-detail-tabs";
+import { GithubProjectSidebar } from "@/components/github-projects/github-project-sidebar";
 import { RequestToolOnboardingButton } from "@/components/github-open-source-tools/request-tool-onboarding-button";
 import { StarButton } from "@/components/github-open-source-tools/star-button";
 
@@ -47,33 +48,33 @@ export async function generateMetadata({
  * now links to (via its `basePath` prop, wired in
  * `github-projects-explorer.tsx` and set from
  * `/github-open-source-tools/page.tsx`'s `cardBasePath`) whenever a card
- * is clicked anywhere — logo, name, description, tag row, all of it —
- * from the Github Open Source Tools grid, instead of opening straight
- * out to GitHub or (previously) landing on the unrelated GitHub Projects
- * detail route.
+ * is clicked from the Github Open Source Tools grid.
  *
  * Sibling of `GithubProjectDetailPage`
  * (`app/(protected)/github-projects/[slug]/page.tsx`): fetches
  * `GET /github-open-source-tools/:slug`
- * (`lib/github-open-source-tools/api.ts`) server-side and renders the
- * repository the same way — identity and stats up top, then
- * Project Info / README / Issues as tabs (`GithubProjectDetailTabs`,
- * reused as-is since a tool's detail shape is identical to a project's:
- * `GithubProjectDetail`) so all three live on one page without a wall of
- * scrolling.
+ * (`lib/github-open-source-tools/api.ts`) server-side and renders it the
+ * same way, including the same two-column layout — the tabbed body
+ * (`GithubProjectDetailTabs`, reused as-is since a tool's detail shape is
+ * identical to a project's: `GithubProjectDetail`) on the left, and the
+ * same `GithubProjectSidebar` ("About" card, maintainer, clone command,
+ * share link) pinned on the right. `tool.owner` was already part of the
+ * fetched `GithubProjectDetail` shape but had no home anywhere on this
+ * page before the sidebar existed.
+ *
+ * Header is deliberately slimmer than before: name, the real
+ * `repositoryFullName` link, and "Updated <relative time>" — the
+ * stars/forks/issues counts that used to live here now live once, in the
+ * sidebar, instead of being repeated in two places on the same page.
  *
  * Two actions sit next to the header: "View on GitHub" (unchanged —
  * always the real repository), and "Request to add as DevTunnel project
- * or tool" (`RequestToolOnboardingButton`) — a contributor-facing way to
- * flag a repository they think is worth an Admin running the full
- * onboarding flow on (as either a DevTunnel Project or an Open Source
- * Tool), without needing Admin access themselves or leaving this page.
- *
- * Same three-outcome handling `GithubProjectDetailPage` already
- * establishes: a slug that doesn't match any catalog entry renders
- * Next's real 404 via `notFound()` rather than a fabricated "empty tool"
- * page (Frontend_Development_Rules.txt rule 25); a network failure
- * degrades to one honest `SectionMessage` instead. Back navigation and
+ * or tool" (`RequestToolOnboardingButton`). Same three-outcome handling
+ * `GithubProjectDetailPage` already establishes: a slug that doesn't
+ * match any catalog entry renders Next's real 404 via `notFound()`
+ * rather than a fabricated "empty tool" page
+ * (Frontend_Development_Rules.txt rule 25); a network failure degrades
+ * to the illustrated `GithubEmptyState` instead. Back navigation and
  * breadcrumb both point at `/github-open-source-tools`, not
  * `/github-projects` — this is the tools catalog's own detail view.
  */
@@ -86,7 +87,7 @@ export default async function GithubToolDetailPage({ params }: GithubToolDetailP
 
   if (result.status === "error") {
     return (
-      <main className="mx-auto max-w-4xl px-6 py-10">
+      <main className="mx-auto max-w-5xl px-6 py-10">
         <Link
           href="/github-open-source-tools"
           className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
@@ -101,16 +102,22 @@ export default async function GithubToolDetailPage({ params }: GithubToolDetailP
           {" / "}
           <span className="text-text-muted">Tool</span>
         </nav>
-        <h1 className="m-0 mb-4 text-xl font-medium text-text">Open Source Tool</h1>
-        <SectionMessage>This tool isn&apos;t available right now — check back soon.</SectionMessage>
+        <h1 className="m-0 mb-6 text-xl font-medium text-text">Open Source Tool</h1>
+        <GithubEmptyState
+          variant="no-results"
+          title="This tool isn't available right now"
+          description="We couldn't reach GitHub for this repository just now. Check back soon, or head back to the full catalog."
+          primaryAction={{ label: "Back to Github Open Source Tools", href: "/github-open-source-tools" }}
+        />
       </main>
     );
   }
 
   const tool = result.data;
+  const shareUrl = `${SITE_URL}/github-open-source-tools/${tool.slug}`;
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
+    <main className="mx-auto max-w-5xl px-6 py-10">
       <Link
         href="/github-open-source-tools"
         className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
@@ -126,7 +133,7 @@ export default async function GithubToolDetailPage({ params }: GithubToolDetailP
         <span className="text-text-muted">{tool.name}</span>
       </nav>
 
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-4">
           <RepoLogo repositoryFullName={tool.repositoryFullName} size={56} />
           <div className="flex flex-col gap-1.5">
@@ -141,26 +148,6 @@ export default async function GithubToolDetailPage({ params }: GithubToolDetailP
                 <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
                 {tool.repositoryFullName}
               </a>
-              <span aria-hidden="true" className="text-text-faint">
-                ·
-              </span>
-              <span
-                className="inline-flex items-center gap-1"
-                aria-label={`${tool.stars.toLocaleString()} stars`}
-              >
-                <StarIcon className="h-3.5 w-3.5" />
-                {formatCompactNumber(tool.stars)}
-              </span>
-              <span aria-hidden="true" className="text-text-faint">
-                ·
-              </span>
-              <span
-                className="inline-flex items-center gap-1"
-                aria-label={`${tool.openIssuesCount.toLocaleString()} open issues`}
-              >
-                <IssueIcon className="h-3.5 w-3.5" />
-                {formatCompactNumber(tool.openIssuesCount)} open
-              </span>
               <span aria-hidden="true" className="text-text-faint">
                 ·
               </span>
@@ -190,7 +177,12 @@ export default async function GithubToolDetailPage({ params }: GithubToolDetailP
         </div>
       </div>
 
-      <GithubProjectDetailTabs project={tool} />
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        <div className="min-w-0 flex-1">
+          <GithubProjectDetailTabs project={tool} />
+        </div>
+        <GithubProjectSidebar project={tool} shareUrl={shareUrl} />
+      </div>
     </main>
   );
 }
