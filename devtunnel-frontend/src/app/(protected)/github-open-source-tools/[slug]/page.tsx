@@ -10,6 +10,7 @@ import { formatRelativeTime } from "@/lib/home/format-relative-time";
 import { SectionMessage } from "@/components/home/section-message";
 import { GithubProjectDetailTabs } from "@/components/github-projects/github-project-detail-tabs";
 import { RequestToolOnboardingButton } from "@/components/github-open-source-tools/request-tool-onboarding-button";
+import { StarButton } from "@/components/github-open-source-tools/star-button";
 
 interface GithubToolDetailPageProps {
   params: { slug: string };
@@ -180,6 +181,11 @@ export default async function GithubToolDetailPage({ params }: GithubToolDetailP
             <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
             View on GitHub
           </a>
+          <StarButton
+            slug={tool.slug}
+            initialStarredByViewer={tool.isStarredByViewer}
+            initialLocalStarCount={tool.localStarCount}
+          />
           <RequestToolOnboardingButton slug={tool.slug} />
         </div>
       </div>

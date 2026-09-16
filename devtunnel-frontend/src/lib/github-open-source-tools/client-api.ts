@@ -7,11 +7,28 @@ import { API_BASE_URL } from "@/lib/config";
 
 export class GithubOpenSourceToolsApiError extends Error {
   status: number;
+  /**
+   * The backend's own `error.code` — see
+   * `lib/github-projects/client-api.ts`'s `GithubProjectsApiError.code`
+   * doc comment for the full reasoning; `StarButton` here branches on
+   * it the same way.
+   */
+  code?: string;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code?: string) {
     super(message);
     this.name = "GithubOpenSourceToolsApiError";
     this.status = status;
+    this.code = code;
+  }
+}
+
+async function parseErrorBody(res: Response): Promise<{ code?: string; message?: string }> {
+  try {
+    const body = (await res.json()) as { error?: { code?: string; message?: string } };
+    return { code: body.error?.code, message: body.error?.message };
+  } catch {
+    return {};
   }
 }
 
@@ -54,4 +71,66 @@ export async function requestGithubToolOnboarding(slug: string): Promise<void> {
       res.status,
     );
   }
+}
+
+export interface GithubStarStatus {
+  starredByViewer: boolean;
+  localStarCount: number;
+}
+
+/**
+ * `PUT /github-open-source-tools/:slug/star` — the Tool Detail page's
+ * "Star" button (`StarButton`,
+ * `components/github-open-source-tools/star-button.tsx`). Sibling of
+ * `starGithubProject` (`lib/github-projects/client-api.ts`) — identical
+ * contract, pointed at this catalog's own route
+ * (src/routes/githubOpenSourceTools.ts): stars the repository on the
+ * contributor's real GitHub account first, then records DevTunnel's own
+ * local star.
+ *
+ * Can reject with `GithubOpenSourceToolsApiError` whose `code` is
+ * `"github_reauth_required"` (status `403`) when the contributor has no
+ * live GitHub connection.
+ */
+export async function starGithubTool(slug: string): Promise<GithubStarStatus> {
+  const res = await fetch(
+    `${API_BASE_URL}/github-open-source-tools/${encodeURIComponent(slug)}/star`,
+    {
+      method: "PUT",
+      credentials: "include",
+    },
+  );
+
+  if (!res.ok) {
+    const { code, message } = await parseErrorBody(res);
+    throw new GithubOpenSourceToolsApiError(
+      message ?? `Failed to star tool (${res.status})`,
+      res.status,
+      code,
+    );
+  }
+
+  return (await res.json()) as GithubStarStatus;
+}
+
+/** See `starGithubTool` above — same contract, in reverse. */
+export async function unstarGithubTool(slug: string): Promise<GithubStarStatus> {
+  const res = await fetch(
+    `${API_BASE_URL}/github-open-source-tools/${encodeURIComponent(slug)}/star`,
+    {
+      method: "DELETE",
+      credentials: "include",
+    },
+  );
+
+  if (!res.ok) {
+    const { code, message } = await parseErrorBody(res);
+    throw new GithubOpenSourceToolsApiError(
+      message ?? `Failed to unstar tool (${res.status})`,
+      res.status,
+      code,
+    );
+  }
+
+  return (await res.json()) as GithubStarStatus;
 }

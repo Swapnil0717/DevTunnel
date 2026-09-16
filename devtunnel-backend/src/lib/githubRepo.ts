@@ -814,3 +814,61 @@ export async function fetchRepositoryLanguages(
   const parsed = languagesSchema.safeParse(await res.json());
   return parsed.success ? parsed.data : {};
 }
+
+/**
+ * Stars/unstars a repository **on GitHub itself**, on behalf of the
+ * signed-in contributor — backs the "Star" action on both the Project
+ * Detail and Open Source Tools Detail pages (routes/githubProjects.ts,
+ * routes/githubOpenSourceTools.ts): starring a repository in DevTunnel
+ * is meant to actually star it on the contributor's real GitHub
+ * account, not just record a DevTunnel-local preference.
+ *
+ * Unlike every other function in this file, `accessToken` here is
+ * required, not optional — GitHub's star endpoints
+ * (`PUT`/`DELETE /user/starred/{owner}/{repo}`) act "for the
+ * authenticated user" and have no meaningful anonymous/unauthenticated
+ * form the way a public repo *read* does. Callers must resolve a live
+ * per-user token first (`getValidGithubAccessToken`,
+ * `db/githubTokens.ts`) and respond `403 github_reauth_required`
+ * themselves when there isn't one — mirroring
+ * `routes/contributions.ts`'s `resolveAccessTokenOrRespond` — rather
+ * than this function silently falling back to an unauthenticated call
+ * that would always 404.
+ *
+ * Both endpoints respond `204 No Content` on success with no JSON
+ * body, and are idempotent on GitHub's side (starring an
+ * already-starred repo, or unstarring an already-unstarred one, is
+ * still a `204`) — so callers don't need to pre-check GitHub's own
+ * star status before calling either of these.
+ *
+ * Requires this backend's GitHub App to have the "Starring" user
+ * permission granted (GitHub App → Permissions & events → Account
+ * permissions → Starring: Read and write) — without it, GitHub
+ * responds `403`, which surfaces here as `GitHubRepoError` with
+ * reason `"unauthorized"` via `assertOk`, same as any other
+ * insufficient-permission response.
+ */
+export async function starRepositoryForUser(
+  accessToken: string,
+  owner: string,
+  repo: string,
+): Promise<void> {
+  const res = await fetchWithTimeout(`${GITHUB_API_BASE}/user/starred/${owner}/${repo}`, {
+    method: "PUT",
+    headers: { ...authHeaders(accessToken), "Content-Length": "0" },
+  });
+  await assertOk(res, "star repository");
+}
+
+/** See `starRepositoryForUser` above — same contract, in reverse. */
+export async function unstarRepositoryForUser(
+  accessToken: string,
+  owner: string,
+  repo: string,
+): Promise<void> {
+  const res = await fetchWithTimeout(`${GITHUB_API_BASE}/user/starred/${owner}/${repo}`, {
+    method: "DELETE",
+    headers: authHeaders(accessToken),
+  });
+  await assertOk(res, "unstar repository");
+}

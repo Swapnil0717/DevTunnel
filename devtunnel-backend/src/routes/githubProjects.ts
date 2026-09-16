@@ -12,11 +12,15 @@ import {
   fetchRepositoryContributorCount,
   fetchRepositoryIssues,
   fetchRepositoryReadme,
+  starRepositoryForUser,
+  unstarRepositoryForUser,
   GitHubRepoError,
   type GitHubRepoCatalogSummary,
 } from "../lib/githubRepo";
 import { mapGithubTopicsToTechStack } from "../lib/techTopics";
 import { recordGithubProjectNomination } from "../db/githubProjectNominations";
+import { getValidGithubAccessToken } from "../db/githubTokens";
+import { addGithubStar, removeGithubStar, getGithubStarStatus } from "../db/githubStars";
 import type { Env, Variables, GithubIssueSummary } from "../types";
 
 /**
@@ -143,6 +147,22 @@ interface GithubProjectDetailPayload {
   openIssues: GithubProjectIssuePreview[];
 }
 
+/**
+ * The two viewer-specific fields layered onto the cached
+ * `GithubProjectDetailPayload` before it's sent — deliberately kept
+ * out of the cached object itself (`withCacheSWR` below) since that
+ * cache slot is shared across every contributor who views this
+ * repository; baking one viewer's star status into it would leak as
+ * every other viewer's star status too. Computed fresh, per-request,
+ * from `db/githubStars.ts` `getGithubStarStatus` after the cached
+ * fetch resolves — see the "Star" section further down for the write
+ * side of this.
+ */
+interface GithubStarViewerFields {
+  isStarredByViewer: boolean;
+  localStarCount: number;
+}
+
 function toIssuePreview(issue: GithubIssueSummary): GithubProjectIssuePreview {
   return {
     // GitHub issue numbers are only unique within one repository, not
@@ -188,6 +208,10 @@ const DETAIL_ISSUES_LIMIT = 30;
  */
 githubProjects.get("/github-projects/:slug", requireAuth, async (c) => {
   const env = getEnv(c.env);
+  const user = c.get("user");
+  if (!user) {
+    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+  }
   const slug = c.req.param("slug");
 
   const withinLimit = await checkRateLimit(c, {
@@ -249,7 +273,17 @@ githubProjects.get("/github-projects/:slug", requireAuth, async (c) => {
       return errorResponse(c, 500, "internal_error", "Couldn't load this project right now");
     }
 
-    return c.json(payload, 200);
+    // Per-viewer, never cached alongside the payload above — see
+    // `GithubStarViewerFields`'s doc comment.
+    const supabase = getSupabase(env);
+    const starStatus = await getGithubStarStatus(supabase, payload.repositoryFullName, user.id);
+    const response: GithubProjectDetailPayload & GithubStarViewerFields = {
+      ...payload,
+      isStarredByViewer: starStatus.starredByViewer,
+      localStarCount: starStatus.localStarCount,
+    };
+
+    return c.json(response, 200);
   } catch (err) {
     if (err instanceof GitHubRepoError) {
       if (err.reason === "not_found") {
@@ -274,6 +308,208 @@ githubProjects.get("/github-projects/:slug", requireAuth, async (c) => {
       requestId: c.get("requestId"),
     });
     return errorResponse(c, 500, "internal_error", "Couldn't load this project right now");
+  }
+});
+
+/**
+ * Resolves a usable GitHub access token for the requesting user, or
+ * `null` when none exists (never connected, or their stored
+ * token/refresh token is dead) — a thin wrapper around
+ * `getValidGithubAccessToken` shared by the star and unstar handlers
+ * below. Deliberately returns `null` rather than writing the `403`
+ * response itself (unlike `routes/contributions.ts`'s own
+ * `resolveAccessTokenOrRespond`) so it doesn't need Hono's `Context`
+ * type spelled out here — each caller checks for `null` and responds
+ * `403 github_reauth_required` itself, right next to its own other
+ * error branches.
+ */
+async function resolveStarAccessToken(
+  env: ReturnType<typeof getEnv>,
+  userId: string,
+): Promise<string | null> {
+  const supabase = getSupabase(env);
+  return getValidGithubAccessToken(supabase, env, userId);
+}
+
+/**
+ * `PUT /github-projects/:slug/star` — the Project Detail page's "Star"
+ * button. Stars the repository **on the contributor's own real GitHub
+ * account** (`lib/githubRepo.ts` `starRepositoryForUser`, using their
+ * own stored OAuth token — never a shared server credential, since a
+ * star must be attributable to the actual GitHub user, not DevTunnel
+ * itself) and only then records the local `github_stars` row
+ * (`db/githubStars.ts` `addGithubStar`) that both Detail pages' star
+ * buttons read back. Ordered GitHub-call-then-local-write deliberately:
+ * a local row with no matching real GitHub star would be a lie about
+ * what actually happened on the contributor's account (rule 21: never
+ * record something that didn't really happen).
+ *
+ * Requires the contributor to have a live GitHub connection — responds
+ * `403 github_reauth_required` otherwise, same as
+ * `routes/contributions.ts`, which the frontend already knows how to
+ * turn into a "reconnect GitHub" prompt.
+ */
+githubProjects.put("/github-projects/:slug/star", requireAuth, async (c) => {
+  const env = getEnv(c.env);
+  const user = c.get("user");
+  if (!user) {
+    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+  }
+  const slug = c.req.param("slug");
+
+  const withinLimit = await checkRateLimit(c, {
+    bucket: "github-projects-star",
+    limit: 30,
+    windowSeconds: 60,
+  });
+  if (!withinLimit) {
+    return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+  }
+
+  const parsedSlug = slugToOwnerRepo(slug);
+  if (!parsedSlug) {
+    return errorResponse(c, 404, "not_found", "This project isn't in the GitHub catalog");
+  }
+  const { owner, repo } = parsedSlug;
+  const repositoryFullName = `${owner}/${repo}`;
+
+  const accessToken = await resolveStarAccessToken(env, user.id);
+  if (!accessToken) {
+    return errorResponse(
+      c,
+      403,
+      "github_reauth_required",
+      "Reconnect your GitHub account to star this project",
+    );
+  }
+
+  try {
+    await starRepositoryForUser(accessToken, owner, repo);
+
+    const supabase = getSupabase(env);
+    await addGithubStar(supabase, {
+      repositoryFullName,
+      repositoryUrl: `https://github.com/${repositoryFullName}`,
+      starredBy: user.id,
+    });
+    const starStatus = await getGithubStarStatus(supabase, repositoryFullName, user.id);
+
+    return c.json(starStatus, 200);
+  } catch (err) {
+    if (err instanceof GitHubRepoError) {
+      if (err.reason === "unauthorized") {
+        return errorResponse(
+          c,
+          403,
+          "github_reauth_required",
+          "Reconnect your GitHub account to star this project",
+        );
+      }
+      if (err.reason === "not_found") {
+        return errorResponse(c, 404, "not_found", "This project isn't in the GitHub catalog");
+      }
+      if (err.reason === "rate_limited") {
+        return errorResponse(c, 429, "rate_limited", err.message);
+      }
+      logger.error("github_project_star_github_error", {
+        reason: err.reason,
+        owner,
+        repo,
+        requestId: c.get("requestId"),
+      });
+      return errorResponse(c, 502, "github_unavailable", "Couldn't reach GitHub right now");
+    }
+
+    logger.error("github_project_star_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      owner,
+      repo,
+      requestId: c.get("requestId"),
+    });
+    return errorResponse(c, 500, "internal_error", "Couldn't star this project right now");
+  }
+});
+
+/**
+ * `DELETE /github-projects/:slug/star` — the reverse of the `PUT`
+ * above: unstars on the contributor's real GitHub account, then
+ * removes the matching local `github_stars` row. Same
+ * error/reauth handling as the `PUT` handler.
+ */
+githubProjects.delete("/github-projects/:slug/star", requireAuth, async (c) => {
+  const env = getEnv(c.env);
+  const user = c.get("user");
+  if (!user) {
+    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+  }
+  const slug = c.req.param("slug");
+
+  const withinLimit = await checkRateLimit(c, {
+    bucket: "github-projects-star",
+    limit: 30,
+    windowSeconds: 60,
+  });
+  if (!withinLimit) {
+    return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+  }
+
+  const parsedSlug = slugToOwnerRepo(slug);
+  if (!parsedSlug) {
+    return errorResponse(c, 404, "not_found", "This project isn't in the GitHub catalog");
+  }
+  const { owner, repo } = parsedSlug;
+  const repositoryFullName = `${owner}/${repo}`;
+
+  const accessToken = await resolveStarAccessToken(env, user.id);
+  if (!accessToken) {
+    return errorResponse(
+      c,
+      403,
+      "github_reauth_required",
+      "Reconnect your GitHub account to unstar this project",
+    );
+  }
+
+  try {
+    await unstarRepositoryForUser(accessToken, owner, repo);
+
+    const supabase = getSupabase(env);
+    await removeGithubStar(supabase, repositoryFullName, user.id);
+    const starStatus = await getGithubStarStatus(supabase, repositoryFullName, user.id);
+
+    return c.json(starStatus, 200);
+  } catch (err) {
+    if (err instanceof GitHubRepoError) {
+      if (err.reason === "unauthorized") {
+        return errorResponse(
+          c,
+          403,
+          "github_reauth_required",
+          "Reconnect your GitHub account to unstar this project",
+        );
+      }
+      if (err.reason === "not_found") {
+        return errorResponse(c, 404, "not_found", "This project isn't in the GitHub catalog");
+      }
+      if (err.reason === "rate_limited") {
+        return errorResponse(c, 429, "rate_limited", err.message);
+      }
+      logger.error("github_project_unstar_github_error", {
+        reason: err.reason,
+        owner,
+        repo,
+        requestId: c.get("requestId"),
+      });
+      return errorResponse(c, 502, "github_unavailable", "Couldn't reach GitHub right now");
+    }
+
+    logger.error("github_project_unstar_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      owner,
+      repo,
+      requestId: c.get("requestId"),
+    });
+    return errorResponse(c, 500, "internal_error", "Couldn't unstar this project right now");
   }
 });
 

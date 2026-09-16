@@ -95,4 +95,27 @@
     * also carries its own `url`.
     */
    openIssues: GithubProjectIssuePreview[];
+   /**
+    * Whether the signed-in contributor has starred this repository
+    * *through DevTunnel* (`StarButton`,
+    * `components/github-projects/star-button.tsx` /
+    * `components/github-open-source-tools/star-button.tsx`) — backed by
+    * devtunnel-backend's own `github_stars` table, not GitHub's public
+    * star count (that's `stars`, above, straight from GitHub). Starring
+    * through DevTunnel also stars the repository on the contributor's
+    * real GitHub account (`PUT /github-projects/:slug/star` /
+    * `PUT /github-open-source-tools/:slug/star`,
+    * src/routes/githubProjects.ts / src/routes/githubOpenSourceTools.ts)
+    * — this flag is just DevTunnel's own record of that, computed fresh
+    * per viewer on every request (never cached alongside the rest of
+    * this payload, since it's specific to whoever is looking).
+    */
+   isStarredByViewer: boolean;
+   /**
+    * How many DevTunnel contributors have starred this repository
+    * through DevTunnel — a DevTunnel-local count, not GitHub's own
+    * public star count (`stars`, above). Shown next to the Star button
+    * as a lightweight "contributors here like this too" signal.
+    */
+   localStarCount: number;
  }
