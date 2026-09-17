@@ -780,7 +780,7 @@ export interface CreatedTask {
  * ---------------------------------------------------------------------- */
 
 /** `devtunnel.task_status` (sql/004) — the task's own DevTunnel lifecycle. */
-export type AdminTaskStatus = "OPEN" | "IN_PROGRESS" | "DONE";
+export type AdminTaskStatus = "OPEN" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
 
 /**
  * The project a task belongs to, trimmed to exactly what the Tasks table

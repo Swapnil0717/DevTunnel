@@ -79,7 +79,7 @@ const updateTaskSchema = z
       .optional(),
     difficulty: z.enum(["BEGINNER", "INTERMEDIATE", "ADVANCED"]).optional(),
     customDescription: z.string().trim().max(20_000).nullable().optional(),
-    status: z.enum(["OPEN", "IN_PROGRESS", "DONE"]).optional(),
+    status: z.enum(["OPEN", "IN_PROGRESS", "IN_REVIEW", "DONE"]).optional(),
   })
   .refine(
     (val) =>

@@ -7,9 +7,15 @@ import { requireAuth } from "../middleware/auth";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
 import { logger } from "../lib/logger";
-import { getTaskDetailByProjectAndId, getTaskById, listTasks, startTask } from "../db/tasks";
+import { getTaskDetailByProjectAndId, getTaskById, listTasks, startTask, submitTask } from "../db/tasks";
 import { getValidGithubAccessToken } from "../db/githubTokens";
 import { findExistingFork, forkRepositoryForUser, GitHubForkError } from "../lib/githubFork";
+import {
+  createPullRequest,
+  fetchDefaultBranch,
+  findOpenPullRequest,
+  GitHubPullRequestError,
+} from "../lib/githubPullRequest";
 
 /**
  * Contributor — Tasks (`/tasks` — "Tasks" in `AppSidebar` / `AppBottomNav`,
@@ -70,7 +76,8 @@ const ROLE_VALUES = [
   "DEVOPS",
 ] as const;
 const DIFFICULTY_VALUES = ["BEGINNER", "INTERMEDIATE", "ADVANCED"] as const;
-const STATUS_VALUES = ["OPEN", "IN_PROGRESS", "DONE"] as const;
+const STATUS_VALUES = ["OPEN", "IN_PROGRESS", "IN_REVIEW", "DONE"] as const;
+const COMMIT_TYPE_VALUES = ["feat", "fix", "docs", "chore"] as const;
 
 /**
  * Query validation for `GET /tasks` (rules 14–15: every input is
@@ -438,5 +445,269 @@ tasks.post("/tasks/:id/start", requireAuth, async (c) => {
       requestId: c.get("requestId"),
     });
     return errorResponse(c, 500, "internal_error", "Couldn't start this task right now");
+  }
+});
+
+const submitBodySchema = z.object({
+  /** Current local branch, as `dev submit`'s own `git status` sees it — cross-checked against `assignee_branch` below so a submit from the wrong checkout fails clearly instead of opening a PR from the wrong branch. */
+  branch: z.string().trim().min(1).max(250),
+  /** PR title — the CLI's own most recent commit subject, unless the contributor typed something else. */
+  title: z.string().trim().min(1).max(200),
+  type: z.enum(COMMIT_TYPE_VALUES),
+  /** Commit subjects ahead of the upstream default branch, oldest first — becomes the PR body's "Changes Made" list. */
+  commits: z.array(z.string().trim().min(1).max(300)).min(1).max(30),
+  testedNote: z.string().trim().max(500).optional(),
+});
+
+/**
+ * Renders a PR body that fills in `.github/PULL_REQUEST_TEMPLATE.md`
+ * (docs/.github/PULL_REQUEST_TEMPLATE.md) field-for-field, so a PR opened
+ * by `dev submit` looks like one a contributor filled out by hand rather
+ * than an obviously-automated one with a different shape. Checklist items
+ * are left unchecked across the board — `dev submit` has no way to verify
+ * "I have signed the CLA" or "All existing and new tests pass" are true,
+ * and ticking a box it can't back up would be worse than leaving it for
+ * the contributor to confirm on GitHub.
+ */
+function buildPullRequestBody(args: {
+  type: (typeof COMMIT_TYPE_VALUES)[number];
+  commits: string[];
+  testedNote: string | null;
+  githubIssueNumber: number | null;
+}): string {
+  const { type, commits, testedNote, githubIssueNumber } = args;
+  const checkbox = (label: string, checked: boolean) => `- [${checked ? "x" : " "}] ${label}`;
+
+  return [
+    "## Description",
+    "",
+    "Opened by `dev submit` (DevTunnel CLI).",
+    "",
+    "## Related Issue",
+    "",
+    githubIssueNumber ? `Closes #${githubIssueNumber}` : "_No linked issue._",
+    "",
+    "## Type of Change",
+    "",
+    checkbox("Bug fix", type === "fix"),
+    checkbox("New feature", type === "feat"),
+    checkbox("Documentation update", type === "docs"),
+    checkbox("Refactor / chore", type === "chore"),
+    "",
+    "## Changes Made",
+    "",
+    ...commits.map((subject) => `- ${subject}`),
+    "",
+    "## How Has This Been Tested?",
+    "",
+    testedNote ?? "_Not specified — run `dev test` locally before merging._",
+    "",
+    "## Checklist",
+    "",
+    checkbox("I have read the CONTRIBUTING.md guide", false),
+    checkbox("I have signed the CLA", false),
+    checkbox("My code follows the project's style guidelines", false),
+    checkbox("I have updated documentation where relevant", false),
+    checkbox("I have added tests where applicable", false),
+    checkbox("All existing and new tests pass", false),
+  ].join("\n");
+}
+
+/**
+ * `POST /tasks/:id/submit` — the backend half of `dev submit <task-id>`
+ * (devtunnel-cli's `src/commands/submit.ts`). By the time this is called,
+ * the CLI has already committed and pushed the contributor's branch to
+ * their fork (the same fork/branch `dev start` recorded) — this route's
+ * job is to open the pull request server-side, using the contributor's
+ * own stored GitHub OAuth token, and record it against the task.
+ *
+ * Only the contributor who ran `dev start` on this task can `dev submit`
+ * it (`task_not_yours`) — same one-claim-one-contributor model
+ * `POST /tasks/:id/start` already enforces, just checked in the other
+ * direction. A task that was never started at all (`assignee_id` still
+ * null) gets its own clearer error rather than being folded into
+ * `task_not_yours`, so the contributor knows to run `dev start` first
+ * rather than wondering whose task this is.
+ *
+ * `branch` in the body is a sanity check, not the source of truth: it
+ * must match `assignee_branch` (recorded at `dev start` time) or the
+ * request is rejected with `branch_mismatch` — this is what catches
+ * "ran `dev submit` from the wrong directory" before it opens a PR from
+ * a branch nobody meant to submit.
+ *
+ * Idempotent the same way `dev start` is: re-running `dev submit` on a
+ * task that already has an open PR (new commits pushed since) finds that
+ * PR (`findOpenPullRequest`) instead of asking GitHub to open a second one
+ * for the same branch, and `submitTask` (db/tasks.ts) updates DevTunnel's
+ * own record of it in place rather than creating a duplicate.
+ */
+tasks.post("/tasks/:id/submit", requireAuth, async (c) => {
+  const env = getEnv(c.env);
+  const user = c.get("user");
+  if (!user) {
+    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+  }
+
+  const taskIdResult = taskIdSchema.safeParse(c.req.param("id"));
+  if (!taskIdResult.success) {
+    return errorResponse(c, 400, "invalid_request", taskIdResult.error.issues[0]!.message);
+  }
+  const taskId = taskIdResult.data;
+
+  const bodyResult = submitBodySchema.safeParse(await c.req.json().catch(() => null));
+  if (!bodyResult.success) {
+    return errorResponse(
+      c,
+      400,
+      "invalid_body",
+      bodyResult.error.issues[0]?.message ?? "Invalid submit request",
+    );
+  }
+  const { branch, title, type, commits, testedNote } = bodyResult.data;
+
+  const withinLimit = await checkRateLimit(c, {
+    bucket: "tasks-submit",
+    limit: 10,
+    windowSeconds: 60,
+  });
+  if (!withinLimit) {
+    return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+  }
+
+  try {
+    const supabase = getSupabase(env);
+
+    const task = await getTaskById(supabase, taskId);
+    if (!task) {
+      return errorResponse(c, 404, "task_not_found", "Task not found");
+    }
+    if (!task.project_github_owner || !task.project_github_full_name) {
+      return errorResponse(
+        c,
+        422,
+        "project_not_github_backed",
+        "This task's project has no linked GitHub repository",
+      );
+    }
+    if (!task.assignee_id || !task.assignee_fork_full_name || !task.assignee_branch) {
+      return errorResponse(
+        c,
+        409,
+        "task_not_started",
+        "Run `dev start` on this task before submitting",
+      );
+    }
+    if (task.assignee_id !== user.id) {
+      return errorResponse(c, 403, "task_not_yours", "This task was started by someone else");
+    }
+    if (task.status === "DONE") {
+      return errorResponse(c, 409, "task_already_done", "This task is already done");
+    }
+    if (task.assignee_branch !== branch) {
+      return errorResponse(
+        c,
+        409,
+        "branch_mismatch",
+        `Expected branch "${task.assignee_branch}" for this task, but "${branch}" is checked out`,
+      );
+    }
+
+    const accessToken = await getValidGithubAccessToken(supabase, env, user.id);
+    if (!accessToken) {
+      return errorResponse(
+        c,
+        403,
+        "github_reauth_required",
+        "Reconnect your GitHub account to submit this task",
+      );
+    }
+
+    const [upstreamOwner, upstreamRepo] = task.project_github_full_name.split("/");
+    const [forkOwner] = task.assignee_fork_full_name.split("/");
+    if (!upstreamOwner || !upstreamRepo || !forkOwner) {
+      return errorResponse(c, 422, "project_not_github_backed", "Malformed repository reference");
+    }
+
+    const baseBranch = await fetchDefaultBranch(accessToken, upstreamOwner, upstreamRepo);
+
+    const existingPr = await findOpenPullRequest(
+      accessToken,
+      upstreamOwner,
+      upstreamRepo,
+      forkOwner,
+      branch,
+    );
+    const isNew = !existingPr;
+
+    const pr =
+      existingPr ??
+      (
+        await createPullRequest(accessToken, {
+          baseOwner: upstreamOwner,
+          baseRepo: upstreamRepo,
+          baseBranch,
+          headOwner: forkOwner,
+          headBranch: branch,
+          title,
+          body: buildPullRequestBody({
+            type,
+            commits,
+            testedNote: testedNote ?? null,
+            githubIssueNumber: task.github_issue_number,
+          }),
+        })
+      ).pr;
+
+    const outcome = await submitTask(supabase, taskId, user.id, {
+      prUrl: pr.htmlUrl,
+      prNumber: pr.number,
+      branch,
+      title,
+    });
+
+    if (outcome.status === "not_found") {
+      return errorResponse(c, 404, "task_not_found", "Task not found");
+    }
+    if (outcome.status === "not_yours") {
+      return errorResponse(c, 403, "task_not_yours", "This task was started by someone else");
+    }
+    if (outcome.status === "already_done") {
+      return errorResponse(c, 409, "task_already_done", "This task is already done");
+    }
+
+    return c.json(
+      {
+        data: {
+          taskId: outcome.task.id,
+          status: outcome.task.status,
+          pullRequest: {
+            id: outcome.pullRequest.id,
+            number: outcome.pullRequest.number,
+            url: outcome.pullRequest.url,
+            isNew,
+          },
+        },
+      },
+      200,
+    );
+  } catch (err) {
+    if (err instanceof GitHubPullRequestError) {
+      const status =
+        err.reason === "rate_limited"
+          ? 429
+          : err.reason === "unauthorized"
+            ? 403
+            : err.reason === "validation"
+              ? 422
+              : err.reason === "not_found"
+                ? 404
+                : 502;
+      return errorResponse(c, status, `github_${err.reason}`, err.message);
+    }
+    logger.error("task_submit_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      requestId: c.get("requestId"),
+    });
+    return errorResponse(c, 500, "internal_error", "Couldn't submit this task right now");
   }
 });

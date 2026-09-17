@@ -4,6 +4,7 @@ import { loginCommand } from "./commands/login";
 import { logoutCommand } from "./commands/logout";
 import { startCommand } from "./commands/start";
 import { testCommand } from "./commands/test";
+import { submitCommand } from "./commands/submit";
 
 const program = new Command();
 
@@ -11,7 +12,7 @@ program
   .name("dev")
   .description(
     "DevTunnel CLI — automates the GitHub contribution workflow.\n" +
-      "Currently implemented: dev login, dev logout, dev start, dev test. More commands (dev submit) land in later modules.",
+      "Implemented: dev login, dev logout, dev start, dev test, dev submit.",
   )
   .version("0.1.0");
 
@@ -49,6 +50,22 @@ program
   .action(async (opts: { dir?: string; skipUpdate?: boolean }) => {
     await testCommand(opts);
   });
+
+program
+  .command("submit <taskId>")
+  .description("Commit, push, and open (or update) the pull request for a task")
+  .option("--dir <path>", "directory to run in (defaults to the current directory)")
+  .option("-m, --message <text>", "commit description (skips the interactive prompt)")
+  .option("--type <type>", "commit type: feat, fix, docs, or chore (skips the interactive prompt)")
+  .option("--tested <note>", "how you tested this — included in the PR body")
+  .action(
+    async (
+      taskId: string,
+      opts: { dir?: string; message?: string; type?: string; tested?: string },
+    ) => {
+      await submitCommand(taskId, opts);
+    },
+  );
 
 program.parseAsync(process.argv).catch((err) => {
   console.error(err instanceof Error ? err.message : String(err));

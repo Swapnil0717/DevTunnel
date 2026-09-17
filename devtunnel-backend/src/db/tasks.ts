@@ -486,3 +486,79 @@ export async function startTask(
     },
   };
 }
+
+export interface SubmitTaskResult {
+  status: "ok";
+  task: {
+    id: string;
+    status: AdminTaskStatus;
+  };
+  pullRequest: {
+    id: string;
+    url: string;
+    number: number | null;
+  };
+}
+
+export type SubmitTaskOutcome =
+  | SubmitTaskResult
+  | { status: "not_found" }
+  | { status: "not_yours" }
+  | { status: "already_done" };
+
+interface SubmitTaskRpcRow {
+  id: string;
+  status: AdminTaskStatus;
+  pull_request_id: string;
+  github_pr_url: string;
+  github_pr_number: number | null;
+}
+
+/**
+ * Records a `dev submit` — the write path `POST /tasks/:id/submit`
+ * (src/routes/tasks.ts) uses after it has already opened (or found the
+ * already-open) GitHub pull request via src/lib/githubPullRequest.ts. All
+ * of the actual bookkeeping (locking, upserting the task's one open
+ * `pull_requests` row, advancing status to `IN_REVIEW`, rejecting a task
+ * that isn't the caller's own claim or is already `DONE`) lives in
+ * `devtunnel.submit_task()` (sql/031) — this function's only job is
+ * turning that function's raised exceptions into a typed outcome the
+ * route can map to the right HTTP status, same pattern `startTask` above
+ * already uses for `start_task`.
+ */
+export async function submitTask(
+  supabase: SupabaseClient,
+  taskId: string,
+  userId: string,
+  args: { prUrl: string; prNumber: number | null; branch: string; title: string },
+): Promise<SubmitTaskOutcome> {
+  const { data, error } = await supabase.rpc("submit_task", {
+    p_task_id: taskId,
+    p_user_id: userId,
+    p_pr_url: args.prUrl,
+    p_pr_number: args.prNumber,
+    p_branch: args.branch,
+    p_title: args.title,
+  });
+
+  if (error) {
+    const message = error.message ?? "";
+    if (message.includes("TASK_NOT_FOUND")) return { status: "not_found" };
+    if (message.includes("TASK_NOT_YOURS")) return { status: "not_yours" };
+    if (message.includes("TASK_ALREADY_DONE")) return { status: "already_done" };
+    throw new Error(`Failed to submit task: ${message}`);
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as SubmitTaskRpcRow | undefined;
+  if (!row) throw new Error("submit_task returned no row");
+
+  return {
+    status: "ok",
+    task: { id: row.id, status: row.status },
+    pullRequest: {
+      id: row.pull_request_id,
+      url: row.github_pr_url,
+      number: row.github_pr_number,
+    },
+  };
+}
