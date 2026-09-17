@@ -4,6 +4,17 @@ import type { Env } from "../types";
 const envSchema = z.object({
   ENVIRONMENT: z.enum(["production", "staging", "development"]),
   GITHUB_CALLBACK_URL: z.string().url(),
+  // Second registered callback URL for the SAME GitHub App, used only by
+  // the `dev login` CLI loopback flow (src/routes/authCli.ts). A GitHub
+  // App (unlike a classic OAuth App) supports multiple callback URLs —
+  // add this one under Settings > Developer settings > GitHub Apps >
+  // DevTunnel.tech > Identifying and authorizing users > "Callback URL",
+  // alongside the existing web one. Kept separate from
+  // GITHUB_CALLBACK_URL rather than reused because the two callbacks do
+  // fundamentally different things with the same GitHub redirect: the
+  // web one hands off to a browser cookie, this one hands off to a
+  // localhost process (see GET /auth/cli/callback).
+  GITHUB_CLI_CALLBACK_URL: z.string().url(),
   FRONTEND_URL: z.string().url(),
   ALLOWED_ORIGINS: z.string().min(1),
   COOKIE_DOMAIN: z.string().optional(),

@@ -57,11 +57,20 @@ async function fetchWithTimeout(input: string, init: RequestInit): Promise<Respo
  * per-user, so devtunnel-backend can later call the GitHub GraphQL API
  * (contribution calendar, src/routes/contributions.ts) using each user's
  * own authorization rather than a separate server-wide credential.
+ *
+ * `redirectUri` defaults to the web app's `GITHUB_CALLBACK_URL` — every
+ * existing caller (src/routes/auth.ts) keeps working unchanged. The
+ * `dev login` CLI flow (src/routes/authCli.ts) is the one caller that
+ * passes `env.GITHUB_CLI_CALLBACK_URL` instead, since it authorizes
+ * against a different registered callback URL (a GitHub App can have more
+ * than one). GitHub requires whatever `redirect_uri` was used to start
+ * the authorize step to also be echoed back on the token-exchange step —
+ * see the same parameter on `exchangeCodeForToken` below.
  */
-export function buildAuthorizeUrl(env: ValidatedEnv, state: string): string {
+export function buildAuthorizeUrl(env: ValidatedEnv, state: string, redirectUri?: string): string {
   const url = new URL(GITHUB_AUTHORIZE_URL);
   url.searchParams.set("client_id", env.GITHUB_CLIENT_ID);
-  url.searchParams.set("redirect_uri", env.GITHUB_CALLBACK_URL);
+  url.searchParams.set("redirect_uri", redirectUri ?? env.GITHUB_CALLBACK_URL);
   url.searchParams.set("state", state);
   return url.toString();
 }
@@ -106,10 +115,16 @@ function toTokenBundle(data: {
   };
 }
 
-/** rule 50: code exchange step. rule 52: validate the shape before trusting it. */
+/**
+ * rule 50: code exchange step. rule 52: validate the shape before
+ * trusting it. `redirectUri` — see the doc comment on `buildAuthorizeUrl`
+ * above; defaults to `GITHUB_CALLBACK_URL` so every existing caller is
+ * unaffected.
+ */
 export async function exchangeCodeForToken(
   env: ValidatedEnv,
   code: string,
+  redirectUri?: string,
 ): Promise<GitHubTokenBundle> {
   const res = await fetchWithTimeout(GITHUB_TOKEN_URL, {
     method: "POST",
@@ -122,7 +137,7 @@ export async function exchangeCodeForToken(
       client_id: env.GITHUB_CLIENT_ID,
       client_secret: env.GITHUB_CLIENT_SECRET,
       code,
-      redirect_uri: env.GITHUB_CALLBACK_URL,
+      redirect_uri: redirectUri ?? env.GITHUB_CALLBACK_URL,
     }),
   });
 

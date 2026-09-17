@@ -12,10 +12,18 @@ import type { ValidatedEnv } from "../config/env";
  *    read by the frontend's Edge middleware for a fast redirect. It is
  *    never treated as proof of identity by anyone — `GET /auth/me` is the
  *    real check (rule 11: authentication must be server-side).
+ *  - `dt_cli_oauth_state`: short-lived httpOnly cookie for the `dev login`
+ *    loopback flow (src/routes/authCli.ts) — same role as
+ *    `dt_oauth_state` below, just scoped to `/auth/cli` and carrying the
+ *    CLI-specific payload (`signCliOAuthState`) instead of `{state, next}`.
+ *    Kept as its own cookie rather than reusing `dt_oauth_state` so the
+ *    web and CLI login flows can never cross-read or collide with each
+ *    other's in-flight state.
  */
 export const SESSION_COOKIE = "dt_session";
 export const AUTH_FLAG_COOKIE = "dt_auth";
 export const OAUTH_STATE_COOKIE = "dt_oauth_state";
+export const CLI_OAUTH_STATE_COOKIE = "dt_cli_oauth_state";
 
 function baseAttrs(env: ValidatedEnv) {
   return {
@@ -61,4 +69,23 @@ export function setOAuthStateCookie(c: Context, env: ValidatedEnv, signedValue: 
 
 export function clearOAuthStateCookie(c: Context, env: ValidatedEnv) {
   deleteCookie(c, OAUTH_STATE_COOKIE, { domain: env.COOKIE_DOMAIN, path: "/auth" });
+}
+
+/**
+ * Short-lived, httpOnly cookie carrying the signed CLI OAuth `state` +
+ * `port` + PKCE `challenge` for the `dev login` loopback flow. Scoped to
+ * `/auth/cli` (narrower than the web flow's `/auth`) so it's never sent
+ * on, or confused with, the ordinary web login/callback requests.
+ */
+export function setCliOAuthStateCookie(c: Context, env: ValidatedEnv, signedValue: string) {
+  setCookie(c, CLI_OAUTH_STATE_COOKIE, signedValue, {
+    ...baseAttrs(env),
+    httpOnly: true,
+    maxAge: 600, // 10 minutes — long enough for the GitHub authorize screen, no longer.
+    path: "/auth/cli",
+  });
+}
+
+export function clearCliOAuthStateCookie(c: Context, env: ValidatedEnv) {
+  deleteCookie(c, CLI_OAUTH_STATE_COOKIE, { domain: env.COOKIE_DOMAIN, path: "/auth/cli" });
 }

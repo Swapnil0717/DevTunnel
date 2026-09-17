@@ -5,6 +5,7 @@ import { corsMiddleware } from "./middleware/cors";
 import { handleError } from "./middleware/errorHandler";
 import { health } from "./routes/health";
 import { auth } from "./routes/auth";
+import { authCli } from "./routes/authCli";
 import { contributions } from "./routes/contributions";
 import { devtunnelStats } from "./routes/devtunnelStats";
 import { issues } from "./routes/issues";
@@ -28,6 +29,12 @@ app.use("*", corsMiddleware());
 
 app.route("/", health);
 app.route("/auth", auth);
+// devtunnel-cli's `dev login`/`dev logout` — see src/routes/authCli.ts for
+// the loopback OAuth flow this backs. Mounted at a sub-path of `/auth`
+// alongside (not inside) the web `auth` router above so the two stay
+// fully independent routers with zero shared state, while still reading
+// as "this is part of authentication" in the URL space.
+app.route("/auth/cli", authCli);
 app.route("/", contributions);
 app.route("/", devtunnelStats);
 app.route("/", issues);

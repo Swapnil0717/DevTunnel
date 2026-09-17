@@ -97,6 +97,69 @@ export async function verifyOAuthState(
   }
 }
 
+/**
+ * CLI counterpart to `signOAuthState`/`verifyOAuthState` above, carrying
+ * the extra fields the `dev login` loopback flow needs to survive the
+ * GitHub redirect round trip (src/routes/authCli.ts):
+ *
+ *  - `state`: the usual anti-CSRF value echoed back by GitHub.
+ *  - `port`: the ephemeral localhost port devtunnel-cli is listening on,
+ *    so `GET /auth/cli/callback` knows where to send the browser back to.
+ *  - `challenge`: the PKCE-style `sha256(verifier)` the CLI generated
+ *    before opening the browser. `POST /auth/cli/token` later checks the
+ *    CLI's own `verifier` against this, so a one-time login code
+ *    intercepted in the loopback redirect (rare, but the standard
+ *    loopback-OAuth threat model — see e.g. RFC 8252 §7.5) can't be
+ *    redeemed by anything that isn't the exact `dev login` process that
+ *    started this flow.
+ *
+ * Deliberately a separate function (not a generalized `signOAuthState`)
+ * so the web login cookie's shape and this one can each change
+ * independently without one flow's schema leaking into the other.
+ */
+export async function signCliOAuthState(
+  payload: { state: string; port: number; challenge: string },
+  secret: string,
+): Promise<string> {
+  const body = toBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
+  const key = await hmacKey(secret);
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
+  return `${body}.${toBase64Url(signature)}`;
+}
+
+/** Verifies and decodes a cookie produced by `signCliOAuthState`. */
+export async function verifyCliOAuthState(
+  cookieValue: string,
+  secret: string,
+): Promise<{ state: string; port: number; challenge: string } | null> {
+  const parts = cookieValue.split(".");
+  if (parts.length !== 2) return null;
+  const [body, signature] = parts as [string, string];
+
+  const key = await hmacKey(secret);
+  const isValid = await crypto.subtle.verify(
+    "HMAC",
+    key,
+    fromBase64Url(signature),
+    new TextEncoder().encode(body),
+  );
+  if (!isValid) return null;
+
+  try {
+    const decoded = JSON.parse(new TextDecoder().decode(fromBase64Url(body)));
+    if (
+      typeof decoded?.state !== "string" ||
+      typeof decoded?.port !== "number" ||
+      typeof decoded?.challenge !== "string"
+    ) {
+      return null;
+    }
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
 async function importAesKey(base64Key: string): Promise<CryptoKey> {
   const raw = fromBase64Url(base64Key.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""));
   // GITHUB_TOKEN_ENCRYPTION_KEY is validated to decode to 32 bytes in

@@ -1,0 +1,19 @@
+{
+    "compilerOptions": {
+      "target": "ES2022",
+      "lib": ["ES2022"],
+      "module": "ES2022",
+      "moduleResolution": "Bundler",
+      "types": ["node"],
+      "strict": true,
+      "noUncheckedIndexedAccess": true,
+      "noImplicitOverride": true,
+      "skipLibCheck": true,
+      "resolveJsonModule": true,
+      "esModuleInterop": true,
+      "forceConsistentCasingInFileNames": true,
+      "isolatedModules": true,
+      "noEmit": true
+    },
+    "include": ["src"]
+  }

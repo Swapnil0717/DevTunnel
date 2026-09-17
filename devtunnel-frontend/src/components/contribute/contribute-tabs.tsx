@@ -4,7 +4,8 @@ import { useState } from "react";
 import { ContributionWaysPanel } from "@/components/contribute/contribution-ways-panel";
 import { ContributeTasksPanel } from "@/components/contribute/contribute-tasks-panel";
 import { ContributeWorkflowPanel } from "@/components/contribute/contribute-workflow-panel";
-import { GridIcon, ChecklistIcon, GitBranchIcon } from "@/components/layout/nav-icons";
+import { ContributeCliPanel } from "@/components/contribute/contribute-cli-panel";
+import { GridIcon, ChecklistIcon, GitBranchIcon, TerminalIcon } from "@/components/layout/nav-icons";
 import { buildWorkflowSteps } from "@/lib/contribute/workflow-steps";
 import type { ContributeTarget } from "@/lib/contribute/types";
 
@@ -12,6 +13,7 @@ const TABS = [
   { id: "ways", label: "Ways to contribute", icon: GridIcon },
   { id: "tasks", label: "DevTunnel tasks", icon: ChecklistIcon },
   { id: "workflow", label: "How to submit", icon: GitBranchIcon },
+  { id: "cli", label: "Submit via DevTunnel CLI", icon: TerminalIcon },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -24,9 +26,11 @@ type TabId = (typeof TABS)[number]["id"];
  * already use, so keyboard and screen-reader behaviour is identical to
  * every other tab set in the app (rule 4).
  *
- * Three tabs, in the order the question actually gets answered: what kind
+ * Four tabs, in the order the question actually gets answered: what kind
  * of help this project takes, what specifically is available right now,
- * and how to get a change in once you've picked something.
+ * how to get a change in by hand once you've picked something, and — for
+ * anyone who'd rather script that same flow — what the planned `dev` CLI
+ * would do for them instead.
  *
  * "DevTunnel tasks" opens first when the project has tasks. Someone who
  * clicked "Contribute to this project" and landed here has already
@@ -130,6 +134,17 @@ export function ContributeTabs({ target }: { target: ContributeTarget }) {
               target.repositoryUrl ? `${target.repositoryUrl}/blob/HEAD/CONTRIBUTING.md` : null
             }
           />
+        </div>
+      ) : null}
+
+      {activeId === "cli" ? (
+        <div
+          role="tabpanel"
+          id="contribute-panel-cli"
+          aria-labelledby="contribute-tab-cli"
+          className="rounded-[10px] border border-border bg-surface p-4"
+        >
+          <ContributeCliPanel />
         </div>
       ) : null}
     </div>

@@ -30,6 +30,13 @@ ENVIRONMENT = "production"
 # App's "Authorization callback URL" exactly, including path).
 GITHUB_CALLBACK_URL = "http://localhost:4000/auth/callback"
 
+# Second callback URL for the SAME GitHub App, used only by the `dev
+# login` CLI loopback flow (src/routes/authCli.ts). Must ALSO be added to
+# the GitHub App's "Callback URL" list (Settings > Developer settings >
+# GitHub Apps > DevTunnel.tech) alongside GITHUB_CALLBACK_URL above — a
+# GitHub App supports multiple callback URLs, unlike a classic OAuth App.
+GITHUB_CLI_CALLBACK_URL = "http://localhost:4000/auth/cli/callback"
+
 # Canonical URL of the Next.js frontend (devtunnel-frontend). Used to build
 # the post-login/post-error redirect target and as the default CORS origin.
 FRONTEND_URL = "http://localhost:3000"
@@ -101,6 +108,7 @@ crons = ["0 3 * * *", "*/4 * * * *", "*/25 * * * *"]
 [env.staging.vars]
 ENVIRONMENT = "staging"
 GITHUB_CALLBACK_URL = "https://api-staging.devtunnel.tech/auth/callback"
+GITHUB_CLI_CALLBACK_URL = "https://api-staging.devtunnel.tech/auth/cli/callback"
 FRONTEND_URL = "https://staging.devtunnel.tech"
 ALLOWED_ORIGINS = "https://staging.devtunnel.tech"
 COOKIE_DOMAIN = "devtunnel.tech"

@@ -230,59 +230,75 @@
      </svg>
    );
  }
-
-  /**
+ 
+ /**
   * Admin sidebar — "AI" section header (AI Added Projects / AI Added Tools /
   * AI Added Tasks / Confirmation by Admin). A simple four-point sparkle
   * reads as "AI" at a glance without pulling in an icon library
   * (Frontend_Development_Rules.txt rule 34).
   */
-   export function SparkleIcon({ className = "" }: IconProps) {
-    return (
-      <svg {...base} className={className}>
-        <path d="M12 3.5c.5 3 2 5 5.5 5.5-3.5.5-5 2.5-5.5 5.5-.5-3-2-5-5.5-5.5C10 8.5 11.5 6.5 12 3.5Z" />
-        <path d="M18.5 15c.3 1.4.9 2 2.3 2.3-1.4.3-2 .9-2.3 2.3-.3-1.4-.9-2-2.3-2.3 1.4-.3 2-.9 2.3-2.3Z" />
-      </svg>
-    );
-  }
+ export function SparkleIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M12 3.5c.5 3 2 5 5.5 5.5-3.5.5-5 2.5-5.5 5.5-.5-3-2-5-5.5-5.5C10 8.5 11.5 6.5 12 3.5Z" />
+       <path d="M18.5 15c.3 1.4.9 2 2.3 2.3-1.4.3-2 .9-2.3 2.3-.3-1.4-.9-2-2.3-2.3 1.4-.3 2-.9 2.3-2.3Z" />
+     </svg>
+   );
+ }
  
-  /**
-   * Admin sidebar — "AI" section, "Confirmation by Admin" leaf item: an
-   * admin reviewing/approving something AI produced, so a checkmark reads
-   * more precisely than the generic sparkle used for the group header.
-   */
-  export function CheckCircleIcon({ className = "" }: IconProps) {
-    return (
-      <svg {...base} className={className}>
-        <circle cx="12" cy="12" r="8.25" />
-        <path d="M8.5 12.3l2.3 2.3 4.7-5" />
-      </svg>
-    );
-  }
+ /**
+  * Admin sidebar — "AI" section, "Confirmation by Admin" leaf item: an
+  * admin reviewing/approving something AI produced, so a checkmark reads
+  * more precisely than the generic sparkle used for the group header.
+  */
+ export function CheckCircleIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <circle cx="12" cy="12" r="8.25" />
+       <path d="M8.5 12.3l2.3 2.3 4.7-5" />
+     </svg>
+   );
+ }
  
-  /**
-   * Admin sidebar — "Open Source Tools" section header and "All Open Source
-   * Tools" leaf item: a wrench for "tool", visually distinct from
-   * `FolderIcon` (Projects) and `ChecklistIcon` (Tasks).
-   */
-  export function ToolIcon({ className = "" }: IconProps) {
-    return (
-      <svg {...base} className={className}>
-        <path d="M14.7 6.3a3.5 3.5 0 0 0-4.6 4.2L4.5 16.1a1.7 1.7 0 0 0 2.4 2.4l5.6-5.6a3.5 3.5 0 0 0 4.2-4.6l-2.3 2.3-1.9-.5-.5-1.9 2.3-2.3Z" />
-      </svg>
-    );
-  }
-    /**
-   * `/github-projects` ("GitHub Projects") card grid (`GithubProjectCard`)
-   * and its loading skeleton — GitHub star count. A plain 5-point outline
-   * star, same stroke-only convention as every other icon in this file.
-   * Never the only cue for the count (rule 43): the card always pairs
-   * this with an `aria-label` stating the real number, e.g. "1.2K stars".
-   */
-     export function StarIcon({ className = "" }: IconProps) {
-      return (
-        <svg {...base} className={className}>
-          <path d="M12 3.75l2.46 5.06 5.54.62-4.06 3.9.98 5.52L12 16.1l-4.92 2.75.98-5.52-4.06-3.9 5.54-.62Z" />
-        </svg>
-      );
-    }
+ /**
+  * Admin sidebar — "Open Source Tools" section header and "All Open Source
+  * Tools" leaf item: a wrench for "tool", visually distinct from
+  * `FolderIcon` (Projects) and `ChecklistIcon` (Tasks).
+  */
+ export function ToolIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M14.7 6.3a3.5 3.5 0 0 0-4.6 4.2L4.5 16.1a1.7 1.7 0 0 0 2.4 2.4l5.6-5.6a3.5 3.5 0 0 0 4.2-4.6l-2.3 2.3-1.9-.5-.5-1.9 2.3-2.3Z" />
+     </svg>
+   );
+ }
+ 
+ /**
+  * `/github-projects` ("GitHub Projects") card grid (`GithubProjectCard`)
+  * and its loading skeleton — GitHub star count. A plain 5-point outline
+  * star, same stroke-only convention as every other icon in this file.
+  * Never the only cue for the count (rule 43): the card always pairs
+  * this with an `aria-label` stating the real number, e.g. "1.2K stars".
+  */
+ export function StarIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M12 3.75l2.46 5.06 5.54.62-4.06 3.9.98 5.52L12 16.1l-4.92 2.75.98-5.52-4.06-3.9 5.54-.62Z" />
+     </svg>
+   );
+ }
+ 
+ /**
+  * Contribute page — "Submit via DevTunnel CLI" tab: a terminal prompt,
+  * distinct from `GitBranchIcon` (the plain git flow) since this tab is
+  * specifically about the `dev` command-line tool.
+  */
+ export function TerminalIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <rect x="3.25" y="4.5" width="17.5" height="15" rx="1.6" />
+       <path d="M7 9.5l3.2 2.7L7 14.9" />
+       <path d="M12.5 15h4.5" />
+     </svg>
+   );
+ }

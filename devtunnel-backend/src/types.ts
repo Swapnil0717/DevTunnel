@@ -18,6 +18,10 @@
   // --- Non-secret config (wrangler.toml [vars]) ---
   ENVIRONMENT: "production" | "staging" | "development";
   GITHUB_CALLBACK_URL: string;
+  // Second registered callback URL for the same GitHub App, used only by
+  // the `dev login` CLI loopback flow — see src/config/env.ts for why
+  // this is a separate value from GITHUB_CALLBACK_URL.
+  GITHUB_CLI_CALLBACK_URL: string;
   FRONTEND_URL: string;
   ALLOWED_ORIGINS: string;
   COOKIE_DOMAIN?: string;
