@@ -2,6 +2,7 @@
 import { cookies } from "next/headers";
 import { API_BASE_URL } from "@/lib/config";
 import type { Submission, SubmissionListFilters } from "./types";
+import { buildSubmissionsQuery } from "./query";
 
 /**
  * `GET /submissions` — backs the Community page (`/submissions`).
@@ -14,6 +15,14 @@ import type { Submission, SubmissionListFilters } from "./types";
  * re-sorting a truncated page in the browser would answer a different
  * question).
  *
+ * `buildSubmissionsQuery` lives in `./query.ts`, not in this file. This
+ * file imports `next/headers`, which makes it server-only — anything
+ * that imports it can never be pulled into a "use client" component.
+ * `client-api.ts` needs the identical query-building logic from the
+ * browser, so it now imports it from the shared, dependency-free
+ * `./query.ts` instead of from here (see that file's doc comment for the
+ * "Cannot find module 'next/headers'" bug this fixes).
+ *
  * Two outcomes rather than three: this is a list, so there's no
  * "not found" — an empty community list and a filter that matched
  * nothing are both legitimately `[]`, and the page tells them apart by
@@ -22,15 +31,6 @@ import type { Submission, SubmissionListFilters } from "./types";
 export type SubmissionsResult =
   | { status: "ok"; data: Submission[] }
   | { status: "error" };
-
-export function buildSubmissionsQuery(filters: SubmissionListFilters): string {
-  const params = new URLSearchParams();
-  params.set("sort", filters.sort);
-  params.set("category", filters.category);
-  if (filters.techStack.length > 0) params.set("tech", filters.techStack.join(","));
-  if (filters.query.trim()) params.set("q", filters.query.trim());
-  return params.toString();
-}
 
 export async function getSubmissions(
   filters: SubmissionListFilters,

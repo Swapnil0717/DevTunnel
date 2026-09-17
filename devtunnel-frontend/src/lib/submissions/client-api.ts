@@ -11,7 +11,14 @@ import type {
   SubmissionKind,
   SubmissionListFilters,
 } from "./types";
-import { buildSubmissionsQuery } from "./api";
+// From `./query.ts`, not `./api.ts`: `api.ts` imports `next/headers` to
+// read request cookies (Server Component only), and this file is
+// imported by "use client" components. Importing `buildSubmissionsQuery`
+// from `api.ts` would drag `next/headers` into the client bundle through
+// this chain — that's the "Cannot find module 'next/headers'" error.
+// `query.ts` has no server-only dependencies, so both this file and
+// `api.ts` import it independently instead of one depending on the other.
+import { buildSubmissionsQuery } from "./query";
 
 export class SubmissionsApiError extends Error {
   status: number;

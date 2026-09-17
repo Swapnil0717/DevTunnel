@@ -13,6 +13,8 @@ import { githubOpenSourceTools } from "./routes/githubOpenSourceTools";
 import { projects } from "./routes/projects";
 import { openSourceTools } from "./routes/openSourceTools";
 import { tasks } from "./routes/tasks";
+import { contribute } from "./routes/contribute";
+import { submissions } from "./routes/submissions";
 import { admin } from "./routes/admin/index";
 import { runDailyDiscovery } from "./lib/aiDiscoveryAgent";
 import { warmGithubCatalogs, warmContributorIssuesScan } from "./lib/cacheWarmers";
@@ -34,6 +36,8 @@ app.route("/", githubOpenSourceTools);
 app.route("/", projects);
 app.route("/", openSourceTools);
 app.route("/", tasks);
+app.route("/", contribute);
+app.route("/", submissions);
 app.route("/admin", admin);
 
 app.onError(handleError);

@@ -29,6 +29,15 @@ import Link from "next/link";
  * components per spot) so every one of these moments shares the same
  * card shape, spacing, and button styling, and only differs in
  * illustration + copy + actions.
+ *
+ * **Fix:** the icon used to sit in front of a blurred, glowing circle
+ * (`blur-xl` over a solid accent-colored disc). Isolated on one card it
+ * read as a subtle touch; repeated across every empty state in the app —
+ * catalog lists, tab panels, the Community page's error state — it
+ * turned into an unintentional signature look, the kind of glow that
+ * reads as generated rather than designed. Replaced with a plain
+ * bordered circle, which is what the rest of this app's icon treatments
+ * already use (rule: consistency over decoration).
  */
 
 type GithubEmptyStateVariant = "projects" | "tools" | "no-results" | "readme" | "issues-clear";
@@ -80,18 +89,14 @@ export function GithubEmptyState({
       }
     >
       <div
-        className={`relative mb-5 flex shrink-0 items-center justify-center ${compact ? "h-16 w-16" : "h-28 w-28"}`}
+        className={`mb-5 flex shrink-0 items-center justify-center rounded-full border ${
+          isPositive ? "border-accent/30 bg-accent/[0.06]" : "border-border-subtle bg-surface-raised"
+        } ${compact ? "h-14 w-14" : "h-20 w-20"}`}
         aria-hidden="true"
       >
-        <span
-          className={`absolute inset-0 rounded-full blur-xl ${isPositive ? "bg-accent/20" : "bg-accent/10"}`}
-        />
-        {!compact ? (
-          <span className="absolute inset-3 rounded-full border border-border-subtle" />
-        ) : null}
         <GithubEmptyIllustration
           variant={variant}
-          className={`relative text-accent ${compact ? "h-8 w-8" : "h-11 w-11"}`}
+          className={`text-text-faint ${isPositive ? "text-accent" : ""} ${compact ? "h-6 w-6" : "h-9 w-9"}`}
         />
       </div>
 

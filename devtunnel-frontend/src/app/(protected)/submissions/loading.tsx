@@ -11,7 +11,7 @@ import { SkeletonBlock } from "@/components/ui/skeleton";
  */
 export default function SubmissionsLoading() {
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10" aria-hidden="true">
+    <main className="w-full px-6 py-10 lg:px-10" aria-hidden="true">
       <SkeletonBlock className="mb-2 h-5 w-40" />
       <SkeletonBlock className="mb-6 h-3 w-[420px] max-w-full" />
 
