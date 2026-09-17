@@ -14,8 +14,8 @@ compatibility_flags = ["nodejs_compat"]
 # ---------------------------------------------------------------------------
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
-preview_id = "REPLACE_WITH_KV_PREVIEW_NAMESPACE_ID"
+id = "4e64447403314490b7a19642fd54d2ac"
+preview_id = "e51efed129714857aa3ca01040f56314"
 
 # ---------------------------------------------------------------------------
 # Non-secret configuration. Safe to commit — none of these values are
@@ -28,22 +28,22 @@ ENVIRONMENT = "production"
 
 # Public URL of this backend once deployed (must match the GitHub OAuth
 # App's "Authorization callback URL" exactly, including path).
-GITHUB_CALLBACK_URL = "http://localhost:4000/auth/callback"
+GITHUB_CALLBACK_URL = "https://api.devtunnel.tech/auth/callback"
 
 # Second callback URL for the SAME GitHub App, used only by the `dev
 # login` CLI loopback flow (src/routes/authCli.ts). Must ALSO be added to
 # the GitHub App's "Callback URL" list (Settings > Developer settings >
 # GitHub Apps > DevTunnel.tech) alongside GITHUB_CALLBACK_URL above — a
 # GitHub App supports multiple callback URLs, unlike a classic OAuth App.
-GITHUB_CLI_CALLBACK_URL = "http://localhost:4000/auth/cli/callback"
+GITHUB_CLI_CALLBACK_URL = "https://api.devtunnel.tech/auth/cli/callback"
 
 # Canonical URL of the Next.js frontend (devtunnel-frontend). Used to build
 # the post-login/post-error redirect target and as the default CORS origin.
-FRONTEND_URL = "http://localhost:3000"
+FRONTEND_URL = "https://devtunnel.tech"
 
 # Comma-separated allowlist of origins permitted to call this API with
 # credentials (Backend_Development_Rules.txt rules 45–46). No wildcards.
-ALLOWED_ORIGINS = "http://localhost:3000"
+ALLOWED_ORIGINS = "https://devtunnel.tech"
 
 # Shared apex domain for the dt_session / dt_auth cookies so both
 # api.devtunnel.tech (this Worker) and devtunnel.tech (the frontend, which
