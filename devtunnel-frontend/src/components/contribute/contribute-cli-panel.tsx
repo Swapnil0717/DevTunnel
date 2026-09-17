@@ -1,60 +1,56 @@
-import { CopyButton } from "@/components/github-projects/copy-button";
-import { CLI_COMMANDS, type CliBackendStatus } from "@/lib/contribute/cli-commands";
+import { CommandBlock } from "@/components/contribute/command-block";
+import { CLI_COMMANDS } from "@/lib/contribute/cli-commands";
 
 /**
- * "Submit via DevTunnel CLI" tab — the planned `dev` command-line tool,
- * laid out as one row per command: what it does on the contributor's
- * machine, and what (if anything) it calls on the DevTunnel backend.
+ * "Submit via DevTunnel CLI" tab — the `dev` command-line tool, laid out
+ * as one step per command: what it does on the contributor's machine,
+ * and what (if anything) it calls on the DevTunnel backend.
  *
- * This is documentation for a tool that doesn't exist yet, not a
- * how-to for one you can install today — there's no `dev` binary and
- * no `/auth/cli/*` route behind it. The banner up top says that
- * outright rather than letting five copyable-looking commands imply
- * otherwise (rule 58 — don't dress a plan up as a shipped feature).
- * Because of that, commands here render as plain `<code>`, not through
- * `CommandBlock`: that component's copy button is for text a
- * contributor can actually paste into a working shell right now, and
- * this text can't be.
+ * Shipped, not planned — `@devtunnelcli/cli` is published on npm and
+ * every backend route it calls is live. Commands render through the same
+ * `CommandBlock` the git-based "How to submit" tab uses (with a real
+ * copy button) rather than plain `<code>`, because unlike the earlier
+ * version of this tab, these genuinely are commands a contributor can
+ * paste into a working shell right now.
  *
  * A table, not the numbered-step cards the "How to submit" tab uses —
- * these five commands aren't a sequence with a fixed order (`dev test`
- * can run any number of times between a `dev start` and a `dev
- * submit`), and the thing worth comparing across all five is the same
- * two columns every time. Wrapped in an `overflow-x-auto` track so the
- * table scrolls on narrow screens instead of squeezing its columns
- * unreadably thin.
+ * these six steps aren't strictly a fixed sequence (`dev test` can run
+ * any number of times between a `dev start` and a `dev submit`, and the
+ * project-claim rows are alternatives to the task-claim ones, not
+ * additional steps), and the thing worth comparing across all of them is
+ * the same two columns every time. Wrapped in an `overflow-x-auto` track
+ * so the table scrolls on narrow screens instead of squeezing its
+ * columns unreadably thin.
  */
 export function ContributeCliPanel() {
   return (
     <div>
       <div className="mb-4">
-        <h3 className="m-0 text-[13px] font-medium text-text">Commands and what they actually do</h3>
-        <p className="m-0 mt-1 text-[12px] leading-relaxed text-text-muted">
-          The planned <code className="rounded-[4px] bg-surface-raised px-1 py-0.5 font-mono text-[11px] text-text-secondary">dev</code>{" "}
-          CLI, and what each command runs locally versus on the DevTunnel backend.
+        <h3 className="m-0 text-[13px] font-medium text-text">
+          Install once, then run these
+        </h3>
+        <p className="m-0 mt-1 text-[12px] leading-relaxed text-text-secondary">
+          The{" "}
+          <code className="rounded-[4px] bg-surface-raised px-1 py-0.5 font-mono text-[11px] text-text-secondary">
+            dev
+          </code>{" "}
+          CLI automates fork, branch, test, and pull-request creation — what each command runs
+          locally versus on the DevTunnel backend.
         </p>
       </div>
 
-      <div className="mb-4 flex items-center gap-3 rounded-[9px] border border-status-idle/25 bg-status-idle-bg px-3.5 py-2.5 text-[12.5px] text-status-idle-text">
-        <span>
-          Not shipped yet — the <code className="font-mono">dev</code> binary and its backend
-          routes don&apos;t exist. This table documents the intended workflow ahead of the tool
-          being built.
-        </span>
-      </div>
-
       <div className="overflow-x-auto rounded-[10px] border border-border-subtle">
-        <table className="w-full min-w-[720px] border-collapse text-left">
+        <table className="w-full min-w-[760px] border-collapse text-left">
           <thead>
             <tr className="border-b border-border-subtle bg-surface-raised">
-              <th className="w-[220px] p-3 text-[11px] font-medium uppercase tracking-wide text-text-faint">
+              <th className="w-[260px] p-3 text-[11px] font-medium uppercase tracking-wide text-text-faint">
                 Command
               </th>
               <th className="p-3 text-[11px] font-medium uppercase tracking-wide text-text-faint">
                 Local (CLI)
               </th>
               <th className="p-3 text-[11px] font-medium uppercase tracking-wide text-text-faint">
-                Backend (new / reused)
+                Backend
               </th>
             </tr>
           </thead>
@@ -65,13 +61,8 @@ export function ContributeCliPanel() {
                 className={index < CLI_COMMANDS.length - 1 ? "border-b border-border-subtle" : ""}
               >
                 <td className="p-3 align-top">
-                  <div className="flex items-start gap-1.5">
-                    <code className="whitespace-nowrap rounded-[6px] bg-bg px-2 py-1 font-mono text-[11.5px] text-text-secondary">
-                      {row.command}
-                    </code>
-                    <CopyButton value={row.command} label={`Copy ${row.command}`} />
-                  </div>
-                  <BackendStatusPill status={row.backendStatus} />
+                  <p className="m-0 mb-1.5 text-[11.5px] font-medium text-text-faint">{row.title}</p>
+                  <CommandBlock commands={row.commands} label={row.title} />
                 </td>
                 <td className="p-3 align-top text-[12px] leading-relaxed text-text-secondary">
                   {row.local}
@@ -85,23 +76,5 @@ export function ContributeCliPanel() {
         </table>
       </div>
     </div>
-  );
-}
-
-/**
- * A small pill under the command, so "does this need new backend work"
- * is scannable without reading the full sentence in the third column
- * (still never the *only* place that's said — the sentence next to it
- * carries the same information, per rule 43).
- */
-function BackendStatusPill({ status }: { status: CliBackendStatus }) {
-  if (status === "none") {
-    return <p className="m-0 mt-2 text-[10.5px] text-text-faint">No backend call</p>;
-  }
-
-  return (
-    <span className="mt-2 inline-block rounded-full bg-status-idle-bg px-2 py-[2px] text-[10px] font-medium text-status-idle-text">
-      New endpoint
-    </span>
   );
 }

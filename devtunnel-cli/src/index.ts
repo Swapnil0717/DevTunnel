@@ -12,7 +12,8 @@ program
   .name("dev")
   .description(
     "DevTunnel CLI — automates the GitHub contribution workflow.\n" +
-      "Implemented: dev login, dev logout, dev start, dev test, dev submit.",
+      "Implemented: dev login, dev logout, dev start, dev test, dev submit.\n" +
+      "`dev start` and `dev submit` accept --project to claim/submit a whole project instead of a single task.",
   )
   .version("0.1.0");
 
@@ -31,12 +32,13 @@ program
   });
 
 program
-  .command("start <taskId>")
-  .description("Claim a DevTunnel task, fork it, and check out a working branch")
+  .command("start <id>")
+  .description("Claim a DevTunnel task (or, with --project, a whole project), fork it, and check out a working branch")
+  .option("--project", "treat <id> as a projectId instead of a taskId")
   .option("--zip", "write a zip archive of the branch instead of a working clone")
   .option("--dir <path>", "directory to clone into (defaults to the repo name)")
-  .action(async (taskId: string, opts: { zip?: boolean; dir?: string }) => {
-    await startCommand(taskId, opts);
+  .action(async (id: string, opts: { project?: boolean; zip?: boolean; dir?: string }) => {
+    await startCommand(id, opts);
   });
 
 program
@@ -52,18 +54,19 @@ program
   });
 
 program
-  .command("submit <taskId>")
-  .description("Commit, push, and open (or update) the pull request for a task")
+  .command("submit <id>")
+  .description("Commit, push, and open (or update) the pull request for a task (or, with --project, a project)")
+  .option("--project", "treat <id> as a projectId instead of a taskId")
   .option("--dir <path>", "directory to run in (defaults to the current directory)")
   .option("-m, --message <text>", "commit description (skips the interactive prompt)")
   .option("--type <type>", "commit type: feat, fix, docs, or chore (skips the interactive prompt)")
   .option("--tested <note>", "how you tested this — included in the PR body")
   .action(
     async (
-      taskId: string,
-      opts: { dir?: string; message?: string; type?: string; tested?: string },
+      id: string,
+      opts: { project?: boolean; dir?: string; message?: string; type?: string; tested?: string },
     ) => {
-      await submitCommand(taskId, opts);
+      await submitCommand(id, opts);
     },
   );
 

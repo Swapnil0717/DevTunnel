@@ -1,20 +1,31 @@
 {
-  "name": "devtunnel-cli",
+  "name": "@devtunnelcli/cli",
   "version": "0.1.0",
-  "private": true,
-  "description": "DevTunnel CLI — automates the GitHub contribution workflow (dev login, dev logout; more commands land in later modules).",
+  "description": "DevTunnel CLI — automates the GitHub contribution workflow: dev login, dev start, dev test, dev submit.",
   "type": "module",
   "bin": {
-    "dev": "./dist/index.js"
+    "dev": "dist/index.js"
   },
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/<org>/DevTunnel.git",
+    "directory": "devtunnel-cli"
+  },
+  "homepage": "https://devtunnel.tech",
+  "bugs": "https://github.com/<org>/DevTunnel/issues",
+  "license": "MIT",
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsup src/index.ts --format esm --target node18 --clean --shims",
     "typecheck": "tsc --noEmit",
-    "link": "npm run build && npm link"
+    "link": "npm run build && npm link",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "commander": "^12.1.0",

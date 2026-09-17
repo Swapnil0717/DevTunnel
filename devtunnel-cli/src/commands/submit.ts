@@ -9,6 +9,8 @@ const COMMIT_TYPES = ["feat", "fix", "docs", "chore"] as const;
 type CommitType = (typeof COMMIT_TYPES)[number];
 
 export interface SubmitCommandOptions {
+  /** Treat `id` as a projectId, hitting `POST /projects/:id/submit` instead of `POST /tasks/:id/submit`. */
+  project?: boolean;
   /** Directory the checkout lives in. Defaults to the current working directory (what `dev start` cloned you into). */
   dir?: string;
   /** Skip the interactive commit prompt and use this as the commit description. */
@@ -33,10 +35,11 @@ interface SubmitTaskResponse {
 }
 
 /**
- * `dev submit <taskId>` — the last leg of the loop `dev start` began and
- * `dev test` verified: get whatever's on disk into an open pull request,
- * with as little ceremony as CONTRIBUTING.md's own manual workflow
- * (fork → branch → commit → push → PR) allows.
+ * `dev submit <taskId>` (or `dev submit <projectId> --project`) — the
+ * last leg of the loop `dev start` began and `dev test` verified: get
+ * whatever's on disk into an open pull request, with as little ceremony
+ * as CONTRIBUTING.md's own manual workflow (fork → branch → commit →
+ * push → PR) allows.
  *
  * 1. Make sure there's actually something to submit: if the working tree
  *    has uncommitted changes, run a short interactive prompt (commit
@@ -49,20 +52,24 @@ interface SubmitTaskResponse {
  *    real diff, not just the most recent commit. Refuses to submit an
  *    empty diff (rule: don't open a PR with nothing in it).
  * 3. `git push` the branch to `origin` (the fork).
- * 4. `POST /tasks/:id/submit` (devtunnel-backend/src/routes/tasks.ts) —
- *    opens the PR server-side, using the contributor's own stored GitHub
- *    token (never this CLI handling a GitHub token directly, same
- *    posture `dev start` already established), fills in the repo's own
- *    PR template, links the task's GitHub issue if it has one, and marks
- *    the task `IN_REVIEW`.
+ * 4. `POST /tasks/:id/submit`, or with `--project` `POST /projects/:id/submit`
+ *    (devtunnel-backend/src/routes/tasks.ts /
+ *    devtunnel-backend/src/routes/projects.ts) — opens the PR server-side,
+ *    using the contributor's own stored GitHub token (never this CLI
+ *    handling a GitHub token directly, same posture `dev start` already
+ *    established), fills in the repo's own PR template, links the task's
+ *    GitHub issue if it has one (project-level submissions have none),
+ *    and marks the task/project `IN_REVIEW`.
  */
-export async function submitCommand(taskId: string, options: SubmitCommandOptions): Promise<void> {
+export async function submitCommand(id: string, options: SubmitCommandOptions): Promise<void> {
   const credentials = readCredentials();
   if (!credentials) {
     console.error(`${pc.red("✗")} Not signed in. Run ${pc.cyan("dev login")} first.`);
     process.exitCode = 1;
     return;
   }
+
+  const kind = options.project ? "project" : "task";
 
   const rootDir = resolve(process.cwd(), options.dir ?? ".");
   const git = simpleGit(rootDir);
@@ -114,10 +121,11 @@ export async function submitCommand(taskId: string, options: SubmitCommandOption
   }
 
   console.log(`${pc.cyan("→")} Opening the pull request…`);
+  const endpoint = options.project ? `/projects/${id}/submit` : `/tasks/${id}/submit`;
   let response: SubmitTaskResponse;
   try {
     response = await apiPost<SubmitTaskResponse>(
-      `/tasks/${taskId}/submit`,
+      endpoint,
       {
         branch,
         title,
@@ -129,7 +137,7 @@ export async function submitCommand(taskId: string, options: SubmitCommandOption
     );
   } catch (err) {
     const message = err instanceof ApiError ? err.message : String(err);
-    console.error(`${pc.red("✗")} Couldn't submit this task: ${message}`);
+    console.error(`${pc.red("✗")} Couldn't submit this ${kind}: ${message}`);
     process.exitCode = 1;
     return;
   }

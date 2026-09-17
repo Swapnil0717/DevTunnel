@@ -4,17 +4,38 @@ A CLI to automate the GitHub contribution workflow for DevTunnel
 (`CONTRIBUTING.md`) — fork, branch, test, submit — using as few and as
 simple commands as possible.
 
-**This module implements `dev login` and `dev logout` only.** `dev start`,
-`dev test`, and `dev submit` are separate modules, built on top of the
-auth this one adds.
+## Install
 
-## Install (local dev, from the monorepo)
+```bash
+npm install -g @devtunnelcli/cli
+```
+
+This installs the `dev` command globally. Verify it worked:
+
+```bash
+dev --version
+```
+
+No account or repo checkout needed first — `dev login` (below) is what
+connects it to your GitHub account. The CLI talks to the hosted DevTunnel
+API (`https://api.devtunnel.tech`) by default, so nothing else needs to be
+running on your machine.
+
+Prefer not to install anything permanently? Run it via `npx` instead:
+
+```bash
+npx @devtunnelcli/cli login
+```
+
+### Building from source (contributing to the CLI itself)
+
+If you're working on the CLI's own code rather than just using it:
 
 ```bash
 cd devtunnel-cli
 npm install
 npm run build
-npm link        # makes the `dev` command available globally
+npm link        # makes the `dev` command available globally, pointing at your local build
 ```
 
 Or run it straight from source without linking:
@@ -93,3 +114,28 @@ URL) this depends on.
 
 Nothing else is written anywhere. `dev logout` removes this file and asks
 the backend to revoke the token it contains.
+
+## Publishing a new version (maintainers)
+
+Editing this package's metadata doesn't put it on npm by itself — someone
+with publish rights has to actually run the release:
+
+```bash
+npm login                # once per machine, needs an npm account that's a
+                          # member of the devtunnelcli org on npm, with
+                          # publish rights and 2FA enabled
+cd devtunnel-cli
+npm version patch        # or minor/major — bumps the version and tags it
+npm publish              # builds via prepublishOnly, then uploads
+```
+
+After that succeeds, `npm install -g @devtunnelcli/cli` works for anyone,
+anywhere — publishing is what actually makes a version fetchable from the
+registry. Until the first `npm publish` runs, the install instructions
+above will 404.
+
+New members added to the `devtunnelcli` org's "Developers" team
+(npmjs.com → Organizations → devtunnelcli → Members) automatically get
+read/write access to packages under this scope, so anyone who needs to
+cut a release should be added there rather than sharing one person's
+login.

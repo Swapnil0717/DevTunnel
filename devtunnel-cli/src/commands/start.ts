@@ -25,6 +25,8 @@ interface StartTaskResponse {
 }
 
 export interface StartCommandOptions {
+  /** Treat `id` as a projectId, hitting `POST /projects/:id/start` instead of `POST /tasks/:id/start`. */
+  project?: boolean;
   /** Write a `git archive` zip of the checked-out branch instead of leaving a working clone on disk. */
   zip?: boolean;
   /** Directory to clone into (or to write the zip alongside). Defaults to the fork's repo name in the current directory. */
@@ -32,29 +34,35 @@ export interface StartCommandOptions {
 }
 
 /**
- * `dev start <taskId>` — claims a DevTunnel task and gets a contributor
- * from "I want to work on this" to an open, ready-to-edit local checkout
- * in one command.
+ * `dev start <taskId>` (or `dev start <projectId> --project`) — claims a
+ * DevTunnel task, or with `--project` a whole project, and gets a
+ * contributor from "I want to work on this" to an open, ready-to-edit
+ * local checkout in one command.
  *
- * 1. `POST /tasks/:id/start` (devtunnel-backend/src/routes/tasks.ts) —
- *    forks the task's project on the contributor's own GitHub account
- *    (server-side, using their stored OAuth token — never this CLI
- *    handling a GitHub token directly) and atomically claims the task,
- *    returning the fork, the upstream repo, and the branch name the
- *    backend picked per CONTRIBUTING.md's naming convention.
+ * 1. `POST /tasks/:id/start` or, with `--project`, `POST /projects/:id/start`
+ *    (devtunnel-backend/src/routes/tasks.ts /
+ *    devtunnel-backend/src/routes/projects.ts) — forks the target's
+ *    project on the contributor's own GitHub account (server-side, using
+ *    their stored OAuth token — never this CLI handling a GitHub token
+ *    directly) and atomically claims the task or project, returning the
+ *    fork, the upstream repo, and the branch name the backend picked per
+ *    CONTRIBUTING.md's naming convention. Both endpoints return the same
+ *    response shape, so everything below this point runs identically
+ *    either way.
  * 2. `git clone` the fork locally with `simple-git`, add `upstream` as a
  *    second remote pointing at the original project (so `dev test`, in a
  *    later module, can `git fetch upstream` to check for updates), and
  *    check out the branch — creating it locally if this is the first
- *    `dev start` for this task, or just switching to it if `dev start`
- *    is being re-run (see the backend route's own idempotency notes).
+ *    `dev start` for this task/project, or just switching to it if
+ *    `dev start` is being re-run (see the backend route's own
+ *    idempotency notes).
  * 3. Print a `vscode://file/<path>` deep link so the contributor can
  *    jump straight into the checkout in VS Code, or (`--zip`) write a
  *    `git archive` zip of the branch instead of leaving a working clone
  *    on disk — for handing the code to an IDE/environment that wants an
  *    archive rather than a git checkout.
  */
-export async function startCommand(taskId: string, options: StartCommandOptions): Promise<void> {
+export async function startCommand(id: string, options: StartCommandOptions): Promise<void> {
   const credentials = readCredentials();
   if (!credentials) {
     console.error(`${pc.red("✗")} Not signed in. Run ${pc.cyan("dev login")} first.`);
@@ -62,18 +70,17 @@ export async function startCommand(taskId: string, options: StartCommandOptions)
     return;
   }
 
-  console.log(`${pc.cyan("→")} Claiming task and preparing your fork…`);
+  const kind = options.project ? "project" : "task";
+  console.log(`${pc.cyan("→")} Claiming ${kind} and preparing your fork…`);
+
+  const endpoint = options.project ? `/projects/${id}/start` : `/tasks/${id}/start`;
 
   let response: StartTaskResponse;
   try {
-    response = await apiPost<StartTaskResponse>(
-      `/tasks/${taskId}/start`,
-      {},
-      { token: credentials.token },
-    );
+    response = await apiPost<StartTaskResponse>(endpoint, {}, { token: credentials.token });
   } catch (err) {
     const message = err instanceof ApiError ? err.message : String(err);
-    console.error(`${pc.red("✗")} Couldn't start this task: ${message}`);
+    console.error(`${pc.red("✗")} Couldn't start this ${kind}: ${message}`);
     process.exitCode = 1;
     return;
   }
