@@ -28,7 +28,8 @@ import type {
  * don't implement the same logic twice).
  */
 export const LIST_COLUMNS =
-  "id, slug, title, status, roles, difficulty, assignee_id, github_issue_number, " +
+  "id, slug, title, status, roles, difficulty, assignee_id, assignee_started_at, " +
+  "assignee_fork_full_name, assignee_branch, github_issue_number, " +
   "github_issue_url, github_issue_snapshot, custom_description, deleted_at, created_at, " +
   "project_id, project_slug, project_name, project_repo_url, project_github_full_name, " +
   "project_github_author, project_github_owner, project_tech_stack, submission_count";

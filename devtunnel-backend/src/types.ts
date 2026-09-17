@@ -874,6 +874,12 @@ export interface AdminTaskListRow {
   roles: DeveloperRole[] | null;
   difficulty: ExperienceLevel | null;
   assignee_id: string | null;
+  /** Set by `devtunnel.start_task` (sql/030) the moment `dev start` claims this task — `null` until then. */
+  assignee_started_at: string | null;
+  /** The contributor's own fork (`owner/repo`) `dev start` created/reused — `null` until claimed. */
+  assignee_fork_full_name: string | null;
+  /** The branch `dev start` checked out on that fork, per CONTRIBUTING.md's naming convention — `null` until claimed. */
+  assignee_branch: string | null;
   github_issue_number: number | null;
   github_issue_url: string | null;
   github_issue_snapshot: GithubIssueSummary | null;

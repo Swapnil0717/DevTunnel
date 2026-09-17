@@ -8,6 +8,9 @@ import type {
 } from "../types";
 import { LIST_COLUMNS, contributorCounts, flattenTechStack, toGithubIssueRef } from "./adminTasks";
 
+/** Re-exported so `routes/tasks.ts` (`POST /tasks/:id/start`) doesn't need to reach into `./adminTasks` directly for this one type. */
+export type { AdminTaskListRow };
+
 /**
  * Contributor — Tasks (`/tasks` — "Tasks" in `AppSidebar` / `AppBottomNav`,
  * devtunnel-frontend's `lib/tasks/{types,api}.ts`). Backs `GET /tasks`
@@ -376,4 +379,110 @@ export async function getTaskDetailByProjectAndId(
   if (!data || data.deleted_at) return null;
 
   return toTaskDetail(data);
+}
+
+/**
+ * Single-task lookup by id alone (no project-slug scoping) — what
+ * `POST /tasks/:id/start` (src/routes/tasks.ts) needs to resolve a task
+ * id from the CLI into its project's GitHub repo, before it has (or
+ * needs) a project slug on hand. Returns the raw `AdminTaskListRow`
+ * rather than the trimmed `TaskDetail`/`TaskSummary` shapes above — the
+ * caller needs fields (`project_github_owner`, `project_github_full_name`,
+ * `assignee_*`) neither of those contributor-facing shapes carries.
+ *
+ * Returns `null` for a task that doesn't exist or has been soft-deleted —
+ * same "not found" treatment `getTaskDetailByProjectAndId` gives a
+ * deleted task.
+ */
+export async function getTaskById(
+  supabase: SupabaseClient,
+  taskId: string,
+): Promise<AdminTaskListRow | null> {
+  const { data, error } = await supabase
+    .from("admin_task_list")
+    .select(LIST_COLUMNS)
+    .eq("id", taskId)
+    .maybeSingle<AdminTaskListRow>();
+
+  if (error) throw new Error(`Failed to load task: ${error.message}`);
+  if (!data || data.deleted_at) return null;
+
+  return data;
+}
+
+export interface StartTaskResult {
+  status: "ok";
+  task: {
+    id: string;
+    status: AdminTaskStatus;
+    assigneeId: string;
+    assigneeStartedAt: string;
+    assigneeForkFullName: string;
+    assigneeBranch: string;
+  };
+}
+
+export type StartTaskOutcome =
+  | StartTaskResult
+  | { status: "not_found" }
+  | { status: "already_claimed" }
+  | { status: "already_done" };
+
+interface StartTaskRpcRow {
+  id: string;
+  status: AdminTaskStatus;
+  assignee_id: string;
+  assignee_started_at: string;
+  assignee_fork_full_name: string;
+  assignee_branch: string;
+}
+
+/**
+ * Claims `taskId` for `userId` — the write path `dev start`
+ * (`POST /tasks/:id/start`) uses after it has already created/found the
+ * contributor's fork and decided on a branch name. All of the actual
+ * claim logic (locking, idempotent-resume-for-the-same-user, rejecting a
+ * different user or an already-done task) lives in
+ * `devtunnel.start_task()` (sql/030) — this function's only job is
+ * turning that function's raised exceptions into a typed outcome the
+ * route can map to the right HTTP status, same pattern
+ * `completeSubmissionDraft` (db/submissionDrafts.ts) already uses for
+ * `complete_user_submission`.
+ */
+export async function startTask(
+  supabase: SupabaseClient,
+  taskId: string,
+  userId: string,
+  forkFullName: string,
+  branch: string,
+): Promise<StartTaskOutcome> {
+  const { data, error } = await supabase.rpc("start_task", {
+    p_task_id: taskId,
+    p_user_id: userId,
+    p_fork_full_name: forkFullName,
+    p_branch: branch,
+  });
+
+  if (error) {
+    const message = error.message ?? "";
+    if (message.includes("TASK_NOT_FOUND")) return { status: "not_found" };
+    if (message.includes("TASK_ALREADY_CLAIMED")) return { status: "already_claimed" };
+    if (message.includes("TASK_ALREADY_DONE")) return { status: "already_done" };
+    throw new Error(`Failed to start task: ${message}`);
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as StartTaskRpcRow | undefined;
+  if (!row) throw new Error("start_task returned no row");
+
+  return {
+    status: "ok",
+    task: {
+      id: row.id,
+      status: row.status,
+      assigneeId: row.assignee_id,
+      assigneeStartedAt: row.assignee_started_at,
+      assigneeForkFullName: row.assignee_fork_full_name,
+      assigneeBranch: row.assignee_branch,
+    },
+  };
 }

@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { UserRow } from "../types";
 import { randomToken, sha256Hex } from "../lib/crypto";
+import { getIsMaintainer } from "./devtunnelStats";
 
 /**
  * How long a `dev login` token stays valid before the user has to run
@@ -54,4 +56,65 @@ export async function revokeCliTokenByToken(supabase: SupabaseClient, token: str
   const tokenHash = await sha256Hex(token);
   const { error } = await supabase.from("cli_tokens").delete().eq("token_hash", tokenHash);
   if (error) throw new Error(`Failed to revoke CLI token: ${error.message}`);
+}
+
+export interface CliTokenUser {
+  user: UserRow;
+  isMaintainer: boolean;
+}
+
+interface CliTokenRow {
+  id: string;
+  user_id: string;
+  expires_at: string;
+}
+
+/**
+ * The `Authorization: Bearer <token>` counterpart to
+ * `getUserForSessionTokenWithMaintainerStatus` (db/sessions.ts) — same
+ * shape, same "hash the raw token, look up the hash, never the raw
+ * value" posture, same `isMaintainer` enrichment so a CLI-authenticated
+ * request sees exactly the same `AuthUser` a cookie-authenticated one
+ * would (src/middleware/auth.ts's `requireAuth` calls this when there's
+ * no session cookie).
+ *
+ * Returns `null` for a token that doesn't exist, has expired, or whose
+ * user no longer exists — `requireAuth` treats every one of those the
+ * same as "not signed in" (401), never a 500.
+ */
+export async function getUserForCliTokenWithMaintainerStatus(
+  supabase: SupabaseClient,
+  token: string,
+): Promise<CliTokenUser | null> {
+  const tokenHash = await sha256Hex(token);
+
+  const { data: cliToken, error } = await supabase
+    .from("cli_tokens")
+    .select("id, user_id, expires_at")
+    .eq("token_hash", tokenHash)
+    .maybeSingle<CliTokenRow>();
+
+  if (error) throw new Error(`Failed to look up CLI token: ${error.message}`);
+  if (!cliToken) return null;
+  if (new Date(cliToken.expires_at).getTime() <= Date.now()) return null;
+
+  const [userResult, isMaintainer] = await Promise.all([
+    supabase.from("users").select().eq("id", cliToken.user_id).maybeSingle<UserRow>(),
+    getIsMaintainer(supabase, cliToken.user_id),
+  ]);
+
+  if (userResult.error) {
+    throw new Error(`Failed to load CLI token user: ${userResult.error.message}`);
+  }
+  if (!userResult.data) return null;
+
+  // Best-effort touch, same pattern as the session equivalent — never
+  // fails the request if this write fails.
+  void supabase
+    .from("cli_tokens")
+    .update({ last_used_at: new Date().toISOString() })
+    .eq("id", cliToken.id)
+    .then(undefined, () => undefined);
+
+  return { user: userResult.data, isMaintainer };
 }
