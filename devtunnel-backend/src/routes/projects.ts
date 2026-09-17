@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import type { Env, Variables, GithubIssueSummary } from "../types";
 import { getEnv } from "../config/env";
 import { getSupabase } from "../lib/supabase";
@@ -10,6 +11,9 @@ import { withCacheSWR } from "../lib/cache";
 import {
   getProjectDetailBySlug,
   listAvailableProjects,
+  getProjectById,
+  startProject,
+  submitProject,
   type ContributorMatchProfile,
 } from "../db/projects";
 import { listTasks } from "../db/tasks";
@@ -20,6 +24,15 @@ import {
   fetchRepositoryContributorCount,
   fetchRepositoryIssues,
 } from "../lib/githubRepo";
+import { getValidGithubAccessToken } from "../db/githubTokens";
+import { findExistingFork, forkRepositoryForUser, GitHubForkError } from "../lib/githubFork";
+import {
+  createPullRequest,
+  fetchDefaultBranch,
+  findOpenPullRequest,
+  GitHubPullRequestError,
+} from "../lib/githubPullRequest";
+import { submitBodySchema, buildPullRequestBody } from "./tasks";
 
 /**
  * Contributor — Projects on DevTunnel (`/projects` — "Projects on
@@ -636,5 +649,342 @@ projects.post("/projects/:slug/contribute", requireAuth, async (c) => {
       requestId: c.get("requestId"),
     });
     return errorResponse(c, 500, "internal_error", "Couldn't join this project right now");
+  }
+});
+
+/* ---------------------------------------------------------------------------
+ * `dev start --project` / `dev submit --project` (devtunnel-cli) — a
+ * whole-project claim, mirroring `POST /tasks/:id/start` and
+ * `POST /tasks/:id/submit` (src/routes/tasks.ts) column-for-column. See
+ * sql/032, sql/033, and src/db/projects.ts's own doc comments for the
+ * `claim_status` vs. `status` naming rationale.
+ * ------------------------------------------------------------------------ */
+
+const projectIdSchema = z.string().uuid("Invalid project id");
+
+/**
+ * Turns a project's name into the slug half of a branch name. Identical
+ * in spirit to `slugifyForBranch` in src/routes/tasks.ts, duplicated here
+ * (rather than imported) only because it's a trivial pure string
+ * transform with no project/task-specific logic worth coupling the two
+ * route files over.
+ */
+function slugifyForBranch(input: string, fallback: string): string {
+  const slug = input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 50)
+    .replace(/-+$/g, "");
+  return slug || fallback.slice(0, 8);
+}
+
+/**
+ * `POST /projects/:id/start` — the backend half of `dev start <project-id>
+ * --project` (devtunnel-cli's `src/commands/start.ts`). Full parallel of
+ * `POST /tasks/:id/start` (src/routes/tasks.ts) — same fork-or-reuse
+ * logic against the contributor's own stored GitHub token, same
+ * idempotent-resume behavior for a re-run, same response shape
+ * (`fork`/`upstream`/`branch`/`startedAt`) so the CLI's `startCommand`
+ * needs no branching on which endpoint it called.
+ *
+ * Unlike a task, a project has no title/roles to derive a branch prefix
+ * from, so every project-level claim gets a plain `feature/<project-name>`
+ * branch — a contributor can always rename it locally before `dev submit`.
+ */
+projects.post("/projects/:id/start", requireAuth, async (c) => {
+  const env = getEnv(c.env);
+  const user = c.get("user");
+  if (!user) {
+    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+  }
+
+  const projectIdResult = projectIdSchema.safeParse(c.req.param("id"));
+  if (!projectIdResult.success) {
+    return errorResponse(c, 400, "invalid_request", projectIdResult.error.issues[0]!.message);
+  }
+  const projectId = projectIdResult.data;
+
+  const withinLimit = await checkRateLimit(c, {
+    bucket: "projects-start",
+    limit: 10,
+    windowSeconds: 60,
+  });
+  if (!withinLimit) {
+    return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+  }
+
+  try {
+    const supabase = getSupabase(env);
+
+    const project = await getProjectById(supabase, projectId);
+    if (!project) {
+      return errorResponse(c, 404, "project_not_found", "Project not found");
+    }
+    if (!project.github_owner || !project.github_full_name) {
+      return errorResponse(
+        c,
+        422,
+        "project_not_github_backed",
+        "This project has no linked GitHub repository",
+      );
+    }
+
+    const alreadyMine =
+      project.assignee_id === user.id && project.assignee_fork_full_name && project.assignee_branch;
+
+    const accessToken = await getValidGithubAccessToken(supabase, env, user.id);
+    if (!accessToken) {
+      return errorResponse(
+        c,
+        403,
+        "github_reauth_required",
+        "Reconnect your GitHub account to start a project",
+      );
+    }
+
+    const [owner, repo] = project.github_full_name.split("/");
+    if (!owner || !repo) {
+      return errorResponse(c, 422, "project_not_github_backed", "Malformed repository reference");
+    }
+
+    let fork = alreadyMine ? null : await findExistingFork(accessToken, owner, repo);
+    if (!fork && !alreadyMine) {
+      fork = await forkRepositoryForUser(accessToken, owner, repo);
+    }
+
+    const forkFullName = alreadyMine ? project.assignee_fork_full_name! : fork!.fullName;
+    const branch = alreadyMine
+      ? project.assignee_branch!
+      : `feature/${slugifyForBranch(project.name, projectId)}`;
+
+    const outcome = await startProject(supabase, projectId, user.id, forkFullName, branch);
+
+    if (outcome.status === "not_found") {
+      return errorResponse(c, 404, "project_not_found", "Project not found");
+    }
+    if (outcome.status === "already_claimed") {
+      return errorResponse(
+        c,
+        409,
+        "project_already_claimed",
+        "Someone else already started this project",
+      );
+    }
+    if (outcome.status === "already_done") {
+      return errorResponse(c, 409, "project_already_done", "This project is already done");
+    }
+
+    return c.json(
+      {
+        data: {
+          taskId: outcome.project.id,
+          status: outcome.project.claimStatus,
+          fork: {
+            fullName: outcome.project.assigneeForkFullName,
+            cloneUrl: `https://github.com/${outcome.project.assigneeForkFullName}.git`,
+            htmlUrl: `https://github.com/${outcome.project.assigneeForkFullName}`,
+          },
+          upstream: {
+            fullName: project.github_full_name,
+            cloneUrl: `https://github.com/${project.github_full_name}.git`,
+          },
+          branch: outcome.project.assigneeBranch,
+          startedAt: outcome.project.assigneeStartedAt,
+        },
+      },
+      200,
+    );
+  } catch (err) {
+    if (err instanceof GitHubForkError) {
+      const status = err.reason === "rate_limited" ? 429 : err.reason === "unauthorized" ? 403 : 502;
+      return errorResponse(c, status, `github_${err.reason}`, err.message);
+    }
+    logger.error("project_start_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      requestId: c.get("requestId"),
+    });
+    return errorResponse(c, 500, "internal_error", "Couldn't start this project right now");
+  }
+});
+
+/**
+ * `POST /projects/:id/submit` — the backend half of `dev submit
+ * <project-id> --project`. Full parallel of `POST /tasks/:id/submit`,
+ * reusing that route's own `submitBodySchema` and `buildPullRequestBody`
+ * (exported from src/routes/tasks.ts) rather than a second copy of
+ * either. Only real difference: a project-level submission has no GitHub
+ * issue to link, so the PR body's "Related Issue" section always reads
+ * "_No linked issue._".
+ */
+projects.post("/projects/:id/submit", requireAuth, async (c) => {
+  const env = getEnv(c.env);
+  const user = c.get("user");
+  if (!user) {
+    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+  }
+
+  const projectIdResult = projectIdSchema.safeParse(c.req.param("id"));
+  if (!projectIdResult.success) {
+    return errorResponse(c, 400, "invalid_request", projectIdResult.error.issues[0]!.message);
+  }
+  const projectId = projectIdResult.data;
+
+  const bodyResult = submitBodySchema.safeParse(await c.req.json().catch(() => null));
+  if (!bodyResult.success) {
+    return errorResponse(
+      c,
+      400,
+      "invalid_body",
+      bodyResult.error.issues[0]?.message ?? "Invalid submit request",
+    );
+  }
+  const { branch, title, type, commits, testedNote } = bodyResult.data;
+
+  const withinLimit = await checkRateLimit(c, {
+    bucket: "projects-submit",
+    limit: 10,
+    windowSeconds: 60,
+  });
+  if (!withinLimit) {
+    return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+  }
+
+  try {
+    const supabase = getSupabase(env);
+
+    const project = await getProjectById(supabase, projectId);
+    if (!project) {
+      return errorResponse(c, 404, "project_not_found", "Project not found");
+    }
+    if (!project.github_owner || !project.github_full_name) {
+      return errorResponse(
+        c,
+        422,
+        "project_not_github_backed",
+        "This project has no linked GitHub repository",
+      );
+    }
+    if (!project.assignee_id || !project.assignee_fork_full_name || !project.assignee_branch) {
+      return errorResponse(
+        c,
+        409,
+        "project_not_started",
+        "Run `dev start --project` on this project before submitting",
+      );
+    }
+    if (project.assignee_id !== user.id) {
+      return errorResponse(c, 403, "project_not_yours", "This project was started by someone else");
+    }
+    if (project.claim_status === "DONE") {
+      return errorResponse(c, 409, "project_already_done", "This project is already done");
+    }
+    if (project.assignee_branch !== branch) {
+      return errorResponse(
+        c,
+        409,
+        "branch_mismatch",
+        `Expected branch "${project.assignee_branch}" for this project, but "${branch}" is checked out`,
+      );
+    }
+
+    const accessToken = await getValidGithubAccessToken(supabase, env, user.id);
+    if (!accessToken) {
+      return errorResponse(
+        c,
+        403,
+        "github_reauth_required",
+        "Reconnect your GitHub account to submit this project",
+      );
+    }
+
+    const [upstreamOwner, upstreamRepo] = project.github_full_name.split("/");
+    const [forkOwner] = project.assignee_fork_full_name.split("/");
+    if (!upstreamOwner || !upstreamRepo || !forkOwner) {
+      return errorResponse(c, 422, "project_not_github_backed", "Malformed repository reference");
+    }
+
+    const baseBranch = await fetchDefaultBranch(accessToken, upstreamOwner, upstreamRepo);
+
+    const existingPr = await findOpenPullRequest(
+      accessToken,
+      upstreamOwner,
+      upstreamRepo,
+      forkOwner,
+      branch,
+    );
+    const isNew = !existingPr;
+
+    const pr =
+      existingPr ??
+      (
+        await createPullRequest(accessToken, {
+          baseOwner: upstreamOwner,
+          baseRepo: upstreamRepo,
+          baseBranch,
+          headOwner: forkOwner,
+          headBranch: branch,
+          title,
+          body: buildPullRequestBody({
+            type,
+            commits,
+            testedNote: testedNote ?? null,
+            githubIssueNumber: null, // no single issue behind a whole-project submission
+          }),
+        })
+      ).pr;
+
+    const outcome = await submitProject(supabase, projectId, user.id, {
+      prUrl: pr.htmlUrl,
+      prNumber: pr.number,
+      branch,
+      title,
+    });
+
+    if (outcome.status === "not_found") {
+      return errorResponse(c, 404, "project_not_found", "Project not found");
+    }
+    if (outcome.status === "not_yours") {
+      return errorResponse(c, 403, "project_not_yours", "This project was started by someone else");
+    }
+    if (outcome.status === "already_done") {
+      return errorResponse(c, 409, "project_already_done", "This project is already done");
+    }
+
+    return c.json(
+      {
+        data: {
+          taskId: outcome.project.id,
+          status: outcome.project.claimStatus,
+          pullRequest: {
+            id: outcome.pullRequest.id,
+            number: outcome.pullRequest.number,
+            url: outcome.pullRequest.url,
+            isNew,
+          },
+        },
+      },
+      200,
+    );
+  } catch (err) {
+    if (err instanceof GitHubPullRequestError) {
+      const status =
+        err.reason === "rate_limited"
+          ? 429
+          : err.reason === "unauthorized"
+            ? 403
+            : err.reason === "validation"
+              ? 422
+              : err.reason === "not_found"
+                ? 404
+                : 502;
+      return errorResponse(c, status, `github_${err.reason}`, err.message);
+    }
+    logger.error("project_submit_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      requestId: c.get("requestId"),
+    });
+    return errorResponse(c, 500, "internal_error", "Couldn't submit this project right now");
   }
 });

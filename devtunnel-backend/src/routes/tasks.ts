@@ -77,7 +77,7 @@ const ROLE_VALUES = [
 ] as const;
 const DIFFICULTY_VALUES = ["BEGINNER", "INTERMEDIATE", "ADVANCED"] as const;
 const STATUS_VALUES = ["OPEN", "IN_PROGRESS", "IN_REVIEW", "DONE"] as const;
-const COMMIT_TYPE_VALUES = ["feat", "fix", "docs", "chore"] as const;
+export const COMMIT_TYPE_VALUES = ["feat", "fix", "docs", "chore"] as const;
 
 /**
  * Query validation for `GET /tasks` (rules 14–15: every input is
@@ -448,7 +448,7 @@ tasks.post("/tasks/:id/start", requireAuth, async (c) => {
   }
 });
 
-const submitBodySchema = z.object({
+export const submitBodySchema = z.object({
   /** Current local branch, as `dev submit`'s own `git status` sees it — cross-checked against `assignee_branch` below so a submit from the wrong checkout fails clearly instead of opening a PR from the wrong branch. */
   branch: z.string().trim().min(1).max(250),
   /** PR title — the CLI's own most recent commit subject, unless the contributor typed something else. */
@@ -469,7 +469,7 @@ const submitBodySchema = z.object({
  * and ticking a box it can't back up would be worse than leaving it for
  * the contributor to confirm on GitHub.
  */
-function buildPullRequestBody(args: {
+export function buildPullRequestBody(args: {
   type: (typeof COMMIT_TYPE_VALUES)[number];
   commits: string[];
   testedNote: string | null;

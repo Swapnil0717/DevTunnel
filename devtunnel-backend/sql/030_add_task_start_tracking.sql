@@ -22,6 +22,11 @@ alter table devtunnel.tasks
 -- src/db/tasks.ts (which reads the exact same view — see that file's own
 -- header comment on why there is deliberately no second, divergent
 -- query) can see a task's start-tracking state without a second query.
+--
+-- New columns are appended at the end of the select list, not inserted
+-- next to assignee_id — `CREATE OR REPLACE VIEW` can only add trailing
+-- columns; it errors if you shift the position of any existing column
+-- (Postgres reads a mid-list insert as a rename of everything after it).
 -- ---------------------------------------------------------------------------
 create or replace view devtunnel.admin_task_list as
 select
@@ -32,9 +37,6 @@ select
   t.roles                    as roles,
   t.difficulty               as difficulty,
   t.assignee_id              as assignee_id,
-  t.assignee_started_at      as assignee_started_at,
-  t.assignee_fork_full_name  as assignee_fork_full_name,
-  t.assignee_branch          as assignee_branch,
   t.github_issue_number      as github_issue_number,
   t.github_issue_url         as github_issue_url,
   t.github_issue_snapshot    as github_issue_snapshot,
@@ -49,7 +51,10 @@ select
   p.github_author             as project_github_author,
   p.github_owner              as project_github_owner,
   p.tech_stack                as project_tech_stack,
-  coalesce(pr.submission_count, 0) as submission_count
+  coalesce(pr.submission_count, 0) as submission_count,
+  t.assignee_started_at      as assignee_started_at,
+  t.assignee_fork_full_name  as assignee_fork_full_name,
+  t.assignee_branch           as assignee_branch
 from devtunnel.tasks t
 join devtunnel.projects p on p.id = t.project_id
 left join (
