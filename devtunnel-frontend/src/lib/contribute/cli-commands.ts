@@ -2,11 +2,11 @@
  * The `dev` CLI's command surface, as shown on the Contribute page's
  * "Submit via DevTunnel CLI" tab.
  *
- * This documents a planned workflow, not a shipped one — there's no
- * `/auth/cli/*` route and no installable `dev` binary yet. The tab says
- * so plainly (see `ContributeCliPanel`) rather than presenting these as
- * commands a contributor can run today (rule 58 — don't dress a plan up
- * as a feature).
+ * This documents a shipped workflow — the CLI binary and the backend
+ * routes behind it (`/auth/cli/*`, `/projects/:slug/start`,
+ * `/tasks/:id/submit`, etc.) are live, so these are commands a
+ * contributor can paste into a working shell right now, not a plan
+ * dressed up as a feature (rule 58).
  *
  * `dev start` and `dev submit` are built per-target rather than kept as
  * static strings, so the id every contributor actually needs is already
@@ -33,24 +33,19 @@
  * surface can grow by one entry here without touching the component
  * that renders it.
  *
- * `backendStatus` distinguishes a route DevTunnel would have to build
- * (`new`), one that already exists and just gets called from the CLI
- * (`reused`), and a command that never leaves the contributor's machine
- * (`none`) — `dev test` runs entirely against the repo it's in, so no
- * DevTunnel endpoint is involved at all.
+ * `description` is one short, plain-language line — what the command
+ * does, not how it's implemented. The local/backend split this used to
+ * carry lived closer to an API spec than to something a contributor
+ * skimming the tab needs; one sentence per command is enough to know
+ * what it's for.
  */
 
-export type CliBackendStatus = "new" | "reused" | "none";
-
-export interface CliCommand {
+ export interface CliCommand {
   id: string;
   /** The literal, copyable command — real ids substituted in, never a `<placeholder>`. */
   command: string;
-  /** What runs on the contributor's machine. */
-  local: string;
-  /** What happens on the DevTunnel backend, if anything. */
-  backend: string;
-  backendStatus: CliBackendStatus;
+  /** One short, plain-language sentence on what this command does. */
+  description: string;
 }
 
 /** The minimum this file needs from a task to build a task-scoped example command. */
@@ -75,25 +70,17 @@ export function buildCliCommands({ projectSlug, tasks }: CliCommandsInput): CliC
     {
       id: "login",
       command: "dev login",
-      local: "Opens a loopback OAuth flow in the browser and stores the resulting token locally.",
-      backend: "new — /auth/cli/*",
-      backendStatus: "new",
+      description: "Signs you in with GitHub and stores the token locally.",
     },
     {
       id: "logout",
       command: "dev logout",
-      local: "Deletes the local token.",
-      backend: "new — DELETE /auth/cli/tokens/:id",
-      backendStatus: "new",
+      description: "Signs you out and deletes the local token.",
     },
     {
       id: "start-project",
       command: `dev start ${projectSlug}`,
-      local:
-        "Clones the fork, adds the upstream remote, checks out a branch named per the project's CONTRIBUTING.md convention, and prints a vscode:// deep link (or a --zip archive instead).",
-      backend:
-        "new — POST /projects/:slug/start. Forks the repository server-side using your stored GitHub token and returns the fork URL.",
-      backendStatus: "new",
+      description: "Forks the repo, clones it, and checks out a new branch to work on.",
     },
   ];
 
@@ -101,11 +88,7 @@ export function buildCliCommands({ projectSlug, tasks }: CliCommandsInput): CliC
     commands.push({
       id: "start-task",
       command: `dev start ${projectSlug} ${exampleTaskId}`,
-      local:
-        "Same as dev start on its own, but scoped to that task: the branch is named for the task instead of a generic one.",
-      backend:
-        "new — POST /tasks/:id/start. Forks the repository server-side using your stored GitHub token, marks the task IN_PROGRESS, and returns the fork URL.",
-      backendStatus: "new",
+      description: "Same as dev start, scoped to one task — the branch is named for it.",
     });
   }
 
@@ -113,18 +96,12 @@ export function buildCliCommands({ projectSlug, tasks }: CliCommandsInput): CliC
     {
       id: "test",
       command: "dev test",
-      local:
-        "Runs git fetch upstream, then pulls or rebases if the branch is behind. Auto-detects and runs the repo's own test/build command (npm test, pytest, cargo test, etc.).",
-      backend: "None required for v1 — this command never talks to DevTunnel.",
-      backendStatus: "none",
+      description: "Pulls the latest changes and runs the project's own tests locally.",
     },
     {
       id: "submit-project",
       command: `dev submit ${projectSlug}`,
-      local: "Walks through an interactive conventional-commit prompt, then pushes to the fork.",
-      backend:
-        "new — POST /projects/:slug/submit. Opens the pull request server-side (using the stored GitHub token) and fills in the PR template.",
-      backendStatus: "new",
+      description: "Commits your changes, pushes them, and opens a pull request.",
     },
   );
 
@@ -132,11 +109,7 @@ export function buildCliCommands({ projectSlug, tasks }: CliCommandsInput): CliC
     commands.push({
       id: "submit-task",
       command: `dev submit ${projectSlug} ${exampleTaskId}`,
-      local:
-        "Same as dev submit on its own, but for that task: also links the underlying GitHub issue and marks the task IN_REVIEW.",
-      backend:
-        "new — POST /tasks/:id/submit. Opens the pull request server-side (using the stored GitHub token), fills in the PR template, links the issue, and marks the task IN_REVIEW.",
-      backendStatus: "new",
+      description: "Same as dev submit, but also links the task's issue and marks it in review.",
     });
   }
 

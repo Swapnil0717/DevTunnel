@@ -144,7 +144,7 @@ export function ContributeTabs({ target }: { target: ContributeTarget }) {
           aria-labelledby="contribute-tab-cli"
           className="rounded-[10px] border border-border bg-surface p-4"
         >
-          <ContributeCliPanel />
+          <ContributeCliPanel target={target} />
         </div>
       ) : null}
     </div>
