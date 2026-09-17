@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Spinner } from "@/components/ui/spinner";
 import { CheckCircleIcon, PlusIcon } from "@/components/layout/nav-icons";
 import {
@@ -13,9 +14,9 @@ interface ContributeToToolButtonProps {
   /** From the server-rendered payload — a returning contributor shouldn't be asked twice. */
   initialIsContributing: boolean;
   /**
-   * The tool's repository URL, when it has one — the success message
-   * points here, since the actual contributing happens in the tool's own
-   * repository, not on DevTunnel.
+   * The tool's repository URL, when it has one. Only used to soften the
+   * error copy for a tool with nothing to contribute to on GitHub; the
+   * Contribute page itself re-reads this from its own payload.
    */
   repositoryUrl: string | null;
 }
@@ -24,31 +25,42 @@ interface ContributeToToolButtonProps {
  * Tool Detail page's primary action, and the one accent-colored button on
  * the page.
  *
- * Reads like `ContributeButton` on the project page and behaves like it —
- * idle → loading → joined, inline status underneath, no un-join — but it
- * promises less on purpose. Joining a *project* unlocks that project's
- * DevTunnel tasks; there are no tasks on a tool (`devtunnel.tasks` hangs
- * off a project, sql/017), so this registers interest and then hands the
- * contributor off to the tool's own repository, which is where the work
- * actually happens. Saying "you're in, now go pick a task" here would be
- * pointing at something that doesn't exist.
+ * **Changed** alongside `ContributeButton` on the project page, and for
+ * the same reason: registering interest and then leaving someone on the
+ * page they were already reading wastes the moment they decided to help.
+ * It now joins and navigates to `/opensource-tools/:slug/contribute`.
  *
- * For a tool with no repository behind it, the button still records
- * interest but the follow-up line drops the link rather than inventing a
- * destination.
+ * It still promises less than the project button, and that difference now
+ * lives on the destination page rather than in a one-line message here.
+ * Joining a *project* unlocks that project's DevTunnel tasks; there are
+ * no tasks on a tool (`devtunnel.tasks` hangs off a project, sql/017), so
+ * the Contribute page's Tasks tab says exactly that and points at the
+ * tool's own open issues instead of implying a DevTunnel backlog exists.
+ *
+ * An already-joined contributor skips the request and goes straight
+ * through — there's nothing to re-join, and the label names what the
+ * click does rather than describing a state.
  */
 export function ContributeToToolButton({
   slug,
   initialIsContributing,
   repositoryUrl,
 }: ContributeToToolButtonProps) {
+  const router = useRouter();
   const [isContributing, setIsContributing] = useState(initialIsContributing);
-  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "navigating" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [justJoined, setJustJoined] = useState(false);
+
+  const contributeHref = `/opensource-tools/${slug}/contribute`;
 
   async function handleClick() {
-    if (status === "loading" || isContributing) return;
+    if (status === "loading" || status === "navigating") return;
+
+    if (isContributing) {
+      setStatus("navigating");
+      router.push(contributeHref);
+      return;
+    }
 
     setStatus("loading");
     setErrorMessage(null);
@@ -56,8 +68,8 @@ export function ContributeToToolButton({
     try {
       const result = await joinOpenSourceTool(slug);
       setIsContributing(result.contributing);
-      setJustJoined(result.contributing);
-      setStatus("idle");
+      setStatus("navigating");
+      router.push(contributeHref);
     } catch (err) {
       setStatus("error");
       if (err instanceof OpenSourceToolsApiError && err.code === "onboarding_required") {
@@ -68,17 +80,17 @@ export function ContributeToToolButton({
     }
   }
 
-  const isBusy = status === "loading";
+  const isBusy = status === "loading" || status === "navigating";
 
   return (
     <div className="flex flex-col items-start gap-1.5">
       <button
         type="button"
         onClick={handleClick}
-        disabled={isBusy || isContributing}
+        disabled={isBusy}
         className={`inline-flex shrink-0 items-center gap-1.5 rounded-[8px] px-3.5 py-2 text-[13px] font-medium transition-colors disabled:cursor-not-allowed ${
           isContributing
-            ? "border border-border bg-surface-selected text-status-success-label"
+            ? "border border-border bg-surface-selected text-status-success-label disabled:opacity-60"
             : "bg-accent text-accent-foreground hover:opacity-90 disabled:opacity-60"
         }`}
       >
@@ -89,33 +101,26 @@ export function ContributeToToolButton({
         ) : (
           <PlusIcon className="h-3.5 w-3.5 shrink-0" />
         )}
-        {isContributing ? "Contributing" : isBusy ? "Registering…" : "Contribute to this tool"}
+        {status === "loading"
+          ? "Registering…"
+          : status === "navigating"
+            ? "Opening…"
+            : isContributing
+              ? "Continue contributing"
+              : "Contribute to this tool"}
       </button>
-
-      {justJoined ? (
-        <p className="m-0 text-[12px] text-status-success-label">
-          Noted.{" "}
-          {repositoryUrl ? (
-            <>
-              Head to{" "}
-              <a
-                href={`${repositoryUrl}/issues`}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="underline hover:text-accent"
-              >
-                the tool&apos;s open issues
-              </a>{" "}
-              to find something to pick up.
-            </>
-          ) : (
-            "Check the All Issues tab for something to pick up."
-          )}
-        </p>
-      ) : null}
 
       {status === "error" && errorMessage ? (
         <p className="m-0 text-[12px] text-status-error-label">{errorMessage}</p>
+      ) : null}
+
+      {!isContributing && status !== "loading" ? (
+        <a
+          href={contributeHref}
+          className="text-[12px] text-text-faint underline-offset-2 hover:text-accent hover:underline"
+        >
+          {repositoryUrl ? "See how to contribute first" : "See what this tool takes"}
+        </a>
       ) : null}
     </div>
   );

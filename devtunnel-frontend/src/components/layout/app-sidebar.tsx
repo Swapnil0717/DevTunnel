@@ -14,6 +14,7 @@ import {
   FolderIcon,
   ChecklistIcon,
   IssueIcon,
+  UploadIcon,
   UserIcon,
   SettingsIcon,
 } from "./nav-icons";
@@ -26,6 +27,13 @@ import { useAuth } from "@/lib/auth/use-auth";
  * usual mobile pattern. `AppBottomNav` only surfaces a subset of these
  * (all 9 don't fit a phone-width tab bar), so keep the two lists in sync
  * deliberately rather than assuming they should always match.
+ *
+ * "Community" (`/submissions`) sits after the four catalog entries and
+ * the two task/issue ones, deliberately last before the personal
+ * section. The entries above it are things DevTunnel found or curated;
+ * Community is the one list contributors fill themselves, and grouping
+ * it with the curated catalogs would blur exactly the distinction that
+ * page exists to make (see `app/(protected)/submissions/page.tsx`).
  *
  * The four GitHub/DevTunnel entries are deliberately paired and ordered
  * as two "GitHub-wide catalog, then DevTunnel's own curated list" pairs
@@ -45,6 +53,7 @@ const NAV_LINKS = [
   { href: "/projects", label: "Projects on Devtunnel", Icon: FolderIcon },
   { href: "/tasks", label: "Tasks / Issues", Icon: ChecklistIcon },
   { href: "/issues", label: "All Issues", Icon: IssueIcon },
+  { href: "/submissions", label: "Community", Icon: UploadIcon },
   { href: "/profile", label: "Profile", Icon: UserIcon },
   { href: "/settings", label: "Settings", Icon: SettingsIcon },
 ] as const;

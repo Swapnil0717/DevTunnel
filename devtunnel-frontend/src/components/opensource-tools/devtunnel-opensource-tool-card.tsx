@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { OpenSourceToolLogo } from "@/components/admin/opensource-tools/opensource-tool-logo";
 import { formatRelativeTime } from "@/lib/home/format-relative-time";
 import { getTechTagClasses } from "@/lib/home/tag-style";
@@ -26,11 +27,13 @@ function formatSourceUrl(sourceUrl: string): string {
  * `GithubProjectCard`'s doc comment documents for `RepoLogo`
  * (Frontend_Development_Rules.txt rule 51).
  *
- * The whole card's primary click target is the tool name, which opens
- * the real source repository/site in a new tab — this is a read-only
- * curated catalog with no DevTunnel-side detail route of its own (no
- * `/opensource-tools/:slug` page exists), same reasoning
- * `GithubProjectCard` documents for why it links out instead of inward.
+ * The whole card is clickable and opens the tool's own DevTunnel detail
+ * page (`/opensource-tools/:slug`, see `[toolSlug]/page.tsx`) — done via
+ * a stretched-link overlay (`inset-0`, `z-0`) so the click target is the
+ * full card, not just the name, while the "Visit tool" footer link stays
+ * a real external link (raised to `z-10` so it sits above the overlay)
+ * for anyone who wants the source repo/site itself rather than the
+ * DevTunnel view of it.
  *
  * Footer swaps `GithubProjectCard`'s stars/forks/issues row (real
  * GitHub-only fields `OpenSourceToolSummary` doesn't carry) for an
@@ -42,20 +45,28 @@ export function DevtunnelOpenSourceToolCard({ tool }: { tool: OpenSourceToolSumm
   const visibleLabels = tool.labels.slice(0, MAX_VISIBLE_LABELS);
   const hiddenLabelCount = tool.labels.length - visibleLabels.length;
 
+  const toolHref = `/opensource-tools/${tool.slug}`;
+
   return (
-    <article className="flex flex-col rounded-[10px] border border-border bg-surface p-4 transition-colors hover:border-border-subtle">
+    <article className="relative flex flex-col rounded-[10px] border border-border bg-surface p-4 transition-colors hover:border-border-subtle">
+      {/* Stretched-link overlay: makes the whole card clickable to the tool's
+          DevTunnel detail page. `tabIndex={-1}` + `aria-hidden` keep it out of
+          the tab order / a11y tree — the heading link below is the real,
+          keyboard-reachable link to the same destination. */}
+      <Link
+        href={toolHref}
+        tabIndex={-1}
+        aria-hidden="true"
+        className="absolute inset-0 z-0 rounded-[10px]"
+      />
+
       <div className="mb-2.5 flex items-start gap-2.5">
         <OpenSourceToolLogo name={tool.name} sourceUrl={tool.sourceUrl} size={32} />
         <div className="min-w-0 flex-1">
           <h3 className="m-0 truncate text-[13px] font-medium leading-tight text-text">
-            <a
-              href={tool.sourceUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="hover:text-accent focus-visible:text-accent"
-            >
+            <Link href={toolHref} className="relative z-10 hover:text-accent focus-visible:text-accent">
               {tool.name}
-            </a>
+            </Link>
           </h3>
           <p className="m-0 mt-0.5 truncate font-mono text-[11px] text-text-faint">
             {formatSourceUrl(tool.sourceUrl)}
@@ -95,9 +106,9 @@ export function DevtunnelOpenSourceToolCard({ tool }: { tool: OpenSourceToolSumm
           href={tool.sourceUrl}
           target="_blank"
           rel="noreferrer noopener"
-          className="text-[10.5px] font-medium text-text-faint hover:text-accent"
+          className="relative z-10 text-[10.5px] font-medium text-text-faint hover:text-accent"
         >
-          Visit tool
+          Visit tool ↗
         </a>
 
         <p className="m-0 shrink-0 text-[10.5px] text-text-faint">

@@ -12,6 +12,12 @@ import { HomeIcon, FolderIcon, ChecklistIcon, UserIcon } from "./nav-icons";
  * Devtunnel, Projects on Devtunnel, Tasks / Issues, All Issues, Profile,
  * Settings); a phone-width tab bar can't hold all of them legibly, so
  * this keeps the 4 most-used, in the same relative order as the sidebar.
+ *
+ * "Community" (`/submissions`) is deliberately NOT here. It's a new
+ * entry and a browsing destination rather than a daily one, and adding
+ * a fifth tab would shrink every existing label below a legible size on
+ * a narrow phone. The sidebar carries it, and the two lists were always
+ * meant to diverge rather than mirror (see this file's note above).
  */
 const NAV_LINKS = [
   { href: "/home", label: "Home", Icon: HomeIcon },
