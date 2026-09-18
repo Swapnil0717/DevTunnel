@@ -25,3 +25,11 @@ pnpm-debug.log*
 .vercel
 next-env.d.ts
 tsconfig.tsbuildinfo
+
+# OpenNext
+.open-next
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
