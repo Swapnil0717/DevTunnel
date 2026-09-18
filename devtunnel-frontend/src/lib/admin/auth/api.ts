@@ -28,7 +28,7 @@ import type { AdminAuthMe } from "./types";
 export async function getAdminAuthMe(): Promise<AdminAuthMe | null> {
   try {
     const res = await fetch(`${API_BASE_URL}/admin/auth/me`, {
-      headers: { cookie: cookies().toString() },
+      headers: { cookie: (await cookies()).toString() },
       cache: "no-store",
     });
 

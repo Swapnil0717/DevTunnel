@@ -19,7 +19,7 @@ type FetchResult<T> =
 
 export async function getOpenSourceTools(): Promise<FetchResult<OpenSourceToolSummary[]>> {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const response = await fetch(`${API_BASE_URL}/opensource-tools/available`, {
       headers: { Cookie: cookieStore.toString() },
       cache: "no-store",
@@ -67,7 +67,7 @@ export async function getOpenSourceToolBySlug(
     const response = await fetch(
       `${API_BASE_URL}/opensource-tools/${encodeURIComponent(slug)}`,
       {
-        headers: { Cookie: cookies().toString() },
+        headers: { Cookie: (await cookies()).toString() },
         cache: "no-store",
       },
     );

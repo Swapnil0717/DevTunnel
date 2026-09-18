@@ -16,7 +16,7 @@ import type { DevTunnelStats } from "./types";
 export async function getServerDevTunnelStats(): Promise<DevTunnelStats | null> {
   try {
     const res = await fetch(`${API_BASE_URL}/users/me/devtunnel-stats`, {
-      headers: { cookie: cookies().toString() },
+      headers: { cookie: (await cookies()).toString() },
       cache: "no-store",
     });
 

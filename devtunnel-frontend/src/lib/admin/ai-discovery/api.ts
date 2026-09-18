@@ -13,7 +13,7 @@ type Result<T> = { status: "ok"; data: T } | { status: "empty" } | { status: "er
 async function fetchList<T>(path: string): Promise<Result<T[]>> {
   try {
     const res = await fetch(`${API_BASE_URL}${path}`, {
-      headers: { cookie: cookies().toString() },
+      headers: { cookie: (await cookies()).toString() },
       cache: "no-store",
     });
     if (!res.ok) return { status: "error" };
@@ -40,7 +40,7 @@ export function getAiDiscoveredTasks(status = "PENDING") {
 export async function getAiConfirmationQueue(): Promise<Result<AiConfirmationQueue>> {
   try {
     const res = await fetch(`${API_BASE_URL}/admin/ai/confirmation`, {
-      headers: { cookie: cookies().toString() },
+      headers: { cookie: (await cookies()).toString() },
       cache: "no-store",
     });
     if (!res.ok) return { status: "error" };
@@ -67,7 +67,7 @@ export async function getAiDiscoveryStatus(): Promise<
 > {
   try {
     const res = await fetch(`${API_BASE_URL}/admin/ai/status`, {
-      headers: { cookie: cookies().toString() },
+      headers: { cookie: (await cookies()).toString() },
       cache: "no-store",
     });
     if (!res.ok) return { status: "error" };

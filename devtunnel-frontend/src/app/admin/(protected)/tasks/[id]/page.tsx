@@ -13,14 +13,14 @@ import { SectionMessage } from "@/components/home/section-message";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
 
 interface TaskDetailPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
   /**
    * `?edit=1` opens the Curation panel straight into edit mode — same
    * convention as the Project Detail page's `?edit=1` (there is no
    * separate `/admin/tasks/:id/edit` route in the spec; section 22 only
    * lists a flat `PATCH /admin/tasks/:id`).
    */
-  searchParams?: { edit?: string };
+  searchParams?: Promise<{ edit?: string }>;
 }
 
 /**
@@ -33,13 +33,14 @@ interface TaskDetailPageProps {
 export async function generateMetadata({
   params,
 }: TaskDetailPageProps): Promise<Metadata> {
-  const result = await getAdminTaskDetail(params.id);
+  const { id } = await params;
+  const result = await getAdminTaskDetail(id);
   const title = result.status === "ok" ? result.data.title : "Task";
 
   return buildMetadata({
     title,
     description: `Manage the "${title}" DevTunnel task — GitHub issue, curation, contributors and submissions.`,
-    path: `/admin/tasks/${params.id}`,
+    path: `/admin/tasks/${id}`,
     noIndex: true,
   });
 }
@@ -70,8 +71,10 @@ export default async function AdminTaskDetailPage({
   params,
   searchParams,
 }: TaskDetailPageProps) {
-  const result = await getAdminTaskDetail(params.id);
-  const startInEditMode = searchParams?.edit === "1";
+  const { id } = await params;
+  const resolvedSearchParams = await searchParams;
+  const result = await getAdminTaskDetail(id);
+  const startInEditMode = resolvedSearchParams?.edit === "1";
 
   if (result.status === "not-found") {
     notFound();

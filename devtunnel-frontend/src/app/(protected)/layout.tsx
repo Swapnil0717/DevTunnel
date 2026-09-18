@@ -57,11 +57,11 @@ export default async function ProtectedLayout({
     redirect("/login");
   }
 
-  if (isAdmin(user) && getServerViewMode() !== "user") {
+  if (isAdmin(user) && (await getServerViewMode()) !== "user") {
     redirect("/admin");
   }
 
-  const pathname = headers().get("x-pathname") ?? "";
+  const pathname = (await headers()).get("x-pathname") ?? "";
   if (pathname !== "/onboarding" && needsOnboarding(user)) {
     redirect("/onboarding");
   }

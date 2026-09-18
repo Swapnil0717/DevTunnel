@@ -16,7 +16,7 @@ import type { ContributionSummary } from "./types";
 export async function getServerDevTunnelContributionsSummary(): Promise<ContributionSummary | null> {
   try {
     const res = await fetch(`${API_BASE_URL}/users/me/contributions/devtunnel/summary`, {
-      headers: { cookie: cookies().toString() },
+      headers: { cookie: (await cookies()).toString() },
       cache: "no-store",
     });
 

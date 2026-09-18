@@ -11,14 +11,14 @@ import { SectionMessage } from "@/components/home/section-message";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
 
 interface OpenSourceToolDetailPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
   /**
    * `?edit=1` opens the Description/Labels/Setup guide panel straight
    * into edit mode — what the `/admin/opensource-tools` grid card's
    * "Edit" action links to, same convention the Project Detail page
    * uses for its own table's "Edit" row action.
    */
-  searchParams?: { edit?: string };
+  searchParams?: Promise<{ edit?: string }>;
 }
 
 /**
@@ -32,13 +32,14 @@ interface OpenSourceToolDetailPageProps {
 export async function generateMetadata({
   params,
 }: OpenSourceToolDetailPageProps): Promise<Metadata> {
-  const result = await getAdminOpenSourceToolDetail(params.id);
+  const { id } = await params;
+  const result = await getAdminOpenSourceToolDetail(id);
   const name = result.status === "ok" ? result.data.name : "Open Source Tool";
 
   return buildMetadata({
     title: name,
     description: `Manage the ${name} listing in the DevTunnel Open Source Tools catalog.`,
-    path: `/admin/opensource-tools/${params.id}`,
+    path: `/admin/opensource-tools/${id}`,
     noIndex: true,
   });
 }
@@ -64,8 +65,10 @@ export default async function AdminOpenSourceToolDetailPage({
   params,
   searchParams,
 }: OpenSourceToolDetailPageProps) {
-  const result = await getAdminOpenSourceToolDetail(params.id);
-  const startInEditMode = searchParams?.edit === "1";
+  const { id } = await params;
+  const resolvedSearchParams = await searchParams;
+  const result = await getAdminOpenSourceToolDetail(id);
+  const startInEditMode = resolvedSearchParams?.edit === "1";
 
   if (result.status === "not-found") {
     notFound();

@@ -55,7 +55,7 @@ export async function getAdminActivityLog(): Promise<AdminActivityResult> {
       if (before) query.set("before", before);
 
       const res = await fetch(`${API_BASE_URL}/admin/activity?${query.toString()}`, {
-        headers: { cookie: cookies().toString() },
+        headers: { cookie: (await cookies()).toString() },
         cache: "no-store",
       });
 
@@ -90,7 +90,7 @@ export async function getRecentAdminActivity(limit = 5): Promise<AdminActivityRe
     const res = await fetch(
       `${API_BASE_URL}/admin/activity?${new URLSearchParams({ limit: String(limit) }).toString()}`,
       {
-        headers: { cookie: cookies().toString() },
+        headers: { cookie: (await cookies()).toString() },
         cache: "no-store",
       },
     );

@@ -12,7 +12,7 @@ import { SectionMessage } from "@/components/home/section-message";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
 
 interface TaskDetailPageProps {
-  params: { projectSlug: string; taskId: string };
+  params: Promise<{ projectSlug: string; taskId: string }>;
 }
 
 /**
@@ -26,7 +26,8 @@ interface TaskDetailPageProps {
 export async function generateMetadata({
   params,
 }: TaskDetailPageProps): Promise<Metadata> {
-  const result = await getTaskDetail(params.projectSlug, params.taskId);
+  const { projectSlug, taskId } = await params;
+  const result = await getTaskDetail(projectSlug, taskId);
   const title = result.status === "ok" ? result.data.title : "Task";
 
   return buildMetadata({
@@ -35,7 +36,7 @@ export async function generateMetadata({
       result.status === "ok"
         ? `"${title}" — a DevTunnel task on ${result.data.project.name}: GitHub issue, role, difficulty and tech stack.`
         : "View this DevTunnel task.",
-    path: `/projects/${params.projectSlug}/tasks/${params.taskId}`,
+    path: `/projects/${projectSlug}/tasks/${taskId}`,
     noIndex: true,
   });
 }
@@ -66,7 +67,8 @@ export async function generateMetadata({
  * only action offered is opening the underlying GitHub issue.
  */
 export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
-  const result = await getTaskDetail(params.projectSlug, params.taskId);
+  const { projectSlug, taskId } = await params;
+  const result = await getTaskDetail(projectSlug, taskId);
 
   if (result.status === "not-found") {
     notFound();

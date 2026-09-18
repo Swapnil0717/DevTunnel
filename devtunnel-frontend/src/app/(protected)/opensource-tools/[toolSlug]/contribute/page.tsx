@@ -12,17 +12,18 @@ import { ContributeSidebar } from "@/components/contribute/contribute-sidebar";
 import type { ContributeTarget } from "@/lib/contribute/types";
 
 interface ToolContributePageProps {
-  params: { toolSlug: string };
+  params: Promise<{ toolSlug: string }>;
 }
 
 export async function generateMetadata({ params }: ToolContributePageProps): Promise<Metadata> {
-  const result = await getOpenSourceToolBySlug(params.toolSlug);
+  const { toolSlug } = await params;
+  const result = await getOpenSourceToolBySlug(toolSlug);
   const name = result.status === "ok" ? result.data.name : "this tool";
 
   return buildMetadata({
     title: `Contribute to ${name}`,
     description: `Ways to contribute to ${name} — the contribution types this tool takes, and how to get a change merged upstream.`,
-    path: `/opensource-tools/${params.toolSlug}/contribute`,
+    path: `/opensource-tools/${toolSlug}/contribute`,
     noIndex: true,
   });
 }
@@ -48,7 +49,8 @@ export async function generateMetadata({ params }: ToolContributePageProps): Pro
  * tool page already makes. No new endpoint, no invented field (rule 58).
  */
 export default async function ToolContributePage({ params }: ToolContributePageProps) {
-  const result = await getOpenSourceToolBySlug(params.toolSlug);
+  const { toolSlug } = await params;
+  const result = await getOpenSourceToolBySlug(toolSlug);
 
   if (result.status === "not-found") {
     notFound();

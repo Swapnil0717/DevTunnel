@@ -42,7 +42,7 @@ const CATALOG_FILTER_OPTIONS = [
 
 interface GithubOpenSourceToolsPageProps {
   /** `?filter=alternative-to-paid` — see `CATALOG_FILTER_OPTIONS` above. */
-  searchParams?: { filter?: string };
+  searchParams?: Promise<{ filter?: string }>;
 }
 
 /**
@@ -78,7 +78,8 @@ interface GithubOpenSourceToolsPageProps {
 export default async function GithubOpenSourceToolsPage({
   searchParams,
 }: GithubOpenSourceToolsPageProps) {
-  const requestedFilter = searchParams?.filter;
+  const resolvedSearchParams = await searchParams;
+  const requestedFilter = resolvedSearchParams?.filter;
   const activeFilter =
     requestedFilter === ALTERNATIVE_TO_PAID ? ALTERNATIVE_TO_PAID : NO_CATALOG_FILTER;
 

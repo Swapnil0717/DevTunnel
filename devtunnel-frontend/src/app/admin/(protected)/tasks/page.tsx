@@ -20,7 +20,7 @@ interface AdminTasksPageProps {
    * than opening a separate `/admin/projects/:id/tasks` route that isn't
    * part of the spec's page list (section 29).
    */
-  searchParams?: { project?: string };
+  searchParams?: Promise<{ project?: string }>;
 }
 
 /**
@@ -37,6 +37,7 @@ interface AdminTasksPageProps {
  * list (`getAdminTasks` walks the backend's keyset pagination in full).
  */
 export default async function AdminTasksPage({ searchParams }: AdminTasksPageProps) {
+  const resolvedSearchParams = await searchParams;
   const result = await getAdminTasks();
 
   return (
@@ -67,7 +68,7 @@ export default async function AdminTasksPage({ searchParams }: AdminTasksPagePro
           .
         </SectionMessage>
       ) : (
-        <AdminTasksExplorer tasks={result.data} initialProjectSlug={searchParams?.project ?? "ALL"} />
+        <AdminTasksExplorer tasks={result.data} initialProjectSlug={resolvedSearchParams?.project ?? "ALL"} />
       )}
     </main>
   );

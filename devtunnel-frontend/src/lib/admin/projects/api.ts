@@ -54,7 +54,7 @@ type AdminProjectDetailResult =
 export async function getAdminProjectDetail(id: string): Promise<AdminProjectDetailResult> {
   try {
     const res = await fetch(`${API_BASE_URL}/admin/projects/${id}`, {
-      headers: { cookie: cookies().toString() },
+      headers: { cookie: (await cookies()).toString() },
       cache: "no-store",
     });
 

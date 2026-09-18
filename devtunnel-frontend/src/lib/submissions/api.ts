@@ -37,7 +37,7 @@ export async function getSubmissions(
 ): Promise<SubmissionsResult> {
   try {
     const res = await fetch(`${API_BASE_URL}/submissions?${buildSubmissionsQuery(filters)}`, {
-      headers: { cookie: cookies().toString() },
+      headers: { cookie: (await cookies()).toString() },
       cache: "no-store",
     });
 

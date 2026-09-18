@@ -14,7 +14,7 @@ import { ToolStarButton } from "@/components/opensource-tools/tool-star-button";
 import { ContributeToToolButton } from "@/components/opensource-tools/contribute-to-tool-button";
 
 interface ToolDetailPageProps {
-  params: { toolSlug: string };
+  params: Promise<{ toolSlug: string }>;
 }
 
 /** Strips the protocol and any trailing slash — same helper `DevtunnelOpenSourceToolCard` uses. */
@@ -31,7 +31,8 @@ function formatSourceUrl(sourceUrl: string): string {
  * `/opensource-tools` itself takes.
  */
 export async function generateMetadata({ params }: ToolDetailPageProps): Promise<Metadata> {
-  const result = await getOpenSourceToolBySlug(params.toolSlug);
+  const { toolSlug } = await params;
+  const result = await getOpenSourceToolBySlug(toolSlug);
   const title = result.status === "ok" ? result.data.name : "Tool";
 
   return buildMetadata({
@@ -40,7 +41,7 @@ export async function generateMetadata({ params }: ToolDetailPageProps): Promise
       result.status === "ok"
         ? `${result.data.name} on DevTunnel — what it does, how to set it up, and where to help.`
         : "View this open source tool on DevTunnel.",
-    path: `/opensource-tools/${params.toolSlug}`,
+    path: `/opensource-tools/${toolSlug}`,
     noIndex: true,
   });
 }
@@ -68,7 +69,8 @@ export async function generateMetadata({ params }: ToolDetailPageProps): Promise
  * one honest `SectionMessage`, otherwise the real page renders.
  */
 export default async function ToolDetailPage({ params }: ToolDetailPageProps) {
-  const result = await getOpenSourceToolBySlug(params.toolSlug);
+  const { toolSlug } = await params;
+  const result = await getOpenSourceToolBySlug(toolSlug);
 
   if (result.status === "not-found") {
     notFound();

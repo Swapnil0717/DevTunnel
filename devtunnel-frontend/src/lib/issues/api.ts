@@ -63,7 +63,7 @@ export async function getIssues(): Promise<IssuesResult> {
       if (before) query.set("before", before);
 
       const res = await fetch(`${API_BASE_URL}/issues?${query.toString()}`, {
-        headers: { cookie: cookies().toString() },
+        headers: { cookie: (await cookies()).toString() },
         cache: "no-store",
       });
 

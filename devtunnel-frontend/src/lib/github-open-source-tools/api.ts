@@ -84,7 +84,7 @@ export async function getGithubOpenSourceToolBySlug(
     const res = await fetch(
       `${API_BASE_URL}/github-open-source-tools/${encodeURIComponent(slug)}`,
       {
-        headers: { cookie: cookies().toString() },
+        headers: { cookie: (await cookies()).toString() },
         cache: "no-store",
       },
     );

@@ -16,7 +16,7 @@ import { SectionMessage } from "@/components/home/section-message";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
 
 interface ProjectDetailPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
   /**
    * `?edit=1` opens the Description/Tech Stack panel straight into edit
    * mode — this is what the Projects table's "Edit" row action links to
@@ -26,7 +26,7 @@ interface ProjectDetailPageProps {
    * other than `"1"` is treated the same as absent, so a stray/garbled
    * query value never silently forces edit mode open.
    */
-  searchParams?: { edit?: string };
+  searchParams?: Promise<{ edit?: string }>;
 }
 
 /**
@@ -40,13 +40,14 @@ interface ProjectDetailPageProps {
 export async function generateMetadata({
   params,
 }: ProjectDetailPageProps): Promise<Metadata> {
-  const result = await getAdminProjectDetail(params.id);
+  const { id } = await params;
+  const result = await getAdminProjectDetail(id);
   const name = result.status === "ok" ? result.data.name : "Project";
 
   return buildMetadata({
     title: name,
     description: `Manage the ${name} DevTunnel project — repository, README, contributors, tasks and GitHub issues.`,
-    path: `/admin/projects/${params.id}`,
+    path: `/admin/projects/${id}`,
     noIndex: true,
   });
 }
@@ -88,15 +89,17 @@ export default async function AdminProjectDetailPage({
   params,
   searchParams,
 }: ProjectDetailPageProps) {
+  const { id } = await params;
+  const resolvedSearchParams = await searchParams;
   // Fetched in parallel — the tasks section is independent of the
   // project detail fetch and shouldn't add its own round-trip latency
   // (Frontend_Development_Rules.txt rule 39: don't serialize
   // independent data fetches).
   const [result, tasksResult] = await Promise.all([
-    getAdminProjectDetail(params.id),
-    getAdminProjectTasks(params.id),
+    getAdminProjectDetail(id),
+    getAdminProjectTasks(id),
   ]);
-  const startInEditMode = searchParams?.edit === "1";
+  const startInEditMode = resolvedSearchParams?.edit === "1";
 
   if (result.status === "not-found") {
     notFound();

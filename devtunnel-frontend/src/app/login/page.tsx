@@ -24,10 +24,10 @@ export const metadata: Metadata = buildMetadata({
 });
 
 interface LoginPageProps {
-  searchParams: {
+  searchParams: Promise<{
     next?: string;
     error?: string;
-  };
+  }>;
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -40,17 +40,18 @@ const ERROR_MESSAGES: Record<string, string> = {
 export default async function LoginPage({
   searchParams,
 }: LoginPageProps) {
+  const resolvedSearchParams = await searchParams;
   const user = await getServerUser();
 
   if (user) {
     if (isAdmin(user)) {
-      const viewMode = getServerViewMode();
+      const viewMode = await getServerViewMode();
 
       if (viewMode === "user") {
         redirect(
-          searchParams.next &&
-            searchParams.next.startsWith("/")
-            ? searchParams.next
+          resolvedSearchParams.next &&
+            resolvedSearchParams.next.startsWith("/")
+            ? resolvedSearchParams.next
             : "/home",
         );
       }
@@ -70,9 +71,9 @@ export default async function LoginPage({
           <PortalChoiceCard
             name={user.name || user.username}
             userDestination={
-              searchParams.next &&
-              searchParams.next.startsWith("/")
-                ? searchParams.next
+              resolvedSearchParams.next &&
+              resolvedSearchParams.next.startsWith("/")
+                ? resolvedSearchParams.next
                 : "/home"
             }
           />
@@ -85,15 +86,15 @@ export default async function LoginPage({
     }
 
     redirect(
-      searchParams.next &&
-        searchParams.next.startsWith("/")
-        ? searchParams.next
+      resolvedSearchParams.next &&
+        resolvedSearchParams.next.startsWith("/")
+        ? resolvedSearchParams.next
         : "/home",
     );
   }
 
-  const next = searchParams.next;
-  const errorCode = searchParams.error;
+  const next = resolvedSearchParams.next;
+  const errorCode = resolvedSearchParams.error;
 
   const status: LoginStatus = errorCode
     ? "error"

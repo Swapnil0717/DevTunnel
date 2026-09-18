@@ -53,7 +53,7 @@ type AdminTaskDetailResult =
 export async function getAdminTaskDetail(id: string): Promise<AdminTaskDetailResult> {
   try {
     const res = await fetch(`${API_BASE_URL}/admin/tasks/${id}`, {
-      headers: { cookie: cookies().toString() },
+      headers: { cookie: (await cookies()).toString() },
       cache: "no-store",
     });
 
@@ -89,7 +89,7 @@ type AdminProjectTasksResult =
 export async function getAdminProjectTasks(projectId: string): Promise<AdminProjectTasksResult> {
   try {
     const res = await fetch(`${API_BASE_URL}/admin/projects/${projectId}/tasks`, {
-      headers: { cookie: cookies().toString() },
+      headers: { cookie: (await cookies()).toString() },
       cache: "no-store",
     });
 

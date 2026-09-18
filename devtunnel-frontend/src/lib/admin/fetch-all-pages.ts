@@ -87,7 +87,7 @@ export async function fetchAllAdminPages<T>(
       }
 
       const res = await fetch(`${API_BASE_URL}${path}?${query.toString()}`, {
-        headers: { cookie: cookies().toString() },
+        headers: { cookie: (await cookies()).toString() },
         cache: "no-store",
       });
 

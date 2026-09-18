@@ -72,7 +72,7 @@ export async function getTaskDetail(
     const res = await fetch(
       `${API_BASE_URL}/projects/${encodeURIComponent(projectSlug)}/tasks/${encodeURIComponent(taskId)}`,
       {
-        headers: { cookie: cookies().toString() },
+        headers: { cookie: (await cookies()).toString() },
         cache: "no-store",
       },
     );

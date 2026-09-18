@@ -14,7 +14,7 @@ import { RequestOnboardingButton } from "@/components/github-projects/request-on
 import { StarButton } from "@/components/github-projects/star-button";
 
 interface GithubProjectDetailPageProps {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }
 
 /**
@@ -29,7 +29,8 @@ interface GithubProjectDetailPageProps {
 export async function generateMetadata({
   params,
 }: GithubProjectDetailPageProps): Promise<Metadata> {
-  const result = await getGithubProjectBySlug(params.slug);
+  const { slug } = await params;
+  const result = await getGithubProjectBySlug(slug);
   const title = result.status === "ok" ? result.data.name : "GitHub Project";
 
   return buildMetadata({
@@ -38,7 +39,7 @@ export async function generateMetadata({
       result.status === "ok"
         ? `${result.data.repositoryFullName} on GitHub — README, open issues, and project info.`
         : "View this GitHub repository.",
-    path: `/github-projects/${params.slug}`,
+    path: `/github-projects/${slug}`,
     noIndex: true,
   });
 }
@@ -75,7 +76,8 @@ export async function generateMetadata({
 export default async function GithubProjectDetailPage({
   params,
 }: GithubProjectDetailPageProps) {
-  const result = await getGithubProjectBySlug(params.slug);
+  const { slug } = await params;
+  const result = await getGithubProjectBySlug(slug);
 
   if (result.status === "not-found") {
     notFound();

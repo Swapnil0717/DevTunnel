@@ -12,7 +12,7 @@ import { ContributeSidebar } from "@/components/contribute/contribute-sidebar";
 import type { ContributeTarget } from "@/lib/contribute/types";
 
 interface ContributePageProps {
-  params: { projectSlug: string };
+  params: Promise<{ projectSlug: string }>;
 }
 
 /**
@@ -23,13 +23,14 @@ interface ContributePageProps {
  * under `(protected)` and is a signed-in contributor's view (rule 18).
  */
 export async function generateMetadata({ params }: ContributePageProps): Promise<Metadata> {
-  const result = await getDevtunnelProjectBySlug(params.projectSlug);
+  const { projectSlug } = await params;
+  const result = await getDevtunnelProjectBySlug(projectSlug);
   const name = result.status === "ok" ? result.data.name : "this project";
 
   return buildMetadata({
     title: `Contribute to ${name}`,
     description: `Ways to contribute to ${name} on DevTunnel — open tasks, the contribution types this project takes, and how to get a pull request merged.`,
-    path: `/projects/${params.projectSlug}/contribute`,
+    path: `/projects/${projectSlug}/contribute`,
     noIndex: true,
   });
 }
@@ -64,7 +65,8 @@ export async function generateMetadata({ params }: ContributePageProps): Promise
  * the information most likely to make someone want to join.
  */
 export default async function ProjectContributePage({ params }: ContributePageProps) {
-  const result = await getDevtunnelProjectBySlug(params.projectSlug);
+  const { projectSlug } = await params;
+  const result = await getDevtunnelProjectBySlug(projectSlug);
 
   if (result.status === "not-found") {
     notFound();

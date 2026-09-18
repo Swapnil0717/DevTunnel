@@ -57,7 +57,7 @@ export default async function AdminProtectedLayout({
   children: React.ReactNode;
 }) {
   const user = await getServerUser();
-  const pathname = headers().get("x-pathname") ?? "/admin";
+  const pathname = (await headers()).get("x-pathname") ?? "/admin";
 
   if (!user || !isAdmin(user)) {
     redirect(`/admin/login?next=${encodeURIComponent(pathname)}`);

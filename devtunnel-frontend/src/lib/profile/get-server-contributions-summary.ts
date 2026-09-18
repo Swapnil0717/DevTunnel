@@ -17,7 +17,7 @@ import type { ContributionSummary } from "./types";
 export async function getServerContributionsSummary(): Promise<ContributionSummary | null> {
   try {
     const res = await fetch(`${API_BASE_URL}/users/me/contributions/summary`, {
-      headers: { cookie: cookies().toString() },
+      headers: { cookie: (await cookies()).toString() },
       cache: "no-store",
     });
 

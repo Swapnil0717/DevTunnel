@@ -10,6 +10,6 @@ function parseViewMode(raw: string | undefined): ViewMode | null {
  * Server-side read. Import this only from Server Components /
  * route handlers / server actions — it pulls in `next/headers`.
  */
-export function getServerViewMode(): ViewMode | null {
-  return parseViewMode(cookies().get(VIEW_MODE_COOKIE)?.value);
+export async function getServerViewMode(): Promise<ViewMode | null> {
+  return parseViewMode((await cookies()).get(VIEW_MODE_COOKIE)?.value);
 }

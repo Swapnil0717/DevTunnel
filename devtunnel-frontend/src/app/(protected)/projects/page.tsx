@@ -22,7 +22,7 @@ export const metadata: Metadata = buildMetadata({
 
 interface ProjectsPageProps {
   /** `?recommended=true` — the `RecommendedProjectsSection` "See all" link on `/home`. */
-  searchParams?: { recommended?: string };
+  searchParams?: Promise<{ recommended?: string }>;
 }
 
 /**
@@ -54,8 +54,9 @@ interface ProjectsPageProps {
  * (and therefore no Suspense boundary) is needed just to support it.
  */
 export default async function ProjectsPage({ searchParams }: ProjectsPageProps) {
+  const resolvedSearchParams = await searchParams;
   const result = await getRecommendedProjects();
-  const initialShowFilter = searchParams?.recommended === "true" ? "RECOMMENDED" : "ALL";
+  const initialShowFilter = resolvedSearchParams?.recommended === "true" ? "RECOMMENDED" : "ALL";
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">

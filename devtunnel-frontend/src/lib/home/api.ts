@@ -32,7 +32,7 @@ type FetchResult<T> =
 
 async function fetchFromApi<T>(path: string): Promise<FetchResult<T>> {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const response = await fetch(`${API_BASE_URL}${path}`, {
       headers: { Cookie: cookieStore.toString() },
       cache: "no-store",

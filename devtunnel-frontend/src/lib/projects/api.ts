@@ -28,7 +28,7 @@ export async function getDevtunnelProjectBySlug(
 ): Promise<DevtunnelProjectResult> {
   try {
     const res = await fetch(`${API_BASE_URL}/projects/${encodeURIComponent(slug)}`, {
-      headers: { cookie: cookies().toString() },
+      headers: { cookie: (await cookies()).toString() },
       cache: "no-store",
     });
 

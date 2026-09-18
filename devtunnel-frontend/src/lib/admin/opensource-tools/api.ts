@@ -52,7 +52,7 @@ export async function getAdminOpenSourceToolDetail(
 ): Promise<AdminOpenSourceToolDetailResult> {
   try {
     const res = await fetch(`${API_BASE_URL}/admin/opensource-tools/${id}`, {
-      headers: { cookie: cookies().toString() },
+      headers: { cookie: (await cookies()).toString() },
       cache: "no-store",
     });
 

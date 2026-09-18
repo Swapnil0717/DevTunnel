@@ -14,7 +14,7 @@ import { RequestToolOnboardingButton } from "@/components/github-open-source-too
 import { StarButton } from "@/components/github-open-source-tools/star-button";
 
 interface GithubToolDetailPageProps {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }
 
 /**
@@ -29,7 +29,8 @@ interface GithubToolDetailPageProps {
 export async function generateMetadata({
   params,
 }: GithubToolDetailPageProps): Promise<Metadata> {
-  const result = await getGithubOpenSourceToolBySlug(params.slug);
+  const { slug } = await params;
+  const result = await getGithubOpenSourceToolBySlug(slug);
   const title = result.status === "ok" ? result.data.name : "Open Source Tool";
 
   return buildMetadata({
@@ -38,7 +39,7 @@ export async function generateMetadata({
       result.status === "ok"
         ? `${result.data.repositoryFullName} on GitHub — README, open issues, and tool info.`
         : "View this open-source developer tool.",
-    path: `/github-open-source-tools/${params.slug}`,
+    path: `/github-open-source-tools/${slug}`,
     noIndex: true,
   });
 }
@@ -79,7 +80,8 @@ export async function generateMetadata({
  * `/github-projects` — this is the tools catalog's own detail view.
  */
 export default async function GithubToolDetailPage({ params }: GithubToolDetailPageProps) {
-  const result = await getGithubOpenSourceToolBySlug(params.slug);
+  const { slug } = await params;
+  const result = await getGithubOpenSourceToolBySlug(slug);
 
   if (result.status === "not-found") {
     notFound();

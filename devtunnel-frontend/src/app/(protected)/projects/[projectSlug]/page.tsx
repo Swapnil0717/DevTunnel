@@ -15,7 +15,7 @@ import { ProjectStarButton } from "@/components/projects/project-star-button";
 import { ContributeButton } from "@/components/projects/contribute-button";
 
 interface ProjectDetailPageProps {
-  params: { projectSlug: string };
+  params: Promise<{ projectSlug: string }>;
 }
 
 /**
@@ -29,7 +29,8 @@ interface ProjectDetailPageProps {
 export async function generateMetadata({
   params,
 }: ProjectDetailPageProps): Promise<Metadata> {
-  const result = await getDevtunnelProjectBySlug(params.projectSlug);
+  const { projectSlug } = await params;
+  const result = await getDevtunnelProjectBySlug(projectSlug);
   const title = result.status === "ok" ? result.data.name : "Project";
 
   return buildMetadata({
@@ -38,7 +39,7 @@ export async function generateMetadata({
       result.status === "ok"
         ? `${result.data.name} on DevTunnel — project info, README, open tasks and issues.`
         : "View this DevTunnel project.",
-    path: `/projects/${params.projectSlug}`,
+    path: `/projects/${projectSlug}`,
     noIndex: true,
   });
 }
@@ -78,7 +79,8 @@ export async function generateMetadata({
  * real page renders.
  */
 export default async function ProjectDetailPage({ params }: ProjectDetailPageProps) {
-  const result = await getDevtunnelProjectBySlug(params.projectSlug);
+  const { projectSlug } = await params;
+  const result = await getDevtunnelProjectBySlug(projectSlug);
 
   if (result.status === "not-found") {
     notFound();

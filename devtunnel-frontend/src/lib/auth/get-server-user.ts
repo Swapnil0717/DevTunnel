@@ -18,7 +18,7 @@ import type { AuthUser } from "./types";
 export async function getServerUser(): Promise<AuthUser | null> {
   try {
     const res = await fetch(`${API_BASE_URL}/auth/me`, {
-      headers: { cookie: cookies().toString() },
+      headers: { cookie: (await cookies()).toString() },
       cache: "no-store",
     });
 
