@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AuthUser, OnboardingData, UserRow } from "../types";
+import type { AuthUser, OnboardingData, ProfileUpdateData, UserRow } from "../types";
 import type { GitHubIdentity } from "../lib/github";
 import { randomToken } from "../lib/crypto";
 import { logger } from "../lib/logger";
@@ -144,4 +144,97 @@ export async function completeOnboarding(
   }
 
   return row;
+}
+
+/**
+ * Updates the account-settings-page-editable subset of a user's profile
+ * (display name + bio). Only ever called for the currently-authenticated
+ * user's own id — see routes/settings.ts, where `userId` comes from
+ * `requireAuth`, never from the request body (rule 12: authorization must
+ * be explicit and separate from authentication — same posture as
+ * `completeOnboarding` above).
+ *
+ * Empty strings are normalized to `null` (matches `completeOnboarding`'s
+ * treatment of `bio`), so clearing a field in the form actually clears the
+ * column instead of persisting an empty string.
+ */
+export async function updateProfile(
+  supabase: SupabaseClient,
+  userId: string,
+  data: ProfileUpdateData,
+): Promise<UserRow> {
+  const { data: row, error } = await supabase
+    .from("users")
+    .update({
+      name: data.name && data.name.length > 0 ? data.name : null,
+      bio: data.bio && data.bio.length > 0 ? data.bio : null,
+    })
+    .eq("id", userId)
+    .select()
+    .single<UserRow>();
+
+  if (error || !row) {
+    throw new Error(`Failed to update profile: ${error?.message ?? "no row returned"}`);
+  }
+
+  return row;
+}
+
+export class DeleteAccountError extends Error {
+  code: "not_found" | "already_deleted";
+
+  constructor(code: "not_found" | "already_deleted", message: string) {
+    super(message);
+    this.name = "DeleteAccountError";
+    this.code = code;
+  }
+}
+
+export interface DeleteAccountResult {
+  id: string;
+  deletedAt: string;
+}
+
+/**
+ * Soft-deletes the caller's own account — backs `DELETE /settings/account`.
+ *
+ * Delegates to the atomic `devtunnel.delete_own_account` Postgres function
+ * (sql/035_add_settings.sql) so the existence check, already-deleted
+ * check, and the `deleted_at` update happen in one transaction with the
+ * row locked for the duration — same pattern as `deleteAdminProject` in
+ * db/adminProjects.ts. Never issues a physical `DELETE`: other tables
+ * (projects.created_by, tasks, submissions, ...) reference this user, and
+ * a hard delete would either cascade away that history or fail outright
+ * on the foreign keys that don't cascade (rule 85/86).
+ *
+ * Session revocation is deliberately NOT done here — it's a different
+ * concern (sessions table, not users table) and the caller
+ * (routes/settings.ts) already has the raw session token it needs to also
+ * clear the browser's cookie, so it revokes every session for this user
+ * right after this call succeeds.
+ */
+export async function deleteOwnAccount(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<DeleteAccountResult> {
+  const { data, error } = await supabase.rpc("delete_own_account", {
+    p_user_id: userId,
+  });
+
+  if (error) {
+    const message = error.message ?? "";
+    if (message.includes("USER_NOT_FOUND")) {
+      throw new DeleteAccountError("not_found", "Account not found");
+    }
+    if (message.includes("ACCOUNT_ALREADY_DELETED")) {
+      throw new DeleteAccountError("already_deleted", "This account has already been deleted");
+    }
+    throw new Error(`Failed to delete account: ${error.message}`);
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) {
+    throw new Error("delete_own_account returned no row");
+  }
+  return { id: row.id, deletedAt: row.deleted_at };
 }

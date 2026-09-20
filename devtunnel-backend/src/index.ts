@@ -16,6 +16,7 @@ import { openSourceTools } from "./routes/openSourceTools";
 import { tasks } from "./routes/tasks";
 import { contribute } from "./routes/contribute";
 import { submissions } from "./routes/submissions";
+import { settings } from "./routes/settings";
 import { admin } from "./routes/admin/index";
 import { runDailyDiscovery } from "./lib/aiDiscoveryAgent";
 import { warmGithubCatalogs, warmContributorIssuesScan } from "./lib/cacheWarmers";
@@ -45,6 +46,7 @@ app.route("/", openSourceTools);
 app.route("/", tasks);
 app.route("/", contribute);
 app.route("/", submissions);
+app.route("/", settings);
 app.route("/admin", admin);
 
 app.onError(handleError);

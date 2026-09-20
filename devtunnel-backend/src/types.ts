@@ -168,6 +168,41 @@ export interface UserRow {
   github_access_token_expires_at: string | null;
   github_refresh_token_encrypted: string | null;
   github_refresh_token_expires_at: string | null;
+  /**
+   * Soft-delete marker (sql/035_add_settings.sql). Null for every active
+   * account. Set only by `devtunnel.delete_own_account` — never assigned
+   * directly from application code (rule 86: soft-delete mutations stay
+   * behind a single guarded RPC, same as devtunnel.projects.deleted_at).
+   */
+  deleted_at: string | null;
+}
+
+/**
+ * `devtunnel.notification_preferences` row (sql/035_add_settings.sql).
+ * One row per user, created lazily on first write — see
+ * db/notificationPreferences.ts `getNotificationPreferences`, which
+ * returns the column defaults below when no row exists yet rather than
+ * requiring a pre-seeded row for every account.
+ */
+export interface NotificationPreferencesRow {
+  user_id: string;
+  issue_assigned: boolean;
+  review_requested: boolean;
+  weekly_digest: boolean;
+  updated_at: string;
+}
+
+/** Frontend-safe shape — mirrors devtunnel-frontend/src/lib/settings/types.ts. */
+export interface NotificationPreferences {
+  issueAssigned: boolean;
+  reviewRequested: boolean;
+  weeklyDigest: boolean;
+}
+
+/** Validated payload for `PATCH /settings/profile`. */
+export interface ProfileUpdateData {
+  name: string | null;
+  bio: string | null;
 }
 
 export interface SessionRow {

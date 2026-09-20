@@ -81,6 +81,25 @@ export async function revokeSessionByToken(
   if (error) throw new Error(`Failed to revoke session: ${error.message}`);
 }
 
+/**
+ * Revokes every session belonging to a user — every browser/device, not
+ * just the one making the current request. Used by
+ * `DELETE /settings/account` (routes/settings.ts) right after the account
+ * is soft-deleted (db/users.ts `deleteOwnAccount`), so an already-open
+ * session elsewhere can't keep using a deleted account. Deliberately a
+ * separate call rather than folded into `delete_own_account` — sessions
+ * and users are different tables/concerns, and this mirrors the existing
+ * split between `revokeSessionByToken` (single session) here and the
+ * users-table mutation in db/users.ts.
+ */
+export async function revokeAllSessionsForUser(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
+  const { error } = await supabase.from("sessions").delete().eq("user_id", userId);
+  if (error) throw new Error(`Failed to revoke sessions: ${error.message}`);
+}
+
 export interface SessionUser {
   user: UserRow;
   isMaintainer: boolean;
