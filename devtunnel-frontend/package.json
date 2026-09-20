@@ -25,6 +25,8 @@
     "remark-gfm": "4.0.0"
   },
   "devDependencies": {
+    "@emnapi/core": "^1.11.3",
+    "@emnapi/runtime": "^1.11.3",
     "@opennextjs/cloudflare": "^1.20.6",
     "@types/node": "20.14.9",
     "@types/react": "18.3.3",
