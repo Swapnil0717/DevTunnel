@@ -1,7 +1,7 @@
 // Server Component only — reads request cookies, don't import from client code.
 import { cookies } from "next/headers";
 import { API_BASE_URL } from "@/lib/config";
-import type { Submission, SubmissionListFilters } from "./types";
+import type { Submission, SubmissionDetail, SubmissionListFilters } from "./types";
 import { buildSubmissionsQuery } from "./query";
 
 /**
@@ -44,6 +44,38 @@ export async function getSubmissions(
     if (!res.ok) return { status: "error" };
 
     return { status: "ok", data: (await res.json()) as Submission[] };
+  } catch {
+    return { status: "error" };
+  }
+}
+
+/**
+ * `GET /submissions/:slug` — backs the view page (`/submissions/:slug`)
+ * and the edit page (`/submissions/:slug/edit`).
+ *
+ * Same three outcomes every detail fetch in this app has: a slug that
+ * isn't on the list renders Next's real 404 (`"not-found"`), any other
+ * failure degrades to one honest message (`"error"`) rather than a
+ * fabricated empty page (rule 25), and the request's cookies are
+ * forwarded so it rides the same session — which is also how the backend
+ * knows whether to mark the row `ownedByViewer`.
+ */
+export type SubmissionDetailResult =
+  | { status: "ok"; data: SubmissionDetail }
+  | { status: "not-found" }
+  | { status: "error" };
+
+export async function getSubmissionBySlug(slug: string): Promise<SubmissionDetailResult> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/submissions/${encodeURIComponent(slug)}`, {
+      headers: { cookie: (await cookies()).toString() },
+      cache: "no-store",
+    });
+
+    if (res.status === 404) return { status: "not-found" };
+    if (!res.ok) return { status: "error" };
+
+    return { status: "ok", data: (await res.json()) as SubmissionDetail };
   } catch {
     return { status: "error" };
   }

@@ -63,8 +63,45 @@
    upvoteCount: number;
    recentUpvoteCount: number;
    upvotedByViewer: boolean;
+   /**
+    * True when the signed-in viewer is the person who submitted this. It
+    * decides whether the card and view page offer "Edit" — a display
+    * hint only: the backend re-checks ownership on every edit
+    * (`PUT /submissions/:slug` answers 403 to anyone else).
+    */
+   ownedByViewer: boolean;
  }
- 
+
+ /**
+  * Live GitHub facts the view page shows beside a submission. Read from
+  * GitHub on each view (briefly cached backend-side), never stored with
+  * the submission — see devtunnel-backend `loadGithubStats`.
+  */
+ export interface SubmissionGithubStats {
+   stars: number;
+   forks: number;
+   openIssuesCount: number;
+   license: string | null;
+   createdAt: string;
+   pushedAt: string;
+ }
+
+ /**
+  * `GET /submissions/:slug` — everything the view page (`/submissions/:slug`)
+  * shows. Extends the list row with what the list doesn't carry: the
+  * stored README, the submitter's own description alongside GitHub's, and
+  * the repository's live stats.
+  */
+ export interface SubmissionDetail extends Submission {
+   /** The README as it was when the repository was submitted. */
+   readme: string | null;
+   descriptionSource: SubmissionDescriptionChoice;
+   /** The submitter's own words — kept even when the existing description is the one showing. */
+   customDescription: string | null;
+   /** `null` when the row has no repository or GitHub couldn't be reached — the page then omits the stats panel. */
+   github: SubmissionGithubStats | null;
+ }
+
  export interface SubmissionListFilters {
    sort: SubmissionSort;
    category: SubmissionCategory;

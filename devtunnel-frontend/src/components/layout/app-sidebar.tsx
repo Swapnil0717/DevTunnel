@@ -28,31 +28,30 @@ import { useAuth } from "@/lib/auth/use-auth";
  * (all 9 don't fit a phone-width tab bar), so keep the two lists in sync
  * deliberately rather than assuming they should always match.
  *
- * "Community" (`/submissions`) sits after the four catalog entries and
- * the two task/issue ones, deliberately last before the personal
- * section. The entries above it are things DevTunnel found or curated;
- * Community is the one list contributors fill themselves, and grouping
- * it with the curated catalogs would blur exactly the distinction that
- * page exists to make (see `app/(protected)/submissions/page.tsx`).
+ * Order: Home, then DevTunnel's own curated lists (Projects on
+ * Devtunnel, Open Source Tools on Devtunnel), then Tasks / Issues and
+ * All Issues, then the two live GitHub-wide catalogs (Github Projects,
+ * Github Open source tools — unfiltered GitHub search results,
+ * src/routes/githubProjects.ts and githubOpenSourceTools.ts), then
+ * Community, Profile and Settings. Community (`/submissions`) stays
+ * after every catalog on purpose: it's the one list contributors fill
+ * themselves, and grouping it with the curated or GitHub-wide catalogs
+ * would blur exactly the distinction that page exists to make (see
+ * `app/(protected)/submissions/page.tsx`).
  *
- * The four GitHub/DevTunnel entries are deliberately paired and ordered
- * as two "GitHub-wide catalog, then DevTunnel's own curated list" pairs
- * — Github Open source tools / Github Projects (live, unfiltered GitHub
- * search results, src/routes/githubOpenSourceTools.ts and
- * githubProjects.ts) followed by Open Source Tools on Devtunnel /
- * Projects on Devtunnel (Supabase-backed, admin-onboarded lists) — so
- * the nav itself communicates which two entries are "everything on
- * GitHub" versus which two are "what DevTunnel has specifically
- * curated," rather than interleaving them.
+ * The sidebar is pinned to the viewport (`sticky top-0 h-screen`), so
+ * only the page content scrolls; on a viewport too short to fit every
+ * item the sidebar scrolls inside itself (`overflow-y-auto`) instead of
+ * clipping the account/sign-out footer.
  */
 const NAV_LINKS = [
   { href: "/home", label: "Home", Icon: HomeIcon },
-  { href: "/github-open-source-tools", label: "Github Open source tools", Icon: GridIcon },
-  { href: "/github-projects", label: "Github Projects", Icon: GitBranchIcon },
-  { href: "/opensource-tools", label: "Open Source Tools on Devtunnel", Icon: ToolIcon },
   { href: "/projects", label: "Projects on Devtunnel", Icon: FolderIcon },
+  { href: "/opensource-tools", label: "Open Source Tools on Devtunnel", Icon: ToolIcon },
   { href: "/tasks", label: "Tasks / Issues", Icon: ChecklistIcon },
   { href: "/issues", label: "All Issues", Icon: IssueIcon },
+  { href: "/github-projects", label: "Github Projects", Icon: GitBranchIcon },
+  { href: "/github-open-source-tools", label: "Github Open source tools", Icon: GridIcon },
   { href: "/submissions", label: "Community", Icon: UploadIcon },
   { href: "/profile", label: "Profile", Icon: UserIcon },
   { href: "/settings", label: "Settings", Icon: SettingsIcon },
@@ -63,7 +62,7 @@ export function AppSidebar() {
   const { user } = useAuth();
 
   return (
-    <aside className="hidden w-[208px] shrink-0 flex-col border-r border-border-subtle px-4 py-6 sm:flex">
+    <aside className="sticky top-0 hidden h-screen w-[208px] shrink-0 flex-col self-start overflow-y-auto border-r border-border-subtle px-4 py-6 sm:flex">
       <div className="mb-8 pl-1">
         <Logo />
       </div>

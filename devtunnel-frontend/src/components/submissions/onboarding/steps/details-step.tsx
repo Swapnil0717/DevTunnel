@@ -36,15 +36,27 @@ import type {
  * one product is required when it's on — a bare "alternative to paid
  * software" badge with nothing behind it is a claim the card can't show
  * and the filter can't justify (rule 38).
+ *
+ * Also the body of the edit page for a published submission
+ * (`EditSubmissionForm`), which offers the same three things. Two
+ * optional props let it reuse this step without wrong copy: `showHeading`
+ * hides the wizard's own title (the edit page has its own), and
+ * `techStackHint` replaces the "Detected from the repository" line — on
+ * an edit the current tags are the submitter's choices, not a detection
+ * result. Both default to the wizard's behaviour, unchanged.
  */
 export function DetailsStep({
   source,
   value,
   onChange,
+  showHeading = true,
+  techStackHint,
 }: {
   source: SubmissionDraftSource;
   value: SubmissionDraftDetails;
   onChange: (next: SubmissionDraftDetails) => void;
+  showHeading?: boolean;
+  techStackHint?: string;
 }) {
   const textareaId = useId();
 
@@ -57,11 +69,15 @@ export function DetailsStep({
 
   return (
     <div>
-      <h1 className="m-0 mb-1 text-[16px] font-medium text-text">Description and tech stack</h1>
-      <p className="m-0 mb-6 max-w-[520px] text-[13px] leading-[1.6] text-text-muted">
-        How this appears on the community list. What GitHub returned is
-        never rewritten — a custom description sits alongside it.
-      </p>
+      {showHeading ? (
+        <>
+          <h1 className="m-0 mb-1 text-[16px] font-medium text-text">Description and tech stack</h1>
+          <p className="m-0 mb-6 max-w-[520px] text-[13px] leading-[1.6] text-text-muted">
+            How this appears on the community list. What GitHub returned is
+            never rewritten — a custom description sits alongside it.
+          </p>
+        </>
+      ) : null}
 
       <section className="mb-6 rounded-[10px] border border-border bg-surface p-5">
         <p className="m-0 mb-1 text-[11px] uppercase tracking-wide text-text-faint">
@@ -120,9 +136,10 @@ export function DetailsStep({
       <section className="mt-8">
         <h2 className="m-0 mb-1 text-[13.5px] font-medium text-text">Tech stack</h2>
         <p className="m-0 mb-3 text-[12.5px] text-text-muted">
-          {source.detectedTechStack.length > 0
-            ? "Detected from the repository. Correct anything that's wrong — this is what people filter by."
-            : "Nothing was detected from the repository. Add what it's built with — this is what people filter by."}
+          {techStackHint ??
+            (source.detectedTechStack.length > 0
+              ? "Detected from the repository. Correct anything that's wrong — this is what people filter by."
+              : "Nothing was detected from the repository. Add what it's built with — this is what people filter by.")}
         </p>
 
         <TagInput

@@ -1,10 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { GitBranchIcon, ToolIcon, FolderIcon } from "@/components/layout/nav-icons";
+import Link from "next/link";
+import { RepoLogo } from "@/components/admin/repo-logo";
+import {
+  EditIcon,
+  GitBranchIcon,
+  ToolIcon,
+  FolderIcon,
+} from "@/components/layout/nav-icons";
 import { getTechTagClasses } from "@/lib/home/tag-style";
 import { formatRelativeTime } from "@/lib/home/format-relative-time";
-import { SubmissionsApiError, setSubmissionUpvote } from "@/lib/submissions/client-api";
+import { useSubmissionUpvote } from "@/lib/submissions/use-submission-upvote";
 import type { Submission } from "@/lib/submissions/types";
 
 /**
@@ -20,48 +26,31 @@ import type { Submission } from "@/lib/submissions/types";
  *
  * Kind is a word next to its icon, not the icon alone (rule 43).
  *
- * The upvote button writes through to the API and renders the count the
- * server returns rather than incrementing locally, since that number is
- * what the Popular and Trending sorts order by — a card showing a count
- * one higher than the sort used would be quietly wrong (rule 38). It
- * updates optimistically and reverts on failure, so a slow network reads
- * as "nothing happened" rather than "it worked, then didn't".
+ * The upvote button's behaviour lives in `useSubmissionUpvote`, shared
+ * with the view page: it writes through to the API and renders the count
+ * the server returns rather than incrementing locally (rule 38).
+ *
+ * The logo is the repository owner's GitHub avatar (`RepoLogo` — GitHub
+ * has no per-repository logo, so it derives the real image from
+ * `repositoryFullName` the same way the GitHub Projects cards do), with
+ * its branch-icon placeholder when there's no repository or the avatar
+ * fails to load — never a blank box.
+ *
+ * The name opens the submission's own view page (`/submissions/:slug`),
+ * and the repository link in the footer still goes straight to GitHub.
+ * "Edit" appears only on the viewer's own submissions
+ * (`ownedByViewer`) and links to the edit page; the backend enforces
+ * ownership independently, so this is a convenience, not the guard.
  */
 export function SubmissionCard({ submission }: { submission: Submission }) {
-  const [upvoted, setUpvoted] = useState(submission.upvotedByViewer);
-  const [count, setCount] = useState(submission.upvoteCount);
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { upvoted, count, isSaving, error, toggle: toggleUpvote } = useSubmissionUpvote(
+    submission.slug,
+    submission.upvotedByViewer,
+    submission.upvoteCount,
+  );
 
   const KindIcon = submission.kind === "TOOL" ? ToolIcon : FolderIcon;
-
-  async function toggleUpvote() {
-    if (isSaving) return;
-
-    const next = !upvoted;
-    const previousCount = count;
-
-    setIsSaving(true);
-    setError(null);
-    setUpvoted(next);
-    setCount((current) => current + (next ? 1 : -1));
-
-    try {
-      const status = await setSubmissionUpvote(submission.slug, next);
-      setUpvoted(status.upvotedByViewer);
-      setCount(status.upvoteCount);
-    } catch (err) {
-      setUpvoted(!next);
-      setCount(previousCount);
-      setError(
-        err instanceof SubmissionsApiError && err.status === 429
-          ? "Slow down a moment, then try again."
-          : "Couldn't record your vote.",
-      );
-    } finally {
-      setIsSaving(false);
-    }
-  }
+  const viewHref = `/submissions/${submission.slug}`;
 
   return (
     <li className="flex gap-3 rounded-[10px] border border-border-subtle bg-surface-raised p-4 transition-colors hover:border-border">
@@ -88,16 +77,18 @@ export function SubmissionCard({ submission }: { submission: Submission }) {
         </span>
       </div>
 
+      <div className="shrink-0 pt-0.5">
+        <RepoLogo repositoryFullName={submission.repositoryFullName ?? ""} size={40} />
+      </div>
+
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-          <a
-            href={submission.sourceUrl}
-            target="_blank"
-            rel="noreferrer noopener"
+          <Link
+            href={viewHref}
             className="text-[13.5px] font-medium text-text hover:text-accent"
           >
             {submission.name}
-          </a>
+          </Link>
           <span className="inline-flex items-center gap-1 text-[11px] text-text-faint">
             <KindIcon className="h-3 w-3 shrink-0" />
             {submission.kind === "TOOL" ? "Tool" : "Project"}
@@ -107,6 +98,25 @@ export function SubmissionCard({ submission }: { submission: Submission }) {
               Alternative to {submission.alternativeTo.join(", ")}
             </span>
           ) : null}
+
+          <span className="ml-auto flex items-center gap-2 text-[11.5px]">
+            <Link
+              href={viewHref}
+              className="rounded-[6px] border border-border-subtle px-2 py-1 text-text-dim transition-colors hover:border-border hover:text-text"
+            >
+              View
+            </Link>
+            {submission.ownedByViewer ? (
+              <Link
+                href={`${viewHref}/edit`}
+                aria-label={`Edit ${submission.name}`}
+                className="inline-flex items-center gap-1 rounded-[6px] border border-border-subtle px-2 py-1 text-text-dim transition-colors hover:border-border hover:text-text"
+              >
+                <EditIcon className="h-3 w-3 shrink-0" />
+                Edit
+              </Link>
+            ) : null}
+          </span>
         </div>
 
         {submission.description ? (

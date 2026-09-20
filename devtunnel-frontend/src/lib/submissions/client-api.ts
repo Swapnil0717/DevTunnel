@@ -6,6 +6,7 @@ import { API_BASE_URL } from "@/lib/config";
 import type {
   CreatedSubmission,
   Submission,
+  SubmissionDetail,
   SubmissionDraft,
   SubmissionDraftDetails,
   SubmissionKind,
@@ -85,6 +86,30 @@ export async function setSubmissionUpvote(
   });
   if (!res.ok) throw await parseError(res);
   return (await res.json()) as SubmissionUpvoteStatus;
+}
+
+/**
+ * `PUT /submissions/:slug` — saves an edit to a published submission's
+ * details (the same description / tech stack / paid-alternative fields
+ * the submit wizard's step 2 collects).
+ *
+ * Owner-only on the backend: rejects with `SubmissionsApiError` status
+ * `403` (code `forbidden`) for anyone but the person who submitted it, so
+ * hiding the Edit button is a courtesy and never the protection. Resolves
+ * with the row as the server stored it.
+ */
+export async function updateSubmissionDetails(
+  slug: string,
+  details: SubmissionDraftDetails,
+): Promise<SubmissionDetail> {
+  const res = await fetch(`${API_BASE_URL}/submissions/${encodeURIComponent(slug)}`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(details),
+  });
+  if (!res.ok) throw await parseError(res);
+  return (await res.json()) as SubmissionDetail;
 }
 
 /* -------------------------------------------------------------------------
