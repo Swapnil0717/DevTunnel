@@ -4,8 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * Community submissions — `devtunnel.user_submission_list` and
  * `devtunnel.user_submission_upvotes` (sql/028).
  *
- * Backs `GET /submissions` and the two upvote routes
- * (src/routes/submissions.ts). Reads the view, not the base table, for
+ * Backs `GET /submissions`, `GET /submissions/:slug`, `PUT /submissions/:slug`
+ * and the two upvote routes (src/routes/submissions.ts). Reads the view, not the base table, for
  * the same reason src/db/tasks.ts reads `admin_task_list`: the upvote
  * counts the sorts depend on are defined once, in SQL, rather than
  * recomputed slightly differently by every caller.
@@ -55,6 +55,13 @@ export interface SubmissionSummary {
   recentUpvoteCount: number;
   /** Per-viewer, layered on by `markViewerUpvotes` — never cached with the row. */
   upvotedByViewer: boolean;
+  /**
+   * Per-viewer, layered on by `markViewerUpvotes`: true when the viewer is
+   * the person who submitted this. It's what lets the UI offer "Edit" to
+   * the owner only — but it is a display hint, not the authorization:
+   * `updateSubmissionDetails` re-checks ownership on every write.
+   */
+  ownedByViewer: boolean;
 }
 
 /**
@@ -146,6 +153,7 @@ function toSummary(row: SubmissionRow): SubmissionSummary {
     upvoteCount: row.upvote_count,
     recentUpvoteCount: row.recent_upvote_count,
     upvotedByViewer: false,
+    ownedByViewer: false,
   };
 }
 
@@ -208,18 +216,20 @@ export async function listSubmissions(
 }
 
 /**
- * Layers "did I upvote this" onto an already-read page.
+ * Layers the two per-viewer facts onto already-read rows: "did I upvote
+ * this" and "is this mine" (`ownedByViewer`, what gates the Edit action).
  *
  * One query for the whole page rather than one per row, and kept
- * separate from `listSubmissions` because it's the only per-viewer part
- * of the payload — the same split every catalog route in this backend
- * uses to keep the shared half cacheable and the personal half not.
+ * separate from `listSubmissions` because these are the only per-viewer
+ * parts of the payload — the same split every catalog route in this
+ * backend uses to keep the shared half cacheable and the personal half
+ * not. Generic so a `SubmissionDetail` keeps its extra fields.
  */
-export async function markViewerUpvotes(
+export async function markViewerUpvotes<T extends SubmissionSummary>(
   supabase: SupabaseClient,
-  submissions: SubmissionSummary[],
+  submissions: T[],
   userId: string,
-): Promise<SubmissionSummary[]> {
+): Promise<T[]> {
   if (submissions.length === 0) return submissions;
 
   const { data, error } = await supabase
@@ -237,7 +247,117 @@ export async function markViewerUpvotes(
   return submissions.map((submission) => ({
     ...submission,
     upvotedByViewer: upvoted.has(submission.id),
+    ownedByViewer: submission.submittedBy.id === userId,
   }));
+}
+
+/**
+ * One submission with everything the view page shows: the list row plus
+ * the stored README and the raw description choice. The README isn't in
+ * `user_submission_list` (it's large, and no list needs it), so it's read
+ * from the base table alongside the view row.
+ */
+export interface SubmissionDetail extends SubmissionSummary {
+  /** The README as it was when the repository was submitted. */
+  readme: string | null;
+  descriptionSource: "EXISTING" | "CUSTOM";
+  /** The submitter's own words, kept even when the existing description is the one showing. */
+  customDescription: string | null;
+}
+
+/** A published submission's full detail, or `null` — which the route turns into a 404. */
+export async function getSubmissionDetail(
+  supabase: SupabaseClient,
+  slug: string,
+): Promise<SubmissionDetail | null> {
+  const [listResult, readmeResult] = await Promise.all([
+    supabase.from("user_submission_list").select(LIST_COLUMNS).eq("slug", slug).maybeSingle(),
+    supabase
+      .from("user_submissions")
+      .select("readme")
+      .eq("slug", slug)
+      .is("removed_at", null)
+      .maybeSingle(),
+  ]);
+
+  if (listResult.error) {
+    throw new Error(`Failed to read submission: ${listResult.error.message}`);
+  }
+  if (readmeResult.error) {
+    throw new Error(`Failed to read submission README: ${readmeResult.error.message}`);
+  }
+
+  const row = listResult.data as unknown as SubmissionRow | null;
+  if (!row) return null;
+
+  return {
+    ...toSummary(row),
+    readme: (readmeResult.data?.readme as string | null | undefined) ?? null,
+    descriptionSource: row.description_source,
+    customDescription: row.custom_description?.trim() || null,
+  };
+}
+
+/** The fields an owner can change after publishing — the same ones the submit wizard's step 2 collects. */
+export interface SubmissionDetailsUpdate {
+  descriptionSource: "EXISTING" | "CUSTOM";
+  customDescription: string | null;
+  techStack: string[];
+  isPaidAlternative: boolean;
+  alternativeTo: string[];
+}
+
+export type UpdateSubmissionResult = "ok" | "not_found" | "forbidden";
+
+/**
+ * Edits a published submission's details — for the person who submitted
+ * it, and nobody else.
+ *
+ * Ownership is enforced here, in the write itself, not left to the caller
+ * or to the UI hiding a button: the row is read first so a stranger gets
+ * `"forbidden"` (rather than a misleading `"not_found"`), and the update
+ * then repeats `submitted_by = userId` in its own `where`, so even a race
+ * between the read and the write can't let another user's edit through.
+ *
+ * Only what the wizard's details step collects is writable. The name,
+ * source URL, repository, kind and README are facts about the repository
+ * that were fetched, not chosen, and stay exactly as they were.
+ */
+export async function updateSubmissionDetails(
+  supabase: SupabaseClient,
+  slug: string,
+  userId: string,
+  details: SubmissionDetailsUpdate,
+): Promise<UpdateSubmissionResult> {
+  const { data: existing, error: readError } = await supabase
+    .from("user_submissions")
+    .select("id, submitted_by")
+    .eq("slug", slug)
+    .is("removed_at", null)
+    .maybeSingle();
+
+  if (readError) throw new Error(`Failed to read submission: ${readError.message}`);
+  if (!existing) return "not_found";
+  if (existing.submitted_by !== userId) return "forbidden";
+
+  const { data: updated, error: updateError } = await supabase
+    .from("user_submissions")
+    .update({
+      description_source: details.descriptionSource,
+      custom_description: details.customDescription,
+      tech_stack: details.techStack,
+      is_paid_alternative: details.isPaidAlternative,
+      alternative_to: details.alternativeTo,
+    })
+    .eq("id", existing.id)
+    .eq("submitted_by", userId)
+    .is("removed_at", null)
+    .select("id");
+
+  if (updateError) throw new Error(`Failed to update submission: ${updateError.message}`);
+  if (!updated || updated.length === 0) return "not_found";
+
+  return "ok";
 }
 
 /** One published submission by slug, or `null` — which the routes turn into a 404. */
