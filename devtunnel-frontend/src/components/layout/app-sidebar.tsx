@@ -18,6 +18,7 @@ import {
   UserIcon,
   SettingsIcon,
 } from "./nav-icons";
+import { SignInLink } from "../auth/sign-in-link";
 import { useAuth } from "@/lib/auth/use-auth";
 
 /**
@@ -37,7 +38,13 @@ import { useAuth } from "@/lib/auth/use-auth";
  * after every catalog on purpose: it's the one list contributors fill
  * themselves, and grouping it with the curated or GitHub-wide catalogs
  * would blur exactly the distinction that page exists to make (see
- * `app/(protected)/submissions/page.tsx`).
+ * `app/(public)/submissions/page.tsx`).
+ *
+ * Signed-out visitors (the catalog pages are public) get the same list
+ * minus the account-only entries — Home, Profile and Settings all live
+ * behind sign-in — and a "Sign in with GitHub" link in place of the
+ * avatar/sign-out footer, so the shell never offers a link that would just
+ * bounce them to /login.
  *
  * The sidebar is pinned to the viewport (`sticky top-0 h-screen`), so
  * only the page content scrolls; on a viewport too short to fit every
@@ -45,21 +52,27 @@ import { useAuth } from "@/lib/auth/use-auth";
  * clipping the account/sign-out footer.
  */
 const NAV_LINKS = [
-  { href: "/home", label: "Home", Icon: HomeIcon },
-  { href: "/projects", label: "Projects on Devtunnel", Icon: FolderIcon },
-  { href: "/opensource-tools", label: "Open Source Tools on Devtunnel", Icon: ToolIcon },
-  { href: "/tasks", label: "Tasks / Issues", Icon: ChecklistIcon },
-  { href: "/issues", label: "All Issues", Icon: IssueIcon },
-  { href: "/github-projects", label: "Github Projects", Icon: GitBranchIcon },
-  { href: "/github-open-source-tools", label: "Github Open source tools", Icon: GridIcon },
-  { href: "/submissions", label: "Community", Icon: UploadIcon },
-  { href: "/profile", label: "Profile", Icon: UserIcon },
-  { href: "/settings", label: "Settings", Icon: SettingsIcon },
+  { href: "/home", label: "Home", Icon: HomeIcon, requiresAccount: true },
+  { href: "/projects", label: "Projects on Devtunnel", Icon: FolderIcon, requiresAccount: false },
+  { href: "/opensource-tools", label: "Open Source Tools on Devtunnel", Icon: ToolIcon, requiresAccount: false },
+  { href: "/tasks", label: "Tasks / Issues", Icon: ChecklistIcon, requiresAccount: false },
+  { href: "/issues", label: "All Issues", Icon: IssueIcon, requiresAccount: false },
+  { href: "/github-projects", label: "Github Projects", Icon: GitBranchIcon, requiresAccount: false },
+  { href: "/github-open-source-tools", label: "Github Open source tools", Icon: GridIcon, requiresAccount: false },
+  { href: "/submissions", label: "Community", Icon: UploadIcon, requiresAccount: false },
+  { href: "/profile", label: "Profile", Icon: UserIcon, requiresAccount: true },
+  { href: "/settings", label: "Settings", Icon: SettingsIcon, requiresAccount: true },
 ] as const;
+
+type NavLink = (typeof NAV_LINKS)[number];
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, status } = useAuth();
+  const isSignedOut = !user && status === "unauthenticated";
+  const links: readonly NavLink[] = isSignedOut
+    ? NAV_LINKS.filter((link) => !link.requiresAccount)
+    : NAV_LINKS;
 
   return (
     <aside className="sticky top-0 hidden h-screen w-[208px] shrink-0 flex-col self-start overflow-y-auto border-r border-border-subtle px-4 py-6 sm:flex">
@@ -69,7 +82,7 @@ export function AppSidebar() {
 
       <nav aria-label="Primary" className="flex-1">
         <ul className="flex flex-col gap-1.5 list-none p-0 m-0">
-          {NAV_LINKS.map(({ href, label, Icon }) => {
+          {links.map(({ href, label, Icon }) => {
             const isActive = pathname === href || pathname?.startsWith(`${href}/`);
             return (
               <li key={href}>
@@ -93,23 +106,31 @@ export function AppSidebar() {
 
       <PortalSwitchLink from="user" className="mb-2 w-full justify-center" />
 
-      <div className="flex items-center gap-2.5 border-t border-border-subtle pt-4">
-        {user?.avatarUrl ? (
-          <img
-            src={user.avatarUrl}
-            alt={`${user.name || user.username}'s avatar`}
-            className="h-8 w-8 shrink-0 rounded-full"
-          />
-        ) : (
-          <span
-            aria-hidden="true"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-raised text-xs font-medium text-text-dim"
-          >
-            {(user?.name || user?.username || "?").charAt(0).toUpperCase()}
-          </span>
-        )}
-        <LogoutButton className="!px-2.5 !py-2 !text-xs w-full" />
-      </div>
+      {isSignedOut ? (
+        <div className="border-t border-border-subtle pt-4">
+          <SignInLink variant="solid" className="w-full justify-center">
+            Sign in with GitHub
+          </SignInLink>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2.5 border-t border-border-subtle pt-4">
+          {user?.avatarUrl ? (
+            <img
+              src={user.avatarUrl}
+              alt={`${user.name || user.username}'s avatar`}
+              className="h-8 w-8 shrink-0 rounded-full"
+            />
+          ) : (
+            <span
+              aria-hidden="true"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-raised text-xs font-medium text-text-dim"
+            >
+              {(user?.name || user?.username || "?").charAt(0).toUpperCase()}
+            </span>
+          )}
+          <LogoutButton className="!px-2.5 !py-2 !text-xs w-full" />
+        </div>
+      )}
     </aside>
   );
 }

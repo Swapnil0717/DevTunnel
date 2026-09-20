@@ -13,7 +13,14 @@ const PROTECTED_PREFIXES = [
   "/profile",
   "/settings",
   "/onboarding",
+  // Creating/editing a community submission needs an account. Viewing one
+  // (`/submissions`, `/submissions/:slug`) is public and deliberately NOT
+  // listed — see `app/(public)/layout.tsx`.
+  "/submissions/new",
 ];
+
+// `/submissions/:slug/edit` — a dynamic segment, so it can't be a prefix.
+const PROTECTED_PATH_PATTERNS = [/^\/submissions\/[^/]+\/edit$/];
 
 const ADMIN_PREFIX = "/admin";
 const ADMIN_LOGIN_PATH = "/admin/login";
@@ -34,6 +41,9 @@ export function middleware(
       (prefix) =>
         pathname === prefix ||
         pathname.startsWith(`${prefix}/`),
+    ) ||
+    PROTECTED_PATH_PATTERNS.some((pattern) =>
+      pattern.test(pathname),
     );
 
   if (
@@ -109,6 +119,8 @@ export const config = {
     "/profile/:path*",
     "/settings/:path*",
     "/onboarding/:path*",
+    "/submissions/new",
+    "/submissions/:slug/edit",
     "/admin/:path*",
   ],
 };

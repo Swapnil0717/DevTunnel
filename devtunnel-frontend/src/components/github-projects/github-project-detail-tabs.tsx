@@ -62,6 +62,14 @@ const TABS = [
  * this component because their detail shape is identical, but each has
  * its own `.../:slug/issues` route for the full list. Same "which
  * catalog am I in" prop `GithubProjectCard` takes as `basePath`.
+ *
+ * Every panel is rendered into the page and the inactive ones simply carry
+ * the `hidden` attribute, instead of mounting only the active tab's panel.
+ * The tabs are an enhancement over content that's already there: the
+ * server-rendered HTML contains all of it, so a crawler, a reader with
+ * JavaScript delayed or off, and an AI system reading the page all see the
+ * README, tasks and setup text — not just whichever tab happened to be
+ * selected first (Frontend_Development_Rules.txt rules 3 and 28).
  */
 export function GithubProjectDetailTabs({
   project,
@@ -123,108 +131,104 @@ export function GithubProjectDetailTabs({
         })}
       </div>
 
-      {activeId === "info" ? (
-        <div
-          role="tabpanel"
-          id="project-panel-info"
-          aria-labelledby="project-tab-info"
-          className="rounded-[10px] border border-border bg-surface p-5"
-        >
-          <div className="grid grid-cols-1 gap-x-6 gap-y-3 text-[12.5px] sm:grid-cols-[140px_1fr]">
-            <span className="text-text-faint">Description</span>
-            <span className="text-text-secondary">
-              {project.description ?? "No description provided."}
-            </span>
+      <div
+        hidden={activeId !== "info"}
+        role="tabpanel"
+        id="project-panel-info"
+        aria-labelledby="project-tab-info"
+        className="rounded-[10px] border border-border bg-surface p-5"
+      >
+        <div className="grid grid-cols-1 gap-x-6 gap-y-3 text-[12.5px] sm:grid-cols-[140px_1fr]">
+          <span className="text-text-faint">Description</span>
+          <span className="text-text-secondary">
+            {project.description ?? "No description provided."}
+          </span>
 
-            <span className="text-text-faint">Primary language</span>
-            <span className="text-text-secondary">{project.primaryLanguage ?? "—"}</span>
+          <span className="text-text-faint">Primary language</span>
+          <span className="text-text-secondary">{project.primaryLanguage ?? "—"}</span>
 
-            <span className="text-text-faint">License</span>
-            <span className="text-text-secondary">{project.license ?? "Not specified"}</span>
+          <span className="text-text-faint">License</span>
+          <span className="text-text-secondary">{project.license ?? "Not specified"}</span>
 
-            <span className="text-text-faint">Contributors</span>
-            <span className="text-text-secondary">
-              {project.contributorCount.toLocaleString()}
-            </span>
+          <span className="text-text-faint">Contributors</span>
+          <span className="text-text-secondary">
+            {project.contributorCount.toLocaleString()}
+          </span>
 
-            <span className="text-text-faint">Stars</span>
-            <span className="text-text-secondary">{project.stars.toLocaleString()}</span>
+          <span className="text-text-faint">Stars</span>
+          <span className="text-text-secondary">{project.stars.toLocaleString()}</span>
 
-            <span className="text-text-faint">Forks</span>
-            <span className="text-text-secondary">{project.forks.toLocaleString()}</span>
-          </div>
+          <span className="text-text-faint">Forks</span>
+          <span className="text-text-secondary">{project.forks.toLocaleString()}</span>
+        </div>
 
-          {project.techStack.length > 0 ? (
-            <div className="mt-4 border-t border-border-subtle pt-4">
-              <h3 className="m-0 mb-2 text-[11px] uppercase tracking-wide text-text-faint">
-                Tech stack
-              </h3>
-              <div className="flex flex-wrap gap-1.5">
-                {project.techStack.map((tag) => (
-                  <span
-                    key={tag}
-                    className={`inline-block rounded-[5px] border px-[7px] py-[2px] text-[10.5px] ${getTechTagClasses(tag)}`}
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
+        {project.techStack.length > 0 ? (
+          <div className="mt-4 border-t border-border-subtle pt-4">
+            <h3 className="m-0 mb-2 text-[11px] uppercase tracking-wide text-text-faint">
+              Tech stack
+            </h3>
+            <div className="flex flex-wrap gap-1.5">
+              {project.techStack.map((tag) => (
+                <span
+                  key={tag}
+                  className={`inline-block rounded-[5px] border px-[7px] py-[2px] text-[10.5px] ${getTechTagClasses(tag)}`}
+                >
+                  {tag}
+                </span>
+              ))}
             </div>
-          ) : null}
-        </div>
-      ) : null}
+          </div>
+        ) : null}
+      </div>
 
-      {activeId === "readme" ? (
-        <div
-          role="tabpanel"
-          id="project-panel-readme"
-          aria-labelledby="project-tab-readme"
-          className="rounded-[10px] border border-border bg-surface p-5"
-        >
-          {project.readme ? (
-            <MarkdownReadme content={project.readme} sourceUrl={project.repositoryUrl} />
-          ) : (
-            <GithubEmptyState
-              compact
-              variant="readme"
-              title="No README yet"
-              description="This repository doesn't have a README file. The source is still browsable directly on GitHub."
-              primaryAction={{
-                label: "View source on GitHub",
-                href: project.repositoryUrl,
-                external: true,
-              }}
-            />
-          )}
-        </div>
-      ) : null}
-
-      {activeId === "tasks" ? (
-        <div
-          role="tabpanel"
-          id="project-panel-tasks"
-          aria-labelledby="project-tab-tasks"
-          className="rounded-[10px] border border-border bg-surface p-4"
-        >
+      <div
+        hidden={activeId !== "readme"}
+        role="tabpanel"
+        id="project-panel-readme"
+        aria-labelledby="project-tab-readme"
+        className="rounded-[10px] border border-border bg-surface p-5"
+      >
+        {project.readme ? (
+          <MarkdownReadme content={project.readme} sourceUrl={project.repositoryUrl} />
+        ) : (
           <GithubEmptyState
             compact
-            variant="tasks-locked"
-            title="No DevTunnel tasks yet"
-            description="This repository is still a raw GitHub listing, not a DevTunnel project or tool, so it doesn't have DevTunnel tasks of its own. This task will be available once it's converted into a DevTunnel project or tool — open issues on GitHub are still a great place to start in the meantime."
+            variant="readme"
+            title="No README yet"
+            description="This repository doesn't have a README file. The source is still browsable directly on GitHub."
+            primaryAction={{
+              label: "View source on GitHub",
+              href: project.repositoryUrl,
+              external: true,
+            }}
           />
-        </div>
-      ) : null}
+        )}
+      </div>
 
-      {activeId === "issues" ? (
-        <div
-          role="tabpanel"
-          id="project-panel-issues"
-          aria-labelledby="project-tab-issues"
-          className="rounded-[10px] border border-border bg-surface p-4"
-        >
-          <GithubIssuesPanel loader={issuesLoader} repositoryUrl={project.repositoryUrl} />
-        </div>
-      ) : null}
+      <div
+        hidden={activeId !== "tasks"}
+        role="tabpanel"
+        id="project-panel-tasks"
+        aria-labelledby="project-tab-tasks"
+        className="rounded-[10px] border border-border bg-surface p-4"
+      >
+        <GithubEmptyState
+          compact
+          variant="tasks-locked"
+          title="No DevTunnel tasks yet"
+          description="This repository is still a raw GitHub listing, not a DevTunnel project or tool, so it doesn't have DevTunnel tasks of its own. This task will be available once it's converted into a DevTunnel project or tool — open issues on GitHub are still a great place to start in the meantime."
+        />
+      </div>
+
+      <div
+        hidden={activeId !== "issues"}
+        role="tabpanel"
+        id="project-panel-issues"
+        aria-labelledby="project-tab-issues"
+        className="rounded-[10px] border border-border bg-surface p-4"
+      >
+        <GithubIssuesPanel loader={issuesLoader} repositoryUrl={project.repositoryUrl} />
+      </div>
     </div>
   );
 }

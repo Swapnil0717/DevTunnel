@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
+import { SignInLink } from "@/components/auth/sign-in-link";
+import { useAuth } from "@/lib/auth/use-auth";
 import {
   GithubProjectsApiError,
   requestGithubProjectOnboarding,
@@ -28,6 +30,15 @@ import {
  */
 export function RequestOnboardingButton({ slug }: { slug: string }) {
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+
+  const { user, status: authStatus } = useAuth();
+
+  // Nominating a repository is an account action (the request lands in the
+  // admins' queue under a real user), so a signed-out visitor gets a
+  // sign-in link rather than a button the backend would reject.
+  if (!user && authStatus === "unauthenticated") {
+    return <SignInLink>Sign in to nominate for DevTunnel</SignInLink>;
+  }
 
   async function handleClick() {
     setStatus("loading");

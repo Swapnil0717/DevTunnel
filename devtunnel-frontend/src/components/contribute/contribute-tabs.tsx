@@ -43,6 +43,14 @@ type TabId = (typeof TABS)[number]["id"];
  * is what decides whether the tab gets opened, and it comes from the list
  * itself rather than a separate figure that could disagree with it
  * (rule 38).
+ *
+ * Every panel is rendered into the page and the inactive ones simply carry
+ * the `hidden` attribute, instead of mounting only the active tab's panel.
+ * The tabs are an enhancement over content that's already there: the
+ * server-rendered HTML contains all of it, so a crawler, a reader with
+ * JavaScript delayed or off, and an AI system reading the page all see the
+ * README, tasks and setup text — not just whichever tab happened to be
+ * selected first (Frontend_Development_Rules.txt rules 3 and 28).
  */
 export function ContributeTabs({ target }: { target: ContributeTarget }) {
   const hasTasks = target.tasks.length > 0;
@@ -93,60 +101,56 @@ export function ContributeTabs({ target }: { target: ContributeTarget }) {
         })}
       </div>
 
-      {activeId === "ways" ? (
-        <div
-          role="tabpanel"
-          id="contribute-panel-ways"
-          aria-labelledby="contribute-tab-ways"
-          className="rounded-[10px] border border-border bg-surface p-4"
-        >
-          <ContributionWaysPanel repositoryUrl={target.repositoryUrl} />
-        </div>
-      ) : null}
+      <div
+        hidden={activeId !== "ways"}
+        role="tabpanel"
+        id="contribute-panel-ways"
+        aria-labelledby="contribute-tab-ways"
+        className="rounded-[10px] border border-border bg-surface p-4"
+      >
+        <ContributionWaysPanel repositoryUrl={target.repositoryUrl} />
+      </div>
 
-      {activeId === "tasks" ? (
-        <div
-          role="tabpanel"
-          id="contribute-panel-tasks"
-          aria-labelledby="contribute-tab-tasks"
-          className="rounded-[10px] border border-border bg-surface p-4"
-        >
-          <ContributeTasksPanel
-            targetKind={target.kind}
-            projectSlug={target.slug}
-            tasks={target.tasks}
-            repositoryUrl={target.repositoryUrl}
-          />
-        </div>
-      ) : null}
+      <div
+        hidden={activeId !== "tasks"}
+        role="tabpanel"
+        id="contribute-panel-tasks"
+        aria-labelledby="contribute-tab-tasks"
+        className="rounded-[10px] border border-border bg-surface p-4"
+      >
+        <ContributeTasksPanel
+          targetKind={target.kind}
+          projectSlug={target.slug}
+          tasks={target.tasks}
+          repositoryUrl={target.repositoryUrl}
+        />
+      </div>
 
-      {activeId === "workflow" ? (
-        <div
-          role="tabpanel"
-          id="contribute-panel-workflow"
-          aria-labelledby="contribute-tab-workflow"
-          className="rounded-[10px] border border-border bg-surface p-4"
-        >
-          <ContributeWorkflowPanel
-            steps={workflowSteps}
-            repositoryUrl={target.repositoryUrl}
-            contributingGuideUrl={
-              target.repositoryUrl ? `${target.repositoryUrl}/blob/HEAD/CONTRIBUTING.md` : null
-            }
-          />
-        </div>
-      ) : null}
+      <div
+        hidden={activeId !== "workflow"}
+        role="tabpanel"
+        id="contribute-panel-workflow"
+        aria-labelledby="contribute-tab-workflow"
+        className="rounded-[10px] border border-border bg-surface p-4"
+      >
+        <ContributeWorkflowPanel
+          steps={workflowSteps}
+          repositoryUrl={target.repositoryUrl}
+          contributingGuideUrl={
+            target.repositoryUrl ? `${target.repositoryUrl}/blob/HEAD/CONTRIBUTING.md` : null
+          }
+        />
+      </div>
 
-      {activeId === "cli" ? (
-        <div
-          role="tabpanel"
-          id="contribute-panel-cli"
-          aria-labelledby="contribute-tab-cli"
-          className="rounded-[10px] border border-border bg-surface p-4"
-        >
-          <ContributeCliPanel target={target} />
-        </div>
-      ) : null}
+      <div
+        hidden={activeId !== "cli"}
+        role="tabpanel"
+        id="contribute-panel-cli"
+        aria-labelledby="contribute-tab-cli"
+        className="rounded-[10px] border border-border bg-surface p-4"
+      >
+        <ContributeCliPanel target={target} />
+      </div>
     </div>
   );
 }

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Spinner } from "@/components/ui/spinner";
+import { SignInLink } from "@/components/auth/sign-in-link";
+import { useAuth } from "@/lib/auth/use-auth";
 import { CheckCircleIcon, PlusIcon } from "@/components/layout/nav-icons";
 import {
   OpenSourceToolsApiError,
@@ -52,6 +54,30 @@ export function ContributeToToolButton({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const contributeHref = `/opensource-tools/${slug}/contribute`;
+
+  const { user, status: authStatus } = useAuth();
+
+  // A signed-out visitor can't join, but the contribution guide itself is
+  // public — so keep both: a sign-in link for the join action, and the
+  // plain link to read how to contribute first (rules 10 and 37).
+  if (!user && authStatus === "unauthenticated") {
+    return (
+      <div className="flex flex-col items-start gap-1.5">
+        <SignInLink
+          variant="primary"
+          icon={<PlusIcon className="h-3.5 w-3.5 shrink-0" />}
+        >
+          Sign in to contribute
+        </SignInLink>
+        <a
+          href={contributeHref}
+          className="text-[12px] text-text-faint underline-offset-2 hover:text-accent hover:underline"
+        >
+          {repositoryUrl ? "See how to contribute first" : "See what this tool takes"}
+        </a>
+      </div>
+    );
+  }
 
   async function handleClick() {
     if (status === "loading" || status === "navigating") return;

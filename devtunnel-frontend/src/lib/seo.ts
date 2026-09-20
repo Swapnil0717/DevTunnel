@@ -9,11 +9,25 @@ interface BuildMetadataOptions {
   /** Path starting with "/", used to build the canonical + OG URL. */
   path: string;
   /**
-   * Private / authenticated-only pages (login, callback, dashboard, profile, ...)
-   * must never be indexed (rule 18). Public, content-bearing pages should omit
-   * this so they stay indexable.
+   * Keep this page out of search results. Two distinct reasons use it:
+   *
+   *  - private / authenticated-only pages (login, callback, dashboard,
+   *    profile, ...) must never be indexed (rule 18);
+   *  - public pages that shouldn't be *indexed* even though anyone can open
+   *    them: a page whose data failed to load (nothing but an error message
+   *    — rule 23), a near-identical "how to contribute" view repeated per
+   *    project, or a mirror of third-party GitHub content (rule 24).
+   *
+   * Public, content-bearing pages should omit this so they stay indexable.
    */
   noIndex?: boolean;
+  /**
+   * Whether crawlers may follow links on the page. Defaults to the opposite
+   * of `noIndex` — a private page shouldn't be crawled through, while a
+   * public-but-unindexed page (see `noIndex` above) still links to pages
+   * that *should* be discovered, so pass `true` there.
+   */
+  followLinks?: boolean;
 }
 
 /**
@@ -29,6 +43,7 @@ export function buildMetadata({
   description,
   path,
   noIndex = false,
+  followLinks,
 }: BuildMetadataOptions): Metadata {
   const url = `${SITE_URL}${path}`;
 
@@ -52,9 +67,10 @@ export function buildMetadata({
       description,
       images: [`${SITE_URL}/logo.png`],
     },
-    robots: noIndex
-      ? { index: false, follow: false }
-      : { index: true, follow: true },
+    robots: {
+      index: !noIndex,
+      follow: followLinks ?? !noIndex,
+    },
   };
 }
 

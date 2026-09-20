@@ -7,7 +7,7 @@ import { Logo } from "@/components/layout/logo";
 /**
  * Root error boundary — catches any uncaught render/runtime exception in
  * `/`, `/login`, `/auth/callback`, and anywhere else outside the
- * `(protected)` and `admin/(protected)` groups (each of those has its own
+ * `(protected)`, `(public)` and `admin/(protected)` groups (each of those has its own
  * `error.tsx` below, so this one never has to fake their shells).
  *
  * Every data fetcher in this app already degrades to an honest "not

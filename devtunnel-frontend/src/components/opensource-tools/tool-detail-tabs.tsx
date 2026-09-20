@@ -53,11 +53,17 @@ type TabId = (typeof TABS)[number]["id"];
  *   the panel says so plainly instead of showing an empty list.
  *
  * The All Issues list's state (`useLoadAllIssues`) is held here rather
- * than in `ToolIssuesPanel`: the panel unmounts whenever another tab is
- * opened, and a contributor who just waited for the complete issue list
- * shouldn't have it thrown away by a glance at the setup guide. Holding it
- * here also lets the tab's badge follow what was actually loaded. With no
- * repository there's nothing to load from, so its `path` is `null`.
+ * than in `ToolIssuesPanel`, so the tab's badge can follow what was
+ * actually loaded and the loader isn't tied to that panel's own lifecycle.
+ * With no repository there's nothing to load from, so its `path` is `null`.
+ *
+ * Every panel is rendered into the page and the inactive ones simply carry
+ * the `hidden` attribute, instead of mounting only the active tab's panel.
+ * The tabs are an enhancement over content that's already there: the
+ * server-rendered HTML contains all of it, so a crawler, a reader with
+ * JavaScript delayed or off, and an AI system reading the page all see the
+ * README, tasks and setup text — not just whichever tab happened to be
+ * selected first (Frontend_Development_Rules.txt rules 3 and 28).
  */
 export function ToolDetailTabs({ tool }: { tool: OpenSourceToolDetail }) {
   const [activeId, setActiveId] = useState<TabId>("info");
@@ -121,154 +127,149 @@ export function ToolDetailTabs({ tool }: { tool: OpenSourceToolDetail }) {
         })}
       </div>
 
-      {activeId === "info" ? (
-        <div
-          role="tabpanel"
-          id="tool-panel-info"
-          aria-labelledby="tool-tab-info"
-          className="rounded-[10px] border border-border bg-surface p-5"
-        >
-          <div className="grid grid-cols-1 gap-x-6 gap-y-3 text-[12.5px] sm:grid-cols-[180px_1fr]">
-            <span className="text-text-faint">Description</span>
-            <span className="text-text-secondary">
-              {tool.description ?? "No description provided."}
-            </span>
+      <div
+        hidden={activeId !== "info"}
+        role="tabpanel"
+        id="tool-panel-info"
+        aria-labelledby="tool-tab-info"
+        className="rounded-[10px] border border-border bg-surface p-5"
+      >
+        <div className="grid grid-cols-1 gap-x-6 gap-y-3 text-[12.5px] sm:grid-cols-[180px_1fr]">
+          <span className="text-text-faint">Description</span>
+          <span className="text-text-secondary">
+            {tool.description ?? "No description provided."}
+          </span>
 
-            <span className="text-text-faint">Source</span>
-            <a
-              href={tool.sourceUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="break-all font-mono text-text-secondary hover:text-accent"
-            >
-              {tool.sourceUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}
-            </a>
+          <span className="text-text-faint">Source</span>
+          <a
+            href={tool.sourceUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="break-all font-mono text-text-secondary hover:text-accent"
+          >
+            {tool.sourceUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+          </a>
 
-            <span className="text-text-faint">Primary language</span>
-            <span className="text-text-secondary">{tool.primaryLanguage ?? "—"}</span>
+          <span className="text-text-faint">Primary language</span>
+          <span className="text-text-secondary">{tool.primaryLanguage ?? "—"}</span>
 
-            {tool.repository ? (
-              <>
-                <span className="text-text-faint">Maintainer</span>
-                <a
-                  href={tool.repository.owner.profileUrl}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="text-text-secondary hover:text-accent"
-                >
-                  {tool.repository.owner.name ?? tool.repository.owner.username} (@
-                  {tool.repository.owner.username})
-                </a>
+          {tool.repository ? (
+            <>
+              <span className="text-text-faint">Maintainer</span>
+              <a
+                href={tool.repository.owner.profileUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="text-text-secondary hover:text-accent"
+              >
+                {tool.repository.owner.name ?? tool.repository.owner.username} (@
+                {tool.repository.owner.username})
+              </a>
 
-                <span className="text-text-faint">License</span>
-                <span className="text-text-secondary">
-                  {tool.repository.license ?? "Not specified"}
-                </span>
+              <span className="text-text-faint">License</span>
+              <span className="text-text-secondary">
+                {tool.repository.license ?? "Not specified"}
+              </span>
 
-                <span className="text-text-faint">Contributors</span>
-                <span className="text-text-secondary">
-                  {tool.repository.contributorCount.toLocaleString()}
-                </span>
-              </>
-            ) : null}
-
-            <span className="text-text-faint">Added to DevTunnel</span>
-            <span className="text-text-secondary">
-              <time dateTime={tool.createdAt}>{formatRelativeTime(tool.createdAt)}</time>
-            </span>
-          </div>
-
-          {tool.labels.length > 0 ? (
-            <div className="mt-4 border-t border-border-subtle pt-4">
-              <h3 className="m-0 mb-2 text-[11px] uppercase tracking-wide text-text-faint">
-                What it&apos;s useful for
-              </h3>
-              <div className="flex flex-wrap gap-1.5">
-                {tool.labels.map((label) => (
-                  <span
-                    key={label}
-                    className={`inline-block rounded-[5px] border px-[7px] py-[2px] text-[10.5px] ${getTechTagClasses(label)}`}
-                  >
-                    {label}
-                  </span>
-                ))}
-              </div>
-            </div>
+              <span className="text-text-faint">Contributors</span>
+              <span className="text-text-secondary">
+                {tool.repository.contributorCount.toLocaleString()}
+              </span>
+            </>
           ) : null}
-        </div>
-      ) : null}
 
-      {activeId === "setup" ? (
-        <div
-          role="tabpanel"
-          id="tool-panel-setup"
-          aria-labelledby="tool-tab-setup"
-          className="rounded-[10px] border border-border bg-surface p-5"
-        >
-          <MarkdownReadme content={tool.setupGuide} sourceUrl={tool.repository?.url} />
+          <span className="text-text-faint">Added to DevTunnel</span>
+          <span className="text-text-secondary">
+            <time dateTime={tool.createdAt}>{formatRelativeTime(tool.createdAt)}</time>
+          </span>
         </div>
-      ) : null}
 
-      {activeId === "tasks" ? (
-        <div
-          role="tabpanel"
-          id="tool-panel-tasks"
-          aria-labelledby="tool-tab-tasks"
-          className="rounded-[10px] border border-border bg-surface p-4"
-        >
-          {tool.linkedProjectSlug ? (
-            <ProjectTasksPanel
-              projectSlug={tool.linkedProjectSlug}
-              tasks={tool.tasks}
-              repositoryUrl={tool.repository?.url ?? tool.sourceUrl}
-            />
-          ) : (
-            <GithubEmptyState
-              compact
-              variant="tasks-locked"
-              title="No DevTunnel tasks yet"
-              description="This tool isn't linked to a DevTunnel project yet, so it has no DevTunnel tasks of its own. Its open issues are still a great place to start in the meantime."
-              primaryAction={
-                tool.repository
-                  ? { label: "Browse open issues", href: `${tool.repository.url}/issues`, external: true }
-                  : { label: "Visit the tool", href: tool.sourceUrl, external: true }
-              }
-            />
-          )}
-        </div>
-      ) : null}
+        {tool.labels.length > 0 ? (
+          <div className="mt-4 border-t border-border-subtle pt-4">
+            <h3 className="m-0 mb-2 text-[11px] uppercase tracking-wide text-text-faint">
+              What it&apos;s useful for
+            </h3>
+            <div className="flex flex-wrap gap-1.5">
+              {tool.labels.map((label) => (
+                <span
+                  key={label}
+                  className={`inline-block rounded-[5px] border px-[7px] py-[2px] text-[10.5px] ${getTechTagClasses(label)}`}
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
 
-      {activeId === "readme" ? (
-        <div
-          role="tabpanel"
-          id="tool-panel-readme"
-          aria-labelledby="tool-tab-readme"
-          className="rounded-[10px] border border-border bg-surface p-5"
-        >
-          {tool.readme ? (
-            <MarkdownReadme content={tool.readme} sourceUrl={tool.repository?.url} />
-          ) : (
-            <GithubEmptyState
-              compact
-              variant="readme"
-              title="No README to show"
-              description="DevTunnel has no README imported for this tool. The setup guide next door covers how to get it running."
-              primaryAction={{ label: "Visit the tool", href: tool.sourceUrl, external: true }}
-            />
-          )}
-        </div>
-      ) : null}
+      <div
+        hidden={activeId !== "setup"}
+        role="tabpanel"
+        id="tool-panel-setup"
+        aria-labelledby="tool-tab-setup"
+        className="rounded-[10px] border border-border bg-surface p-5"
+      >
+        <MarkdownReadme content={tool.setupGuide} sourceUrl={tool.repository?.url} />
+      </div>
 
-      {activeId === "issues" ? (
-        <div
-          role="tabpanel"
-          id="tool-panel-issues"
-          aria-labelledby="tool-tab-issues"
-          className="rounded-[10px] border border-border bg-surface p-4"
-        >
-          <ToolIssuesPanel loader={issuesLoader} repositoryUrl={tool.repository?.url ?? null} />
-        </div>
-      ) : null}
+      <div
+        hidden={activeId !== "tasks"}
+        role="tabpanel"
+        id="tool-panel-tasks"
+        aria-labelledby="tool-tab-tasks"
+        className="rounded-[10px] border border-border bg-surface p-4"
+      >
+        {tool.linkedProjectSlug ? (
+          <ProjectTasksPanel
+            projectSlug={tool.linkedProjectSlug}
+            tasks={tool.tasks}
+            repositoryUrl={tool.repository?.url ?? tool.sourceUrl}
+          />
+        ) : (
+          <GithubEmptyState
+            compact
+            variant="tasks-locked"
+            title="No DevTunnel tasks yet"
+            description="This tool isn't linked to a DevTunnel project yet, so it has no DevTunnel tasks of its own. Its open issues are still a great place to start in the meantime."
+            primaryAction={
+              tool.repository
+                ? { label: "Browse open issues", href: `${tool.repository.url}/issues`, external: true }
+                : { label: "Visit the tool", href: tool.sourceUrl, external: true }
+            }
+          />
+        )}
+      </div>
+
+      <div
+        hidden={activeId !== "readme"}
+        role="tabpanel"
+        id="tool-panel-readme"
+        aria-labelledby="tool-tab-readme"
+        className="rounded-[10px] border border-border bg-surface p-5"
+      >
+        {tool.readme ? (
+          <MarkdownReadme content={tool.readme} sourceUrl={tool.repository?.url} />
+        ) : (
+          <GithubEmptyState
+            compact
+            variant="readme"
+            title="No README to show"
+            description="DevTunnel has no README imported for this tool. The setup guide next door covers how to get it running."
+            primaryAction={{ label: "Visit the tool", href: tool.sourceUrl, external: true }}
+          />
+        )}
+      </div>
+
+      <div
+        hidden={activeId !== "issues"}
+        role="tabpanel"
+        id="tool-panel-issues"
+        aria-labelledby="tool-tab-issues"
+        className="rounded-[10px] border border-border bg-surface p-4"
+      >
+        <ToolIssuesPanel loader={issuesLoader} repositoryUrl={tool.repository?.url ?? null} />
+      </div>
     </div>
   );
 }

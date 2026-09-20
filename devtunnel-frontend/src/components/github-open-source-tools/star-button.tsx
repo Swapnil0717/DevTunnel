@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
+import { SignInLink } from "@/components/auth/sign-in-link";
 import { GithubLoginButton } from "@/components/auth/github-login-button";
 import { StarIcon } from "@/components/layout/nav-icons";
+import { useAuth } from "@/lib/auth/use-auth";
 import { formatCompactNumber } from "@/lib/github-projects/format-compact-number";
 import {
   GithubOpenSourceToolsApiError,
@@ -43,6 +45,25 @@ export function StarButton({
   const [isBusy, setIsBusy] = useState(false);
   const [needsReauth, setNeedsReauth] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const { user, status: authStatus } = useAuth();
+
+  // A signed-out visitor on a public page: starring is tied to a GitHub
+  // account, so offer a real sign-in link instead of a button whose request
+  // the backend would only reject. The count stays visible — it's public
+  // information (Frontend_Development_Rules.txt rule 43).
+  if (!user && authStatus === "unauthenticated") {
+    return (
+      <SignInLink icon={<StarIcon className="h-3.5 w-3.5 shrink-0" />}>
+        Sign in to star
+      {count > 0 ? (
+        <span className="text-text-faint" aria-label={`${count.toLocaleString()} local stars`}>
+          {formatCompactNumber(count)}
+        </span>
+      ) : null}
+      </SignInLink>
+    );
+  }
 
   async function handleClick() {
     if (isBusy) return;

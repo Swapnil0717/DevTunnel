@@ -24,8 +24,8 @@
  * that's still sitting in the raw GitHub catalog (`/github-projects`,
  * `/github-open-source-tools`) and hasn't been converted into either a
  * DevTunnel Project or Tool yet. It's built by
- * `app/(protected)/github-projects/[slug]/contribute/page.tsx` and
- * `app/(protected)/github-open-source-tools/[slug]/contribute/page.tsx`
+ * `app/(public)/github-projects/[slug]/contribute/page.tsx` and
+ * `app/(public)/github-open-source-tools/[slug]/contribute/page.tsx`
  * from `GithubProjectDetail` (`lib/github-projects/types.ts`) the exact
  * same way the other two build from their own detail payloads. Its
  * `tasks` is always `[]` for the same underlying reason a tool's is:

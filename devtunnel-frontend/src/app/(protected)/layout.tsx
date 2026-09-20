@@ -7,11 +7,20 @@ import { getServerUser } from "@/lib/auth/get-server-user";
 import { needsOnboarding } from "@/lib/onboarding/needs-onboarding";
 import { isAdmin } from "@/lib/auth/is-admin";
 import { getServerViewMode } from "@/lib/auth/view-mode.server";
+import { signInHref } from "@/lib/auth/sign-in-href";
 
 /**
- * Real route protection for /dashboard, /home, /profile, /onboarding, and
- * anything else added under this route group (devtunnel_workflow.txt
- * task: "Create protected-route handling").
+ * Real route protection for /dashboard, /home, /profile, /settings,
+ * /onboarding, /submissions/new, /submissions/:slug/edit and anything else
+ * added under this route group (devtunnel_workflow.txt task: "Create
+ * protected-route handling").
+ *
+ * Only pages that genuinely need an account belong here. Content meant to
+ * be discovered — the project/task/tool catalog, Community listings — lives
+ * in the sibling `(public)` group (`app/(public)/layout.tsx`), which never
+ * redirects a signed-out request. Putting public content behind this layout
+ * would send every crawler and shared-link visitor to /login before they
+ * saw a single word of it (Frontend_Development_Rules.txt rules 2, 16, 27).
  *
  * `middleware.ts` already redirects unauthenticated requests based on the
  * `dt_auth` flag cookie for a fast, edge-level bounce. This layout is the
@@ -52,16 +61,19 @@ export default async function ProtectedLayout({
   children: React.ReactNode;
 }) {
   const user = await getServerUser();
+  const pathname = (await headers()).get("x-pathname") ?? "";
 
   if (!user) {
-    redirect("/login");
+    // Carry the page they were trying to reach through sign-in. `pathname`
+    // comes from `middleware.ts`, which is why every route in this group
+    // has to be in its matcher.
+    redirect(signInHref(pathname));
   }
 
   if (isAdmin(user) && (await getServerViewMode()) !== "user") {
     redirect("/admin");
   }
 
-  const pathname = (await headers()).get("x-pathname") ?? "";
   if (pathname !== "/onboarding" && needsOnboarding(user)) {
     redirect("/onboarding");
   }

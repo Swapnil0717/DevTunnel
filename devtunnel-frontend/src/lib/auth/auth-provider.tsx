@@ -38,11 +38,21 @@ export const AuthContext =
 interface AuthProviderProps {
   children: ReactNode;
   initialUser?: AuthUser | null;
+  /**
+   * The server already asked the backend who this is and the answer was
+   * "nobody" (a signed-out visitor on a public route). Starts in the
+   * `"unauthenticated"` state and skips the redundant client-side
+   * `/auth/me` round trip, so signed-out pages render their guest UI
+   * (sign-in links instead of star/join buttons) on the very first paint
+   * rather than flashing a "loading" state first.
+   */
+  anonymous?: boolean;
 }
 
 export function AuthProvider({
   children,
   initialUser = null,
+  anonymous = false,
 }: AuthProviderProps) {
   const [user, setUser] =
     useState<AuthUser | null>(initialUser);
@@ -51,7 +61,9 @@ export function AuthProvider({
     useState<AuthStatus>(
       initialUser
         ? "authenticated"
-        : "loading",
+        : anonymous
+          ? "unauthenticated"
+          : "loading",
     );
 
   const refreshUser = useCallback(async () => {
@@ -77,7 +89,7 @@ export function AuthProvider({
   }, []);
 
   useEffect(() => {
-    if (initialUser) return;
+    if (initialUser || anonymous) return;
 
     void refreshUser();
 

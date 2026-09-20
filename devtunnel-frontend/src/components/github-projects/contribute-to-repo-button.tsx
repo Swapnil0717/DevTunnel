@@ -26,8 +26,8 @@ interface ContributeToRepoButtonProps {
  * row to join yet — so there's nothing to call and nothing to await. This
  * is a plain link straight to
  * `/github-projects/:slug/contribute` or `/github-open-source-tools/:slug/contribute`
- * (`app/(protected)/github-projects/[slug]/contribute/page.tsx` /
- * `app/(protected)/github-open-source-tools/[slug]/contribute/page.tsx`),
+ * (`app/(public)/github-projects/[slug]/contribute/page.tsx` /
+ * `app/(public)/github-open-source-tools/[slug]/contribute/page.tsx`),
  * which renders the same `ContributePageHeader` / `ContributeTabs` /
  * `ContributeSidebar` components the onboarded pages use, built from a
  * `ContributeTarget` of kind `"github-repo"` (`lib/contribute/types.ts`).

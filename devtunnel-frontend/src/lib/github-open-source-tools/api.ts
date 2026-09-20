@@ -29,7 +29,7 @@ import type { GithubProjectDetail, GithubProjectSummary } from "@/lib/github-pro
  * Passing an unrecognized value 400s the backend request, which surfaces
  * here as `{ status: "error" }` same as any other failed fetch — the
  * page's own `?filter=` search-param handling
- * (`app/(protected)/github-open-source-tools/page.tsx`) is what keeps a
+ * (`app/(public)/github-open-source-tools/page.tsx`) is what keeps a
  * bad value from ever reaching this function in the first place.
  *
  * Like `getGithubProjects`, returns only the first page

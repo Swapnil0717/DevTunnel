@@ -45,10 +45,16 @@ type TabId = (typeof TABS)[number]["id"];
  * "do not mix the two datasets").
  *
  * The All Issues list's state (`useLoadAllIssues`) is held here rather
- * than in `ProjectIssuesPanel`: the panel unmounts whenever another tab
- * is opened, and a contributor who just waited for the complete issue
- * list shouldn't have it thrown away by a glance at the README. Holding
- * it here also lets the tab's badge follow what was actually loaded.
+ * than in `ProjectIssuesPanel`, so the tab's badge can follow what was
+ * actually loaded and the loader isn't tied to that panel's own lifecycle.
+ *
+ * Every panel is rendered into the page and the inactive ones simply carry
+ * the `hidden` attribute, instead of mounting only the active tab's panel.
+ * The tabs are an enhancement over content that's already there: the
+ * server-rendered HTML contains all of it, so a crawler, a reader with
+ * JavaScript delayed or off, and an AI system reading the page all see the
+ * README, tasks and setup text — not just whichever tab happened to be
+ * selected first (Frontend_Development_Rules.txt rules 3 and 28).
  */
 export function ProjectDetailTabs({ project }: { project: DevtunnelProjectDetail }) {
   const [activeId, setActiveId] = useState<TabId>("info");
@@ -110,134 +116,130 @@ export function ProjectDetailTabs({ project }: { project: DevtunnelProjectDetail
         })}
       </div>
 
-      {activeId === "info" ? (
-        <div
-          role="tabpanel"
-          id="project-panel-info"
-          aria-labelledby="project-tab-info"
-          className="rounded-[10px] border border-border bg-surface p-5"
-        >
-          <div className="grid grid-cols-1 gap-x-6 gap-y-3 text-[12.5px] sm:grid-cols-[180px_1fr]">
-            <span className="text-text-faint">Description</span>
-            <span className="text-text-secondary">
-              {project.description ?? "No description provided."}
-            </span>
+      <div
+        hidden={activeId !== "info"}
+        role="tabpanel"
+        id="project-panel-info"
+        aria-labelledby="project-tab-info"
+        className="rounded-[10px] border border-border bg-surface p-5"
+      >
+        <div className="grid grid-cols-1 gap-x-6 gap-y-3 text-[12.5px] sm:grid-cols-[180px_1fr]">
+          <span className="text-text-faint">Description</span>
+          <span className="text-text-secondary">
+            {project.description ?? "No description provided."}
+          </span>
 
-            <span className="text-text-faint">Repository</span>
-            <a
-              href={project.repositoryUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="font-mono text-text-secondary hover:text-accent"
-            >
-              {project.repositoryFullName}
-            </a>
+          <span className="text-text-faint">Repository</span>
+          <a
+            href={project.repositoryUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="font-mono text-text-secondary hover:text-accent"
+          >
+            {project.repositoryFullName}
+          </a>
 
-            <span className="text-text-faint">Maintainer</span>
-            <a
-              href={project.author.profileUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="text-text-secondary hover:text-accent"
-            >
-              {project.author.name ?? project.author.username} (@{project.author.username})
-            </a>
+          <span className="text-text-faint">Maintainer</span>
+          <a
+            href={project.author.profileUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-text-secondary hover:text-accent"
+          >
+            {project.author.name ?? project.author.username} (@{project.author.username})
+          </a>
 
-            <span className="text-text-faint">Primary technology</span>
-            <span className="text-text-secondary">{project.primaryTech ?? "—"}</span>
+          <span className="text-text-faint">Primary technology</span>
+          <span className="text-text-secondary">{project.primaryTech ?? "—"}</span>
 
-            <span className="text-text-faint">License</span>
-            <span className="text-text-secondary">{project.license ?? "Not specified"}</span>
+          <span className="text-text-faint">License</span>
+          <span className="text-text-secondary">{project.license ?? "Not specified"}</span>
 
-            <span className="text-text-faint">DevTunnel contributors</span>
-            <span className="text-text-secondary">
-              {project.devTunnelContributorCount.toLocaleString()}
-            </span>
+          <span className="text-text-faint">DevTunnel contributors</span>
+          <span className="text-text-secondary">
+            {project.devTunnelContributorCount.toLocaleString()}
+          </span>
 
-            <span className="text-text-faint">GitHub contributors</span>
-            <span className="text-text-secondary">
-              {project.githubContributorCount.toLocaleString()}
-            </span>
+          <span className="text-text-faint">GitHub contributors</span>
+          <span className="text-text-secondary">
+            {project.githubContributorCount.toLocaleString()}
+          </span>
 
-            <span className="text-text-faint">DevTunnel tasks</span>
-            <span className="text-text-secondary">{project.taskCount.toLocaleString()}</span>
+          <span className="text-text-faint">DevTunnel tasks</span>
+          <span className="text-text-secondary">{project.taskCount.toLocaleString()}</span>
 
-            <span className="text-text-faint">Open issues on GitHub</span>
-            <span className="text-text-secondary">
-              {project.openIssuesCount.toLocaleString()}
-            </span>
-          </div>
+          <span className="text-text-faint">Open issues on GitHub</span>
+          <span className="text-text-secondary">
+            {project.openIssuesCount.toLocaleString()}
+          </span>
+        </div>
 
-          {project.techStack.length > 0 ? (
-            <div className="mt-4 border-t border-border-subtle pt-4">
-              <h3 className="m-0 mb-2 text-[11px] uppercase tracking-wide text-text-faint">
-                Tech stack
-              </h3>
-              <div className="flex flex-wrap gap-1.5">
-                {project.techStack.map((tag) => (
-                  <span
-                    key={tag}
-                    className={`inline-block rounded-[5px] border px-[7px] py-[2px] text-[10.5px] ${getTechTagClasses(tag)}`}
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
+        {project.techStack.length > 0 ? (
+          <div className="mt-4 border-t border-border-subtle pt-4">
+            <h3 className="m-0 mb-2 text-[11px] uppercase tracking-wide text-text-faint">
+              Tech stack
+            </h3>
+            <div className="flex flex-wrap gap-1.5">
+              {project.techStack.map((tag) => (
+                <span
+                  key={tag}
+                  className={`inline-block rounded-[5px] border px-[7px] py-[2px] text-[10.5px] ${getTechTagClasses(tag)}`}
+                >
+                  {tag}
+                </span>
+              ))}
             </div>
-          ) : null}
-        </div>
-      ) : null}
+          </div>
+        ) : null}
+      </div>
 
-      {activeId === "readme" ? (
-        <div
-          role="tabpanel"
-          id="project-panel-readme"
-          aria-labelledby="project-tab-readme"
-          className="rounded-[10px] border border-border bg-surface p-5"
-        >
-          {project.readme ? (
-            <MarkdownReadme content={project.readme} sourceUrl={project.repositoryUrl} />
-          ) : (
-            <GithubEmptyState
-              compact
-              variant="readme"
-              title="No README yet"
-              description="This repository doesn't have a README file. The source is still browsable directly on GitHub."
-              primaryAction={{
-                label: "View source on GitHub",
-                href: project.repositoryUrl,
-                external: true,
-              }}
-            />
-          )}
-        </div>
-      ) : null}
-
-      {activeId === "tasks" ? (
-        <div
-          role="tabpanel"
-          id="project-panel-tasks"
-          aria-labelledby="project-tab-tasks"
-          className="rounded-[10px] border border-border bg-surface p-4"
-        >
-          <ProjectTasksPanel
-            projectSlug={project.slug}
-            tasks={project.tasks}
-            repositoryUrl={project.repositoryUrl}
+      <div
+        hidden={activeId !== "readme"}
+        role="tabpanel"
+        id="project-panel-readme"
+        aria-labelledby="project-tab-readme"
+        className="rounded-[10px] border border-border bg-surface p-5"
+      >
+        {project.readme ? (
+          <MarkdownReadme content={project.readme} sourceUrl={project.repositoryUrl} />
+        ) : (
+          <GithubEmptyState
+            compact
+            variant="readme"
+            title="No README yet"
+            description="This repository doesn't have a README file. The source is still browsable directly on GitHub."
+            primaryAction={{
+              label: "View source on GitHub",
+              href: project.repositoryUrl,
+              external: true,
+            }}
           />
-        </div>
-      ) : null}
+        )}
+      </div>
 
-      {activeId === "issues" ? (
-        <div
-          role="tabpanel"
-          id="project-panel-issues"
-          aria-labelledby="project-tab-issues"
-          className="rounded-[10px] border border-border bg-surface p-4"
-        >
-          <ProjectIssuesPanel loader={issuesLoader} repositoryUrl={project.repositoryUrl} />
-        </div>
-      ) : null}
+      <div
+        hidden={activeId !== "tasks"}
+        role="tabpanel"
+        id="project-panel-tasks"
+        aria-labelledby="project-tab-tasks"
+        className="rounded-[10px] border border-border bg-surface p-4"
+      >
+        <ProjectTasksPanel
+          projectSlug={project.slug}
+          tasks={project.tasks}
+          repositoryUrl={project.repositoryUrl}
+        />
+      </div>
+
+      <div
+        hidden={activeId !== "issues"}
+        role="tabpanel"
+        id="project-panel-issues"
+        aria-labelledby="project-tab-issues"
+        className="rounded-[10px] border border-border bg-surface p-4"
+      >
+        <ProjectIssuesPanel loader={issuesLoader} repositoryUrl={project.repositoryUrl} />
+      </div>
     </div>
   );
 }

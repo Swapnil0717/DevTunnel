@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth/use-auth";
+import { signInHref } from "@/lib/auth/sign-in-href";
 import { SubmissionsApiError, setSubmissionUpvote } from "./client-api";
 
 export interface SubmissionUpvoteState {
@@ -23,6 +26,12 @@ export interface SubmissionUpvoteState {
  * one higher than the sort used would be quietly wrong (rule 38). It
  * updates optimistically and reverts on failure, so a slow network reads
  * as "nothing happened" rather than "it worked, then didn't".
+ *
+ * `/submissions` is public, so a signed-out visitor can reach the upvote
+ * control. A vote belongs to an account, so for them the click takes them to
+ * sign in (returning to this page afterwards) instead of firing a request the
+ * backend would reject and reverting with a misleading "Couldn't record your
+ * vote."
  */
 export function useSubmissionUpvote(
   slug: string,
@@ -33,9 +42,17 @@ export function useSubmissionUpvote(
   const [count, setCount] = useState(initialCount);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { user, status: authStatus } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
 
   async function toggle() {
     if (isSaving) return;
+
+    if (!user && authStatus === "unauthenticated") {
+      router.push(signInHref(pathname));
+      return;
+    }
 
     const next = !upvoted;
     const previousCount = count;

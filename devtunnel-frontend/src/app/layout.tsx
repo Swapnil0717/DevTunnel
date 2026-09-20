@@ -43,7 +43,8 @@ export default function RootLayout({
         {/* Mounted once for the whole app so any page can read sign-in
             state (devtunnel_workflow.txt task: "Create authentication
             state" / "Create user profile state"). Route-level protection
-            still happens server-side — see (protected)/layout.tsx. */}
+            still happens server-side — see (protected)/layout.tsx; the
+            (public)/layout.tsx group deliberately doesn't redirect. */}
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

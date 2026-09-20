@@ -157,7 +157,7 @@ export function GithubProjectsExplorer({
   /**
    * Optional server-driven catalog filter — e.g. "Alternative to paid
    * software" on `/github-open-source-tools`
-   * (`app/(protected)/github-open-source-tools/page.tsx`). Deliberately
+   * (`app/(public)/github-open-source-tools/page.tsx`). Deliberately
    * NOT handled like the Tech stack/Minimum stars filters below: those
    * narrow the `projects` array this component already has in memory,
    * but a catalog filter selects a *different backend discovery query*
