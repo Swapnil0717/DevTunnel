@@ -17,6 +17,12 @@ import Link from "next/link";
  *   repository has zero open issues. Deliberately framed as a *good*
  *   result (checkmark, not a dashed "nothing here" box) — an empty
  *   issue queue is something to feel good about, not a gap to fill.
+ * - `"tasks-locked"` — a repository detail page's Tasks tab. Not an
+ *   error or a gap to fill either: this repository simply isn't a
+ *   DevTunnel Project or Tool yet, so there's no `devtunnel.tasks` row
+ *   to have (sql/017 — tasks hang off that record, not off a raw GitHub
+ *   repository). The copy says exactly that rather than presenting a
+ *   bare empty list that looks like a loading bug.
  *
  * Frontend-only: this never talks to the backend or invents any
  * repository data — it's purely a better-designed placeholder for the
@@ -40,7 +46,13 @@ import Link from "next/link";
  * already use (rule: consistency over decoration).
  */
 
-type GithubEmptyStateVariant = "projects" | "tools" | "no-results" | "readme" | "issues-clear";
+type GithubEmptyStateVariant =
+  | "projects"
+  | "tools"
+  | "no-results"
+  | "readme"
+  | "issues-clear"
+  | "tasks-locked";
 
 interface GithubEmptyStateAction {
   label: string;
@@ -155,7 +167,7 @@ function EmptyStateActionButton({
 }
 
 /**
- * Five small outline illustrations, same drawing convention
+ * Six small outline illustrations, same drawing convention
  * `components/layout/nav-icons.tsx` documents (plain inline SVG, no
  * icon-library dependency, `currentColor` stroke) — just larger and a
  * little more detailed since these carry a whole empty state rather
@@ -217,6 +229,20 @@ function GithubEmptyIllustration({
       <svg {...base} className={className}>
         <circle cx="24" cy="24" r="17" />
         <path d="M16.5 24.5l5 5 10-11" />
+      </svg>
+    );
+  }
+
+  if (variant === "tasks-locked") {
+    return (
+      <svg {...base} className={className}>
+        {/* Checklist behind a padlock — the tasks are there in shape, just not unlocked yet */}
+        <path d="M9 8h17v33H9a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2Z" />
+        <path d="M13 16h9" />
+        <path d="M13 23h9" />
+        <path d="M13 30h6" />
+        <rect x="26" y="24" width="16" height="13" rx="2.5" />
+        <path d="M29.5 24v-4a4.5 4.5 0 0 1 9 0v4" />
       </svg>
     );
   }

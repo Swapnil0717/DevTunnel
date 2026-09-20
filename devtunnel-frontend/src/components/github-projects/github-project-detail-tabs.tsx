@@ -4,7 +4,7 @@ import { useState } from "react";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
 import { GithubEmptyState } from "@/components/github-projects/github-empty-state";
 import { GithubIssuesPanel } from "@/components/github-projects/github-issues-panel";
-import { GridIcon, FileIcon, IssueIcon } from "@/components/layout/nav-icons";
+import { GridIcon, FileIcon, ChecklistIcon, IssueIcon } from "@/components/layout/nav-icons";
 import { getTechTagClasses } from "@/lib/home/tag-style";
 import { repoIssuesPath, type RepoIssuesBasePath } from "@/lib/issues/repo-issues-client";
 import { useLoadAllIssues } from "@/lib/issues/use-load-all-issues";
@@ -13,11 +13,12 @@ import type { GithubProjectDetail, GithubProjectIssuePreview } from "@/lib/githu
 const TABS = [
   { id: "info", label: "Project Info", icon: GridIcon },
   { id: "readme", label: "README", icon: FileIcon },
+  { id: "tasks", label: "Tasks", icon: ChecklistIcon },
   { id: "issues", label: "Issues", icon: IssueIcon },
 ] as const;
 
 /**
- * Project Detail page's three-tab body — real, accessible tab UI
+ * Project Detail page's four-tab body — real, accessible tab UI
  * (Frontend_Development_Rules.txt rule 4 — semantic HTML/ARIA over
  * generic divs), same `role="tablist"`/`role="tab"`/`role="tabpanel"`
  * wiring `ProfileTabs` (`components/profile/profile-tabs.tsx`) already
@@ -34,6 +35,17 @@ const TABS = [
  *   page to read it. When GitHub reports no README, this now shows the
  *   illustrated `GithubEmptyState` ("readme" variant) with a real link
  *   out to the repository instead of one faint line of text.
+ * - **Tasks** — always the `GithubEmptyState` "tasks-locked" variant.
+ *   This repository is still raw GitHub-catalog data, not a DevTunnel
+ *   Project or Tool, so there's no `devtunnel.tasks` row for it to have
+ *   yet (sql/017 — tasks hang off that record). The tab exists here
+ *   (rather than being left out, the way this component's onboarded
+ *   sibling `ProjectDetailTabs` has no equivalent gap) so a contributor
+ *   who clicks it learns *why* there's nothing to pick up, instead of
+ *   assuming DevTunnel simply forgot to load anything — and learns what
+ *   would make that change: this repository being converted into a
+ *   DevTunnel project or tool via the "Contribute on GitHub" /
+ *   "Nominate for DevTunnel" actions in the page header above.
  * - **Issues** — the repository's currently-open issues
  *   (`GithubProjectIssuePreview[]`), each linking straight out to the
  *   real GitHub issue — this app has no issue tracker of its own for a
@@ -184,6 +196,22 @@ export function GithubProjectDetailTabs({
               }}
             />
           )}
+        </div>
+      ) : null}
+
+      {activeId === "tasks" ? (
+        <div
+          role="tabpanel"
+          id="project-panel-tasks"
+          aria-labelledby="project-tab-tasks"
+          className="rounded-[10px] border border-border bg-surface p-4"
+        >
+          <GithubEmptyState
+            compact
+            variant="tasks-locked"
+            title="No DevTunnel tasks yet"
+            description="This repository is still a raw GitHub listing, not a DevTunnel project or tool, so it doesn't have DevTunnel tasks of its own. This task will be available once it's converted into a DevTunnel project or tool — open issues on GitHub are still a great place to start in the meantime."
+          />
         </div>
       ) : null}
 

@@ -12,6 +12,7 @@ import { GithubProjectDetailTabs } from "@/components/github-projects/github-pro
 import { GithubProjectSidebar } from "@/components/github-projects/github-project-sidebar";
 import { RequestToolOnboardingButton } from "@/components/github-open-source-tools/request-tool-onboarding-button";
 import { StarButton } from "@/components/github-open-source-tools/star-button";
+import { ContributeOnGithubButton } from "@/components/github-projects/contribute-on-github-button";
 
 interface GithubToolDetailPageProps {
   params: Promise<{ slug: string }>;
@@ -70,7 +71,11 @@ export async function generateMetadata({
  * stars/forks/issues counts that used to live here now live once, in the
  * sidebar, instead of being repeated in two places on the same page.
  *
- * Two actions sit next to the header: "View on GitHub" (unchanged —
+ * Three actions sit next to the header: `ContributeOnGithubButton` (new —
+ * the one accent-colored button, opens this exact repository's own GitHub
+ * contribute page; see its doc comment for why that's the honest
+ * destination rather than a DevTunnel `/contribute` page this
+ * not-yet-onboarded tool doesn't have), "View on GitHub" (unchanged —
  * always the real repository), and "Request to add as DevTunnel project
  * or tool" (`RequestToolOnboardingButton`). Same three-outcome handling
  * `GithubProjectDetailPage` already establishes: a slug that doesn't
@@ -163,6 +168,7 @@ export default async function GithubToolDetailPage({ params }: GithubToolDetailP
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <ContributeOnGithubButton repositoryUrl={tool.repositoryUrl} />
           <a
             href={tool.repositoryUrl}
             target="_blank"

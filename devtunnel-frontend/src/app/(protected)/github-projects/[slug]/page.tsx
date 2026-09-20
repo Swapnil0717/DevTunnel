@@ -12,6 +12,7 @@ import { GithubProjectDetailTabs } from "@/components/github-projects/github-pro
 import { GithubProjectSidebar } from "@/components/github-projects/github-project-sidebar";
 import { RequestOnboardingButton } from "@/components/github-projects/request-onboarding-button";
 import { StarButton } from "@/components/github-projects/star-button";
+import { ContributeOnGithubButton } from "@/components/github-projects/contribute-on-github-button";
 
 interface GithubProjectDetailPageProps {
   params: Promise<{ slug: string }>;
@@ -72,6 +73,15 @@ export async function generateMetadata({
  * `notFound()` rather than a fabricated "empty project" page
  * (Frontend_Development_Rules.txt rule 25); a network failure degrades
  * to the illustrated `GithubEmptyState` instead.
+ *
+ * Three actions sit next to the header, in the order a contributor would
+ * actually want them: `ContributeOnGithubButton` (the one accent-colored
+ * button — opens this exact repository's own GitHub contribute page),
+ * "View on GitHub" (the plain repository itself), and
+ * `RequestOnboardingButton` (nominate it for DevTunnel). See
+ * `ContributeOnGithubButton`'s own doc comment for why it points at GitHub
+ * rather than a DevTunnel `/contribute` page — this repository doesn't have
+ * one yet.
  */
 export default async function GithubProjectDetailPage({
   params,
@@ -157,6 +167,7 @@ export default async function GithubProjectDetailPage({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <ContributeOnGithubButton repositoryUrl={project.repositoryUrl} />
           <a
             href={project.repositoryUrl}
             target="_blank"
