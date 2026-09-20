@@ -18,6 +18,7 @@ import {
   fetchRepositoryContributorCount,
   fetchRepositoryIssues,
 } from "../lib/githubRepo";
+import { handleRepositoryIssuesRequest, type ListedIssue } from "../lib/repoIssuesList";
 
 /**
  * Contributor — Open Source Tools on DevTunnel (`/opensource-tools` —
@@ -260,18 +261,10 @@ openSourceTools.get("/opensource-tools/:slug", requireAuth, async (c) => {
 
       // Same `GithubProjectIssuePreview` shape `GET /github-projects/:slug`
       // returns, which is what the frontend's `OpenSourceToolIssuePreview`
-      // aliases. `url` doubles as the id — GitHub issue numbers are only
-      // unique within one repository, and this preview has no database row
-      // of its own to key on.
-      openIssues: (snapshot?.issues ?? []).map((issue) => ({
-        id: issue.url,
-        number: issue.number,
-        title: issue.title,
-        url: issue.url,
-        labels: issue.labels,
-        commentCount: issue.commentCount,
-        createdAt: issue.createdAt,
-      })),
+      // aliases. This is only the first `DETAIL_ISSUES_LIMIT` of them;
+      // `GET /opensource-tools/:slug/issues` below returns the rest, in
+      // this same row shape.
+      openIssues: (snapshot?.issues ?? []).map(toToolIssuePreview),
 
       isStarredByViewer: starStatus.starredByViewer,
       localStarCount: starStatus.localStarCount,
@@ -288,6 +281,49 @@ openSourceTools.get("/opensource-tools/:slug", requireAuth, async (c) => {
     return errorResponse(c, 500, "internal_error", "Couldn't load this tool right now");
   }
 });
+
+/**
+ * One GitHub issue as the frontend's `OpenSourceToolIssuePreview` row.
+ * `url` doubles as the id — GitHub issue numbers are only unique within
+ * one repository, and this preview has no database row of its own to key
+ * on. Shared by the detail route's first-page preview and the "Load all
+ * issues" route below so the two can never drift apart.
+ */
+function toToolIssuePreview(issue: ListedIssue) {
+  return {
+    id: issue.url,
+    number: issue.number,
+    title: issue.title,
+    url: issue.url,
+    labels: issue.labels,
+    commentCount: issue.commentCount,
+    createdAt: issue.createdAt,
+  };
+}
+
+/**
+ * `GET /opensource-tools/:slug/issues` — the All Issues tab's "Load all
+ * issues" action: the tool repository's complete open-issue list (up to
+ * the shared cap) rather than the first `DETAIL_ISSUES_LIMIT` the detail
+ * route ships. `409 no_repository` for a tool whose source isn't a GitHub
+ * repository — the frontend never calls it in that case (the tab shows
+ * "No issue tracker to show" instead), so it's a guard against a
+ * hand-made request, same as the star routes. Shared fetch/cache/error-
+ * mapping flow: `lib/repoIssuesList.ts`.
+ */
+openSourceTools.get("/opensource-tools/:slug/issues", requireAuth, (c) =>
+  handleRepositoryIssuesRequest(c, c.req.param("slug"), {
+    name: "opensource-tools",
+    notFoundMessage: "This tool isn't on DevTunnel",
+    resolve: async (slug, env) => {
+      const tool = await getOpenSourceToolDetailBySlug(getSupabase(env), slug);
+      if (!tool) return "not_found";
+      if (!tool.repo) return "no_repository";
+      return { ...tool.repo, context: null };
+    },
+    mapIssue: (issue) => toToolIssuePreview(issue),
+  }),
+);
 
 /**
  * Resolves the tool's GitHub repository for the two star routes.

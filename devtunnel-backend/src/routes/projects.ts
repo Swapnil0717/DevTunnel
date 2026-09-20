@@ -32,6 +32,7 @@ import {
   findOpenPullRequest,
   GitHubPullRequestError,
 } from "../lib/githubPullRequest";
+import { handleRepositoryIssuesRequest, type ListedIssue } from "../lib/repoIssuesList";
 import { submitBodySchema, buildPullRequestBody } from "./tasks";
 
 /**
@@ -376,24 +377,10 @@ projects.get("/projects/:slug", requireAuth, async (c) => {
       // project's issues or every project's. `fetchRepositoryIssues`
       // requests open issues only, so `state` is always "OPEN" here —
       // the frontend's Open/Closed filter is still correct, its Closed
-      // bucket is simply always empty on this page.
-      issues: (snapshot?.issues ?? []).map((issue) => ({
-        number: issue.number,
-        title: issue.title,
-        url: issue.url,
-        state: issue.state,
-        project: {
-          slug: project.slug,
-          name: project.name,
-          repositoryFullName: project.repositoryFullName,
-          repositoryUrl: project.repositoryUrl,
-          techStack: project.techStack,
-        },
-        author: issue.author,
-        labels: issue.labels,
-        createdAt: issue.createdAt,
-        updatedAt: issue.updatedAt,
-      })),
+      // bucket is simply always empty on this page. This is only the
+      // first `DETAIL_ISSUES_LIMIT` of them; `GET /projects/:slug/issues`
+      // below returns the rest, in this same row shape.
+      issues: (snapshot?.issues ?? []).map((issue) => toProjectIssueRow(issue, project)),
     };
 
     return c.json(response, 200);
@@ -406,6 +393,67 @@ projects.get("/projects/:slug", requireAuth, async (c) => {
     return errorResponse(c, 500, "internal_error", "Couldn't load this project right now");
   }
 });
+
+/**
+ * The parts of an onboarded project an issue row needs to name it —
+ * the `project` block on the frontend's `Issue` shape
+ * (`lib/issues/types.ts`).
+ */
+interface IssueRowProject {
+  slug: string;
+  name: string;
+  repositoryFullName: string;
+  repositoryUrl: string;
+  techStack: string[];
+}
+
+/**
+ * One GitHub issue as the frontend's `Issue` row. Shared by the detail
+ * route's first-page preview and the "Load all issues" route below, so
+ * the two can never drift into different row shapes — the All Issues tab
+ * swaps one list for the other in place.
+ */
+function toProjectIssueRow(issue: ListedIssue, project: IssueRowProject) {
+  return {
+    number: issue.number,
+    title: issue.title,
+    url: issue.url,
+    state: issue.state,
+    project: {
+      slug: project.slug,
+      name: project.name,
+      repositoryFullName: project.repositoryFullName,
+      repositoryUrl: project.repositoryUrl,
+      techStack: project.techStack,
+    },
+    author: issue.author,
+    labels: issue.labels,
+    createdAt: issue.createdAt,
+    updatedAt: issue.updatedAt,
+  };
+}
+
+/**
+ * `GET /projects/:slug/issues` — the All Issues tab's "Load all issues"
+ * action: this project's repository's complete open-issue list (up to the
+ * shared cap) rather than the first `DETAIL_ISSUES_LIMIT` the detail
+ * route ships. Same 404 posture as the detail route — an unknown,
+ * soft-deleted, or archived project is one indistinguishable "not found".
+ * Shared fetch/cache/error-mapping flow: `lib/repoIssuesList.ts`.
+ */
+projects.get("/projects/:slug/issues", requireAuth, (c) =>
+  handleRepositoryIssuesRequest(c, c.req.param("slug"), {
+    name: "projects",
+    notFoundMessage: "This project isn't on DevTunnel",
+    resolve: async (slug, env) => {
+      const project = await getProjectDetailBySlug(getSupabase(env), slug, null);
+      if (!project) return "not_found";
+      if (!project.repo) return "no_repository";
+      return { ...project.repo, context: project };
+    },
+    mapIssue: (issue, project) => toProjectIssueRow(issue, project),
+  }),
+);
 
 /**
  * Resolves the project's GitHub repository for the two star routes, or

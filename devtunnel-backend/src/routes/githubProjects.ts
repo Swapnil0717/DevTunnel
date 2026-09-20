@@ -21,7 +21,8 @@ import { mapGithubTopicsToTechStack } from "../lib/techTopics";
 import { recordGithubProjectNomination } from "../db/githubProjectNominations";
 import { getValidGithubAccessToken } from "../db/githubTokens";
 import { addGithubStar, removeGithubStar, getGithubStarStatus } from "../db/githubStars";
-import type { Env, Variables, GithubIssueSummary } from "../types";
+import { handleRepositoryIssuesRequest, type ListedIssue } from "../lib/repoIssuesList";
+import type { Env, Variables } from "../types";
 
 /**
  * Contributor — GitHub Projects (`/github-projects` — "GitHub Projects"
@@ -166,7 +167,7 @@ interface GithubStarViewerFields {
   localStarCount: number;
 }
 
-function toIssuePreview(issue: GithubIssueSummary): GithubProjectIssuePreview {
+function toIssuePreview(issue: ListedIssue): GithubProjectIssuePreview {
   return {
     // GitHub issue numbers are only unique within one repository, not
     // globally — `url` doubles as a stable per-repository-scoped id
@@ -313,6 +314,26 @@ githubProjects.get("/github-projects/:slug", requireAuth, async (c) => {
     return errorResponse(c, 500, "internal_error", "Couldn't load this project right now");
   }
 });
+
+/**
+ * `GET /github-projects/:slug/issues` — the Issues tab's "Load all
+ * issues" action: this repository's complete open-issue list (up to the
+ * shared cap), as the same `GithubProjectIssuePreview` rows the detail
+ * route above returns its first `DETAIL_ISSUES_LIMIT` of. The
+ * fetch/cache/error-mapping flow is shared with the other three detail
+ * pages' issue routes — see `lib/repoIssuesList.ts`.
+ */
+githubProjects.get("/github-projects/:slug/issues", requireAuth, (c) =>
+  handleRepositoryIssuesRequest(c, c.req.param("slug"), {
+    name: "github-projects",
+    notFoundMessage: "This project isn't in the GitHub catalog",
+    resolve: async (slug) => {
+      const parsedSlug = slugToOwnerRepo(slug);
+      return parsedSlug ? { ...parsedSlug, context: null } : "not_found";
+    },
+    mapIssue: (issue) => toIssuePreview(issue),
+  }),
+);
 
 /**
  * Resolves a usable GitHub access token for the requesting user, or

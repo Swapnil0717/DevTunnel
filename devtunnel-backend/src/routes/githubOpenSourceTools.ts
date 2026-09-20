@@ -21,7 +21,8 @@ import { mapGithubTopicsToTechStack } from "../lib/techTopics";
 import { recordGithubToolNomination } from "../db/githubOpenSourceToolNominations";
 import { getValidGithubAccessToken } from "../db/githubTokens";
 import { addGithubStar, removeGithubStar, getGithubStarStatus } from "../db/githubStars";
-import type { Env, Variables, GithubIssueSummary } from "../types";
+import { handleRepositoryIssuesRequest, type ListedIssue } from "../lib/repoIssuesList";
+import type { Env, Variables } from "../types";
 
 /**
  * Contributor — GitHub Open Source Tools (`/github-open-source-tools` —
@@ -250,7 +251,7 @@ interface GithubToolStarViewerFields {
   localStarCount: number;
 }
 
-function toIssuePreview(issue: GithubIssueSummary): GithubToolIssuePreview {
+function toIssuePreview(issue: ListedIssue): GithubToolIssuePreview {
   return {
     // GitHub issue numbers are only unique within one repository, not
     // globally — `url` doubles as a stable per-repository-scoped id
@@ -397,6 +398,25 @@ githubOpenSourceTools.get("/github-open-source-tools/:slug", requireAuth, async 
     return errorResponse(c, 500, "internal_error", "Couldn't load this tool right now");
   }
 });
+
+/**
+ * `GET /github-open-source-tools/:slug/issues` — the Issues tab's "Load
+ * all issues" action for this catalog: the repository's complete
+ * open-issue list (up to the shared cap), as the same
+ * `GithubToolIssuePreview` rows the detail route above returns its first
+ * `DETAIL_ISSUES_LIMIT` of. Shared flow lives in `lib/repoIssuesList.ts`.
+ */
+githubOpenSourceTools.get("/github-open-source-tools/:slug/issues", requireAuth, (c) =>
+  handleRepositoryIssuesRequest(c, c.req.param("slug"), {
+    name: "github-open-source-tools",
+    notFoundMessage: "This tool isn't in the GitHub catalog",
+    resolve: async (slug) => {
+      const parsedSlug = slugToOwnerRepo(slug);
+      return parsedSlug ? { ...parsedSlug, context: null } : "not_found";
+    },
+    mapIssue: (issue) => toIssuePreview(issue),
+  }),
+);
 
 /**
  * Resolves a usable GitHub access token for the requesting user, or

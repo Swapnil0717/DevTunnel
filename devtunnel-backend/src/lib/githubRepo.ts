@@ -746,11 +746,69 @@ export async function fetchAllRepositoryIssues(
   owner: string,
   repo: string,
 ): Promise<GithubIssueSummary[]> {
+  const { issues } = await walkOpenIssues(accessToken, owner, repo, MAX_SCANNED_ISSUES);
+  return issues;
+}
+
+export interface RepositoryIssueListing {
+  /** Open issues (never pull requests), most recently updated first. */
+  issues: GithubIssueSummary[];
+  /**
+   * `true` when the repository has more open issues than `issues`
+   * holds — the walk stopped at the cap rather than at GitHub's last
+   * page. Lets the UI say "showing the N most recently updated" instead
+   * of implying the list is complete.
+   */
+  truncated: boolean;
+}
+
+/**
+ * Same full-backlog walk `fetchAllRepositoryIssues` does, but also
+ * reports whether the cap cut the list short. Backs the contributor-
+ * facing "Load all issues" action on the four detail pages
+ * (`lib/repoIssuesList.ts`), which — unlike the admin New Issues scan —
+ * has to tell the person looking at the list whether it's complete.
+ *
+ * Reuses `MAX_SCANNED_ISSUES` as the default ceiling on purpose: one
+ * number bounding how much GitHub rate-limit budget a single repository
+ * can cost, whichever feature is asking.
+ */
+export async function fetchRepositoryIssueListing(
+  accessToken: string | null,
+  owner: string,
+  repo: string,
+  cap: number = MAX_SCANNED_ISSUES,
+): Promise<RepositoryIssueListing> {
+  return walkOpenIssues(accessToken, owner, repo, cap);
+}
+
+/**
+ * Shared page-by-page walk behind `fetchAllRepositoryIssues` and
+ * `fetchRepositoryIssueListing`. Stops once `cap` issues are collected;
+ * `truncated` is `true` only when GitHub still had another page to
+ * offer at that point (a repository with exactly `cap` open issues and
+ * no further page is *not* truncated). The one imprecision: if that
+ * next page turns out to hold only pull requests it still reports
+ * `truncated`, which errs toward "there may be more" — the safe
+ * direction for a message that points the reader at GitHub.
+ */
+async function walkOpenIssues(
+  accessToken: string | null,
+  owner: string,
+  repo: string,
+  cap: number,
+): Promise<RepositoryIssueListing> {
   const results: GithubIssueSummary[] = [];
+  let truncated = false;
   let url: string | null =
     `${GITHUB_API_BASE}/repos/${owner}/${repo}/issues?state=open&per_page=100&sort=updated&direction=desc`;
 
-  while (url && results.length < MAX_SCANNED_ISSUES) {
+  while (url) {
+    if (results.length >= cap) {
+      truncated = true;
+      break;
+    }
+
     const res = await fetchWithTimeout(url, { headers: authHeaders(accessToken) });
     await assertOk(res, "issues lookup");
 
@@ -766,7 +824,9 @@ export async function fetchAllRepositoryIssues(
     url = parseNextLinkUrl(res.headers.get("Link"));
   }
 
-  return results.slice(0, MAX_SCANNED_ISSUES);
+  if (results.length > cap) truncated = true;
+
+  return { issues: results.slice(0, cap), truncated };
 }
 
 /**
