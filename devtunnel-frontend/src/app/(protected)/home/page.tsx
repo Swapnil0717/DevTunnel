@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { HomeHeader } from "@/components/home/home-header";
 import { WelcomeBanner } from "@/components/home/welcome-banner";
-import { EntryActions } from "@/components/home/entry-actions";
+import { JourneyCard } from "@/components/home/journey-card";
+import { TaskStats } from "@/components/home/task-stats";
+import { JourneySkeleton } from "@/components/home/journey-skeleton";
 import { RecommendedProjectsSection } from "@/components/home/recommended-projects-section";
 import { ActiveContributionsSection } from "@/components/home/active-contributions-section";
 import { TasksSection } from "@/components/home/tasks-section";
@@ -21,9 +24,18 @@ export const metadata: Metadata = {
  *
  * Content is capped at max-w-[1040px] and centered — without it, on a
  * wide monitor the sidebar's fixed 208px leaves the rest of the row to
- * stretch the two-column entry-action cards and three-column project grid
- * far wider than they were designed for, which reads as empty/unfinished
- * rather than intentional.
+ * stretch the three-column project grid far wider than it was designed
+ * for, which reads as empty/unfinished rather than intentional.
+ *
+ * Order: greeting → `JourneyCard` (what's my progress, what do I do
+ * next) → `TaskStats` → recommended projects → recommended/your tasks →
+ * recently active projects. The journey card now owns the "what should I
+ * do next" job the old `EntryActions` two-card grid used to: one of
+ * those two cards ("Start an open source project") never linked anywhere
+ * real (`built: false`, no contributor-facing page exists), and the
+ * other ("Find an open source project") is exactly the journey card's
+ * own `/projects?intent=find` CTA. The journey card's single, state-aware
+ * CTA replaces both without ever offering a dead link.
  */
 export default async function HomePage() {
   return (
@@ -32,10 +44,13 @@ export default async function HomePage() {
         <h1 className="sr-only">Contributor home</h1>
         <HomeHeader />
         <WelcomeBanner />
-        <EntryActions />
+        <Suspense fallback={<JourneySkeleton />}>
+          <JourneyCard />
+          <TaskStats />
+        </Suspense>
         <RecommendedProjectsSection />
-        <ActiveContributionsSection />
         <TasksSection />
+        <ActiveContributionsSection />
       </div>
     </main>
   );
