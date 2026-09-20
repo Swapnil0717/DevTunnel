@@ -41,24 +41,31 @@ import { CATALOG_CONFIG as GITHUB_OPEN_SOURCE_TOOLS_CATALOG } from "../routes/gi
  * `CATALOG_CONFIG` as the single source of truth for discovery
  * queries/cache keys, so this never drifts out of sync with what the
  * routes themselves actually serve.
+ *
+ * Runs the catalogs strictly one after another, NOT in parallel: they all
+ * spend the same `GITHUB_DISCOVERY_TOKEN`, and GitHub's Search API allows
+ * only 30 requests per minute per token. Running them concurrently (as
+ * this used to) meant the two scans' calls stacked up and both hit the
+ * limit. `lib/githubDiscovery.ts` paces every Search call at ~1 per 2.1s,
+ * so the whole run (roughly 50 calls) takes a couple of minutes — fine
+ * for a background job on a 25-minute cadence.
  */
 export async function warmGithubCatalogs(env: ValidatedEnv, workerEnv: Env): Promise<void> {
-  const results = await Promise.allSettled([
-    warmCatalogRoute(env, workerEnv, GITHUB_PROJECTS_CATALOG),
-    warmCatalogRoute(env, workerEnv, GITHUB_OPEN_SOURCE_TOOLS_CATALOG),
-  ]);
+  const catalogs = [GITHUB_PROJECTS_CATALOG, GITHUB_OPEN_SOURCE_TOOLS_CATALOG];
 
-  results.forEach((result, index) => {
-    if (result.status === "rejected") {
+  for (const catalog of catalogs) {
+    try {
+      await warmCatalogRoute(env, workerEnv, catalog);
+    } catch (err) {
       logger.error("catalog_warm_failed", {
-        catalog: index === 0 ? GITHUB_PROJECTS_CATALOG.name : GITHUB_OPEN_SOURCE_TOOLS_CATALOG.name,
-        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        catalog: catalog.name,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
-  });
+  }
 
   logger.info("catalog_warm_completed", {
-    catalogs: [GITHUB_PROJECTS_CATALOG.name, GITHUB_OPEN_SOURCE_TOOLS_CATALOG.name],
+    catalogs: catalogs.map((catalog) => catalog.name),
   });
 }
 

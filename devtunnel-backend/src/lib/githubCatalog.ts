@@ -5,7 +5,7 @@ import { getEnv, type ValidatedEnv } from "../config/env";
 import { checkRateLimit } from "./rateLimit";
 import { errorResponse } from "./response";
 import { logger } from "./logger";
-import { withCacheSWR, warmCacheSWR } from "./cache";
+import { getCachedSWR, setCachedSWR, tryAcquireLock, releaseLock } from "./cache";
 import { searchOpenSourceCatalog, type GithubCatalogRepoItem } from "./githubDiscovery";
 import { mapGithubTopicsToTechStack } from "./techTopics";
 
@@ -27,6 +27,36 @@ import { mapGithubTopicsToTechStack } from "./techTopics";
  * contributor's own token) and why the scan is cached whole rather than
  * queried live per request — both apply identically to every catalog
  * built here.
+ *
+ * ---------------------------------------------------------------------
+ * Why the scan/cache design below looks the way it does
+ * ---------------------------------------------------------------------
+ * An earlier version of this module made `/github-open-source-tools`
+ * unusable (the page just said "check back soon") because of three
+ * compounding problems, each of which is now handled explicitly:
+ *
+ *  1. GitHub's Search API allows only 30 requests/minute per token, but
+ *     the tools catalog is 7 topic queries x up to 10 pages each, run with
+ *     no spacing. The scan hit the limit around its 30th call, threw, and
+ *     discarded everything gathered so far. -> Calls are now paced
+ *     (`lib/githubDiscovery.ts`), each topic is capped to a few pages
+ *     (`CatalogRouteConfig.maxPagesPerQuery`), a rate limit stops the scan
+ *     but keeps what it has, and one failing query no longer voids the
+ *     others (`scanCatalog`).
+ *
+ *  2. The cache stored raw GitHub search items (~5 KB each) instead of
+ *     the ~0.7 KB summaries the route actually serves. A few thousand
+ *     repos pushed the value past Workers KV's 25 MiB per-value limit, so
+ *     every cache write silently failed (`setCachedSWR` fails open) and the
+ *     cache never held anything. -> The cache now stores `CatalogSummary`
+ *     objects (`toSummary` runs once at scan time, not on every read).
+ *
+ *  3. With no cache, every request paid for a full live scan, and every
+ *     stale read spawned another one. -> A cold cache now triggers at most
+ *     one quick, single-page-per-topic scan (guarded by a KV lock so
+ *     concurrent requests can't pile on), and the scheduled warmer
+ *     (`lib/cacheWarmers.ts`) owns all full refreshes. Request handlers
+ *     never start a full scan themselves.
  */
 
 /**
@@ -36,16 +66,14 @@ import { mapGithubTopicsToTechStack } from "./techTopics";
  * one cache window, short enough that a catalog still feels "live" to a
  * contributor browsing across a few sessions. Also protects the
  * GITHUB_DISCOVERY_TOKEN's shared rate-limit budget across *every*
- * catalog route: without this, a burst of contributor traffic on any one
- * of them could each trigger their own 10-call GitHub search walk.
+ * catalog route.
  *
- * This is the *soft* TTL for `withCacheSWR` below — "how fresh should this
- * ideally be" — not a hard expiry. A scheduled warmer (lib/cacheWarmers.ts,
+ * This is the *soft* TTL — "how fresh should this ideally be" — not a
+ * hard expiry. A scheduled warmer (lib/cacheWarmers.ts,
  * `[triggers].crons` in wrangler.toml) re-runs `scanCatalog` for every
- * catalog on a ~25 minute cadence, comfortably inside this window, so in
- * steady state no real contributor request should ever actually see a
- * stale or missing entry — this TTL mainly governs what happens if that
- * warmer run is ever late or fails.
+ * catalog on a ~25 minute cadence, comfortably inside this window. A
+ * stale entry is still served (and logged) rather than blocking a
+ * contributor's request on a live scan.
  */
 const CATALOG_CACHE_SOFT_TTL_SECONDS = 30 * 60;
 
@@ -59,10 +87,46 @@ const CATALOG_CACHE_SOFT_TTL_SECONDS = 30 * 60;
  */
 export const CATALOG_CACHE_HARD_TTL_SECONDS = CATALOG_CACHE_SOFT_TTL_SECONDS * 3;
 
-export interface CatalogCacheEntry {
-  scannedAt: string;
-  items: GithubCatalogRepoItem[];
-}
+/**
+ * GitHub's Search API returns at most 1,000 results per query = 10 pages
+ * of 100. Routes that OR many topics together (one query per topic) can
+ * lower this via `CatalogRouteConfig.maxPagesPerQuery` to stay inside
+ * the 30-requests/minute Search budget.
+ */
+const DEFAULT_MAX_PAGES_PER_QUERY = 10;
+
+/**
+ * A cold-cache request only gets ONE page (top 100 by stars) per query —
+ * enough for a usable page, cheap enough (7 calls for the tools base
+ * catalog, ~15s paced) to run inside a request. The scheduled warmer
+ * replaces it with the full catalog shortly after.
+ */
+const COLD_START_MAX_PAGES_PER_QUERY = 1;
+
+/**
+ * The scheduled warmer runs in the background (no user waiting), so if it
+ * hits GitHub's rate limit it may sit out up to one full minute-window
+ * and retry once instead of giving up on the rest of the catalog.
+ */
+const WARM_MAX_RATE_LIMIT_WAIT_SECONDS = 65;
+
+/**
+ * All catalog scans share one GitHub token, so they share one lock: only
+ * one scan (warmer or cold-start request) runs at a time. TTL comfortably
+ * exceeds the slowest scan (~45s paced + at most one 65s rate-limit wait).
+ */
+const SCAN_LOCK_NAME = "github-catalog-scan";
+const SCAN_LOCK_TTL_SECONDS = 180;
+
+/**
+ * Per signed-in user, per catalog. The frontend walks the whole catalog
+ * page by page on every load, so this must be comfortably above one
+ * walk's page count; it exists only to stop runaway clients.
+ */
+const LIST_RATE_LIMIT_PER_MINUTE = 60;
+
+/** Largest `limit` a caller may ask for — see `catalogListQuerySchema`. */
+const MAX_PAGE_SIZE = 500;
 
 /**
  * Maps a raw GitHub search result to the frontend-facing
@@ -70,6 +134,11 @@ export interface CatalogCacheEntry {
  * `lib/github-projects/types.ts` — reused as-is by the Open Source Tools
  * catalog too; there is no separate "tool" shape on the frontend, it's
  * the same card/grid/filter UI over the same fields).
+ *
+ * Runs once per repository at *scan* time and the result is what gets
+ * cached — never the raw GitHub item, which carries ~80 fields (dozens
+ * of API URL templates) this route never serves and would blow past KV's
+ * per-value size limit at a few thousand repos.
  */
 function toSummary(item: GithubCatalogRepoItem) {
   // GitHub reports "NOASSERTION" as the spdx_id when it found a LICENSE
@@ -120,6 +189,9 @@ function toSummary(item: GithubCatalogRepoItem) {
   };
 }
 
+/** One catalog row exactly as served to the frontend — and as cached. */
+export type CatalogSummary = ReturnType<typeof toSummary>;
+
 /**
  * Same `limit`/`before` contract every keyset-paginated list route in
  * this backend uses. `before` is an opaque offset into the cached
@@ -128,6 +200,11 @@ function toSummary(item: GithubCatalogRepoItem) {
  * the frontend never parses it, only round-trips whatever `X-Next-Cursor`
  * it was last given.
  *
+ * `limit` may go up to `MAX_PAGE_SIZE` (500, up from 100): the frontend
+ * walks the entire catalog on every page load, and at 100 rows per page a
+ * few-thousand-repo catalog took 20-40 round trips — each one re-reading
+ * and re-parsing the whole cached array from KV. At 500 it's a handful.
+ *
  * `filter` is optional and, when present, must be one of the named
  * filters a given route's `CatalogRouteConfig.filters` declares (see
  * below) — validated against that specific route's filter set inside
@@ -135,7 +212,7 @@ function toSummary(item: GithubCatalogRepoItem) {
  * differs per route and this schema is shared by all of them.
  */
 export const catalogListQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).optional().default(24),
+  limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(24),
   before: z
     .string()
     .regex(/^\d+$/, "before must be a cursor returned by this endpoint")
@@ -186,6 +263,16 @@ export interface CatalogRouteConfig {
   /** KV cache key this catalog's scan is stored under. Must be unique per catalog. */
   cacheKey: string;
   /**
+   * Max pages of 100 results to walk *per discovery query* during a full
+   * (scheduled) scan. Defaults to 10 — GitHub's own ceiling of 1,000
+   * results per query — which is fine for a single-query catalog. A
+   * catalog built from many per-topic queries should set this lower:
+   * total Search calls = queries x pages, and GitHub allows only 30 per
+   * minute, so e.g. 7 topics x 3 pages = 21 calls (~45s paced) instead
+   * of 70. Applies to this route's named `filters` too.
+   */
+  maxPagesPerQuery?: number;
+  /**
    * Optional named filters a caller can select via `?filter=<key>`
    * instead of the base `discoveryQueries`/`cacheKey` above. Keyed by
    * the value the frontend sends on the wire (e.g.
@@ -198,47 +285,155 @@ export interface CatalogRouteConfig {
   filters?: Record<string, CatalogFilterConfig>;
 }
 
+export interface ScanCatalogOptions {
+  /** Pages of 100 to walk per query (default: GitHub's max of 10). */
+  maxPagesPerQuery?: number;
+  /** See `CatalogSearchOptions.maxRateLimitWaitSeconds` — default 0 (never wait). */
+  maxRateLimitWaitSeconds?: number;
+}
+
+export interface ScanCatalogResult {
+  /** De-duplicated, stars-descending catalog rows. */
+  items: CatalogSummary[];
+  /**
+   * False if any query failed or the scan stopped early on a GitHub rate
+   * limit — i.e. `items` may be missing part of the population. Callers
+   * that already hold a fuller cached catalog use this to avoid replacing
+   * it with a smaller one.
+   */
+  complete: boolean;
+}
+
 /**
  * Runs each of `queries` as its own independent `searchOpenSourceCatalog`
- * scan and merges the results into one de-duplicated, stars-sorted list.
- * This is the OR-across-qualifiers workaround `CatalogFilterConfig`'s
- * doc comment describes: GitHub Search can't OR multiple `topic:`
- * qualifiers in a single query, so a catalog that's conceptually "topic
- * A OR topic B OR topic C" has to be built from separate per-topic
- * searches instead, unioned here.
+ * scan and merges the results into one de-duplicated, stars-sorted list
+ * of `CatalogSummary` rows. This is the OR-across-qualifiers workaround
+ * `CatalogFilterConfig`'s doc comment describes: GitHub Search can't OR
+ * multiple `topic:` qualifiers in a single query, so a catalog that's
+ * conceptually "topic A OR topic B OR topic C" has to be built from
+ * separate per-topic searches instead, unioned here.
  *
  * De-duplicates by `full_name` (a repo can legitimately match more than
  * one query, e.g. a repo tagged both `topic:cli` and `topic:devtools`)
- * — kept once, sorted by star count descending like a single-query scan
- * would already be from GitHub's own `sort=stars`.
+ * — kept once, sorted by star count descending.
+ *
+ * Resilient by design: one query failing (or GitHub's rate limit being
+ * hit) does NOT discard what the other queries already returned — that
+ * all-or-nothing behavior is what previously left the tools catalog
+ * permanently uncached. It only throws if *nothing* could be gathered
+ * and at least one query errored, so a genuinely broken token or outage
+ * still surfaces as an error instead of an empty catalog.
  */
 export async function scanCatalog(
   env: ValidatedEnv,
   queries: string[],
-): Promise<GithubCatalogRepoItem[]> {
-  const byFullName = new Map<string, GithubCatalogRepoItem>();
+  options: ScanCatalogOptions = {},
+): Promise<ScanCatalogResult> {
+  const byFullName = new Map<string, CatalogSummary>();
+  let lastError: unknown = null;
+  let failedQueries = 0;
+  let rateLimited = false;
 
   for (const query of queries) {
-    const items = await searchOpenSourceCatalog(env, query);
-    for (const item of items) {
-      const existing = byFullName.get(item.full_name);
-      if (!existing || item.stargazers_count > existing.stargazers_count) {
-        byFullName.set(item.full_name, item);
+    try {
+      const result = await searchOpenSourceCatalog(env, query, {
+        maxPages: options.maxPagesPerQuery,
+        maxRateLimitWaitSeconds: options.maxRateLimitWaitSeconds,
+      });
+
+      for (const item of result.items) {
+        const summary = toSummary(item);
+        const existing = byFullName.get(summary.repositoryFullName);
+        if (!existing || summary.stars > existing.stars) {
+          byFullName.set(summary.repositoryFullName, summary);
+        }
       }
+
+      if (result.rateLimited) {
+        // The remaining queries would just hit the same wall.
+        rateLimited = true;
+        break;
+      }
+    } catch (err) {
+      failedQueries += 1;
+      lastError = err;
+      logger.error("catalog_scan_query_failed", {
+        query,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
-  return Array.from(byFullName.values()).sort(
-    (a, b) => b.stargazers_count - a.stargazers_count,
-  );
+  if (byFullName.size === 0 && lastError !== null) {
+    throw lastError;
+  }
+
+  const items = Array.from(byFullName.values()).sort((a, b) => b.stars - a.stars);
+  const complete = !rateLimited && failedQueries === 0;
+
+  logger.info("catalog_scan_completed", {
+    queries: queries.length,
+    failedQueries,
+    rateLimited,
+    complete,
+    repositories: items.length,
+    maxPagesPerQuery: options.maxPagesPerQuery ?? DEFAULT_MAX_PAGES_PER_QUERY,
+  });
+
+  return { items, complete };
+}
+
+/**
+ * Cold cache, nothing to serve stale: build a small catalog right now
+ * (one page per query) so the very first visitor after a deploy or a long
+ * warmer outage sees real data instead of an error. Guarded by the shared
+ * scan lock — if another scan is already running, this re-checks the cache
+ * once and otherwise reports `"busy"` (the route turns that into a 503
+ * with `Retry-After`) rather than adding a second scan to the same GitHub
+ * budget.
+ */
+async function buildCatalogOnColdStart(
+  env: ValidatedEnv,
+  workerEnv: Env,
+  slot: string,
+  queries: string[],
+): Promise<CatalogSummary[] | "busy"> {
+  const locked = await tryAcquireLock(workerEnv, SCAN_LOCK_NAME, SCAN_LOCK_TTL_SECONDS);
+
+  if (!locked) {
+    const again = await getCachedSWR<CatalogSummary[]>(workerEnv, slot, CATALOG_CACHE_SOFT_TTL_SECONDS);
+    return again.status === "miss" ? "busy" : again.value;
+  }
+
+  try {
+    const scan = await scanCatalog(env, queries, {
+      maxPagesPerQuery: COLD_START_MAX_PAGES_PER_QUERY,
+    });
+    if (scan.items.length > 0) {
+      await setCachedSWR(workerEnv, slot, scan.items, CATALOG_CACHE_HARD_TTL_SECONDS);
+    }
+    return scan.items;
+  } finally {
+    await releaseLock(workerEnv, SCAN_LOCK_NAME);
+  }
 }
 
 /**
  * Handles one `GET` request for a GitHub-wide catalog route: rate limit,
- * validate `limit`/`before`, serve from cache or run a fresh
- * `searchOpenSourceCatalog` scan, paginate in memory, respond. Shared by
- * every route built with this module so a fix or tuning change (cache
- * TTL, pagination semantics, error shape) only has to happen once.
+ * validate `limit`/`before`, read the cached catalog, paginate it in
+ * memory, respond. Shared by every route built with this module so a fix
+ * or tuning change (cache TTL, pagination semantics, error shape) only
+ * has to happen once.
+ *
+ * Cache behavior:
+ *  - fresh entry: served as-is.
+ *  - stale entry (older than the soft TTL, still within the hard TTL):
+ *    served immediately and logged as `catalog_served_stale` so a failing
+ *    warmer is visible. No refresh is started from here — an HTTP
+ *    request's background work is cut off ~30s after the response, far
+ *    too short for a full paced scan, and every stale request kicking off
+ *    its own scan just stampeded GitHub's rate limit.
+ *  - miss: one quick cold-start scan (see `buildCatalogOnColdStart`).
  */
 export async function handleCatalogListRequest(
   c: Context<{ Bindings: Env; Variables: Variables }>,
@@ -246,10 +441,16 @@ export async function handleCatalogListRequest(
 ) {
   const env: ValidatedEnv = getEnv(c.env);
 
+  // Counted per signed-in user, not per IP: this route is called
+  // server-side by the Next.js frontend Worker, so an IP-based bucket
+  // would be shared by every visitor and one page load could exhaust it
+  // for everyone (see `RateLimitOptions.identity`).
+  const user = c.get("user");
   const withinLimit = await checkRateLimit(c, {
     bucket: `${config.name}-list`,
-    limit: 20,
+    limit: LIST_RATE_LIMIT_PER_MINUTE,
     windowSeconds: 60,
+    identity: user ? `user:${user.id}` : undefined,
   });
   if (!withinLimit) {
     return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
@@ -277,7 +478,7 @@ export async function handleCatalogListRequest(
   // unfiltered catalog, so a frontend bug surfaces immediately instead
   // of quietly serving the wrong list.
   let discoveryQueries = config.discoveryQueries;
-  let cacheKey = config.cacheKey;
+  let cacheSlot = config.cacheKey;
   if (parsed.data.filter !== undefined) {
     const filterConfig = config.filters?.[parsed.data.filter];
     if (!filterConfig) {
@@ -289,48 +490,54 @@ export async function handleCatalogListRequest(
       );
     }
     discoveryQueries = filterConfig.discoveryQueries;
-    cacheKey = filterConfig.cacheKey;
+    cacheSlot = filterConfig.cacheKey;
   }
 
   try {
-    // Stale-while-revalidate: a fresh cache entry is returned as-is; a
-    // stale-but-present one is still returned immediately while a real
-    // refresh happens in the background (`c.executionCtx.waitUntil`), so
-    // this request is never the one that blocks on a live GitHub Search
-    // walk. Only a true miss (nothing in KV at all — see
-    // `CATALOG_CACHE_HARD_TTL_SECONDS`'s doc comment) pays for that walk
-    // synchronously, and in steady state the scheduled warmer
-    // (lib/cacheWarmers.ts) should mean that never happens for real traffic.
-    const catalog = await withCacheSWR<GithubCatalogRepoItem[]>(
-      c.executionCtx,
+    const cached = await getCachedSWR<CatalogSummary[]>(
       c.env,
-      cacheKey,
-      { softTtlSeconds: CATALOG_CACHE_SOFT_TTL_SECONDS, hardTtlSeconds: CATALOG_CACHE_HARD_TTL_SECONDS },
-      async () => {
-        const scanned = await scanCatalog(env, discoveryQueries);
-        // Only cache a non-empty result — same "don't cache a bad scan"
-        // posture GET /issues takes with GITHUB_SCAN_CACHE_KEY (rule 21).
-        return scanned.length > 0 ? scanned : null;
-      },
+      cacheSlot,
+      CATALOG_CACHE_SOFT_TTL_SECONDS,
     );
 
-    // `catalog` is only ever `null` here if this was a true cache miss AND
-    // the synchronous refresh above also came back empty (e.g. GitHub
-    // Search genuinely returned nothing for this query right now) — treat
-    // that the same as "nothing cached yet", an empty catalog, rather than
-    // an error.
-    const items = catalog ?? [];
+    let catalog: CatalogSummary[];
+
+    if (cached.status !== "miss") {
+      catalog = cached.value;
+      if (cached.status === "stale") {
+        logger.warn("catalog_served_stale", {
+          catalog: config.name,
+          slot: cacheSlot,
+          filter: parsed.data.filter ?? null,
+        });
+      }
+    } else {
+      const built = await buildCatalogOnColdStart(env, c.env, cacheSlot, discoveryQueries);
+      if (built === "busy") {
+        c.header("Retry-After", "15");
+        return errorResponse(
+          c,
+          503,
+          "catalog_warming",
+          "This catalog is still being built. Try again shortly.",
+        );
+      }
+      // Empty only if GitHub genuinely returned nothing right now —
+      // treated as an empty catalog, not an error.
+      catalog = built;
+    }
 
     const { limit, before } = parsed.data;
     const startIndex = before ? Number(before) : 0;
-    const page = items.slice(startIndex, startIndex + limit);
-    const hasMore = startIndex + limit < items.length;
+    const page = catalog.slice(startIndex, startIndex + limit);
+    const hasMore = startIndex + limit < catalog.length;
 
     if (hasMore) {
       c.header("X-Next-Cursor", String(startIndex + limit));
     }
 
-    return c.json(page.map(toSummary), 200);
+    // Already `CatalogSummary` rows — `toSummary` ran at scan time.
+    return c.json(page, 200);
   } catch (err) {
     logger.error(`${config.name}_list_failed`, {
       error: err instanceof Error ? err.message : String(err),
@@ -344,41 +551,94 @@ export async function handleCatalogListRequest(
 /**
  * Unconditionally re-scans and re-caches one catalog slot (a route's base
  * catalog, or one of its named `filters`) — called by the scheduled cache
- * warmer (`lib/cacheWarmers.ts`), never by a request handler. Uses
- * `warmCacheSWR` rather than `withCacheSWR`: a cron trigger always wants a
- * real fresh scan, never whatever's currently cached.
+ * warmer (`lib/cacheWarmers.ts`), never by a request handler.
+ *
+ * Takes the shared scan lock (skips this slot if another scan holds it),
+ * runs a full paced scan that's allowed to sit out one GitHub rate-limit
+ * window, and — if the scan came back incomplete — refuses to replace an
+ * existing cached catalog with a smaller one. Errors are caught and
+ * logged, never thrown: a warmer run is best-effort, and the next
+ * scheduled run tries again while readers keep serving what's in KV.
  */
 export async function warmCatalogCacheKey(
   env: ValidatedEnv,
   workerEnv: Env,
   cacheKey: string,
   discoveryQueries: string[],
+  maxPagesPerQuery: number = DEFAULT_MAX_PAGES_PER_QUERY,
 ): Promise<void> {
-  await warmCacheSWR<GithubCatalogRepoItem[]>(
-    workerEnv,
-    cacheKey,
-    CATALOG_CACHE_HARD_TTL_SECONDS,
-    async () => {
-      const scanned = await scanCatalog(env, discoveryQueries);
-      return scanned.length > 0 ? scanned : null;
-    },
-  );
+  const locked = await tryAcquireLock(workerEnv, SCAN_LOCK_NAME, SCAN_LOCK_TTL_SECONDS);
+  if (!locked) {
+    logger.info("catalog_warm_skipped_locked", { slot: cacheKey });
+    return;
+  }
+
+  try {
+    const scan = await scanCatalog(env, discoveryQueries, {
+      maxPagesPerQuery,
+      maxRateLimitWaitSeconds: WARM_MAX_RATE_LIMIT_WAIT_SECONDS,
+    });
+
+    if (scan.items.length === 0) {
+      logger.warn("catalog_warm_produced_nothing", { slot: cacheKey });
+      return;
+    }
+
+    if (!scan.complete) {
+      const existing = await getCachedSWR<CatalogSummary[]>(
+        workerEnv,
+        cacheKey,
+        CATALOG_CACHE_SOFT_TTL_SECONDS,
+      );
+      if (existing.status !== "miss" && existing.value.length >= scan.items.length) {
+        logger.warn("catalog_warm_kept_existing", {
+          slot: cacheKey,
+          existingRepositories: existing.value.length,
+          partialRepositories: scan.items.length,
+        });
+        return;
+      }
+    }
+
+    await setCachedSWR(workerEnv, cacheKey, scan.items, CATALOG_CACHE_HARD_TTL_SECONDS);
+    logger.info("catalog_warm_stored", {
+      slot: cacheKey,
+      repositories: scan.items.length,
+      complete: scan.complete,
+    });
+  } catch (err) {
+    logger.error("catalog_warm_failed", {
+      slot: cacheKey,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  } finally {
+    await releaseLock(workerEnv, SCAN_LOCK_NAME);
+  }
 }
 
 /**
  * Warms every cache slot a `CatalogRouteConfig` can ever serve — its base
  * catalog plus every named filter — so the scheduled warmer only needs one
  * call per route (`lib/cacheWarmers.ts`) regardless of how many filters
- * that route declares.
+ * that route declares. Slots are warmed one after another (never in
+ * parallel): they all spend the same GitHub Search budget.
  */
 export async function warmCatalogRoute(
   env: ValidatedEnv,
   workerEnv: Env,
   config: CatalogRouteConfig,
 ): Promise<void> {
-  await warmCatalogCacheKey(env, workerEnv, config.cacheKey, config.discoveryQueries);
+  const maxPages = config.maxPagesPerQuery ?? DEFAULT_MAX_PAGES_PER_QUERY;
+
+  await warmCatalogCacheKey(env, workerEnv, config.cacheKey, config.discoveryQueries, maxPages);
 
   for (const filterConfig of Object.values(config.filters ?? {})) {
-    await warmCatalogCacheKey(env, workerEnv, filterConfig.cacheKey, filterConfig.discoveryQueries);
+    await warmCatalogCacheKey(
+      env,
+      workerEnv,
+      filterConfig.cacheKey,
+      filterConfig.discoveryQueries,
+      maxPages,
+    );
   }
 }

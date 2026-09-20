@@ -6,6 +6,18 @@ import { fetchAllAdminPages } from "@/lib/admin/fetch-all-pages";
 import type { GithubProjectDetail, GithubProjectSummary } from "@/lib/github-projects/types";
 
 /**
+ * Rows requested per backend page. This catalog is walked in full on every
+ * page load, and at the walker's default of 100 a catalog of a couple
+ * thousand repos meant 20+ round trips — each one re-reading the whole
+ * cached catalog on the backend. The catalog routes accept up to 500 per
+ * page (`catalogListQuerySchema` in devtunnel-backend
+ * `src/lib/githubCatalog.ts`), which brings a full walk down to a handful
+ * of calls. Deploy the backend change first: an older backend rejects
+ * `limit` > 100 with a 400.
+ */
+const CATALOG_PAGE_LIMIT = 500;
+
+/**
  * `GET /github-open-source-tools` — backs the contributor-facing
  * **Github Open source tools** page (`/github-open-source-tools` —
  * "Github Open source tools" in `AppSidebar`). Sibling of
@@ -42,7 +54,7 @@ export async function getGithubOpenSourceTools(
 ): Promise<GithubOpenSourceToolsResult> {
   const result = await fetchAllAdminPages<GithubProjectSummary>(
     "/github-open-source-tools",
-    undefined,
+    CATALOG_PAGE_LIMIT,
     filter ? { filter } : undefined,
   );
   if (result.status === "error") return { status: "error" };

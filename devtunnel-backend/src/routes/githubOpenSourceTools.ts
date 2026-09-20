@@ -82,7 +82,16 @@ export const CATALOG_CONFIG: CatalogRouteConfig = {
   discoveryQueries: OPEN_SOURCE_TOOL_TOPICS.map(
     (topic) => `is:public archived:false fork:false stars:>=20 topic:${topic}`,
   ),
-  cacheKey: "github-open-source-tools:catalog:v1",
+  // v2: the cached value is now the served `CatalogSummary` rows instead of
+  // raw GitHub search items (which pushed the entry past Workers KV's
+  // 25 MiB per-value limit, so it could never be written at all).
+  cacheKey: "github-open-source-tools:catalog:v2",
+  // 7 topic queries x 3 pages x 100 = at most 21 Search calls (~45s paced)
+  // per full scan, instead of 7 x 10 = 70 — which alone exceeds GitHub's
+  // 30-requests/minute Search limit. 300 top-starred repos per topic is
+  // plenty for an "explore tools" page; the union across topics is
+  // de-duplicated. Also applies to the named filters below.
+  maxPagesPerQuery: 3,
   filters: {
     /**
      * "Alternative to paid software" — narrows the catalog to
@@ -131,7 +140,7 @@ export const CATALOG_CONFIG: CatalogRouteConfig = {
         ].map((topic) => `is:public archived:false fork:false stars:>=10 topic:${topic}`),
         'is:public archived:false fork:false stars:>=10 "alternative to" in:name,description,topics',
       ],
-      cacheKey: "github-open-source-tools:catalog:alternative-to-paid:v1",
+      cacheKey: "github-open-source-tools:catalog:alternative-to-paid:v2",
     },
   },
 };

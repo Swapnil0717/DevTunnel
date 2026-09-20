@@ -32,8 +32,18 @@ type GithubProjectsResult =
   | { status: "empty" }
   | { status: "error" };
 
+/**
+ * Rows requested per backend page — see `CATALOG_PAGE_LIMIT` in
+ * `lib/github-open-source-tools/api.ts` for why (fewer round trips per
+ * full-catalog walk). Requires the backend that accepts `limit` up to 500.
+ */
+const CATALOG_PAGE_LIMIT = 500;
+
 export async function getGithubProjects(): Promise<GithubProjectsResult> {
-  const result = await fetchAllAdminPages<GithubProjectSummary>("/github-projects");
+  const result = await fetchAllAdminPages<GithubProjectSummary>(
+    "/github-projects",
+    CATALOG_PAGE_LIMIT,
+  );
   if (result.status === "error") return { status: "error" };
   if (result.status === "empty") return { status: "empty" };
   return { status: "ok", data: result.data };

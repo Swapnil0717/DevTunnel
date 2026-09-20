@@ -211,37 +211,183 @@ const MAX_CATALOG_PAGES = 10;
 const CATALOG_PER_PAGE = 100;
 
 /**
- * Walks GitHub's `/search/repositories` for `GET /github-projects`
- * (src/routes/githubProjects.ts) — "every open-source project on
- * GitHub", not just repositories DevTunnel has onboarded. There is no
- * GitHub endpoint that literally lists all ~400M repositories on the
- * platform, and returning that many rows would be useless to a
- * contributor anyway, so this samples the slice an "explore open source"
- * page actually wants: real, public, non-archived, non-fork projects,
- * ordered by popularity (`sort=stars`), up to the Search API's own
- * 1,000-result ceiling (see `MAX_CATALOG_PAGES`).
+ * GitHub's Search API is limited to 30 requests per minute per token
+ * (a separate, much smaller budget than the 5,000/hour core REST limit).
+ * One request every 2.1s keeps a single isolate at ~28/min, just under
+ * that ceiling.
+ *
+ * The catalog scans (`lib/githubCatalog.ts`) used to fire 60-130 Search
+ * calls back to back with no spacing, so every scan hit the limit around
+ * its 30th call, threw, and threw away everything it had gathered — which
+ * is why `/github-open-source-tools` never got a cache entry.
+ *
+ * `lastSearchRequestAt` is module-level on purpose: every catalog scan in
+ * this isolate (projects, tools, each named filter) shares ONE token, so
+ * they must share one pacing clock too. The slot is reserved
+ * synchronously (before the `await`), so concurrent callers queue behind
+ * each other instead of all waking up at the same instant.
+ */
+const SEARCH_MIN_INTERVAL_MS = 2100;
+let lastSearchRequestAt = 0;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForSearchSlot(): Promise<void> {
+  const now = Date.now();
+  const slot = Math.max(now, lastSearchRequestAt + SEARCH_MIN_INTERVAL_MS);
+  lastSearchRequestAt = slot;
+  const wait = slot - now;
+  if (wait > 0) await sleep(wait);
+}
+
+/**
+ * Thrown by `githubSearchGet` when GitHub says the Search rate limit (or
+ * its secondary/abuse limit) is exhausted. A distinct type so callers can
+ * keep what they already gathered instead of treating it like any other
+ * failed request.
+ */
+export class GithubSearchRateLimitError extends Error {
+  readonly retryAfterSeconds: number;
+
+  constructor(retryAfterSeconds: number, message: string) {
+    super(message);
+    this.name = "GithubSearchRateLimitError";
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+/**
+ * Returns how long GitHub wants us to wait, or `null` if this 403/429
+ * isn't a rate-limit response at all (e.g. a bad token, which must still
+ * surface as a normal error rather than be mistaken for "try later").
+ */
+function rateLimitRetryAfterSeconds(res: Response, body: string): number | null {
+  const retryAfter = Number(res.headers.get("retry-after"));
+  if (Number.isFinite(retryAfter) && retryAfter > 0) return retryAfter;
+
+  const reset = Number(res.headers.get("x-ratelimit-reset"));
+  if (res.headers.get("x-ratelimit-remaining") === "0" && Number.isFinite(reset) && reset > 0) {
+    return Math.max(1, Math.ceil(reset - Date.now() / 1000));
+  }
+
+  if (res.status === 429 || /rate limit/i.test(body)) return 60;
+  return null;
+}
+
+/** Like `githubGet`, but paced to the Search API budget and rate-limit aware. */
+async function githubSearchGet<T>(env: ValidatedEnv, path: string): Promise<T | null> {
+  await waitForSearchSlot();
+
+  const res = await fetch(`${GITHUB_API}${path}`, { headers: headers(env) });
+  if (res.status === 404) return null;
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+
+    if (res.status === 403 || res.status === 429) {
+      const retryAfter = rateLimitRetryAfterSeconds(res, body);
+      if (retryAfter !== null) {
+        logger.warn("github_search_rate_limited", {
+          path,
+          status: res.status,
+          retryAfterSeconds: retryAfter,
+        });
+        throw new GithubSearchRateLimitError(retryAfter, `GitHub Search rate limit hit for ${path}`);
+      }
+    }
+
+    logger.warn("github_discovery_request_failed", { path, status: res.status, body: body.slice(0, 300) });
+    throw new Error(`GitHub API ${res.status} for ${path}`);
+  }
+
+  return (await res.json()) as T;
+}
+
+export interface CatalogSearchOptions {
+  /** Pages of 100 to walk for this query (1-10, default 10). */
+  maxPages?: number;
+  /**
+   * Longest rate-limit wait (seconds) this walk is willing to sit out
+   * before retrying the same page once. `0` (default) means never wait:
+   * stop and return what's been gathered. Only background/cron callers
+   * should pass a positive value — an HTTP request can't afford to wait
+   * out a rate-limit window.
+   */
+  maxRateLimitWaitSeconds?: number;
+}
+
+export interface CatalogSearchResult {
+  items: GithubCatalogRepoItem[];
+  /** True if the walk stopped early because GitHub's rate limit was hit. */
+  rateLimited: boolean;
+}
+
+async function fetchCatalogPage(
+  env: ValidatedEnv,
+  query: string,
+  page: number,
+  maxRateLimitWaitSeconds: number,
+): Promise<{ items: GithubCatalogRepoItem[] } | "rate_limited"> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const data = await githubSearchGet<{ items: GithubCatalogRepoItem[] }>(
+        env,
+        `/search/repositories?q=${encodeURIComponent(query)}&sort=stars&order=desc&per_page=${CATALOG_PER_PAGE}&page=${page}`,
+      );
+      return { items: data?.items ?? [] };
+    } catch (err) {
+      if (!(err instanceof GithubSearchRateLimitError)) throw err;
+      if (attempt === 1 || err.retryAfterSeconds > maxRateLimitWaitSeconds) return "rate_limited";
+      await sleep((err.retryAfterSeconds + 1) * 1000);
+    }
+  }
+  return "rate_limited";
+}
+
+/**
+ * Walks GitHub's `/search/repositories` for the GitHub-wide catalogs
+ * (`GET /github-projects`, `GET /github-open-source-tools`) — "every
+ * open-source project on GitHub", not just repositories DevTunnel has
+ * onboarded. There is no GitHub endpoint that literally lists all ~400M
+ * repositories on the platform, and returning that many rows would be
+ * useless to a contributor anyway, so this samples the slice an "explore
+ * open source" page actually wants: real, public, non-archived, non-fork
+ * projects, ordered by popularity (`sort=stars`), up to the Search API's
+ * own 1,000-result ceiling (see `MAX_CATALOG_PAGES`).
+ *
+ * Paced to GitHub's 30-requests/minute Search budget (see
+ * `SEARCH_MIN_INTERVAL_MS`) and rate-limit aware: if the limit is hit
+ * mid-walk it returns the pages already gathered with `rateLimited: true`
+ * rather than throwing them away. Any other failure still throws.
  *
  * `archived`, `fork`, and `private` are all re-checked here even though
  * `query` already asks for `archived:false fork:false is:public` —
- * defense in depth (same "don't rely on the query string alone" posture
- * `searchRepositories` above already takes for archived/fork), and
- * because `is:public` is a *search* filter, not a guarantee GitHub can
- * never regress — an explicit client-side `!item.private` check is a
- * second, independent guard against ever surfacing a private repository
- * to a contributor via this discovery-token-backed catalog.
+ * defense in depth, and because `is:public` is a *search* filter, not a
+ * guarantee GitHub can never regress — an explicit client-side
+ * `!item.private` check is a second, independent guard against ever
+ * surfacing a private repository to a contributor via this
+ * discovery-token-backed catalog.
  */
 export async function searchOpenSourceCatalog(
   env: ValidatedEnv,
   query: string,
-): Promise<GithubCatalogRepoItem[]> {
+  options: CatalogSearchOptions = {},
+): Promise<CatalogSearchResult> {
+  const maxPages = Math.min(Math.max(options.maxPages ?? MAX_CATALOG_PAGES, 1), MAX_CATALOG_PAGES);
+  const maxRateLimitWaitSeconds = options.maxRateLimitWaitSeconds ?? 0;
   const results: GithubCatalogRepoItem[] = [];
+  let rateLimited = false;
 
-  for (let page = 1; page <= MAX_CATALOG_PAGES; page++) {
-    const data = await githubGet<{ items: GithubCatalogRepoItem[] }>(
-      env,
-      `/search/repositories?q=${encodeURIComponent(query)}&sort=stars&order=desc&per_page=${CATALOG_PER_PAGE}&page=${page}`,
-    );
-    const items = data?.items ?? [];
+  for (let page = 1; page <= maxPages; page++) {
+    const outcome = await fetchCatalogPage(env, query, page, maxRateLimitWaitSeconds);
+    if (outcome === "rate_limited") {
+      rateLimited = true;
+      break;
+    }
+
+    const items = outcome.items;
     if (items.length === 0) break;
 
     for (const item of items) {
@@ -249,9 +395,9 @@ export async function searchOpenSourceCatalog(
     }
 
     // A short page means this was GitHub's last page — stop rather than
-    // spending an extra call to confirm an empty page 11.
+    // spending an extra call to confirm an empty page.
     if (items.length < CATALOG_PER_PAGE) break;
   }
 
-  return results;
+  return { items: results, rateLimited };
 }

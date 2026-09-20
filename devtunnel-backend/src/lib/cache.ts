@@ -245,3 +245,47 @@ export async function warmCacheSWR<T>(
     logger.error("cache_warm_failed", { key, error: err instanceof Error ? err.message : String(err) });
   }
 }
+
+// ---------------------------------------------------------------------------
+// Best-effort scan lock
+//
+// The GitHub-wide catalog scans (`lib/githubCatalog.ts`) all draw on one
+// GitHub Search budget (30 requests/minute for the one
+// `GITHUB_DISCOVERY_TOKEN`). Two scans running at once — the scheduled
+// warmer plus a request that found a cold cache, or several requests that
+// all found the same cold cache — each burn that budget and push the other
+// into a rate-limit failure. A short-lived KV marker lets one scan run at a
+// time; everyone else backs off instead of piling on.
+//
+// KV is eventually consistent and this is a get-then-put, so two callers
+// can occasionally both win the lock. That's acceptable: the lock only has
+// to make a pile-up rare, not impossible, and the scan itself is
+// rate-limit-aware and never fails destructively (see `scanCatalog`).
+// The TTL is the safety net if a Worker is killed before it can release —
+// KV's minimum `expirationTtl` is 60s, so it's clamped up to that.
+// ---------------------------------------------------------------------------
+
+const LOCK_PREFIX = "lock:";
+
+/** Returns true if the lock was acquired (or KV is unavailable — fails open). */
+export async function tryAcquireLock(env: Env, name: string, ttlSeconds: number): Promise<boolean> {
+  const key = LOCK_PREFIX + name;
+  try {
+    if (await env.RATE_LIMIT_KV.get(key)) return false;
+    await env.RATE_LIMIT_KV.put(key, new Date().toISOString(), {
+      expirationTtl: Math.max(ttlSeconds, 60),
+    });
+    return true;
+  } catch (err) {
+    logger.error("cache_lock_acquire_failed", { name, error: String(err) });
+    return true; // fail open, same posture as the rate limiter
+  }
+}
+
+export async function releaseLock(env: Env, name: string): Promise<void> {
+  try {
+    await env.RATE_LIMIT_KV.delete(LOCK_PREFIX + name);
+  } catch (err) {
+    logger.error("cache_lock_release_failed", { name, error: String(err) });
+  }
+}

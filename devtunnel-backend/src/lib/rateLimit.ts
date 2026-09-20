@@ -18,6 +18,16 @@ export interface RateLimitOptions {
   limit: number;
   /** Window size in seconds. */
   windowSeconds: number;
+  /**
+   * Overrides who the limit is counted against. Defaults to the
+   * connecting IP, which is right for public/unauthenticated endpoints —
+   * but wrong for a route that's called *server-side by the Next.js
+   * frontend Worker* on behalf of a signed-in user: every visitor's
+   * request then arrives from the frontend's own address, so they'd all
+   * share one bucket and one busy visitor could lock out everyone else.
+   * Authenticated routes should pass something like `user:${user.id}`.
+   */
+  identity?: string;
 }
 
 function clientIdentity(c: Context): string {
@@ -33,7 +43,7 @@ export async function checkRateLimit(
 ): Promise<boolean> {
   const { bucket, limit, windowSeconds } = options;
   const window = Math.floor(Date.now() / 1000 / windowSeconds);
-  const identity = clientIdentity(c);
+  const identity = options.identity ?? clientIdentity(c);
   const key = `rl:${bucket}:${identity}:${window}`;
 
   try {

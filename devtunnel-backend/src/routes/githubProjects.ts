@@ -62,7 +62,10 @@ export const CATALOG_CONFIG: CatalogRouteConfig = {
   // `lib/githubCatalog.ts`'s `CatalogRouteConfig.discoveryQueries` doc
   // comment for why this is an array at all.
   discoveryQueries: ["is:public archived:false fork:false stars:>=50"],
-  cacheKey: "github-projects:catalog:v1",
+  // v2: the cached value is now the served `CatalogSummary` rows instead of
+  // raw GitHub search items — see `lib/githubCatalog.ts`. Bumped so a
+  // leftover v1 entry (raw items) is never read back as summaries.
+  cacheKey: "github-projects:catalog:v2",
 };
 
 /**
