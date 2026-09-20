@@ -34,10 +34,11 @@ export const metadata: Metadata = buildMetadata({
  *
  * Browsable with search + filters (tech stack, minimum stars, sort by
  * trending/most stars/newest/recently updated) and 12-per-page grid
- * pagination (`GithubProjectsExplorer`), layered on top of one
- * fully-fetched `GET /github-projects` list (`getGithubProjects` walks
- * the backend's keyset pagination in full — see
- * `lib/github-projects/api.ts`).
+ * pagination (`GithubProjectsExplorer`), layered on top of the
+ * `GET /github-projects` list. The server renders only its first page
+ * (`getGithubProjects` — the most-starred rows, see
+ * `lib/github-projects/api.ts`) so the page appears quickly; a "Load all
+ * projects" button in the explorer fetches the rest from the browser.
  */
 export default async function GithubProjectsPage() {
   const result = await getGithubProjects();
@@ -72,7 +73,14 @@ export default async function GithubProjectsPage() {
             </>
           }
         >
-          <GithubProjectsExplorer projects={result.data} />
+          <GithubProjectsExplorer
+            projects={result.data}
+            catalogLoad={{
+              path: "/github-projects",
+              noun: "projects",
+              hasMore: result.hasMore,
+            }}
+          />
         </Suspense>
       )}
     </main>

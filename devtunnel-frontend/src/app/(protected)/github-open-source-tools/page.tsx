@@ -127,6 +127,16 @@ export default async function GithubOpenSourceToolsPage({
           <GithubProjectsExplorer
             projects={result.data}
             catalogFilter={catalogFilter}
+            // The server renders only the first page; "Load all tools"
+            // fetches the rest — for the same `?filter=` population the
+            // preview came from, so a filtered view never fills up with
+            // unfiltered rows.
+            catalogLoad={{
+              path: "/github-open-source-tools",
+              noun: "tools",
+              filter: activeFilter === NO_CATALOG_FILTER ? undefined : activeFilter,
+              hasMore: result.hasMore,
+            }}
             cardBasePath="/github-open-source-tools"
           />
         </Suspense>

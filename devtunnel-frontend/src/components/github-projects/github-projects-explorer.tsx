@@ -8,6 +8,8 @@ import { FilterSelect } from "@/components/ui/filter-select";
 import { PagePaginationControls } from "@/components/admin/page-pagination-controls";
 import { usePagePagination } from "@/lib/admin/use-page-pagination";
 import { GithubProjectCard } from "./github-project-card";
+import { LoadCatalogBar } from "./load-catalog-bar";
+import { useLoadFullCatalog } from "@/lib/github-projects/use-load-full-catalog";
 import type { GithubProjectSummary } from "@/lib/github-projects/types";
 
 type SortOption = "TRENDING" | "MOST_STARS" | "NEWEST" | "RECENTLY_UPDATED";
@@ -37,6 +39,22 @@ export interface CatalogFilterConfig {
   value: string;
   /** Options shown in the dropdown, including a `NO_CATALOG_FILTER` "no filter" entry. */
   options: CatalogFilterOption[];
+}
+
+/**
+ * What the "Load all" button needs to fetch the rest of a catalog. The
+ * server-rendered page ships only the first page (the most-starred rows);
+ * this tells the explorer where the remainder lives.
+ */
+export interface CatalogLoadConfig {
+  /** Backend list route to load from, e.g. `"/github-projects"`. */
+  path: string;
+  /** Plural noun for the button/status copy — `"projects"` or `"tools"`. */
+  noun: string;
+  /** The catalog's own `?filter=` value when one is active, so the load asks for the same population the preview came from. */
+  filter?: string;
+  /** Whether rows exist past the preview (the backend's `X-Next-Cursor`, read server-side). `false` hides the button. */
+  hasMore: boolean;
 }
 
 /** "500+ stars" style thresholds — a project matches when `stars >= value`. */
@@ -101,12 +119,18 @@ function sortProjects(
 
 /**
  * Client-side search + filter + sort bar for `/github-projects`
- * ("GitHub Projects"), driven by the fully-fetched `GET /github-projects`
- * list (`lib/github-projects/api.ts`) — narrowed and re-ordered here,
- * then paginated 12-per-page (`GITHUB_PROJECTS_PAGE_SIZE`), never a
- * second fabricated data source (Frontend_Development_Rules.txt rule
- * 58). Same convention as `IssuesExplorer` and `AdminProjectsExplorer`:
- * one real fetch, filtered/sorted/paginated entirely in the browser.
+ * ("GitHub Projects"), driven by the `GET /github-projects` list
+ * (`lib/github-projects/api.ts`) — narrowed and re-ordered here, then
+ * paginated 12-per-page (`GITHUB_PROJECTS_PAGE_SIZE`), never a second
+ * fabricated data source (Frontend_Development_Rules.txt rule 58). Same
+ * convention as `IssuesExplorer` and `AdminProjectsExplorer`: filtered,
+ * sorted and paginated entirely in the browser.
+ *
+ * The server ships only the first page (the most-starred rows) so the
+ * page paints without waiting on the whole catalog; `catalogLoad` turns
+ * on a "Load all" button (`LoadCatalogBar`) that fetches the rest from
+ * the browser, after which every filter/sort below covers the complete
+ * list. Until then the bar says the search only covers what's loaded.
  *
  * Three filters, matching what a contributor exploring GitHub
  * repositories actually reaches for: **Tech stack** (built from the
@@ -117,10 +141,18 @@ function sortProjects(
  * Recently updated — see `sortProjects`'s doc comment on "Trending").
  */
 export function GithubProjectsExplorer({
-  projects,
+  projects: initialProjects,
   catalogFilter,
+  catalogLoad,
   cardBasePath = "/github-projects",
 }: {
+  /**
+   * The server-rendered first page of the catalog. When `catalogLoad` is
+   * given and `hasMore` is true, this is only a preview — the rows the
+   * explorer actually searches, filters and pages over are
+   * `useLoadFullCatalog`'s `projects`, which start as this and become the
+   * whole catalog after "Load all".
+   */
   projects: GithubProjectSummary[];
   /**
    * Optional server-driven catalog filter — e.g. "Alternative to paid
@@ -139,6 +171,11 @@ export function GithubProjectsExplorer({
    */
   catalogFilter?: CatalogFilterConfig;
   /**
+   * Enables the "Load all" bar above the grid. Omit it and `projects`
+   * is treated as already complete, exactly as before.
+   */
+  catalogLoad?: CatalogLoadConfig;
+  /**
    * Forwarded straight to `GithubProjectCard` — lets a page reusing this
    * explorer (like `/github-open-source-tools`) send every card's click
    * target to its own `:slug` detail route instead of
@@ -153,6 +190,14 @@ export function GithubProjectsExplorer({
   const [techStack, setTechStack] = useState(ALL_TECH);
   const [minStars, setMinStars] = useState(ALL_STARS);
   const [sortBy, setSortBy] = useState<SortOption>("TRENDING");
+
+  const loader = useLoadFullCatalog({
+    path: catalogLoad?.path ?? null,
+    filter: catalogLoad?.filter,
+    initialProjects,
+    hasMore: catalogLoad?.hasMore ?? false,
+  });
+  const projects = loader.projects;
 
   function handleCatalogFilterChange(nextValue: string) {
     if (!catalogFilter) return;
@@ -295,6 +340,8 @@ export function GithubProjectsExplorer({
           </div>
         </div>
       </div>
+
+      {catalogLoad ? <LoadCatalogBar loader={loader} noun={catalogLoad.noun} /> : null}
 
       {filteredProjects.length === 0 ? (
         <SectionMessage>

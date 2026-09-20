@@ -1,8 +1,8 @@
 // Server Component only — reads request cookies directly (getGithubProjectBySlug)
-// or via `fetchAllAdminPages` (getGithubProjects); don't import from client code.
+// or via `fetchCatalogPreview` (getGithubProjects); don't import from client code.
 import { cookies } from "next/headers";
 import { API_BASE_URL } from "@/lib/config";
-import { fetchAllAdminPages } from "@/lib/admin/fetch-all-pages";
+import { fetchCatalogPreview } from "./fetch-catalog-preview";
 import type { GithubProjectDetail, GithubProjectSummary } from "./types";
 
 /**
@@ -16,37 +16,22 @@ import type { GithubProjectDetail, GithubProjectSummary } from "./types";
  * repeated loads within that window are cheap even though the
  * underlying data is a live cross-GitHub scan, not a database table.
  *
- * Reuses `fetchAllAdminPages` rather than a bespoke walk loop the way
- * `lib/issues/api.ts` has one: `fetchAllAdminPages` isn't actually tied
- * to the `/admin` prefix — it's a generic keyset-pagination walker any
- * `limit`/`before`/`X-Next-Cursor` list route can use (same reasoning
- * `lib/issues/issues-table.tsx`'s doc comment gives for reusing
- * `AdminTableRow`/`RepoLogo` here: role-agnostic logic shouldn't be
- * duplicated — rule 51). The backend's `before` cursor here is an opaque
- * offset into its own cached, stars-ranked catalog (not the ISO
- * timestamp `/issues` uses) — `fetchAllAdminPages` doesn't care, since
- * it only ever round-trips whatever `X-Next-Cursor` it was last given.
+ * Returns only the first page (`CATALOG_PREVIEW_LIMIT` rows, ranked by
+ * stars) plus `hasMore`, not the whole catalog: walking every page
+ * before rendering made the page wait on a full-catalog read. The page's
+ * "Load all projects" button fetches the remainder from the browser
+ * (`lib/github-projects/catalog-client.ts`) when a contributor wants it.
+ * The backend's `before` cursor is an opaque offset into its own cached,
+ * stars-ranked catalog — `fetchCatalogPreview` only ever asks for the
+ * first page, so it never needs to interpret one.
  */
 type GithubProjectsResult =
-  | { status: "ok"; data: GithubProjectSummary[] }
+  | { status: "ok"; data: GithubProjectSummary[]; hasMore: boolean }
   | { status: "empty" }
   | { status: "error" };
 
-/**
- * Rows requested per backend page — see `CATALOG_PAGE_LIMIT` in
- * `lib/github-open-source-tools/api.ts` for why (fewer round trips per
- * full-catalog walk). Requires the backend that accepts `limit` up to 500.
- */
-const CATALOG_PAGE_LIMIT = 500;
-
 export async function getGithubProjects(): Promise<GithubProjectsResult> {
-  const result = await fetchAllAdminPages<GithubProjectSummary>(
-    "/github-projects",
-    CATALOG_PAGE_LIMIT,
-  );
-  if (result.status === "error") return { status: "error" };
-  if (result.status === "empty") return { status: "empty" };
-  return { status: "ok", data: result.data };
+  return fetchCatalogPreview<GithubProjectSummary>("/github-projects");
 }
 
 /**

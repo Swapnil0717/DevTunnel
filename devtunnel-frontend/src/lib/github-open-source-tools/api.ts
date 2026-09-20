@@ -1,21 +1,9 @@
-// Server Component only — `fetchAllAdminPages` and `getGithubOpenSourceToolBySlug`
+// Server Component only — `fetchCatalogPreview` and `getGithubOpenSourceToolBySlug`
 // both read request cookies, don't import from client code.
 import { cookies } from "next/headers";
 import { API_BASE_URL } from "@/lib/config";
-import { fetchAllAdminPages } from "@/lib/admin/fetch-all-pages";
+import { fetchCatalogPreview } from "@/lib/github-projects/fetch-catalog-preview";
 import type { GithubProjectDetail, GithubProjectSummary } from "@/lib/github-projects/types";
-
-/**
- * Rows requested per backend page. This catalog is walked in full on every
- * page load, and at the walker's default of 100 a catalog of a couple
- * thousand repos meant 20+ round trips — each one re-reading the whole
- * cached catalog on the backend. The catalog routes accept up to 500 per
- * page (`catalogListQuerySchema` in devtunnel-backend
- * `src/lib/githubCatalog.ts`), which brings a full walk down to a handful
- * of calls. Deploy the backend change first: an older backend rejects
- * `limit` > 100 with a 400.
- */
-const CATALOG_PAGE_LIMIT = 500;
 
 /**
  * `GET /github-open-source-tools` — backs the contributor-facing
@@ -23,8 +11,8 @@ const CATALOG_PAGE_LIMIT = 500;
  * "Github Open source tools" in `AppSidebar`). Sibling of
  * `lib/github-projects/api.ts`, built the exact same way — a live,
  * GitHub-wide catalog cached 30 minutes backend-side
- * (src/routes/githubOpenSourceTools.ts), walked in full via the same
- * generic `fetchAllAdminPages` keyset-pagination helper.
+ * (src/routes/githubOpenSourceTools.ts), read one page at a time via
+ * `fetchCatalogPreview`.
  *
  * Reuses `GithubProjectSummary` as-is (a type-only import, erased at
  * build time) rather than declaring a separate `GithubToolSummary` —
@@ -43,23 +31,25 @@ const CATALOG_PAGE_LIMIT = 500;
  * page's own `?filter=` search-param handling
  * (`app/(protected)/github-open-source-tools/page.tsx`) is what keeps a
  * bad value from ever reaching this function in the first place.
+ *
+ * Like `getGithubProjects`, returns only the first page
+ * (`CATALOG_PREVIEW_LIMIT` rows, ranked by stars) plus `hasMore`; the
+ * page's "Load all tools" button fetches the rest from the browser
+ * (`lib/github-projects/catalog-client.ts`), passing the same `filter`.
  */
 type GithubOpenSourceToolsResult =
-  | { status: "ok"; data: GithubProjectSummary[] }
+  | { status: "ok"; data: GithubProjectSummary[]; hasMore: boolean }
   | { status: "empty" }
   | { status: "error" };
 
 export async function getGithubOpenSourceTools(
   filter?: string,
 ): Promise<GithubOpenSourceToolsResult> {
-  const result = await fetchAllAdminPages<GithubProjectSummary>(
+  return fetchCatalogPreview<GithubProjectSummary>(
     "/github-open-source-tools",
-    CATALOG_PAGE_LIMIT,
+    undefined,
     filter ? { filter } : undefined,
   );
-  if (result.status === "error") return { status: "error" };
-  if (result.status === "empty") return { status: "empty" };
-  return { status: "ok", data: result.data };
 }
 
 /**
