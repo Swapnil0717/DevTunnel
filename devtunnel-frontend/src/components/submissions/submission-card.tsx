@@ -36,8 +36,16 @@ import type { Submission } from "@/lib/submissions/types";
  * its branch-icon placeholder when there's no repository or the avatar
  * fails to load — never a blank box.
  *
- * The name opens the submission's own view page (`/submissions/:slug`),
- * and the repository link in the footer still goes straight to GitHub.
+ * The whole card opens the submission's own view page
+ * (`/submissions/:slug`) — the standard "stretched link" pattern
+ * `GithubProjectCard` uses: one real `Link` positioned over the entire
+ * card (`absolute inset-0 z-0`) carries the click target, keyboard focus
+ * and accessible name, and every control that must keep doing its own
+ * thing is lifted above it (`relative z-10`): the upvote button, "Edit",
+ * the submitter's GitHub profile and the repository link, which still
+ * goes straight to GitHub. Clicking anywhere else — logo, name,
+ * description, tags — opens the view page.
+ *
  * "Edit" appears only on the viewer's own submissions
  * (`ownedByViewer`) and links to the edit page; the backend enforces
  * ownership independently, so this is a convenience, not the guard.
@@ -53,7 +61,14 @@ export function SubmissionCard({ submission }: { submission: Submission }) {
   const viewHref = `/submissions/${submission.slug}`;
 
   return (
-    <li className="flex gap-3 rounded-[10px] border border-border-subtle bg-surface-raised p-4 transition-colors hover:border-border">
+    <li className="relative flex gap-3 rounded-[10px] border border-border-subtle bg-surface-raised p-4 transition-colors hover:border-border">
+      <Link
+        href={viewHref}
+        className="absolute inset-0 z-0 rounded-[10px] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      >
+        <span className="sr-only">View {submission.name} details</span>
+      </Link>
+
       <div className="flex shrink-0 flex-col items-center gap-1">
         <button
           type="button"
@@ -61,7 +76,7 @@ export function SubmissionCard({ submission }: { submission: Submission }) {
           disabled={isSaving}
           aria-pressed={upvoted}
           aria-label={upvoted ? `Remove your upvote from ${submission.name}` : `Upvote ${submission.name}`}
-          className={`flex h-8 w-9 items-center justify-center rounded-[7px] border text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+          className={`relative z-10 flex h-8 w-9 items-center justify-center rounded-[7px] border text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
             upvoted
               ? "border-accent/40 bg-surface-selected text-status-success-label"
               : "border-border-subtle bg-surface text-text-dim hover:text-text"
@@ -83,12 +98,7 @@ export function SubmissionCard({ submission }: { submission: Submission }) {
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-          <Link
-            href={viewHref}
-            className="text-[13.5px] font-medium text-text hover:text-accent"
-          >
-            {submission.name}
-          </Link>
+          <h3 className="m-0 text-[13.5px] font-medium text-text">{submission.name}</h3>
           <span className="inline-flex items-center gap-1 text-[11px] text-text-faint">
             <KindIcon className="h-3 w-3 shrink-0" />
             {submission.kind === "TOOL" ? "Tool" : "Project"}
@@ -99,24 +109,16 @@ export function SubmissionCard({ submission }: { submission: Submission }) {
             </span>
           ) : null}
 
-          <span className="ml-auto flex items-center gap-2 text-[11.5px]">
+          {submission.ownedByViewer ? (
             <Link
-              href={viewHref}
-              className="rounded-[6px] border border-border-subtle px-2 py-1 text-text-dim transition-colors hover:border-border hover:text-text"
+              href={`${viewHref}/edit`}
+              aria-label={`Edit ${submission.name}`}
+              className="relative z-10 ml-auto inline-flex items-center gap-1 rounded-[6px] border border-border-subtle px-2 py-1 text-[11.5px] text-text-dim transition-colors hover:border-border hover:text-text"
             >
-              View
+              <EditIcon className="h-3 w-3 shrink-0" />
+              Edit
             </Link>
-            {submission.ownedByViewer ? (
-              <Link
-                href={`${viewHref}/edit`}
-                aria-label={`Edit ${submission.name}`}
-                className="inline-flex items-center gap-1 rounded-[6px] border border-border-subtle px-2 py-1 text-text-dim transition-colors hover:border-border hover:text-text"
-              >
-                <EditIcon className="h-3 w-3 shrink-0" />
-                Edit
-              </Link>
-            ) : null}
-          </span>
+          ) : null}
         </div>
 
         {submission.description ? (
@@ -155,7 +157,7 @@ export function SubmissionCard({ submission }: { submission: Submission }) {
                 href={submission.submittedBy.profileUrl}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="hover:text-accent"
+                className="relative z-10 hover:text-accent"
               >
                 @{submission.submittedBy.username}
               </a>
@@ -175,7 +177,7 @@ export function SubmissionCard({ submission }: { submission: Submission }) {
                 href={submission.sourceUrl}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="inline-flex items-center gap-1 font-mono hover:text-accent"
+                className="relative z-10 inline-flex items-center gap-1 font-mono hover:text-accent"
               >
                 <GitBranchIcon className="h-3 w-3 shrink-0" />
                 {submission.repositoryFullName}
