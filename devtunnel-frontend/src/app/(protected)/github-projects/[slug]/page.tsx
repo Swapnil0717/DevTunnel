@@ -177,7 +177,7 @@ export default async function GithubProjectDetailPage({
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
-          <GithubProjectDetailTabs project={project} />
+          <GithubProjectDetailTabs project={project} issuesBasePath="/github-projects" />
         </div>
         <GithubProjectSidebar project={project} shareUrl={shareUrl} />
       </div>

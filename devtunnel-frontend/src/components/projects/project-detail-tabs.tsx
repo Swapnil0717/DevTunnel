@@ -7,6 +7,9 @@ import { ProjectTasksPanel } from "@/components/projects/project-tasks-panel";
 import { ProjectIssuesPanel } from "@/components/projects/project-issues-panel";
 import { GridIcon, FileIcon, ChecklistIcon, IssueIcon } from "@/components/layout/nav-icons";
 import { getTechTagClasses } from "@/lib/home/tag-style";
+import { repoIssuesPath } from "@/lib/issues/repo-issues-client";
+import { useLoadAllIssues } from "@/lib/issues/use-load-all-issues";
+import type { Issue } from "@/lib/issues/types";
 import type { DevtunnelProjectDetail } from "@/lib/projects/types";
 
 const TABS = [
@@ -40,13 +43,32 @@ type TabId = (typeof TABS)[number]["id"];
  * including the DevTunnel/GitHub contributor split kept as two labeled
  * rows rather than one combined figure (admin_workflow.txt section 5 —
  * "do not mix the two datasets").
+ *
+ * The All Issues list's state (`useLoadAllIssues`) is held here rather
+ * than in `ProjectIssuesPanel`: the panel unmounts whenever another tab
+ * is opened, and a contributor who just waited for the complete issue
+ * list shouldn't have it thrown away by a glance at the README. Holding
+ * it here also lets the tab's badge follow what was actually loaded.
  */
 export function ProjectDetailTabs({ project }: { project: DevtunnelProjectDetail }) {
   const [activeId, setActiveId] = useState<TabId>("info");
 
-  const tabCount: Partial<Record<TabId, number>> = {
-    tasks: project.tasks.length,
-    issues: project.issues.length,
+  const issuesLoader = useLoadAllIssues<Issue>({
+    path: repoIssuesPath("/projects", project.slug),
+    initialIssues: project.issues,
+    openIssuesCount: project.openIssuesCount,
+  });
+
+  // Both badges come from the lists themselves (rule 38). The issues one
+  // gains a "+" when the backend capped the full list.
+  const tabCount: Partial<Record<TabId, string>> = {
+    tasks: project.tasks.length > 0 ? project.tasks.length.toLocaleString() : undefined,
+    issues:
+      issuesLoader.issues.length > 0
+        ? `${issuesLoader.issues.length.toLocaleString()}${
+            issuesLoader.status === "loaded" && issuesLoader.truncated ? "+" : ""
+          }`
+        : undefined,
   };
 
   return (
@@ -59,7 +81,7 @@ export function ProjectDetailTabs({ project }: { project: DevtunnelProjectDetail
         {TABS.map((tab) => {
           const isActive = tab.id === activeId;
           const Icon = tab.icon;
-          const count = tabCount[tab.id];
+          const badge = tabCount[tab.id];
 
           return (
             <button
@@ -78,9 +100,9 @@ export function ProjectDetailTabs({ project }: { project: DevtunnelProjectDetail
             >
               <Icon className="h-3.5 w-3.5" />
               {tab.label}
-              {typeof count === "number" && count > 0 ? (
+              {badge ? (
                 <span className="rounded-full bg-surface-raised px-1.5 py-[1px] text-[10px] text-text-faint">
-                  {count.toLocaleString()}
+                  {badge}
                 </span>
               ) : null}
             </button>
@@ -213,7 +235,7 @@ export function ProjectDetailTabs({ project }: { project: DevtunnelProjectDetail
           aria-labelledby="project-tab-issues"
           className="rounded-[10px] border border-border bg-surface p-4"
         >
-          <ProjectIssuesPanel issues={project.issues} repositoryUrl={project.repositoryUrl} />
+          <ProjectIssuesPanel loader={issuesLoader} repositoryUrl={project.repositoryUrl} />
         </div>
       ) : null}
     </div>

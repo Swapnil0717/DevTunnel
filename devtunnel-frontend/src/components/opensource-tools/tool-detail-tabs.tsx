@@ -7,7 +7,9 @@ import { ToolIssuesPanel } from "@/components/opensource-tools/tool-issues-panel
 import { GridIcon, FileIcon, ToolIcon, IssueIcon } from "@/components/layout/nav-icons";
 import { formatRelativeTime } from "@/lib/home/format-relative-time";
 import { getTechTagClasses } from "@/lib/home/tag-style";
-import type { OpenSourceToolDetail } from "@/lib/opensource-tools/types";
+import { repoIssuesPath } from "@/lib/issues/repo-issues-client";
+import { useLoadAllIssues } from "@/lib/issues/use-load-all-issues";
+import type { OpenSourceToolDetail, OpenSourceToolIssuePreview } from "@/lib/opensource-tools/types";
 
 const TABS = [
   { id: "info", label: "Tool Info", icon: GridIcon },
@@ -38,9 +40,31 @@ type TabId = (typeof TABS)[number]["id"];
  * - **All Issues depends on the repository.** A tool's source can be a
  *   docs site rather than a repo, so the count is absent (not zero) and
  *   the panel says so plainly instead of showing an empty list.
+ *
+ * The All Issues list's state (`useLoadAllIssues`) is held here rather
+ * than in `ToolIssuesPanel`: the panel unmounts whenever another tab is
+ * opened, and a contributor who just waited for the complete issue list
+ * shouldn't have it thrown away by a glance at the setup guide. Holding it
+ * here also lets the tab's badge follow what was actually loaded. With no
+ * repository there's nothing to load from, so its `path` is `null`.
  */
 export function ToolDetailTabs({ tool }: { tool: OpenSourceToolDetail }) {
   const [activeId, setActiveId] = useState<TabId>("info");
+
+  const issuesLoader = useLoadAllIssues<OpenSourceToolIssuePreview>({
+    path: tool.repository ? repoIssuesPath("/opensource-tools", tool.slug) : null,
+    initialIssues: tool.openIssues,
+    openIssuesCount: tool.repository?.openIssuesCount ?? 0,
+  });
+
+  // The badge comes from the list itself (rule 38), gaining a "+" when the
+  // backend capped the full list.
+  const issuesBadge =
+    issuesLoader.issues.length > 0
+      ? `${issuesLoader.issues.length.toLocaleString()}${
+          issuesLoader.status === "loaded" && issuesLoader.truncated ? "+" : ""
+        }`
+      : undefined;
 
   return (
     <div>
@@ -52,7 +76,7 @@ export function ToolDetailTabs({ tool }: { tool: OpenSourceToolDetail }) {
         {TABS.map((tab) => {
           const isActive = tab.id === activeId;
           const Icon = tab.icon;
-          const count = tab.id === "issues" ? tool.openIssues.length : undefined;
+          const badge = tab.id === "issues" ? issuesBadge : undefined;
 
           return (
             <button
@@ -71,9 +95,9 @@ export function ToolDetailTabs({ tool }: { tool: OpenSourceToolDetail }) {
             >
               <Icon className="h-3.5 w-3.5" />
               {tab.label}
-              {typeof count === "number" && count > 0 ? (
+              {badge ? (
                 <span className="rounded-full bg-surface-raised px-1.5 py-[1px] text-[10px] text-text-faint">
-                  {count.toLocaleString()}
+                  {badge}
                 </span>
               ) : null}
             </button>
@@ -197,10 +221,7 @@ export function ToolDetailTabs({ tool }: { tool: OpenSourceToolDetail }) {
           aria-labelledby="tool-tab-issues"
           className="rounded-[10px] border border-border bg-surface p-4"
         >
-          <ToolIssuesPanel
-            issues={tool.openIssues}
-            repositoryUrl={tool.repository?.url ?? null}
-          />
+          <ToolIssuesPanel loader={issuesLoader} repositoryUrl={tool.repository?.url ?? null} />
         </div>
       ) : null}
     </div>

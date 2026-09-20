@@ -56,8 +56,10 @@ export async function generateMetadata({
  * `GET /github-open-source-tools/:slug`
  * (`lib/github-open-source-tools/api.ts`) server-side and renders it the
  * same way, including the same two-column layout — the tabbed body
- * (`GithubProjectDetailTabs`, reused as-is since a tool's detail shape is
- * identical to a project's: `GithubProjectDetail`) on the left, and the
+ * (`GithubProjectDetailTabs`, reused since a tool's detail shape is
+ * identical to a project's: `GithubProjectDetail` — told which catalog
+ * it's in via `issuesBasePath`, so its Issues tab's "Load all issues"
+ * hits this catalog's own route) on the left, and the
  * same `GithubProjectSidebar` ("About" card, maintainer, clone command,
  * share link) pinned on the right. `tool.owner` was already part of the
  * fetched `GithubProjectDetail` shape but had no home anywhere on this
@@ -181,7 +183,7 @@ export default async function GithubToolDetailPage({ params }: GithubToolDetailP
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
-          <GithubProjectDetailTabs project={tool} />
+          <GithubProjectDetailTabs project={tool} issuesBasePath="/github-open-source-tools" />
         </div>
         <GithubProjectSidebar project={tool} shareUrl={shareUrl} />
       </div>
