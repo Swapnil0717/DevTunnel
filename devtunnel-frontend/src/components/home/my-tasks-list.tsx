@@ -64,6 +64,8 @@ export async function MyTasksList() {
               projectSlug={task.projectSlug}
               status={task.status}
               projectName={task.projectName}
+              startedAt={task.startedAt}
+              pullRequest={task.pullRequest}
             />
           </li>
         ))}

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { TASK_STAGES, stageFor, stageIndex } from "@/lib/tasks/progress";
-import type { TaskStatus } from "@/lib/tasks/types";
+import type { TaskPullRequestRef, TaskStatus } from "@/lib/tasks/types";
+import { formatRelativeTime } from "@/lib/home/format-relative-time";
 
 /**
  * Chip colors per stage, matched to each stage's dot/segment color in
@@ -30,6 +31,17 @@ type TaskRowProps =
       status: TaskStatus;
       /** Shown under the title when the backend sent it, so two tasks with similar titles can be told apart. */
       projectName?: string;
+      /** When `dev start` claimed it. Shown under the title alongside `projectName`. */
+      startedAt?: string | null;
+      /**
+       * The PR `dev submit` opened, if any. Only its number is surfaced here
+       * (as plain text, not a link) — the row is already one `Link` to the
+       * task page, and nesting a second `<a>` to GitHub inside it would
+       * break the single-link-per-row pattern every other Home row uses.
+       * The actual "open on GitHub" link lives on the task page itself
+       * (`TaskProgressTracker`).
+       */
+      pullRequest?: TaskPullRequestRef | null;
     };
 
 /**
@@ -41,8 +53,11 @@ type TaskRowProps =
  *
  * The chip carries the stage in words; the mini bar is decorative
  * (`aria-hidden`), so nothing is conveyed by color alone (rule 43). The
- * whole row is one link to the task page, so the pull request link lives
- * there rather than nested inside this one.
+ * whole row is one link to the task page, so the actual pull-request link
+ * lives there rather than nested inside this one — here, once a task
+ * reaches `IN_REVIEW`, only the PR number is surfaced as plain text next
+ * to the chip. `startedAt`, when sent, appears under the title next to
+ * the project name.
  */
 export function TaskRow(props: TaskRowProps) {
   const href = `/projects/${props.projectSlug}/tasks/${props.taskId}`;
@@ -54,8 +69,17 @@ export function TaskRow(props: TaskRowProps) {
     >
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[11.5px] text-text-secondary">{props.title}</span>
-        {props.variant === "mine" && props.projectName ? (
-          <span className="block truncate text-[10px] text-text-faint">{props.projectName}</span>
+        {props.variant === "mine" && (props.projectName || props.startedAt) ? (
+          <span className="block truncate text-[10px] text-text-faint">
+            {props.projectName}
+            {props.projectName && props.startedAt ? " · " : null}
+            {props.startedAt ? (
+              <>
+                Started{" "}
+                <time dateTime={props.startedAt}>{formatRelativeTime(props.startedAt)}</time>
+              </>
+            ) : null}
+          </span>
         ) : null}
       </span>
 
@@ -65,6 +89,11 @@ export function TaskRow(props: TaskRowProps) {
         </span>
       ) : (
         <span className="flex shrink-0 items-center gap-2">
+          {props.status === "IN_REVIEW" && props.pullRequest?.number ? (
+            <span className="text-[10px] text-text-faint font-mono">
+              PR #{props.pullRequest.number}
+            </span>
+          ) : null}
           <span aria-hidden="true" className="flex items-center gap-0.5">
             {TASK_STAGES.map((stage, index) => (
               <span
