@@ -226,6 +226,48 @@ export interface DevTunnelStats {
   isMaintainer: boolean;
 }
 
+/**
+ * The profile page's "30-day milestones" section
+ * (devtunnel-frontend components/profile/milestone-track.tsx). Backed by
+ * `GET /users/me/contributions/milestones` (routes/devtunnelStats.ts).
+ * See lib/milestones.ts for how this is built and for the checkpoint /
+ * bonus goal constants.
+ */
+export interface MilestoneDay {
+  date: string; // YYYY-MM-DD
+  active: boolean;
+}
+
+export interface MilestoneCheckpoint {
+  id: string;
+  label: string;
+  threshold: number;
+  iconId: "seedling" | "flame" | "bolt" | "trophy" | "crown";
+  reached: boolean;
+  /** 0 once `reached` is true. */
+  daysRemaining: number;
+}
+
+export interface MilestoneBonusGoal {
+  id: "tasks" | "pullRequests";
+  label: string;
+  current: number;
+  target: number;
+  reached: boolean;
+}
+
+export interface MilestoneWindow {
+  fromDate: string; // YYYY-MM-DD
+  toDate: string; // YYYY-MM-DD
+  windowDays: number;
+  activeDayCount: number;
+  /** Oldest to newest, always exactly `windowDays` entries. */
+  days: MilestoneDay[];
+  checkpoints: MilestoneCheckpoint[];
+  nextCheckpoint: MilestoneCheckpoint | null;
+  bonusGoals: MilestoneBonusGoal[];
+}
+
 /* -------------------------------------------------------------------------
  * Admin — Project Onboarding (admin_workflow.txt section 6; sql/006).
  *

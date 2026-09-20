@@ -4,6 +4,7 @@ import type {
   ContributionSummary,
   DevTunnelContributionMonth,
   DevTunnelStats,
+  MilestoneWindow,
 } from "./types";
 
 export class ProfileApiError extends Error {
@@ -151,5 +152,32 @@ export async function fetchDevTunnelStats(): Promise<DevTunnelStats> {
   }
 
   const body = (await res.json()) as { data: DevTunnelStats };
+  return body.data;
+}
+
+/**
+ * `GET /users/me/contributions/milestones` (devtunnel-backend
+ * src/routes/devtunnelStats.ts) — the rolling 30-day day strip,
+ * checkpoints, and bonus goals behind the profile page's "30-day
+ * milestones" section. No "account not linked" error state here: every
+ * signed-in user gets a real window back, built from DevTunnel activity
+ * alone when no GitHub account is linked.
+ */
+export async function fetchMilestoneWindow(): Promise<MilestoneWindow> {
+  const res = await fetch(`${API_BASE_URL}/users/me/contributions/milestones`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const { code, message } = await parseErrorBody(res);
+    throw new ProfileApiError(
+      message ?? `Failed to load milestone progress (${res.status})`,
+      res.status,
+      code,
+    );
+  }
+
+  const body = (await res.json()) as { data: MilestoneWindow };
   return body.data;
 }

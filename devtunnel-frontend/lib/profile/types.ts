@@ -64,3 +64,44 @@ export type DevTunnelStats = {
   pullRequestsMerged: number;
   isMaintainer: boolean;
 };
+
+/**
+ * The profile page's "30-day milestones" section
+ * (components/profile/milestone-track.tsx). `GET
+ * /users/me/contributions/milestones` (devtunnel-backend
+ * src/routes/devtunnelStats.ts) — see that route's comment for what
+ * counts as an "active day" and devtunnel-backend src/lib/milestones.ts
+ * for the checkpoint thresholds and bonus goal targets.
+ */
+export type MilestoneDay = {
+  date: string; // YYYY-MM-DD
+  active: boolean;
+};
+
+export type MilestoneCheckpoint = {
+  id: string;
+  label: string;
+  threshold: number;
+  iconId: "seedling" | "flame" | "bolt" | "trophy" | "crown";
+  reached: boolean;
+  daysRemaining: number;
+};
+
+export type MilestoneBonusGoal = {
+  id: "tasks" | "pullRequests";
+  label: string;
+  current: number;
+  target: number;
+  reached: boolean;
+};
+
+export type MilestoneWindow = {
+  fromDate: string; // YYYY-MM-DD
+  toDate: string; // YYYY-MM-DD
+  windowDays: number;
+  activeDayCount: number;
+  days: MilestoneDay[];
+  checkpoints: MilestoneCheckpoint[];
+  nextCheckpoint: MilestoneCheckpoint | null;
+  bonusGoals: MilestoneBonusGoal[];
+};

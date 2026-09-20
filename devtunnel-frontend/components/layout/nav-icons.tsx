@@ -302,3 +302,80 @@
      </svg>
    );
  }
+
+ /** Profile page — "Contributions" stat card. */
+ export function GitCommitIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <circle cx="12" cy="12" r="3.2" />
+       <path d="M2.5 12h6.3" />
+       <path d="M15.2 12h6.3" />
+     </svg>
+   );
+ }
+
+ /** Profile page — "Current streak" stat card. */
+ export function FlameIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M12 3c1 2.2-.3 3.4-1.4 4.6C9.3 8.9 8 10.4 8 12.6a4 4 0 0 0 8 0c0-1-.4-1.8-.9-2.5.7.5 1.9 1.7 1.9 3.7a5 5 0 0 1-10 0C7 10.6 9.5 8.7 10.6 7 11.3 5.9 11.6 4.6 12 3Z" />
+     </svg>
+   );
+ }
+
+ /** Profile page — "Pull requests merged" stat card and milestone bonus goal. */
+ export function GitPullRequestIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <circle cx="6.5" cy="6" r="2.2" />
+       <circle cx="6.5" cy="18" r="2.2" />
+       <circle cx="17.5" cy="10.5" r="2.2" />
+       <path d="M6.5 8.2V15.8" />
+       <path d="M17.5 12.7V16a2 2 0 0 1-2 2h-4.3" />
+     </svg>
+   );
+ }
+
+ /** Milestone track — "Warm-up" checkpoint (3 active days). */
+ export function SeedlingIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M12 21v-8" />
+       <path d="M12 13c0-4.5-3.5-6.5-7.5-6.5C4.5 10.5 7.5 13 12 13Z" />
+       <path d="M12 10.5c0-3.5 2.8-5 6-5 0 3.2-2.4 5.5-6 5.5" />
+     </svg>
+   );
+ }
+
+ /** Milestone track — "Consistent" checkpoint (14 active days). */
+ export function BoltIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M13 3 5 13.5h5.5L11 21l8-10.8h-5.6Z" />
+     </svg>
+   );
+ }
+
+ /** Milestone track — "Committed" checkpoint (21 active days). */
+ export function TrophyIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M7 4.5h10v4a5 5 0 0 1-10 0Z" />
+       <path d="M7 5.5H4a3 3 0 0 0 3 4.4" />
+       <path d="M17 5.5h3a3 3 0 0 1-3 4.4" />
+       <path d="M12 13.5v3" />
+       <path d="M9 19.5h6" />
+       <path d="M10 16.5h4l.6 3H9.4Z" />
+     </svg>
+   );
+ }
+
+ /** Milestone track — "Full month" checkpoint (30 active days). */
+ export function CrownIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M4 8.5 8 12l4-6.5 4 6.5 4-3.5-1.4 9.5H5.4Z" />
+       <path d="M5.4 18h13.2" />
+     </svg>
+   );
+ }

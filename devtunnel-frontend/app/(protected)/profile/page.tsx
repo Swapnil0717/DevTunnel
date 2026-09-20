@@ -4,9 +4,11 @@ import { getServerUser } from "@/lib/auth/get-server-user";
 import { getServerContributionsSummary } from "@/lib/profile/get-server-contributions-summary";
 import { getServerDevTunnelContributionsSummary } from "@/lib/profile/get-server-devtunnel-contributions-summary";
 import { getServerDevTunnelStats } from "@/lib/profile/get-server-devtunnel-stats";
+import { getServerMilestoneWindow } from "@/lib/profile/get-server-milestone-window";
 import { ProfileHeader } from "@/components/profile/profile-header";
 import { ProfileTags } from "@/components/profile/profile-tags";
 import { ProfileStats } from "@/components/profile/profile-stats";
+import { MilestoneTrack } from "@/components/profile/milestone-track";
 import { ProfileTabs } from "@/components/profile/profile-tabs";
 
 export const metadata: Metadata = buildMetadata({
@@ -30,7 +32,7 @@ export const metadata: Metadata = buildMetadata({
 // file, matching the components/home/* convention elsewhere in this
 // codebase.
 //
-// The profile page's stats now pull from FOUR real backend sources,
+// The profile page's stats now pull from FIVE real backend sources,
 // fetched here in parallel:
 //   - getServerUser() — GET /auth/me (devtunnel-backend src/routes/auth.ts),
 //     now including every onboarding field + `isMaintainer` (see
@@ -45,17 +47,21 @@ export const metadata: Metadata = buildMetadata({
 //     (src/routes/devtunnelStats.ts) — projects created/maintained, tasks
 //     completed, pull requests merged, all backed by real tables
 //     (devtunnel-backend/sql/004_add_devtunnel_contributions.sql).
+//   - getServerMilestoneWindow() — GET /users/me/contributions/milestones
+//     (src/routes/devtunnelStats.ts) — the rolling 30-day day strip,
+//     checkpoints, and bonus goals rendered by MilestoneTrack.
 // Each fetcher independently returns `null` on failure so one source
 // going down never blocks the rest of the page — see the comments on
 // each fetcher for why (Frontend_Development_Rules.txt rule 58: never
 // invent a number, always render an honest "not available" state
 // instead).
 export default async function ProfilePage() {
-  const [user, githubSummary, devtunnelSummary, devtunnelStats] = await Promise.all([
+  const [user, githubSummary, devtunnelSummary, devtunnelStats, milestoneWindow] = await Promise.all([
     getServerUser(),
     getServerContributionsSummary(),
     getServerDevTunnelContributionsSummary(),
     getServerDevTunnelStats(),
+    getServerMilestoneWindow(),
   ]);
 
   return (
@@ -72,6 +78,7 @@ export default async function ProfilePage() {
               devtunnelSummary={devtunnelSummary}
               devtunnelStats={devtunnelStats}
             />
+            <MilestoneTrack milestoneWindow={milestoneWindow} />
             <ProfileTabs />
           </div>
         </div>

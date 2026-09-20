@@ -1,4 +1,10 @@
 import type { ContributionSummary, DevTunnelStats } from "@/lib/profile/types";
+import {
+  GitCommitIcon,
+  FolderIcon,
+  ChecklistIcon,
+  GitPullRequestIcon,
+} from "@/components/layout/nav-icons";
 
 /**
  * Contributions / Projects / Tasks done / Pull requests stat cards
@@ -23,6 +29,13 @@ import type { ContributionSummary, DevTunnelStats } from "@/lib/profile/types";
  * Every card still falls back to an honest "—" (not a guessed 0) when
  * its source failed to load server-side — never invent a number
  * (Frontend_Development_Rules.txt rule 58/59).
+ *
+ * Each card carries a small icon chip (git-commit / folder / checklist /
+ * pull-request) using colors already in the theme (tailwind.config.ts —
+ * status.success, tag-interest, status.info, tag-skill) rather than a
+ * new palette. Every icon is `aria-hidden` and sits next to a text label
+ * that carries the same meaning on its own, so nothing here is
+ * communicated by color or icon alone (rule 43).
  */
 export function ProfileStats({
   githubSummary,
@@ -39,7 +52,12 @@ export function ProfileStats({
       aria-label="Contribution stats"
     >
       <div className="col-span-2 rounded-lg bg-surface px-3.5 py-3 sm:col-span-1">
-        <p className="m-0 mb-1 text-[11px] text-text-dim">Contributions</p>
+        <StatCardIcon
+          icon={GitCommitIcon}
+          bgClassName="bg-status-success-bg"
+          colorClassName="text-status-success-label"
+        />
+        <p className="m-0 mb-1 mt-2 text-[11px] text-text-dim">Contributions</p>
         <div className="flex items-baseline gap-3">
           <div>
             {githubSummary ? (
@@ -75,7 +93,12 @@ export function ProfileStats({
       </div>
 
       <div className="rounded-lg bg-surface px-3.5 py-3">
-        <p className="m-0 mb-1 text-[11px] text-text-dim">Projects</p>
+        <StatCardIcon
+          icon={FolderIcon}
+          bgClassName="bg-tag-interest-bg"
+          colorClassName="text-tag-interest-text"
+        />
+        <p className="m-0 mb-1 mt-2 text-[11px] text-text-dim">Projects</p>
         {devtunnelStats ? (
           <>
             <p className="m-0 text-xl font-medium text-text">{devtunnelStats.projectsCreated}</p>
@@ -96,7 +119,12 @@ export function ProfileStats({
       </div>
 
       <div className="rounded-lg bg-surface px-3.5 py-3">
-        <p className="m-0 mb-1 text-[11px] text-text-dim">Tasks done</p>
+        <StatCardIcon
+          icon={ChecklistIcon}
+          bgClassName="bg-status-info-bg"
+          colorClassName="text-status-info-text"
+        />
+        <p className="m-0 mb-1 mt-2 text-[11px] text-text-dim">Tasks done</p>
         {devtunnelStats ? (
           <p className="m-0 text-xl font-medium text-text">{devtunnelStats.tasksCompleted}</p>
         ) : (
@@ -110,7 +138,12 @@ export function ProfileStats({
       </div>
 
       <div className="rounded-lg bg-surface px-3.5 py-3">
-        <p className="m-0 mb-1 text-[11px] text-text-dim">Pull requests</p>
+        <StatCardIcon
+          icon={GitPullRequestIcon}
+          bgClassName="bg-tag-skill-bg"
+          colorClassName="text-tag-skill-text"
+        />
+        <p className="m-0 mb-1 mt-2 text-[11px] text-text-dim">Pull requests</p>
         {devtunnelStats ? (
           <p className="m-0 text-xl font-medium text-text">{devtunnelStats.pullRequestsMerged}</p>
         ) : (
@@ -122,6 +155,29 @@ export function ProfileStats({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The small rounded icon chip shared by all four cards above. A tiny
+ * local component rather than four copies of the same markup (rule 51).
+ * Always decorative — see the file header for why.
+ */
+function StatCardIcon({
+  icon: Icon,
+  bgClassName,
+  colorClassName,
+}: {
+  icon: (props: { className?: string }) => JSX.Element;
+  bgClassName: string;
+  colorClassName: string;
+}) {
+  return (
+    <div
+      className={`flex h-7 w-7 items-center justify-center rounded-md ${bgClassName} ${colorClassName}`}
+    >
+      <Icon className="h-4 w-4" />
     </div>
   );
 }

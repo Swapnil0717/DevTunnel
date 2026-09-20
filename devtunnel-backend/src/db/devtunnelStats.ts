@@ -119,3 +119,49 @@ export async function getDevTunnelContributionSummary(
 
   return { totalContributions: count ?? 0, fromISO, toISO };
 }
+
+/**
+ * Raw DevTunnel-native activity for an arbitrary `[fromISO, toISO]`
+ * window — backs the profile page's 30-day milestone track
+ * (`GET /users/me/contributions/milestones`, routes/devtunnelStats.ts,
+ * shaped by lib/milestones.ts).
+ *
+ * A single query over `activity_log` (sql/004) gives both pieces the
+ * route needs: `dailyCounts` (any activity type, used for the "active
+ * day" strip — merged with the caller's GitHub days by the route) and
+ * the `TASK_COMPLETED` / `PULL_REQUEST_MERGED` counts for the two bonus
+ * goals. One query rather than three, since `activity_log` already rows
+ * up every event this needs.
+ */
+export async function getDevTunnelActivityWindow(
+  supabase: SupabaseClient,
+  userId: string,
+  fromISO: string,
+  toISO: string,
+): Promise<{
+  dailyCounts: Map<string, number>;
+  tasksCompleted: number;
+  pullRequestsMerged: number;
+}> {
+  const { data, error } = await supabase
+    .from("activity_log")
+    .select("occurred_at, type")
+    .eq("user_id", userId)
+    .gte("occurred_at", fromISO)
+    .lte("occurred_at", toISO);
+
+  if (error) throw new Error(`Failed to load DevTunnel activity window: ${error.message}`);
+
+  const dailyCounts = new Map<string, number>();
+  let tasksCompleted = 0;
+  let pullRequestsMerged = 0;
+
+  for (const row of (data ?? []) as { occurred_at: string; type: string }[]) {
+    const date = row.occurred_at.slice(0, 10);
+    dailyCounts.set(date, (dailyCounts.get(date) ?? 0) + 1);
+    if (row.type === "TASK_COMPLETED") tasksCompleted += 1;
+    if (row.type === "PULL_REQUEST_MERGED") pullRequestsMerged += 1;
+  }
+
+  return { dailyCounts, tasksCompleted, pullRequestsMerged };
+}
