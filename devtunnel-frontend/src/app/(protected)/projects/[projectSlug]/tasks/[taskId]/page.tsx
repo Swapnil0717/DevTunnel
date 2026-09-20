@@ -3,13 +3,18 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { buildMetadata } from "@/lib/seo";
 import { getTaskDetail } from "@/lib/tasks/api";
-import { AdminTaskStatusBadge } from "@/components/admin/tasks/admin-task-status-badge";
+import { getDevtunnelProjectBySlug } from "@/lib/projects/api";
 import { RepoLogo } from "@/components/admin/repo-logo";
-import { TechIcon } from "@/components/onboarding/tech-icon";
-import { DEVELOPER_ROLE_LABEL, EXPERIENCE_LEVEL_LABEL } from "@/lib/onboarding/types";
+import { AdminTaskStatusBadge } from "@/components/admin/tasks/admin-task-status-badge";
 import { ChevronLeftIcon, IssueIcon, GitBranchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
-import { MarkdownReadme } from "@/components/ui/markdown-readme";
+import { TaskContributeButton } from "@/components/tasks/task-contribute-button";
+import {
+  TaskDescriptionSection,
+  TaskDetailSidebar,
+  TaskIssueSection,
+  TaskProjectSection,
+} from "@/components/tasks/task-detail-sections";
 
 interface TaskDetailPageProps {
   params: Promise<{ projectSlug: string; taskId: string }>;
@@ -34,7 +39,7 @@ export async function generateMetadata({
     title,
     description:
       result.status === "ok"
-        ? `"${title}" — a DevTunnel task on ${result.data.project.name}: GitHub issue, role, difficulty and tech stack.`
+        ? `"${title}" — a DevTunnel task on ${result.data.project.name}: project background, task brief, GitHub issue and how to contribute.`
         : "View this DevTunnel task.",
     path: `/projects/${projectSlug}/tasks/${taskId}`,
     noIndex: true,
@@ -43,32 +48,53 @@ export async function generateMetadata({
 
 /**
  * `/projects/:projectSlug/tasks/:taskId` — the "View Task" destination
- * `TaskRow` (`components/home/task-row.tsx`) and `TasksTable`
- * (`components/tasks/tasks-table.tsx`) already link to: a contributor
- * clicking a task anywhere in the app lands here, rather than being sent
- * straight to GitHub the way clicking an *issue* is (`/issues` —
- * `IssuesTable`'s row/`externalHref` opens the GitHub issue itself,
- * since a bare GitHub issue has no DevTunnel-side page of its own to
- * show instead).
+ * `TaskRow` (`components/home/task-row.tsx`), `TasksTable`
+ * (`components/tasks/tasks-table.tsx`) and the project's Tasks tabs link
+ * to: a contributor clicking a task anywhere in the app lands here,
+ * rather than being sent straight to GitHub the way clicking a bare
+ * *issue* is (`/issues` — `IssuesTable`'s row opens the GitHub issue
+ * itself, since a bare GitHub issue has no DevTunnel-side page of its own).
  *
- * Fetches `GET /projects/:projectSlug/tasks/:taskId`
- * (`lib/tasks/api.ts`) server-side and renders: task title, project,
- * GitHub issue reference, role, difficulty, tech stack, DevTunnel
- * status, and the task's own description (a custom DevTunnel
- * description when curated, falling back to the original GitHub issue
- * body — never rewritten). A task id that doesn't exist, or doesn't
- * belong to `projectSlug`, renders Next's real 404 via `notFound()`
- * rather than a fabricated "empty task" page (Frontend_Development_
- * Rules.txt rule 25); a network failure degrades to one honest
- * `SectionMessage` instead.
+ * The page answers, in reading order, the three questions someone asks
+ * before picking a task up:
+ *
+ *  1. **What is this project?**  — `TaskProjectSection`
+ *  2. **What is being asked?**   — `TaskDescriptionSection` (the curated brief)
+ *  3. **What's the original issue?** — `TaskIssueSection` (the GitHub issue, as filed)
+ *
+ * …and then gives them one obvious next step: **Contribute to this task**
+ * in the header, which leads to `/projects/:projectSlug/tasks/:taskId/
+ * contribute` — the task-scoped Contribute page with the exact
+ * `dev start <task-id>` commands and the manual fork-to-PR flow.
+ *
+ * Two fetches, in parallel: `GET /projects/:projectSlug/tasks/:taskId`
+ * for the task (`lib/tasks/api.ts`) and `GET /projects/:projectSlug` for
+ * the project's description (`lib/projects/api.ts`). The task payload
+ * only carries a trimmed `TaskProjectRef` with no description, and adding
+ * one would mean a backend change to say something the project endpoint
+ * already says — so this re-uses it, the same way the project Contribute
+ * page re-uses the project fetch rather than growing a new endpoint
+ * (rule 58). The project fetch is *supplementary*: if it fails, the page
+ * still renders the task and the project section says the description
+ * isn't available, rather than the whole task disappearing because a
+ * secondary request hiccuped. Only the task fetch decides between
+ * 404 / error / page.
+ *
+ * Same three outcomes every detail route in this app uses: a task id that
+ * doesn't exist, or doesn't belong to `projectSlug`, renders Next's real
+ * 404 via `notFound()` (Frontend_Development_Rules.txt rule 25); a
+ * network failure degrades to one honest `SectionMessage`; otherwise the
+ * real page renders.
  *
  * Read-only, same as the rest of this contributor-facing app: no
- * edit/delete affordance here (that's `/admin/tasks/:id`'s job) — the
- * only action offered is opening the underlying GitHub issue.
+ * edit/delete affordance here (that's `/admin/tasks/:id`'s job).
  */
 export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
   const { projectSlug, taskId } = await params;
-  const result = await getTaskDetail(projectSlug, taskId);
+  const [result, projectResult] = await Promise.all([
+    getTaskDetail(projectSlug, taskId),
+    getDevtunnelProjectBySlug(projectSlug),
+  ]);
 
   if (result.status === "not-found") {
     notFound();
@@ -76,7 +102,7 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
 
   if (result.status === "error") {
     return (
-      <main className="mx-auto max-w-4xl px-6 py-10">
+      <main className="mx-auto max-w-6xl px-6 py-10">
         <Link
           href="/tasks"
           className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
@@ -98,9 +124,11 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
   }
 
   const task = result.data;
+  const projectDescription = projectResult.status === "ok" ? projectResult.data.description : null;
+  const contributeHref = `/projects/${task.project.slug}/tasks/${task.id}/contribute`;
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
+    <main className="mx-auto max-w-6xl px-6 py-10">
       <Link
         href="/tasks"
         className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
@@ -116,8 +144,8 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
         <span className="text-text-muted">{task.title}</span>
       </nav>
 
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-        <div>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
           <h1 className="m-0 mb-1.5 text-xl font-medium text-text">{task.title}</h1>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-text-secondary">
             <span className="inline-flex items-center gap-1.5">
@@ -143,102 +171,37 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
           </div>
         </div>
 
-        {task.githubIssue ? (
-          <a
-            href={task.githubIssue.url}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="inline-flex items-center gap-1.5 rounded-[8px] border border-border bg-surface px-3.5 py-2 text-[13px] font-medium text-text hover:bg-surface-raised"
-          >
-            <IssueIcon className="h-3.5 w-3.5 shrink-0" />
-            View issue #{task.githubIssue.number}
-          </a>
-        ) : null}
+        <div className="flex flex-wrap items-start gap-2">
+          <TaskContributeButton href={contributeHref} status={task.status} />
+          {task.githubIssue ? (
+            <a
+              href={task.githubIssue.url}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-[8px] border border-border bg-surface px-3.5 py-2 text-[13px] font-medium text-text hover:bg-surface-raised"
+            >
+              <IssueIcon className="h-3.5 w-3.5 shrink-0" />
+              View issue #{task.githubIssue.number}
+            </a>
+          ) : null}
+        </div>
       </div>
 
-      <section
-        aria-labelledby="task-details-heading"
-        className="mb-8 rounded-[10px] border border-border bg-surface p-5"
-      >
-        <h2
-          id="task-details-heading"
-          className="m-0 mb-3 text-[11px] uppercase tracking-wide text-text-faint"
-        >
-          Details
-        </h2>
-        <div className="grid grid-cols-1 gap-x-6 gap-y-3 text-[12.5px] sm:grid-cols-[140px_1fr]">
-          <span className="text-text-faint">Role</span>
-          <span className="text-text-secondary">
-            {task.roles.length
-              ? task.roles.map((role) => DEVELOPER_ROLE_LABEL[role]).join(", ")
-              : "—"}
-          </span>
-
-          <span className="text-text-faint">Difficulty</span>
-          <span className="text-text-secondary">
-            {task.difficulty ? EXPERIENCE_LEVEL_LABEL[task.difficulty] : "—"}
-          </span>
-
-          <span className="text-text-faint">Contributors</span>
-          <span className="text-text-secondary">
-            {task.activeContributorCount} working · {task.completedContributorCount} completed
-          </span>
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        <div className="flex min-w-0 flex-1 flex-col gap-6">
+          <TaskProjectSection
+            project={task.project}
+            description={projectDescription}
+            unavailable={projectResult.status !== "ok"}
+          />
+          <TaskDescriptionSection
+            customDescription={task.customDescription}
+            hasIssue={task.githubIssue !== null}
+          />
+          <TaskIssueSection issue={task.githubIssue} body={task.githubIssueBody} />
         </div>
-      </section>
-
-      <section
-        aria-labelledby="task-techstack-heading"
-        className="mb-8 rounded-[10px] border border-border bg-surface p-5"
-      >
-        <h2
-          id="task-techstack-heading"
-          className="m-0 mb-3 text-[11px] uppercase tracking-wide text-text-faint"
-        >
-          Tech stack
-        </h2>
-        {task.techStack.length === 0 ? (
-          <p className="m-0 text-[12px] text-text-faint">No tech stack recorded.</p>
-        ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {task.techStack.map((value) => (
-              <span
-                key={value}
-                className="inline-flex items-center gap-1.5 rounded-md border border-tag-tech-border bg-tag-tech-bg px-2 py-0.5 text-[11.5px] text-tag-tech-text"
-              >
-                <TechIcon name={value} />
-                {value}
-              </span>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section
-        aria-labelledby="task-description-heading"
-        className="rounded-[10px] border border-border bg-surface p-5"
-      >
-        <h2
-          id="task-description-heading"
-          className="m-0 mb-2 text-[11px] uppercase tracking-wide text-text-faint"
-        >
-          {task.customDescription ? "Description" : "GitHub issue"}
-        </h2>
-        {task.githubIssue ? (
-          <p className="m-0 mb-3 flex items-center gap-2 text-[13px] text-text">
-            <span className="font-mono text-text-muted">#{task.githubIssue.number}</span>
-            {task.githubIssue.title}
-          </p>
-        ) : null}
-        <div className="max-h-[420px] overflow-y-auto rounded-md border border-border-subtle bg-surface-raised p-4">
-          {task.customDescription ? (
-            <MarkdownReadme content={task.customDescription} />
-          ) : task.githubIssueBody ? (
-            <MarkdownReadme content={task.githubIssueBody} />
-          ) : (
-            <p className="m-0 text-[12px] text-text-faint">No description provided.</p>
-          )}
-        </div>
-      </section>
+        <TaskDetailSidebar task={task} />
+      </div>
     </main>
   );
 }
