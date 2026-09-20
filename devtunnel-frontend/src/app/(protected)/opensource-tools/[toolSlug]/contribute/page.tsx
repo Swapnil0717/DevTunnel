@@ -80,6 +80,7 @@ export default async function ToolContributePage({ params }: ToolContributePageP
   const target: ContributeTarget = {
     kind: "tool",
     slug: tool.slug,
+    projectId: null,
     name: tool.name,
     description: tool.description,
     repositoryUrl: repository?.url ?? null,

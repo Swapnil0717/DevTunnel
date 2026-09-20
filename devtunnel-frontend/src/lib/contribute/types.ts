@@ -37,6 +37,14 @@
  export interface ContributeTarget {
    kind: ContributeTargetKind;
    slug: string;
+   /**
+    * The project's DevTunnel id (a UUID) — what `dev start`/`dev submit --project`
+    * take. NOT the slug: `POST /projects/:id/start` rejects anything that isn't
+    * the UUID ("Invalid project id"). `null` for a tool: tools live in a
+    * different table and have no project-claim route, so there's no id the
+    * CLI could accept (rule 58 — don't print a command that can't work).
+    */
+   projectId: string | null;
    name: string;
    /** Curated description, or GitHub's. `null` when neither exists. */
    description: string | null;

@@ -10,8 +10,8 @@ import type { ContributeTarget } from "@/lib/contribute/types";
  * Shipped, not planned — the CLI binary and the backend routes behind it
  * are live, so these are commands a contributor can paste into a working
  * shell right now. `dev start`/`dev submit` are still built per-target
- * via `buildCliCommands` so the example already carries this project or
- * tool's real slug (and a real task id, once it has curated tasks)
+ * via `buildCliCommands` so the example already carries this project's real
+ * DevTunnel id (and a real task id, once it has curated tasks)
  * rather than a `<placeholder>` the contributor has to fill in by hand.
  *
  * Commands render through the same `CommandBlock` the git-based "How to
@@ -27,7 +27,7 @@ import type { ContributeTarget } from "@/lib/contribute/types";
  * thin.
  */
 export function ContributeCliPanel({ target }: { target: ContributeTarget }) {
-  const commands = buildCliCommands({ projectSlug: target.slug, tasks: target.tasks });
+  const commands = buildCliCommands({ projectId: target.projectId, tasks: target.tasks });
 
   return (
     <div>
@@ -73,6 +73,17 @@ export function ContributeCliPanel({ target }: { target: ContributeTarget }) {
           </tbody>
         </table>
       </div>
+
+      {target.projectId && (
+        <p className="m-0 mt-3 text-[12px] leading-relaxed text-text-secondary">
+          The ID in the{" "}
+          <code className="rounded-[4px] bg-surface-raised px-1 py-0.5 font-mono text-[11px] text-text-secondary">
+            --project
+          </code>{" "}
+          commands is this project&apos;s DevTunnel ID, not its name from the URL — copy the commands
+          exactly as shown.
+        </p>
+      )}
     </div>
   );
 }

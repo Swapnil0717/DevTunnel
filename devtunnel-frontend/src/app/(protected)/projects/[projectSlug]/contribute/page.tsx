@@ -95,6 +95,7 @@ export default async function ProjectContributePage({ params }: ContributePagePr
   const target: ContributeTarget = {
     kind: "project",
     slug: project.slug,
+    projectId: project.id,
     name: project.name,
     description: project.description,
     repositoryUrl: project.repositoryUrl,
