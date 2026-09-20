@@ -109,4 +109,60 @@
    customDescription: string | null;
    /** The original GitHub issue body, exactly as imported — never rewritten. */
    githubIssueBody: string | null;
+   /**
+    * Where the task is in its lifecycle from *this viewer's* point of view
+    * — the task-progress tracker's data. Optional only so a deploy where
+    * the frontend ships before the backend degrades to "no tracker
+    * details" instead of a crash; the backend always sends it.
+    */
+   progress?: TaskProgress;
+ }
+
+ /**
+  * The GitHub pull request `dev submit` opened for a task
+  * (`devtunnel.pull_requests`). `url`/`number` are nullable because the
+  * table allows a row with no GitHub PR behind it — the task's own
+  * `IN_REVIEW` status is what says a PR was opened; this is just the link.
+  */
+ export type TaskPullRequestState = "OPEN" | "MERGED" | "CLOSED";
+
+ export interface TaskPullRequestRef {
+   number: number | null;
+   url: string | null;
+   title: string | null;
+   state: TaskPullRequestState;
+ }
+
+ /**
+  * The `progress` block on `GET /projects/:projectSlug/tasks/:taskId`.
+  * Every field is something the backend records when `dev start` /
+  * `dev submit` run — never a self-reported checklist tick (the Contribute
+  * page's checklist is a private scratchpad and is deliberately not an
+  * input here).
+  *
+  *  - `viewerIsAssignee` — whether the signed-in contributor is the one
+  *    who claimed the task. Who else has claimed it is never exposed.
+  *  - `startedAt` — when `dev start` claimed it.
+  *  - `branch` — the viewer's own branch; `null` unless they're the assignee.
+  *  - `pullRequest` — the PR `dev submit` opened, if any.
+  */
+ export interface TaskProgress {
+   viewerIsAssignee: boolean;
+   startedAt: string | null;
+   branch: string | null;
+   pullRequest: TaskPullRequestRef | null;
+ }
+
+ /**
+  * How many of a project's tasks sit at each stage — `taskProgress` on
+  * `GET /projects/:slug`. Counted in the database rather than from the
+  * (capped) `tasks` array, so `total` always matches the project's
+  * `taskCount`.
+  */
+ export interface TaskProgressCounts {
+   total: number;
+   open: number;
+   inProgress: number;
+   inReview: number;
+   done: number;
  }

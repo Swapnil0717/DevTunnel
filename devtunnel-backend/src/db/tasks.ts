@@ -88,13 +88,120 @@ export interface TaskDetail extends TaskSummary {
   customDescription: string | null;
   /** The original GitHub issue body, exactly as imported — never rewritten (rule: "Do not modify the original GitHub issue"). */
   githubIssueBody: string | null;
+  /** Where this task is in its lifecycle, from the signed-in viewer's point of view — see `TaskProgress`. */
+  progress: TaskProgress;
 }
 
-function toTaskDetail(row: AdminTaskListRow): TaskDetail {
+/**
+ * The GitHub pull request DevTunnel recorded for a task when `dev submit`
+ * ran — `devtunnel.pull_requests` (sql/004, sql/031). `url`/`number` are
+ * nullable because the table allows a row with no GitHub PR behind it
+ * (sql/004: "may correspond to a real GitHub PR"); a task's own
+ * `IN_REVIEW` status is what says a PR was opened, this is only the link.
+ */
+export type TaskPullRequestState = "OPEN" | "MERGED" | "CLOSED";
+
+export interface TaskPullRequestRef {
+  number: number | null;
+  url: string | null;
+  title: string | null;
+  state: TaskPullRequestState;
+}
+
+/**
+ * The task-progress tracker's data — everything on it is something the
+ * backend already records when `dev start` / `dev submit` run (sql/030,
+ * sql/031), never a self-reported checklist tick (sql/027 is explicit that
+ * those are a private scratchpad, not a record of work done):
+ *
+ *  - `viewerIsAssignee` — whether the signed-in contributor is the one who
+ *    claimed the task. The assignee's *identity* is deliberately not
+ *    exposed: a contributor needs to know "is this mine?", not who else
+ *    is working on what.
+ *  - `startedAt` — when `dev start` claimed it (`assignee_started_at`).
+ *  - `branch` — the contributor's own branch. Only ever set for the
+ *    assignee; another viewer gets `null`, since it names someone else's
+ *    fork branch.
+ *  - `pullRequest` — the PR `dev submit` opened, if any. A PR is public on
+ *    GitHub, so its link is shown to every viewer.
+ */
+export interface TaskProgress {
+  viewerIsAssignee: boolean;
+  startedAt: string | null;
+  branch: string | null;
+  pullRequest: TaskPullRequestRef | null;
+}
+
+/** `devtunnel.pull_requests` columns the tracker reads — explicit list, never `select("*")` (rule 23). */
+const PULL_REQUEST_COLUMNS = "task_id, github_pr_url, github_pr_number, title, status, created_at";
+
+interface PullRequestRow {
+  task_id: string | null;
+  github_pr_url: string | null;
+  github_pr_number: number | null;
+  title: string | null;
+  status: TaskPullRequestState;
+  created_at: string;
+}
+
+function toPullRequestRef(row: PullRequestRow): TaskPullRequestRef {
+  return {
+    number: row.github_pr_number,
+    url: row.github_pr_url,
+    title: row.title,
+    state: row.status,
+  };
+}
+
+/**
+ * The most recent pull request recorded for each of `taskIds`, keyed by
+ * task id — one query for the whole batch, so the "My tasks" list doesn't
+ * cost a query per row. "Most recent" because a task can accumulate more
+ * than one row over time (an earlier PR closed, a fresh one opened —
+ * `pull_requests_task_id_open_idx` only limits it to one *open* PR at a
+ * time), and the latest is the one that reflects where the task is now.
+ * A task with no PR is simply absent from the map.
+ */
+async function listLatestPullRequestsByTask(
+  supabase: SupabaseClient,
+  taskIds: string[],
+): Promise<Map<string, TaskPullRequestRef>> {
+  const byTask = new Map<string, TaskPullRequestRef>();
+  if (taskIds.length === 0) return byTask;
+
+  const { data, error } = await supabase
+    .from("pull_requests")
+    .select(PULL_REQUEST_COLUMNS)
+    .in("task_id", taskIds)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(`Failed to load task pull requests: ${error.message}`);
+
+  for (const row of (data ?? []) as unknown as PullRequestRow[]) {
+    if (row.task_id && !byTask.has(row.task_id)) {
+      byTask.set(row.task_id, toPullRequestRef(row));
+    }
+  }
+  return byTask;
+}
+
+function toTaskDetail(
+  row: AdminTaskListRow,
+  viewerId: string,
+  pullRequest: TaskPullRequestRef | null,
+): TaskDetail {
+  const viewerIsAssignee = row.assignee_id !== null && row.assignee_id === viewerId;
+
   return {
     ...toTaskSummary(row),
     customDescription: row.custom_description,
     githubIssueBody: row.github_issue_snapshot?.body ?? null,
+    progress: {
+      viewerIsAssignee,
+      startedAt: row.assignee_started_at,
+      branch: viewerIsAssignee ? row.assignee_branch : null,
+      pullRequest,
+    },
   };
 }
 
@@ -367,6 +474,12 @@ export async function getTaskDetailByProjectAndId(
   supabase: SupabaseClient,
   projectSlug: string,
   taskId: string,
+  /**
+   * The signed-in contributor — what `progress.viewerIsAssignee` is
+   * computed against. Passed in by the route from `c.get("user")` rather
+   * than re-queried, same as `ContributorProfile` above.
+   */
+  viewerId: string,
 ): Promise<TaskDetail | null> {
   const { data, error } = await supabase
     .from("admin_task_list")
@@ -378,7 +491,15 @@ export async function getTaskDetailByProjectAndId(
   if (error) throw new Error(`Failed to load task: ${error.message}`);
   if (!data || data.deleted_at) return null;
 
-  return toTaskDetail(data);
+  // Only a task that has moved past OPEN can have a PR; skipping the
+  // query for an untouched task keeps the common "browsing open tasks"
+  // path at exactly one round trip.
+  const pullRequests =
+    data.status === "OPEN"
+      ? new Map<string, TaskPullRequestRef>()
+      : await listLatestPullRequestsByTask(supabase, [data.id]);
+
+  return toTaskDetail(data, viewerId, pullRequests.get(data.id) ?? null);
 }
 
 /**
@@ -560,5 +681,126 @@ export async function submitTask(
       url: row.github_pr_url,
       number: row.github_pr_number,
     },
+  };
+}
+
+/**
+ * One row of "My tasks" on the Home page — a task the signed-in
+ * contributor has claimed, with just enough to render a stage chip and a
+ * link back to the task. Mirrors `MyTask` in devtunnel-frontend's
+ * `lib/home/types.ts` (a superset of the `taskId`/`title`/`projectSlug`/
+ * `status` that type has always had).
+ */
+export interface MyTaskItem {
+  taskId: string;
+  title: string;
+  projectSlug: string;
+  projectName: string;
+  status: TaskStatus;
+  startedAt: string | null;
+  pullRequest: TaskPullRequestRef | null;
+}
+
+/**
+ * Backs `GET /users/me/tasks` — every non-deleted task `userId` has
+ * claimed via `dev start` (`assignee_id`, sql/030), newest claim first,
+ * with tasks still being worked on ahead of finished ones so the Home
+ * list leads with what needs attention.
+ *
+ * Reads the same `admin_task_list` view (sql/013) as every other task
+ * query, so a task's project/status fields can't disagree with what the
+ * Tasks page shows for it (rule 51). Scoped to one `userId` in the query
+ * itself — no path returns another contributor's claims (rule 17).
+ *
+ * `limit` bounds the result (rule 40): this is a personal list on a
+ * dashboard, not a paginated collection, and 30 is more than that panel
+ * can usefully show.
+ *
+ * Whole-project claims (`dev start --project`, sql/032) are a separate
+ * record on `devtunnel.projects` and are not included — this is a *task*
+ * list.
+ */
+export async function listTasksAssignedToUser(
+  supabase: SupabaseClient,
+  userId: string,
+  limit: number,
+): Promise<MyTaskItem[]> {
+  const { data, error } = await supabase
+    .from("admin_task_list")
+    .select(LIST_COLUMNS)
+    .eq("assignee_id", userId)
+    .is("deleted_at", null)
+    .order("assignee_started_at", { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (error) throw new Error(`Failed to load your tasks: ${error.message}`);
+
+  const rows = (data ?? []) as unknown as AdminTaskListRow[];
+  const pullRequests = await listLatestPullRequestsByTask(
+    supabase,
+    rows.map((row) => row.id),
+  );
+
+  const items: MyTaskItem[] = rows.map((row) => ({
+    taskId: row.id,
+    title: row.title,
+    projectSlug: row.project_slug,
+    projectName: row.project_name,
+    status: row.status,
+    startedAt: row.assignee_started_at,
+    pullRequest: pullRequests.get(row.id) ?? null,
+  }));
+
+  // Array.prototype.sort is stable, so within each group the newest-first
+  // order from the query above is preserved.
+  return items.sort((a, b) => Number(a.status === "DONE") - Number(b.status === "DONE"));
+}
+
+/**
+ * How many of a project's tasks sit at each stage — the numbers behind
+ * the project progress bar on `GET /projects/:slug`.
+ *
+ * Counted in the database, one `head` count per status, rather than
+ * derived from the `tasks` array that endpoint returns: that array is
+ * capped (`DETAIL_TASKS_LIMIT`) so a large project's bar built from it
+ * would silently under-count, while `taskCount` on the same payload is
+ * the true total — the two would disagree (rule 38: never let two numbers
+ * that are supposed to agree quietly diverge). Excludes soft-deleted
+ * tasks, same as `taskCount` (sql/015) and the list.
+ */
+export interface ProjectTaskProgress {
+  total: number;
+  open: number;
+  inProgress: number;
+  inReview: number;
+  done: number;
+}
+
+export async function getProjectTaskProgress(
+  supabase: SupabaseClient,
+  projectSlug: string,
+): Promise<ProjectTaskProgress> {
+  const statuses: TaskStatus[] = ["OPEN", "IN_PROGRESS", "IN_REVIEW", "DONE"];
+
+  const [open, inProgress, inReview, done] = await Promise.all(
+    statuses.map(async (status) => {
+      const { count, error } = await supabase
+        .from("admin_task_list")
+        .select("id", { count: "exact", head: true })
+        .eq("project_slug", projectSlug)
+        .eq("status", status)
+        .is("deleted_at", null);
+
+      if (error) throw new Error(`Failed to count ${status} tasks: ${error.message}`);
+      return count ?? 0;
+    }),
+  );
+
+  return {
+    total: (open ?? 0) + (inProgress ?? 0) + (inReview ?? 0) + (done ?? 0),
+    open: open ?? 0,
+    inProgress: inProgress ?? 0,
+    inReview: inReview ?? 0,
+    done: done ?? 0,
   };
 }

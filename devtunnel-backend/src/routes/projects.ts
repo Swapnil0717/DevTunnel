@@ -16,7 +16,7 @@ import {
   submitProject,
   type ContributorMatchProfile,
 } from "../db/projects";
-import { listTasks } from "../db/tasks";
+import { getProjectTaskProgress, listTasks } from "../db/tasks";
 import { isProjectContributor, joinProject } from "../db/catalogMemberships";
 import { applyCatalogStar, readCatalogStarStatus } from "../lib/catalogStar";
 import {
@@ -262,7 +262,7 @@ projects.get("/projects/:slug", requireAuth, async (c) => {
     // reads are independent of one another — run them together rather
     // than serially, so the slowest one sets the response time instead of
     // their sum.
-    const [snapshot, tasksPage, starStatus, viewerIsContributing] = await Promise.all([
+    const [snapshot, tasksPage, taskProgress, starStatus, viewerIsContributing] = await Promise.all([
       project.repo
         ? withCacheSWR<ProjectGithubSnapshot>(
             c.executionCtx,
@@ -314,6 +314,18 @@ projects.get("/projects/:slug", requireAuth, async (c) => {
           })
         : Promise.resolve(null),
       listTasks(supabase, { limit: DETAIL_TASKS_LIMIT, before: null, projectSlug: slug }),
+      // Per-stage counts for the project progress bar. Supplementary, like
+      // the GitHub snapshot: if the count query fails the page still
+      // loads, just without the bar (`taskProgress: null`) — a progress
+      // figure nobody can verify is worse than none (rule 38).
+      getProjectTaskProgress(supabase, slug).catch((err) => {
+        logger.error("project_detail_task_progress_failed", {
+          error: err instanceof Error ? err.message : String(err),
+          slug,
+          requestId: c.get("requestId"),
+        });
+        return null;
+      }),
       project.repositoryFullName
         ? readCatalogStarStatus(env, project.repositoryFullName, user.id)
         : Promise.resolve({ starredByViewer: false, localStarCount: 0 }),
@@ -359,6 +371,8 @@ projects.get("/projects/:slug", requireAuth, async (c) => {
 
       devTunnelContributorCount: project.devTunnelContributorCount,
       taskCount: project.taskCount,
+      /** Tasks per stage (open / in progress / in review / done) — `null` when the count query failed. */
+      taskProgress,
 
       createdAt: project.createdAt,
       pushedAt: snapshot?.pushedAt ?? null,

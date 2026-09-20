@@ -7,7 +7,14 @@ import { requireAuth } from "../middleware/auth";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
 import { logger } from "../lib/logger";
-import { getTaskDetailByProjectAndId, getTaskById, listTasks, startTask, submitTask } from "../db/tasks";
+import {
+  getTaskDetailByProjectAndId,
+  getTaskById,
+  listTasks,
+  listTasksAssignedToUser,
+  startTask,
+  submitTask,
+} from "../db/tasks";
 import { getValidGithubAccessToken } from "../db/githubTokens";
 import { findExistingFork, forkRepositoryForUser, GitHubForkError } from "../lib/githubFork";
 import {
@@ -66,6 +73,9 @@ import {
 export const tasks = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 const taskIdSchema = z.string().uuid("Invalid task id");
+
+/** Upper bound on `GET /users/me/tasks` — a personal dashboard list, not a paginated collection (rule 40). */
+const MY_TASKS_LIMIT = 30;
 
 const ROLE_VALUES = [
   "FRONTEND",
@@ -233,9 +243,20 @@ tasks.get("/tasks", requireAuth, async (c) => {
  * but doesn't belong to `projectSlug` 404s exactly like an id that
  * doesn't exist at all, rather than silently ignoring the URL's project
  * segment.
+ *
+ * The payload carries a `progress` block (`TaskProgress`, src/db/tasks.ts)
+ * for the task-progress tracker: whether *this viewer* is the one who
+ * claimed the task, when it was started, and the pull request `dev
+ * submit` opened. The response is therefore per-viewer — the signed-in
+ * user's id is passed down for exactly that — and must not be cached
+ * across viewers.
  */
 tasks.get("/projects/:projectSlug/tasks/:taskId", requireAuth, async (c) => {
   const env = getEnv(c.env);
+  const user = c.get("user");
+  if (!user) {
+    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+  }
 
   const projectSlug = c.req.param("projectSlug")?.trim();
   const taskIdResult = taskIdSchema.safeParse(c.req.param("taskId"));
@@ -258,7 +279,7 @@ tasks.get("/projects/:projectSlug/tasks/:taskId", requireAuth, async (c) => {
 
   try {
     const supabase = getSupabase(env);
-    const task = await getTaskDetailByProjectAndId(supabase, projectSlug, taskIdResult.data);
+    const task = await getTaskDetailByProjectAndId(supabase, projectSlug, taskIdResult.data, user.id);
     if (!task) {
       return errorResponse(c, 404, "task_not_found", "Task not found");
     }
@@ -269,6 +290,52 @@ tasks.get("/projects/:projectSlug/tasks/:taskId", requireAuth, async (c) => {
       requestId: c.get("requestId"),
     });
     return errorResponse(c, 500, "internal_error", "Couldn't load this task right now");
+  }
+});
+
+/**
+ * `GET /users/me/tasks` — the tasks the signed-in contributor has claimed
+ * with `dev start`, each with its current stage, for the Home page's
+ * "My tasks" list (devtunnel-frontend's `components/home/my-tasks-list.tsx`
+ * via `getMyTasks` in `lib/home/api.ts`).
+ *
+ * Replaces the placeholder `GET /contributor/tasks?assignedToMe=true` that
+ * list used to call, which was never built — so "My tasks" always showed
+ * its "not available yet" message. This route is what makes it real.
+ *
+ * `requireAuth` only. Scoped to `user.id` inside the query itself
+ * (`listTasksAssignedToUser`), so there is no parameter a caller could
+ * change to read someone else's claims. Bare array response, same as
+ * `GET /tasks`, because that's what the Home page's fetch helper expects;
+ * an empty array is the normal "nothing claimed yet" answer, not an error.
+ * Registered under `/users/me/…` alongside `GET /users/me/contributions`.
+ */
+tasks.get("/users/me/tasks", requireAuth, async (c) => {
+  const env = getEnv(c.env);
+  const user = c.get("user");
+  if (!user) {
+    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+  }
+
+  const withinLimit = await checkRateLimit(c, {
+    bucket: "tasks-mine",
+    limit: 60,
+    windowSeconds: 60,
+  });
+  if (!withinLimit) {
+    return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+  }
+
+  try {
+    const supabase = getSupabase(env);
+    const items = await listTasksAssignedToUser(supabase, user.id, MY_TASKS_LIMIT);
+    return c.json(items, 200);
+  } catch (err) {
+    logger.error("my_tasks_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      requestId: c.get("requestId"),
+    });
+    return errorResponse(c, 500, "internal_error", "Couldn't load your tasks right now");
   }
 });
 

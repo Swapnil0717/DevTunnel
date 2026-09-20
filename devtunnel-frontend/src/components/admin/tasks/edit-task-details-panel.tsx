@@ -37,11 +37,12 @@ const ROLES: DeveloperRole[] = [
 ];
 
 const DIFFICULTIES: ExperienceLevel[] = ["BEGINNER", "INTERMEDIATE", "ADVANCED"];
-const STATUSES: AdminTaskStatus[] = ["OPEN", "IN_PROGRESS", "DONE"];
+const STATUSES: AdminTaskStatus[] = ["OPEN", "IN_PROGRESS", "IN_REVIEW", "DONE"];
 
 const STATUS_LABEL: Record<AdminTaskStatus, string> = {
   OPEN: "Open",
   IN_PROGRESS: "In progress",
+  IN_REVIEW: "In review",
   DONE: "Done",
 };
 

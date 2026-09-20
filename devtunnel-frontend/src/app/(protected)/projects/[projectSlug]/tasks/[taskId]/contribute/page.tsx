@@ -12,6 +12,8 @@ import { SectionMessage } from "@/components/home/section-message";
 import { ContributeSidebar } from "@/components/contribute/contribute-sidebar";
 import { ContributeWorkflowPanel } from "@/components/contribute/contribute-workflow-panel";
 import { TaskContributeCliPanel } from "@/components/tasks/task-contribute-cli-panel";
+import { TaskProgressTracker } from "@/components/tasks/task-progress-tracker";
+import { getTaskClaim } from "@/lib/tasks/progress";
 import { buildTaskWorkflowSteps } from "@/lib/contribute/task-workflow";
 import { DEVELOPER_ROLE_LABEL, EXPERIENCE_LEVEL_LABEL } from "@/lib/onboarding/types";
 import type { ContributeTarget } from "@/lib/contribute/types";
@@ -72,13 +74,21 @@ export async function generateMetadata({ params }: TaskContributePageProps): Pro
  * which forks and claims in one step, so there's nothing to gate on and
  * the information is most useful to someone still deciding.
  *
- * Status-aware, because the steps mean different things by status. A
- * `DONE` task has nothing left to start, so the page says so and points
- * back to the project's other tasks instead of printing commands that
- * would only be rejected. An `IN_PROGRESS` task still shows the steps —
- * it may well be the viewer's own, and `dev start` resumes a task you
- * already claimed — with a note about what happens if it's someone
- * else's.
+ * Claim-aware (`getTaskClaim`), because the steps mean different things
+ * depending on whose task it is — and the task's progress data now says
+ * which, so the page no longer has to hedge:
+ *
+ *  - `done` — nothing left to start; says so and points to other tasks.
+ *  - `other` — someone else claimed it, so `dev start` would be
+ *    rejected; says so and points to other tasks instead of printing
+ *    commands that can only fail.
+ *  - `mine` — the steps stay, because `dev start` resumes a task you
+ *    already claimed and `dev submit` updates your open PR; the tracker at
+ *    the top says where you are.
+ *  - `open` — the full steps.
+ *  - `unknown` (frontend ahead of backend, no `progress` block) — the
+ *    steps stay, with the old "if it's yours…" note, rather than hiding
+ *    them on a guess.
  *
  * Same three outcomes every detail route in this app uses: an unknown
  * task (or one that doesn't belong to `projectSlug`) renders Next's real
@@ -113,6 +123,7 @@ export default async function TaskContributePage({ params }: TaskContributePageP
   }
 
   const task = result.data;
+  const claim = getTaskClaim(task);
   const taskHref = `/projects/${task.project.slug}/tasks/${task.id}`;
   const projectTasksHref = `/projects/${task.project.slug}`;
 
@@ -218,6 +229,8 @@ export default async function TaskContributePage({ params }: TaskContributePageP
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-6">
+          <TaskProgressTracker task={task} />
+
           <section
             aria-labelledby="contribute-task-heading"
             className="rounded-[10px] border border-border bg-surface p-5"
@@ -273,14 +286,18 @@ export default async function TaskContributePage({ params }: TaskContributePageP
             </p>
           </section>
 
-          {task.status === "DONE" ? (
+          {claim === "done" || claim === "other" ? (
             <section className="rounded-[10px] border border-border bg-surface p-5">
               <h2 className="m-0 mb-2 text-[13px] font-medium text-text">
-                This task is already done
+                {claim === "done"
+                  ? "This task is already done"
+                  : "Another contributor has already started this task"}
               </h2>
               <p className="m-0 text-[12.5px] leading-relaxed text-text-secondary">
-                Someone has completed and submitted it, so there&apos;s nothing left to start. Pick
-                another task from{" "}
+                {claim === "done"
+                  ? "Someone has completed and submitted it, so there's nothing left to start."
+                  : "Only one contributor can work on a task at a time, so starting it now would be rejected."}{" "}
+                Pick another task from{" "}
                 <Link href={projectTasksHref} className="text-text hover:text-accent">
                   {task.project.name}
                 </Link>{" "}
@@ -293,12 +310,12 @@ export default async function TaskContributePage({ params }: TaskContributePageP
             </section>
           ) : (
             <>
-              {task.status === "IN_PROGRESS" ? (
+              {claim === "unknown" ? (
                 <SectionMessage>
-                  This task is in progress. If it&apos;s yours, <code className="font-mono">dev start</code>{" "}
-                  picks up where you left off. If another contributor has claimed it,{" "}
-                  <code className="font-mono">dev start</code> will tell you — pick a different task
-                  from this project instead.
+                  This task is already underway. If it&apos;s yours,{" "}
+                  <code className="font-mono">dev start</code> picks up where you left off. If
+                  another contributor has claimed it, <code className="font-mono">dev start</code>{" "}
+                  will tell you — pick a different task from this project instead.
                 </SectionMessage>
               ) : null}
 

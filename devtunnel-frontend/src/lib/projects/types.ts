@@ -30,7 +30,7 @@
  */
  import type { OnboardingGithubIdentity } from "@/lib/admin/project-onboarding/types";
  import type { AdminProjectStatus } from "@/lib/admin/projects/types";
- import type { Task } from "@/lib/tasks/types";
+ import type { Task, TaskProgressCounts } from "@/lib/tasks/types";
  import type { Issue } from "@/lib/issues/types";
  
  /**
@@ -73,6 +73,13 @@
    devTunnelContributorCount: number;
    /** Total DevTunnel tasks on this project, including ones already done. */
    taskCount: number;
+   /**
+    * Tasks per stage (open / in progress / in review / done), counted in
+    * the database so `total` matches `taskCount`. `null` when the backend's
+    * count failed; absent when the frontend is ahead of the backend —
+    * either way the progress bar is simply not shown.
+    */
+   taskProgress?: TaskProgressCounts | null;
  
    /** GitHub repository creation date. */
    createdAt: string;

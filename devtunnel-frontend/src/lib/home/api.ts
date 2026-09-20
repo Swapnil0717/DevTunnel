@@ -8,10 +8,13 @@ import type {
 } from "./types";
 
 /**
- * None of these endpoints are built on the backend yet.
+ * Most of these endpoints are not built on the backend yet.
  * - GET /projects/available and GET /contributor/tasks are the ones
  *   actually spec'd in docs/devtunnel-workflow.md (Module 3) / the
  *   confirmed auth routes.
+ * - GET /users/me/tasks (`getMyTasks`) IS built — it replaced the
+ *   never-implemented `GET /contributor/tasks?assignedToMe=true`, so the
+ *   "Your tasks" list finally has something real behind it.
  * - GET /contributor/active-projects below is NOT confirmed anywhere —
  *   there's no spec'd endpoint for "recently active projects" yet.
  *   Treat that path as a placeholder and get it confirmed with backend
@@ -69,5 +72,5 @@ export function getRecommendedTasks() {
 }
 
 export function getMyTasks() {
-  return fetchFromApi<MyTask[]>("/contributor/tasks?assignedToMe=true");
+  return fetchFromApi<MyTask[]>("/users/me/tasks");
 }

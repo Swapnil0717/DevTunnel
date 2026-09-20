@@ -1,3 +1,5 @@
+import type { TaskPullRequestRef, TaskStatus as DevtunnelTaskStatus } from "@/lib/tasks/types";
+
 export type ProjectSummary = {
   slug: string;
   name: string;
@@ -22,11 +24,30 @@ export type RecommendedTask = {
   role: string;
 };
 
-export type TaskStatus = "TODO" | "IN_PROGRESS" | "IN_REVIEW";
+/**
+ * A claimed task's stage. This is the task's own DevTunnel lifecycle
+ * (`devtunnel.task_status`) — the same four values the Tasks pages and the
+ * task-progress tracker use — not a separate "TODO / in progress / in
+ * review" vocabulary. It used to be its own three-value type, which could
+ * not represent a finished task and named the first stage differently
+ * from everywhere else.
+ */
+export type TaskStatus = DevtunnelTaskStatus;
 
+/**
+ * One row of "Your tasks" — `GET /users/me/tasks` (devtunnel-backend
+ * `src/routes/tasks.ts`). The first four fields are what this type has
+ * always carried; `projectName`, `startedAt` and `pullRequest` come from
+ * the same response and let the row show which project a task is in and
+ * link to its pull request. All three are optional so a row from a backend
+ * that predates them still renders.
+ */
 export type MyTask = {
   taskId: string;
   title: string;
   projectSlug: string;
   status: TaskStatus;
+  projectName?: string;
+  startedAt?: string | null;
+  pullRequest?: TaskPullRequestRef | null;
 };

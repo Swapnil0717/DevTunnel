@@ -9,6 +9,8 @@ import { AdminTaskStatusBadge } from "@/components/admin/tasks/admin-task-status
 import { ChevronLeftIcon, IssueIcon, GitBranchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
 import { TaskContributeButton } from "@/components/tasks/task-contribute-button";
+import { TaskProgressTracker } from "@/components/tasks/task-progress-tracker";
+import { getTaskClaim } from "@/lib/tasks/progress";
 import {
   TaskDescriptionSection,
   TaskDetailSidebar,
@@ -66,6 +68,16 @@ export async function generateMetadata({
  * in the header, which leads to `/projects/:projectSlug/tasks/:taskId/
  * contribute` — the task-scoped Contribute page with the exact
  * `dev start <task-id>` commands and the manual fork-to-PR flow.
+ *
+ * Above all three sits the **progress tracker** (`TaskProgressTracker`):
+ * Open → Started → PR submitted → Done, plus what that means for the
+ * signed-in viewer — whether this task is theirs, when they started it,
+ * the pull request. That is also what decides the header button:
+ * "Continue your task" for the person who claimed it, and an honest
+ * "Claimed by another contributor" (no dead-end link) for everyone else.
+ * The project section additionally carries the project's own "X of Y
+ * tasks done" bar, from the same project fetch that supplies its
+ * description.
  *
  * Two fetches, in parallel: `GET /projects/:projectSlug/tasks/:taskId`
  * for the task (`lib/tasks/api.ts`) and `GET /projects/:projectSlug` for
@@ -125,6 +137,9 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
 
   const task = result.data;
   const projectDescription = projectResult.status === "ok" ? projectResult.data.description : null;
+  const projectTaskProgress =
+    projectResult.status === "ok" ? (projectResult.data.taskProgress ?? null) : null;
+  const claim = getTaskClaim(task);
   const contributeHref = `/projects/${task.project.slug}/tasks/${task.id}/contribute`;
 
   return (
@@ -172,7 +187,7 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
         </div>
 
         <div className="flex flex-wrap items-start gap-2">
-          <TaskContributeButton href={contributeHref} status={task.status} />
+          <TaskContributeButton href={contributeHref} claim={claim} />
           {task.githubIssue ? (
             <a
               href={task.githubIssue.url}
@@ -187,12 +202,17 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
         </div>
       </div>
 
+      <div className="mb-6">
+        <TaskProgressTracker task={task} />
+      </div>
+
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-6">
           <TaskProjectSection
             project={task.project}
             description={projectDescription}
             unavailable={projectResult.status !== "ok"}
+            taskProgress={projectTaskProgress}
           />
           <TaskDescriptionSection
             customDescription={task.customDescription}

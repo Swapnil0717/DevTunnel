@@ -22,6 +22,7 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "ALL", label: "All" },
   { value: "OPEN", label: "Open" },
   { value: "IN_PROGRESS", label: "In progress" },
+  { value: "IN_REVIEW", label: "In review" },
   { value: "DONE", label: "Done" },
 ];
 

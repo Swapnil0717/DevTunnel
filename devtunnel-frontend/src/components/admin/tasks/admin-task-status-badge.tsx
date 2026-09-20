@@ -22,6 +22,10 @@ const STATUS_COPY: Record<
     label: "In progress",
     dotColor: "#639922",
   },
+  IN_REVIEW: {
+    label: "In review",
+    dotColor: "#AFA9EC",
+  },
   DONE: {
     label: "Done",
     dotColor: "#1D9E75",

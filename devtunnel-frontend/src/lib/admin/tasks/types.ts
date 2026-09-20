@@ -35,13 +35,19 @@
  import type { DeveloperRole, ExperienceLevel } from "@/lib/onboarding/types";
  
  /**
-  * `devtunnel.task_status` (`devtunnel-backend/sql/004_add_devtunnel_contributions.sql`)
-  * — the task's own DevTunnel lifecycle, distinct from a contributor's
-  * personal progress on it (`lib/home/types.ts`'s `TaskStatus`,
-  * "TODO" | "IN_PROGRESS" | "IN_REVIEW", which is a different,
-  * per-contributor concept).
+  * `devtunnel.task_status` (`devtunnel-backend/sql/004_add_devtunnel_contributions.sql`,
+  * plus `IN_REVIEW` from `sql/031_add_task_submit_tracking.sql`) — the
+  * task's own DevTunnel lifecycle: open → in progress (`dev start`) →
+  * in review (`dev submit` opened a PR) → done.
+  *
+  * `IN_REVIEW` has existed in the database and the backend's own
+  * `AdminTaskStatus` since sql/031, but was missing here, so a task that
+  * had been submitted rendered with its raw enum string as its label and
+  * couldn't be reached from any status filter. It is included now
+  * because the task-progress tracker (`lib/tasks/progress.ts`) is built
+  * on all four stages.
   */
- export type AdminTaskStatus = "OPEN" | "IN_PROGRESS" | "DONE";
+ export type AdminTaskStatus = "OPEN" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
  
  /**
   * The project a task belongs to, trimmed to exactly what the Tasks table

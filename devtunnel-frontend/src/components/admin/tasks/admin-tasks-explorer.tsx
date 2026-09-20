@@ -32,6 +32,7 @@ const STATUS_FILTERS: {
   { value: "ALL", label: "All statuses" },
   { value: "OPEN", label: "Open" },
   { value: "IN_PROGRESS", label: "In progress" },
+  { value: "IN_REVIEW", label: "In review" },
   { value: "DONE", label: "Done" },
 ];
 

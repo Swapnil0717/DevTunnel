@@ -5,9 +5,15 @@ import { TechIcon } from "@/components/onboarding/tech-icon";
 import { StatusDot } from "@/components/ui/status-dot";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
 import { SectionMessage } from "@/components/home/section-message";
+import { ProjectTaskProgress } from "@/components/projects/project-task-progress";
 import { GitBranchIcon, IssueIcon } from "@/components/layout/nav-icons";
 import { DEVELOPER_ROLE_LABEL, EXPERIENCE_LEVEL_LABEL } from "@/lib/onboarding/types";
-import type { TaskDetail, TaskGithubIssueRef, TaskProjectRef } from "@/lib/tasks/types";
+import type {
+  TaskDetail,
+  TaskGithubIssueRef,
+  TaskProgressCounts,
+  TaskProjectRef,
+} from "@/lib/tasks/types";
 
 /**
  * The building blocks of the View Task page
@@ -42,15 +48,22 @@ const HEADING_CLASS = "m-0 text-[11px] uppercase tracking-wide text-text-faint";
  * so the copy never claims a project has no description just because the
  * request hiccuped (rule 58 — don't present an absence the app can't
  * actually stand behind).
+ *
+ * `taskProgress` is the project's per-stage task counts (same data as the
+ * bar on the project page), shown here as a compact "X of Y tasks done" so
+ * someone reading a single task can see how the project around it is
+ * doing. Omitted when the project fetch didn't return it.
  */
 export function TaskProjectSection({
   project,
   description,
   unavailable,
+  taskProgress = null,
 }: {
   project: TaskProjectRef;
   description: string | null;
   unavailable: boolean;
+  taskProgress?: TaskProgressCounts | null;
 }) {
   return (
     <section aria-labelledby="task-project-heading" className={SECTION_CLASS}>
@@ -93,6 +106,12 @@ export function TaskProjectSection({
                 : "This project has no description yet."}
             </p>
           )}
+
+          {taskProgress ? (
+            <div className="mt-4 border-t border-border-subtle pt-3">
+              <ProjectTaskProgress counts={taskProgress} compact />
+            </div>
+          ) : null}
         </div>
       </div>
     </section>

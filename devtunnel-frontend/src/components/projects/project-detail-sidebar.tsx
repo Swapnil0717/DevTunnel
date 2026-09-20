@@ -12,6 +12,7 @@ import {
 import { formatCompactNumber } from "@/lib/github-projects/format-compact-number";
 import { formatRelativeTime } from "@/lib/home/format-relative-time";
 import { getTechTagClasses } from "@/lib/home/tag-style";
+import { ProjectTaskProgress } from "@/components/projects/project-task-progress";
 import type { DevtunnelProjectDetail } from "@/lib/projects/types";
 
 type IconProps = { className?: string };
@@ -214,6 +215,16 @@ export function ProjectDetailSidebar({
           </span>
         </div>
       </div>
+
+      {/* Task progress — only when the backend returned the per-stage counts. */}
+      {project.taskProgress ? (
+        <div className="rounded-[10px] border border-border bg-surface p-4">
+          <h2 className="m-0 mb-3 text-[11px] font-normal uppercase tracking-wide text-text-faint">
+            Task progress
+          </h2>
+          <ProjectTaskProgress counts={project.taskProgress} />
+        </div>
+      ) : null}
 
       {/* Match — only when there's a real one to show. */}
       {typeof project.matchPercent === "number" ? (

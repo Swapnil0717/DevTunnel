@@ -31,6 +31,19 @@ export default function TaskContributeLoading() {
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-6">
           <div className="rounded-[10px] border border-border bg-surface p-5">
+            <SkeletonBlock className="mb-4 h-2.5 w-16" />
+            <div className="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index}>
+                  <SkeletonBlock className="mb-2 h-1 w-full rounded-full" />
+                  <SkeletonBlock className="mb-1.5 h-3 w-20" />
+                  <SkeletonBlock className="h-2.5 w-28" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[10px] border border-border bg-surface p-5">
             <SkeletonBlock className="mb-3 h-2.5 w-20" />
             <SkeletonBlock className="mb-2 h-3.5 w-3/5" />
             <SkeletonBlock className="mb-4 h-3 w-4/5" />

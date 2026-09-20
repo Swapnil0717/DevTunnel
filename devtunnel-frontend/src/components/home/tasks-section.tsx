@@ -22,7 +22,7 @@ export function TasksSection() {
       <section aria-labelledby="my-tasks-heading">
         <div className="flex items-center justify-between mb-2.5">
           <h2 id="my-tasks-heading" className="text-[12.5px] text-text-muted">
-            Your active tasks
+            Your tasks
           </h2>
           <Link
             href="/tasks?filter=mine"
