@@ -37,9 +37,11 @@ export async function generateMetadata({ params }: ToolContributePageProps): Pro
  * differences are carried by the `ContributeTarget` it builds, not by a
  * second set of components:
  *
- *  - `tasks` is always `[]`. DevTunnel tasks hang off a project, never a
- *    tool (sql/017) — the Tasks tab says that outright instead of showing
- *    an empty list that looks like a backlog nobody has filled.
+ *  - `tasks` comes straight off `tool.tasks` (sql/034's linked shadow
+ *    project) — `[]` for a tool onboarded before that migration, same
+ *    "no record to hang a task off yet" reasoning `ContributeTasksPanel`'s
+ *    `"github-repo"` branch already documents for a raw catalog
+ *    repository, not a claim that this tool can never have tasks.
  *  - Everything repository-shaped is conditional on `tool.repository`.
  *    A tool whose `sourceUrl` isn't a GitHub repository has no fork to
  *    make and no clone URL, so the workflow tab and the clone card drop
@@ -93,7 +95,7 @@ export default async function ToolContributePage({ params }: ToolContributePageP
     listHref: "/opensource-tools",
     listLabel: "Open Source Tools",
     viewerIsContributing: tool.viewerIsContributing,
-    tasks: [],
+    tasks: tool.tasks,
   };
 
   return (

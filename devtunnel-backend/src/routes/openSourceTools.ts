@@ -11,6 +11,7 @@ import {
   getOpenSourceToolDetailBySlug,
   listAvailableOpenSourceTools,
 } from "../db/openSourceTools";
+import { listTasks } from "../db/tasks";
 import { isOpenSourceToolContributor, joinOpenSourceTool } from "../db/catalogMemberships";
 import { applyCatalogStar, readCatalogStarStatus } from "../lib/catalogStar";
 import {
@@ -130,6 +131,14 @@ const DETAIL_CACHE_HARD_TTL_SECONDS = DETAIL_CACHE_SOFT_TTL_SECONDS * 3;
 const DETAIL_ISSUES_LIMIT = 50;
 
 /**
+ * Upper bound on tasks returned with a tool — same reasoning and same
+ * value as `GET /projects/:slug`'s own `DETAIL_TASKS_LIMIT` (this route's
+ * linked shadow project is a real `devtunnel.projects` row, so its task
+ * count behaves exactly like any other project's).
+ */
+const DETAIL_TASKS_LIMIT = 200;
+
+/**
  * `GET /opensource-tools/:slug` — backs the Tool Detail page, the
  * destination `DevtunnelOpenSourceToolCard` should link to instead of
  * sending every click straight out to the tool's own site.
@@ -178,7 +187,7 @@ openSourceTools.get("/opensource-tools/:slug", requireAuth, async (c) => {
 
     const repositoryFullName = tool.repo ? `${tool.repo.owner}/${tool.repo.repo}` : null;
 
-    const [snapshot, starStatus, viewerIsContributing] = await Promise.all([
+    const [snapshot, tasksPage, starStatus, viewerIsContributing] = await Promise.all([
       tool.repo
         ? withCacheSWR<ToolGithubSnapshot>(
             c.executionCtx,
@@ -226,6 +235,13 @@ openSourceTools.get("/opensource-tools/:slug", requireAuth, async (c) => {
             return null;
           })
         : Promise.resolve(null),
+      // `null` for a tool onboarded before sql/034 — it has no linked
+      // project yet, so there's nowhere to read tasks from (same "no
+      // record to hang a task off" reasoning the Contribute page's Tasks
+      // panel already documents for this exact case).
+      tool.projectSlug
+        ? listTasks(supabase, { limit: DETAIL_TASKS_LIMIT, before: null, projectSlug: tool.projectSlug })
+        : Promise.resolve({ tasks: [], nextCursor: null }),
       repositoryFullName
         ? readCatalogStarStatus(env, repositoryFullName, user.id)
         : Promise.resolve({ starredByViewer: false, localStarCount: 0 }),
@@ -265,6 +281,15 @@ openSourceTools.get("/opensource-tools/:slug", requireAuth, async (c) => {
       // `GET /opensource-tools/:slug/issues` below returns the rest, in
       // this same row shape.
       openIssues: (snapshot?.issues ?? []).map(toToolIssuePreview),
+
+      // This tool's DevTunnel tasks, read off its linked shadow project
+      // (sql/034) — `[]` (never a fabricated error) for a pre-sql/034
+      // tool that has no linked project. `linkedProjectSlug` is what the
+      // frontend's Tasks tab needs to build each task's real URL
+      // (`/projects/:projectSlug/tasks/:taskId` — tasks are always a
+      // project route, even when reached from a tool's page).
+      tasks: tasksPage.tasks,
+      linkedProjectSlug: tool.projectSlug,
 
       isStarredByViewer: starStatus.starredByViewer,
       localStarCount: starStatus.localStarCount,

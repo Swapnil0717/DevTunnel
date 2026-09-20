@@ -1,5 +1,6 @@
 import type { OnboardingGithubIdentity } from "@/lib/admin/project-onboarding/types";
 import type { GithubProjectIssuePreview } from "@/lib/github-projects/types";
+import type { Task } from "@/lib/tasks/types";
 
 /**
  * Local, frontend-only shape for the contributor-facing **Open Source
@@ -112,6 +113,23 @@ export interface OpenSourceToolDetail extends OpenSourceToolSummary {
    * own `url`.
    */
   openIssues: OpenSourceToolIssuePreview[];
+
+  /**
+   * This tool's DevTunnel tasks — read off its linked shadow project
+   * (sql/034, backend `GET /opensource-tools/:slug`). `[]` for a tool
+   * onboarded before that migration, which has no linked project yet —
+   * never distinguished from "linked but genuinely has no tasks", same
+   * as any other project's empty task list.
+   */
+  tasks: Task[];
+  /**
+   * Slug of the linked shadow project, or `null` pre-sql/034. Every task
+   * row's own real destination is a project route
+   * (`/projects/:projectSlug/tasks/:taskId`, same as `ProjectTasksPanel`
+   * already uses) — this is what makes that link resolvable from a
+   * tool's own page without a second request.
+   */
+  linkedProjectSlug: string | null;
 
   /**
    * Whether the signed-in contributor has starred this tool through

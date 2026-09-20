@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
 import { GithubEmptyState } from "@/components/github-projects/github-empty-state";
+import { ProjectTasksPanel } from "@/components/projects/project-tasks-panel";
 import { ToolIssuesPanel } from "@/components/opensource-tools/tool-issues-panel";
-import { GridIcon, FileIcon, ToolIcon, IssueIcon } from "@/components/layout/nav-icons";
+import { GridIcon, FileIcon, ToolIcon, ChecklistIcon, IssueIcon } from "@/components/layout/nav-icons";
 import { formatRelativeTime } from "@/lib/home/format-relative-time";
 import { getTechTagClasses } from "@/lib/home/tag-style";
 import { repoIssuesPath } from "@/lib/issues/repo-issues-client";
@@ -14,6 +15,7 @@ import type { OpenSourceToolDetail, OpenSourceToolIssuePreview } from "@/lib/ope
 const TABS = [
   { id: "info", label: "Tool Info", icon: GridIcon },
   { id: "setup", label: "Setup Guide", icon: ToolIcon },
+  { id: "tasks", label: "Tasks", icon: ChecklistIcon },
   { id: "readme", label: "README", icon: FileIcon },
   { id: "issues", label: "All Issues", icon: IssueIcon },
 ] as const;
@@ -28,15 +30,24 @@ type TabId = (typeof TABS)[number]["id"];
  *
  * Two deliberate differences from the project page's four tabs:
  *
- * - **Setup Guide replaces Tasks.** A tool has no DevTunnel tasks —
- *   `devtunnel.tasks` hangs off a project, not a tool (sql/017) — so a
- *   Tasks tab here could only ever be empty. What a tool *does* have,
- *   and what nothing else in this app has, is the Admin-authored setup
- *   guide from Step 4 of tool onboarding: the "how do I actually run
+ * - **Setup Guide, ahead of Tasks and README.** The Admin-authored setup
+ *   guide from Step 4 of tool onboarding — the "how do I actually run
  *   this?" answer a contributor opens a tool page for in the first
- *   place. It sits second, ahead of the README, because it's the
- *   DevTunnel-specific thing; the README is the upstream project's own
- *   pitch and is one click further along.
+ *   place — is the one thing this catalog has that no other page does,
+ *   so it sits right after Tool Info, ahead of both Tasks and README.
+ * - **Tasks reads the tool's linked shadow project.** Every tool
+ *   onboarded since sql/034 gets a real `devtunnel.projects` row created
+ *   for it automatically (`devtunnel.tasks` still hangs off a project,
+ *   never a tool directly — a polymorphic owner column would lose real
+ *   referential integrity, per sql/026's own header). `tool.tasks` is
+ *   that linked project's tasks, and `ProjectTasksPanel` — the exact
+ *   component the View Project page's own Tasks tab uses — is reused
+ *   here unmodified (rule 51), pointed at `tool.linkedProjectSlug` so
+ *   every row's "View task" link lands on the real
+ *   `/projects/:projectSlug/tasks/:taskId` page. A tool onboarded before
+ *   sql/034 has `linkedProjectSlug: null` and no tasks yet — the panel
+ *   below falls back to the same "not linked yet" empty state a tool
+ *   with a linked-but-genuinely-empty task list would never show.
  * - **All Issues depends on the repository.** A tool's source can be a
  *   docs site rather than a repo, so the count is absent (not zero) and
  *   the panel says so plainly instead of showing an empty list.
@@ -76,7 +87,12 @@ export function ToolDetailTabs({ tool }: { tool: OpenSourceToolDetail }) {
         {TABS.map((tab) => {
           const isActive = tab.id === activeId;
           const Icon = tab.icon;
-          const badge = tab.id === "issues" ? issuesBadge : undefined;
+          const badge =
+            tab.id === "issues"
+              ? issuesBadge
+              : tab.id === "tasks" && tool.tasks.length > 0
+                ? tool.tasks.length.toLocaleString()
+                : undefined;
 
           return (
             <button
@@ -190,6 +206,35 @@ export function ToolDetailTabs({ tool }: { tool: OpenSourceToolDetail }) {
           className="rounded-[10px] border border-border bg-surface p-5"
         >
           <MarkdownReadme content={tool.setupGuide} sourceUrl={tool.repository?.url} />
+        </div>
+      ) : null}
+
+      {activeId === "tasks" ? (
+        <div
+          role="tabpanel"
+          id="tool-panel-tasks"
+          aria-labelledby="tool-tab-tasks"
+          className="rounded-[10px] border border-border bg-surface p-4"
+        >
+          {tool.linkedProjectSlug ? (
+            <ProjectTasksPanel
+              projectSlug={tool.linkedProjectSlug}
+              tasks={tool.tasks}
+              repositoryUrl={tool.repository?.url ?? tool.sourceUrl}
+            />
+          ) : (
+            <GithubEmptyState
+              compact
+              variant="tasks-locked"
+              title="No DevTunnel tasks yet"
+              description="This tool isn't linked to a DevTunnel project yet, so it has no DevTunnel tasks of its own. Its open issues are still a great place to start in the meantime."
+              primaryAction={
+                tool.repository
+                  ? { label: "Browse open issues", href: `${tool.repository.url}/issues`, external: true }
+                  : { label: "Visit the tool", href: tool.sourceUrl, external: true }
+              }
+            />
+          )}
         </div>
       ) : null}
 

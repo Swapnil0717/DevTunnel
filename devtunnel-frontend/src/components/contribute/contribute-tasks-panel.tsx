@@ -49,11 +49,12 @@ const MAX_VISIBLE_TECH = 3;
  * `TasksTable` and `ProjectTasksPanel` already use, with the underlying
  * GitHub issue reachable separately.
  *
- * For a tool, `tasks` is always empty and the panel says why: DevTunnel
- * tasks hang off a project, never a tool (sql/017), so an empty list here
- * is a fact about how DevTunnel works, not a backlog waiting to be
- * filled. Pretending otherwise would leave someone refreshing a page that
- * is never going to fill up.
+ * For a tool, `tasks` is only empty when the tool has no linked shadow
+ * project yet (sql/034 — a tool onboarded before that migration). Once
+ * linked, a tool's tasks are its linked project's real tasks and render
+ * through the exact same list below as a project's own Tasks tab — the
+ * "no DevTunnel tasks" copy only appears when `tasks.length === 0`, same
+ * as it would for a project with none.
  *
  * For a raw GitHub-catalog repository (`targetKind === "github-repo"`),
  * `tasks` is empty for a related but distinct reason: it isn't a
@@ -130,30 +131,17 @@ export function ContributeTasksPanel({
     );
   }
 
-  if (targetKind === "tool") {
-    return (
-      <GithubEmptyState
-        compact
-        variant="no-results"
-        title="Tools don't carry DevTunnel tasks"
-        description="Tasks are curated on DevTunnel projects. A tool points straight at its own repository, so the open issues there are what's available to pick up."
-        primaryAction={
-          repositoryUrl
-            ? { label: "Browse open issues", href: `${repositoryUrl}/issues`, external: true }
-            : undefined
-        }
-        secondaryAction={{ label: "Browse DevTunnel projects", href: "/projects" }}
-      />
-    );
-  }
-
   if (tasks.length === 0) {
     return (
       <GithubEmptyState
         compact
         variant="no-results"
-        title="No tasks curated yet"
-        description="Nothing on this project has been broken out into a DevTunnel task so far. The repository's own open issues are still the place to find something to pick up."
+        title={targetKind === "tool" ? "No DevTunnel tasks yet" : "No tasks curated yet"}
+        description={
+          targetKind === "tool"
+            ? "This tool isn't linked to a DevTunnel project yet, so it has no DevTunnel tasks of its own. Its open issues are still the place to find something to pick up."
+            : "Nothing on this project has been broken out into a DevTunnel task so far. The repository's own open issues are still the place to find something to pick up."
+        }
         primaryAction={
           repositoryUrl
             ? { label: "Browse issues on GitHub", href: `${repositoryUrl}/issues`, external: true }

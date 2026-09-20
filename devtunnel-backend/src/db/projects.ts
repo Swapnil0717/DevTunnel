@@ -102,6 +102,7 @@ export async function listAvailableProjects(
     .from("projects")
     .select(AVAILABLE_PROJECT_COLUMNS)
     .eq("status", "ACTIVE")
+    .eq("is_tool_shadow", false)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(AVAILABLE_PROJECTS_LIMIT);

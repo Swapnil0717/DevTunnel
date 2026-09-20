@@ -171,15 +171,25 @@ export interface OpenSourceToolDetailRecord extends OpenSourceToolSummary {
   setupGuide: string;
   /** Resolved from `source_url` — `null` when the tool isn't hosted on GitHub. */
   repo: { owner: string; repo: string } | null;
+  /**
+   * Slug of this tool's linked shadow project (sql/034), or `null` for a
+   * tool onboarded before that migration — those simply have no linked
+   * project yet, and this reads `null` rather than inventing one. This
+   * is what `GET /opensource-tools/:slug` uses to pull the tool's real
+   * DevTunnel tasks (`devtunnel.tasks` hangs off a project, never a tool
+   * directly — sql/034's own header explains why).
+   */
+  projectSlug: string | null;
 }
 
 interface OpenSourceToolDetailRow extends AvailableOpenSourceToolRow {
   readme: string | null;
   setup_guide: string;
+  project_id: string | null;
 }
 
 /** Explicit column list, never `select("*")` (rule 23). */
-const DETAIL_TOOL_COLUMNS = `${AVAILABLE_TOOL_COLUMNS}, readme, setup_guide`;
+const DETAIL_TOOL_COLUMNS = `${AVAILABLE_TOOL_COLUMNS}, readme, setup_guide, project_id`;
 
 /**
  * One published tool by slug, or `null` when no such tool exists — which
@@ -207,10 +217,28 @@ export async function getOpenSourceToolDetailBySlug(
   if (error) throw new Error(`Failed to load open source tool: ${error.message}`);
   if (!data) return null;
 
+  // Second, cheap point lookup rather than a PostgREST embed — same
+  // "two round trips, both hit a unique index" reasoning
+  // `getProjectDetailBySlug` documents for its own project/counts split.
+  // Skipped entirely for a pre-sql/034 tool with no project_id at all.
+  let projectSlug: string | null = null;
+  if (data.project_id) {
+    const { data: projectRow, error: projectError } = await supabase
+      .from("projects")
+      .select("slug")
+      .eq("id", data.project_id)
+      .maybeSingle<{ slug: string }>();
+    if (projectError) {
+      throw new Error(`Failed to load tool's linked project: ${projectError.message}`);
+    }
+    projectSlug = projectRow?.slug ?? null;
+  }
+
   return {
     ...toOpenSourceToolSummary(data),
     readme: data.readme,
     setupGuide: data.setup_guide ?? "",
     repo: parseGithubRepoUrl(data.source_url),
+    projectSlug,
   };
 }
