@@ -19,11 +19,27 @@
  * shape but is legitimately empty for a tool, and the Tasks tab says why
  * rather than pretending a tool has a task list nobody has filled in yet
  * (rule 58 — don't invent data, and don't dress an absence up as one).
+ *
+ * A third kind, `"github-repo"`, covers the same page for a repository
+ * that's still sitting in the raw GitHub catalog (`/github-projects`,
+ * `/github-open-source-tools`) and hasn't been converted into either a
+ * DevTunnel Project or Tool yet. It's built by
+ * `app/(protected)/github-projects/[slug]/contribute/page.tsx` and
+ * `app/(protected)/github-open-source-tools/[slug]/contribute/page.tsx`
+ * from `GithubProjectDetail` (`lib/github-projects/types.ts`) the exact
+ * same way the other two build from their own detail payloads. Its
+ * `tasks` is always `[]` for the same underlying reason a tool's is:
+ * there's no `devtunnel.tasks` row to have without a DevTunnel project or
+ * tool record to hang it off, and its `projectId` is always `null` for
+ * the same reason a tool's is (no DevTunnel id exists yet either). The
+ * Tasks tab spells out *why* for this kind specifically, rather than
+ * reusing the tool's copy verbatim — the fix here is "get this onboarded
+ * as a DevTunnel project or tool", not "go look at a different project".
  */
 
  import type { Task } from "@/lib/tasks/types";
 
- export type ContributeTargetKind = "project" | "tool";
+ export type ContributeTargetKind = "project" | "tool" | "github-repo";
  
  /**
   * Everything the Contribute page needs about the thing being contributed

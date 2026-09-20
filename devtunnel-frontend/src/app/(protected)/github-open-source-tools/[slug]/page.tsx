@@ -12,7 +12,7 @@ import { GithubProjectDetailTabs } from "@/components/github-projects/github-pro
 import { GithubProjectSidebar } from "@/components/github-projects/github-project-sidebar";
 import { RequestToolOnboardingButton } from "@/components/github-open-source-tools/request-tool-onboarding-button";
 import { StarButton } from "@/components/github-open-source-tools/star-button";
-import { ContributeOnGithubButton } from "@/components/github-projects/contribute-on-github-button";
+import { ContributeToRepoButton } from "@/components/github-projects/contribute-to-repo-button";
 
 interface GithubToolDetailPageProps {
   params: Promise<{ slug: string }>;
@@ -71,13 +71,14 @@ export async function generateMetadata({
  * stars/forks/issues counts that used to live here now live once, in the
  * sidebar, instead of being repeated in two places on the same page.
  *
- * Three actions sit next to the header: `ContributeOnGithubButton` (new —
- * the one accent-colored button, opens this exact repository's own GitHub
- * contribute page; see its doc comment for why that's the honest
- * destination rather than a DevTunnel `/contribute` page this
- * not-yet-onboarded tool doesn't have), "View on GitHub" (unchanged —
- * always the real repository), and "Request to add as DevTunnel project
- * or tool" (`RequestToolOnboardingButton`). Same three-outcome handling
+ * Four actions sit next to the header: `ContributeToRepoButton` (new —
+ * the one accent-colored button, opens
+ * `/github-open-source-tools/:slug/contribute`, this repository's own
+ * DevTunnel Contribute page — same destination shape `ContributeToToolButton`
+ * opens for an onboarded tool, just without a join call first; see its
+ * own doc comment for why), "View on GitHub" (unchanged — always the real
+ * repository), `StarButton`, and "Request to add as DevTunnel project or
+ * tool" (`RequestToolOnboardingButton`). Same three-outcome handling
  * `GithubProjectDetailPage` already establishes: a slug that doesn't
  * match any catalog entry renders Next's real 404 via `notFound()`
  * rather than a fabricated "empty tool" page
@@ -168,7 +169,7 @@ export default async function GithubToolDetailPage({ params }: GithubToolDetailP
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <ContributeOnGithubButton repositoryUrl={tool.repositoryUrl} />
+          <ContributeToRepoButton slug={tool.slug} basePath="/github-open-source-tools" />
           <a
             href={tool.repositoryUrl}
             target="_blank"

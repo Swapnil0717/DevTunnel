@@ -54,6 +54,15 @@ const MAX_VISIBLE_TECH = 3;
  * is a fact about how DevTunnel works, not a backlog waiting to be
  * filled. Pretending otherwise would leave someone refreshing a page that
  * is never going to fill up.
+ *
+ * For a raw GitHub-catalog repository (`targetKind === "github-repo"`),
+ * `tasks` is empty for a related but distinct reason: it isn't a
+ * DevTunnel project or tool *at all* yet, so there's no record for a task
+ * to hang off in the first place. The copy says exactly that — this task
+ * will be available once the repository is converted into a DevTunnel
+ * project or tool — rather than reusing the tool's "browse other
+ * projects" framing, which would imply the fix is picking a different
+ * project rather than converting this one.
  */
 export function ContributeTasksPanel({
   targetKind,
@@ -103,6 +112,23 @@ export function ContributeTasksPanel({
       return true;
     });
   }, [tasks, statusFilter, roleFilter, difficultyFilter, query]);
+
+  if (targetKind === "github-repo") {
+    return (
+      <GithubEmptyState
+        compact
+        variant="tasks-locked"
+        title="No DevTunnel tasks yet"
+        description="This repository isn't a DevTunnel project or tool yet, so it has no DevTunnel tasks of its own. This task will be available once it's converted into a DevTunnel project or tool — its open issues on GitHub are still a great place to start in the meantime."
+        primaryAction={
+          repositoryUrl
+            ? { label: "Browse open issues", href: `${repositoryUrl}/issues`, external: true }
+            : undefined
+        }
+        secondaryAction={{ label: "Browse DevTunnel projects", href: "/projects" }}
+      />
+    );
+  }
 
   if (targetKind === "tool") {
     return (

@@ -10,10 +10,12 @@ import type { ContributeTarget } from "@/lib/contribute/types";
  *
  * `logo` comes in as a node rather than being chosen here: a project
  * renders `DevtunnelProjectLogo` (keyed on the repository), a tool renders
- * `OpenSourceToolLogo` (keyed on its source URL). Passing the element in
- * keeps this component from needing to know which of the two it's
- * looking at, and keeps each route using the logo component it already
- * uses on its own detail page.
+ * `OpenSourceToolLogo` (keyed on its source URL), and a raw GitHub-catalog
+ * repository (`target.kind === "github-repo"`) renders the same `RepoLogo`
+ * its own detail page already uses. Passing the element in keeps this
+ * component from needing to know which of the three it's looking at, and
+ * keeps each route using the logo component it already uses on its own
+ * detail page.
  *
  * There is deliberately no accent-colored button up here. The detail page
  * owns the "Contribute to this project" action; by the time someone is on
@@ -82,7 +84,11 @@ export function ContributePageHeader({
                   <span className="inline-flex items-center gap-1.5 text-status-success-label">
                     <CheckCircleIcon className="h-3.5 w-3.5 shrink-0" />
                     You&apos;ve joined this{" "}
-                    {target.kind === "project" ? "project" : "tool"}
+                    {target.kind === "project"
+                      ? "project"
+                      : target.kind === "tool"
+                        ? "tool"
+                        : "repository"}
                   </span>
                 </>
               ) : null}
@@ -101,7 +107,11 @@ export function ContributePageHeader({
             href={target.detailHref}
             className="inline-flex shrink-0 items-center gap-1.5 rounded-[8px] border border-border bg-surface px-3.5 py-2 text-[13px] font-medium text-text hover:bg-surface-raised"
           >
-            {target.kind === "project" ? "Project overview" : "Tool overview"}
+            {target.kind === "project"
+              ? "Project overview"
+              : target.kind === "tool"
+                ? "Tool overview"
+                : "Repository overview"}
           </Link>
           {target.repositoryUrl ? (
             <a
