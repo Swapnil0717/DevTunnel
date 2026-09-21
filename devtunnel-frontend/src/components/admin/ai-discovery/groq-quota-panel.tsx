@@ -5,7 +5,13 @@ import { getGroqQuota } from "@/lib/admin/ai-discovery/client-api";
 import type { GroqQuotaSnapshot } from "@/lib/admin/ai-discovery/types";
 import { ActivityIcon } from "@/components/layout/nav-icons";
 
-const POLL_INTERVAL_MS = 30_000;
+// 30s of continuous polling meant a tab left open all day made ~2,880 calls
+// on its own, each one costing a rate-limit KV write on the backend
+// (src/lib/rateLimit.ts) — a meaningful slice of the Workers KV free-tier
+// daily put budget from a single idle admin tab. Backed off to 2 minutes,
+// and paused entirely while the tab isn't visible (see the visibility
+// listener below), since a background tab has no reason to keep polling.
+const POLL_INTERVAL_MS = 120_000;
 
 function formatCount(n: number): string {
   return n.toLocaleString();
@@ -83,8 +89,35 @@ export function GroqQuotaPanel({ refreshKey, kind }: GroqQuotaPanelProps) {
 
   useEffect(() => {
     load();
-    const intervalId = setInterval(load, POLL_INTERVAL_MS);
-    return () => clearInterval(intervalId);
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const startPolling = () => {
+      if (intervalId !== null) return;
+      intervalId = setInterval(load, POLL_INTERVAL_MS);
+    };
+    const stopPolling = () => {
+      if (intervalId === null) return;
+      clearInterval(intervalId);
+      intervalId = null;
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        // Catch up immediately on refocus, then resume the interval.
+        load();
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    };
+
+    if (document.visibilityState === "visible") startPolling();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [load]);
 
   useEffect(() => {
