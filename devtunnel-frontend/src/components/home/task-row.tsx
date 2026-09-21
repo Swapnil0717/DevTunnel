@@ -8,7 +8,7 @@ import { formatRelativeTime } from "@/lib/home/format-relative-time";
  * `TASK_STAGES` so the chip, the mini bar beside it and the tracker on
  * the task page all read as the same stage.
  */
-const STAGE_CHIP_CLASSES: Record<TaskStatus, string> = {
+export const STAGE_CHIP_CLASSES: Record<TaskStatus, string> = {
   OPEN: "bg-status-info-bg text-status-info-text",
   IN_PROGRESS: "bg-status-idle-bg text-status-idle-text",
   IN_REVIEW: "bg-tag-skill-bg text-tag-skill-text",
@@ -21,7 +21,10 @@ type TaskRowProps =
       taskId: string;
       title: string;
       projectSlug: string;
-      role: string;
+      /** Shown under the title so two tasks with similar titles can be told apart. */
+      projectName?: string;
+      /** Why it was recommended — the role, technology or level that matched. Shown as "Match · {match}". */
+      match: string;
     }
   | {
       variant: "mine";
@@ -69,6 +72,9 @@ export function TaskRow(props: TaskRowProps) {
     >
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[11.5px] text-text-secondary">{props.title}</span>
+        {props.variant === "recommended" && props.projectName ? (
+          <span className="block truncate text-[10px] text-text-faint">{props.projectName}</span>
+        ) : null}
         {props.variant === "mine" && (props.projectName || props.startedAt) ? (
           <span className="block truncate text-[10px] text-text-faint">
             {props.projectName}
@@ -85,7 +91,7 @@ export function TaskRow(props: TaskRowProps) {
 
       {props.variant === "recommended" ? (
         <span className="shrink-0 text-[10px] text-status-success-label">
-          Match · {props.role}
+          Match · {props.match}
         </span>
       ) : (
         <span className="flex shrink-0 items-center gap-2">

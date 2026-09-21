@@ -19,9 +19,8 @@ import type { Task } from "@/lib/tasks/types";
  * `GET /opensource-tools/available` is NOT confirmed anywhere —
  * `docs/devtunnel-workflow.md` only spec's `GET /projects/available` and
  * `GET /contributor/tasks` for contributor-facing catalogs (Module 3).
- * Same documented-assumption convention `lib/home/api.ts`'s
- * `getActiveProjects` already uses for its own unconfirmed
- * `/contributor/active-projects` path: a plausible, clearly-flagged
+ * Same documented-assumption convention `lib/home/api.ts` used for
+ * Home's endpoints before they were built: a plausible, clearly-flagged
  * shape built directly from the published `devtunnel.opensource_tools`
  * columns (sql/017) rather than invented from nothing
  * (Frontend_Development_Rules.txt rule 58), but not yet backed by a real

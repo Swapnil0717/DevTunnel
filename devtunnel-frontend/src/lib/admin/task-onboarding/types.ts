@@ -82,8 +82,8 @@ export const DEFAULT_ISSUE_INFORMATION: TaskIssueInformation = {
 /**
  * Step 5 — "Difficulty", plus the target contributor role(s) this task
  * is curated for. The spec only names Difficulty explicitly, but the
- * DevTunnel home feed already models a task's role (see
- * `lib/home/types.ts`'s `RecommendedTask.role`, e.g. "Backend
+ * DevTunnel home feed already matches tasks to a contributor's role (see
+ * `lib/home/types.ts`'s `RecommendedTask.match`, e.g. "Backend
  * Developer") — so `roles` here reuses the same `DeveloperRole` enum the
  * contributor onboarding flow already defines
  * (`lib/onboarding/types.ts`) rather than inventing a second taxonomy

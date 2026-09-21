@@ -29,7 +29,7 @@ export const metadata: Metadata = {
  *
  * Order: greeting → `JourneyCard` (what's my progress, what do I do
  * next) → `TaskStats` → recommended projects → recommended/your tasks →
- * recently active projects. The journey card now owns the "what should I
+ * recent activity. The journey card now owns the "what should I
  * do next" job the old `EntryActions` two-card grid used to: one of
  * those two cards ("Start an open source project") never linked anywhere
  * real (`built: false`, no contributor-facing page exists), and the

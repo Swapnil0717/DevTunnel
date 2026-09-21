@@ -10,6 +10,7 @@ import { logger } from "../lib/logger";
 import {
   getTaskDetailByProjectAndId,
   getTaskById,
+  listRecommendedTasksForProfile,
   listTasks,
   listTasksAssignedToUser,
   startTask,
@@ -76,6 +77,9 @@ const taskIdSchema = z.string().uuid("Invalid task id");
 
 /** Upper bound on `GET /users/me/tasks` — a personal dashboard list, not a paginated collection (rule 40). */
 const MY_TASKS_LIMIT = 30;
+
+/** How many tasks Home's "Recommended tasks" list shows — a short shortlist, not a paginated collection (rule 40). */
+const RECOMMENDED_TASKS_LIMIT = 5;
 
 const ROLE_VALUES = [
   "FRONTEND",
@@ -336,6 +340,78 @@ tasks.get("/users/me/tasks", requireAuth, async (c) => {
       requestId: c.get("requestId"),
     });
     return errorResponse(c, 500, "internal_error", "Couldn't load your tasks right now");
+  }
+});
+
+/**
+ * `GET /users/me/recommended-tasks` — open tasks that fit the signed-in
+ * contributor's onboarding profile (roles, experience level, technologies and
+ * skills), best fit first, for the Home page's "Recommended tasks" list
+ * (devtunnel-frontend's `components/home/recommended-tasks-list.tsx` via
+ * `getRecommendedTasks` in `lib/home/api.ts`).
+ *
+ * Replaces the placeholder `GET /contributor/tasks?type=recommended` that
+ * list used to call, which was never built — so the section always showed
+ * "Recommended tasks aren't available yet". The matching itself is the same
+ * rule `GET /tasks?recommended=true` applies (see
+ * `listRecommendedTasksForProfile` in src/db/tasks.ts), narrowed to tasks
+ * nobody has claimed yet.
+ *
+ * `requireAuth` only, and scoped to `user` from the session — there is no
+ * parameter a caller could change to get someone else's recommendations.
+ * Bare array response like `GET /users/me/tasks` (what the Home fetch helper
+ * expects); `[]` is the normal "nothing fits right now" answer — including
+ * for an account with no onboarding answers to match against — not an error.
+ *
+ * The rate-limit bucket is counted per user, not per IP: Home calls this from
+ * the Next.js Worker on the visitor's behalf, so every visitor arrives from
+ * the same address (see `RateLimitOptions.identity`).
+ */
+tasks.get("/users/me/recommended-tasks", requireAuth, async (c) => {
+  const env = getEnv(c.env);
+  const user = c.get("user");
+  if (!user) {
+    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+  }
+
+  const withinLimit = await checkRateLimit(c, {
+    bucket: "tasks-recommended",
+    limit: 60,
+    windowSeconds: 60,
+    identity: `user:${user.id}`,
+  });
+  if (!withinLimit) {
+    return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+  }
+
+  const hasProfile =
+    user.developerRoles.length > 0 ||
+    user.experienceLevel !== null ||
+    user.technologies.length > 0 ||
+    user.skills.length > 0;
+  if (!user.onboardingCompleted || !hasProfile) {
+    return c.json([], 200);
+  }
+
+  try {
+    const supabase = getSupabase(env);
+    const items = await listRecommendedTasksForProfile(
+      supabase,
+      {
+        developerRoles: user.developerRoles,
+        experienceLevel: user.experienceLevel,
+        technologies: user.technologies,
+        skills: user.skills,
+      },
+      RECOMMENDED_TASKS_LIMIT,
+    );
+    return c.json(items, 200);
+  } catch (err) {
+    logger.error("recommended_tasks_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      requestId: c.get("requestId"),
+    });
+    return errorResponse(c, 500, "internal_error", "Couldn't load recommended tasks right now");
   }
 });
 

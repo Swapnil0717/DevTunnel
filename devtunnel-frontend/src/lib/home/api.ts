@@ -2,28 +2,29 @@
 import { cookies } from "next/headers";
 import type {
   ProjectSummary,
-  ActiveProjectSummary,
+  RecentActivity,
   RecommendedTask,
   MyTask,
 } from "./types";
 
 /**
- * Most of these endpoints are not built on the backend yet.
- * - GET /projects/available and GET /contributor/tasks are the ones
- *   actually spec'd in docs/devtunnel-workflow.md (Module 3) / the
- *   confirmed auth routes.
- * - GET /users/me/tasks (`getMyTasks`) IS built — it replaced the
- *   never-implemented `GET /contributor/tasks?assignedToMe=true`, so the
- *   "Your tasks" list finally has something real behind it.
- * - GET /contributor/active-projects below is NOT confirmed anywhere —
- *   there's no spec'd endpoint for "recently active projects" yet.
- *   Treat that path as a placeholder and get it confirmed with backend
- *   before relying on it.
+ * Every Home section reads from a real devtunnel-backend route:
+ * - GET /projects/available            → "Recommended for you" (projects)
+ * - GET /users/me/recommended-tasks    → "Recommended tasks" — open tasks that
+ *   fit the contributor's onboarding profile (roles, level, technologies,
+ *   skills)
+ * - GET /users/me/tasks                → "Your tasks"
+ * - GET /users/me/activity             → "Recently active" — what the
+ *   contributor recently started, submitted or finished
  *
- * Every call is expected to fail (network error / 404) until the
- * backend work lands. fetchFromApi() catches that and returns a
- * status instead of throwing, so a missing endpoint degrades to an
- * "error" message in one section rather than a blank page.
+ * Two of these — "Recommended tasks" and "Recently active" — used to call
+ * placeholder paths (`/contributor/tasks?type=recommended`,
+ * `/contributor/active-projects`) that were never built, so both sections
+ * always showed their "not available yet" message.
+ *
+ * fetchFromApi() still catches a failed request (network error, 4xx/5xx) and
+ * returns a status instead of throwing, so one failing endpoint degrades to a
+ * message in its own section rather than a blank page.
  */
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -61,14 +62,14 @@ export function getRecommendedProjects() {
   return fetchFromApi<ProjectSummary[]>("/projects/available");
 }
 
-export function getActiveProjects() {
-  // TODO: confirm the real path — placeholder, see note above.
-  return fetchFromApi<ActiveProjectSummary[]>("/contributor/active-projects");
+/** Open tasks that fit the signed-in contributor's profile, best fit first. */
+export function getRecommendedTasks() {
+  return fetchFromApi<RecommendedTask[]>("/users/me/recommended-tasks");
 }
 
-export function getRecommendedTasks() {
-  // TODO: confirm this query contract against GET /contributor/tasks.
-  return fetchFromApi<RecommendedTask[]>("/contributor/tasks?type=recommended");
+/** The signed-in contributor's own recent activity, newest first. */
+export function getRecentActivity() {
+  return fetchFromApi<RecentActivity[]>("/users/me/activity?limit=5");
 }
 
 export function getMyTasks() {

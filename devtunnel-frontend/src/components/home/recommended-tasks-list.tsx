@@ -2,6 +2,13 @@ import { TaskRow } from "./task-row";
 import { SectionMessage } from "./section-message";
 import { getRecommendedTasks } from "@/lib/home/api";
 
+/**
+ * "Recommended tasks" on Home — open, unclaimed tasks that fit the
+ * contributor's onboarding profile, best fit first, from
+ * `GET /users/me/recommended-tasks`. Each row says why it was picked
+ * ("Match · Backend Developer"), so the list can be trusted and not just
+ * read as a random selection.
+ */
 export async function RecommendedTasksList() {
   const result = await getRecommendedTasks();
 
@@ -14,7 +21,11 @@ export async function RecommendedTasksList() {
   }
 
   if (result.status === "empty") {
-    return <SectionMessage>No recommended tasks right now.</SectionMessage>;
+    return (
+      <SectionMessage>
+        No open tasks match your profile right now — check back soon.
+      </SectionMessage>
+    );
   }
 
   return (
@@ -26,7 +37,8 @@ export async function RecommendedTasksList() {
             taskId={task.taskId}
             title={task.title}
             projectSlug={task.projectSlug}
-            role={task.role}
+            projectName={task.projectName}
+            match={task.match}
           />
         </li>
       ))}

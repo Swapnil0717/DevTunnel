@@ -804,3 +804,146 @@ export async function getProjectTaskProgress(
     done: done ?? 0,
   };
 }
+
+/* ---------------------------------------------------------------------------
+ * Home — "Recommended tasks" (`GET /users/me/recommended-tasks`)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * One row of Home's "Recommended tasks" list. Mirrors `RecommendedTask` in
+ * devtunnel-frontend's `lib/home/types.ts`.
+ *
+ * `match` is the single, true reason this task was picked for the viewer,
+ * shown as "Match · {match}": the role that matched (`"Backend Developer"`),
+ * else the first technology that matched (`"React"`), else the experience
+ * level (`"Beginner level"`). It is never a made-up score or a role the
+ * viewer didn't actually match on.
+ */
+export interface RecommendedTaskItem {
+  taskId: string;
+  title: string;
+  projectSlug: string;
+  projectName: string;
+  match: string;
+}
+
+/**
+ * The contributor's own onboarding answers used to rank tasks. `skills` is
+ * included on top of `ContributorProfile` so this agrees with Home's
+ * "Recommended for you" *projects* list, which matches a project's tech stack
+ * against `technologies` **and** `skills` (`computeMatch`, src/db/projects.ts).
+ */
+export interface RecommendationProfile extends ContributorProfile {
+  skills: string[];
+}
+
+const RECOMMENDED_ROLE_LABELS: Record<DeveloperRole, string> = {
+  FRONTEND: "Frontend Developer",
+  BACKEND: "Backend Developer",
+  FULL_STACK: "Full Stack Developer",
+  DOCUMENTATION: "Documentation",
+  TESTING: "Testing",
+  DEVOPS: "DevOps",
+};
+
+const RECOMMENDED_LEVEL_LABELS: Record<ExperienceLevel, string> = {
+  BEGINNER: "Beginner level",
+  INTERMEDIATE: "Intermediate level",
+  ADVANCED: "Advanced level",
+};
+
+/**
+ * Open tasks that fit the contributor's profile, best fit first — backs
+ * `GET /users/me/recommended-tasks` (src/routes/tasks.ts) and Home's
+ * "Recommended tasks" list.
+ *
+ * Which tasks are *eligible* deliberately mirrors `matchProfile` in
+ * `listTasks` above (`GET /tasks?recommended=true`): a task fits when its
+ * roles overlap the contributor's `developerRoles` (a Full Stack contributor
+ * fits any task that has a role tagged), OR its difficulty equals their
+ * `experienceLevel`, OR its project's tech stack overlaps their
+ * `technologies`/`skills`. Two lists on the site should not disagree about
+ * what "recommended" means.
+ *
+ * What differs is that this only offers work that can actually be picked up:
+ * `status = OPEN` and no assignee, so a task someone has already claimed
+ * (including the viewer's own — those live under "Your tasks") never shows
+ * up here.
+ *
+ * Ordering is a simple, explainable score — role match (3), each shared
+ * technology (1, capped at 3), difficulty match (1) — with newest first
+ * breaking ties (the SQL order is preserved because `Array.prototype.sort`
+ * is stable). The score only orders the list; it is never sent to the client.
+ * Reads the same bounded, newest-first window `listTasks` scans for its own
+ * in-memory filters (`IN_MEMORY_SCAN_LIMIT`).
+ */
+export async function listRecommendedTasksForProfile(
+  supabase: SupabaseClient,
+  profile: RecommendationProfile,
+  limit: number,
+): Promise<RecommendedTaskItem[]> {
+  const { data, error } = await supabase
+    .from("admin_task_list")
+    .select(LIST_COLUMNS)
+    .eq("status", "OPEN")
+    .is("assignee_id", null)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(IN_MEMORY_SCAN_LIMIT);
+
+  if (error) throw new Error(`Failed to load recommended tasks: ${error.message}`);
+
+  const rows = (data ?? []) as unknown as AdminTaskListRow[];
+
+  const contributorTags = new Set(
+    [...profile.technologies, ...profile.skills].map((tag) => tag.toLowerCase()),
+  );
+  const isFullStack = profile.developerRoles.includes("FULL_STACK");
+
+  const scored: { item: RecommendedTaskItem; score: number }[] = [];
+
+  for (const row of rows) {
+    const roles = row.roles ?? [];
+
+    const directRole = roles.find((role) => profile.developerRoles.includes(role));
+    const roleLabel = directRole
+      ? RECOMMENDED_ROLE_LABELS[directRole]
+      : isFullStack && roles.length > 0
+        ? RECOMMENDED_ROLE_LABELS.FULL_STACK
+        : null;
+
+    const seenTags = new Set<string>();
+    const matchedTech: string[] = [];
+    for (const tag of flattenTechStack(row.project_tech_stack)) {
+      const key = tag.toLowerCase();
+      if (seenTags.has(key)) continue;
+      seenTags.add(key);
+      if (contributorTags.has(key)) matchedTech.push(tag);
+    }
+
+    const levelMatch = profile.experienceLevel !== null && row.difficulty === profile.experienceLevel;
+
+    if (!roleLabel && matchedTech.length === 0 && !levelMatch) continue;
+
+    const match =
+      roleLabel ??
+      matchedTech[0] ??
+      RECOMMENDED_LEVEL_LABELS[profile.experienceLevel as ExperienceLevel];
+
+    scored.push({
+      score: (roleLabel ? 3 : 0) + Math.min(matchedTech.length, 3) + (levelMatch ? 1 : 0),
+      item: {
+        taskId: row.id,
+        title: row.title,
+        projectSlug: row.project_slug,
+        projectName: row.project_name,
+        match,
+      },
+    });
+  }
+
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((entry) => entry.item);
+}
