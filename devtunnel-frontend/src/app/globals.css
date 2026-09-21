@@ -140,6 +140,71 @@
   }
 }
 
+/* Blueprint "setting out" sheet: the recent.design "portfolio page load
+   animation" reference, reproduced as-is — a CAD/architectural drawing
+   sheet (ruled grid + diagonally-hatched fills + dimension callouts +
+   "PLATE" corner flags) that draws itself in top to bottom before the
+   real page appears. Used by `BlueprintSheet` / `BlueprintBlock` /
+   `BlueprintPlate` (components/ui/blueprint-loader.tsx), currently
+   wired up as `(protected)/home/loading.tsx`. Each hatched block grows
+   downward from its top edge — same clip-path technique as
+   `skeleton-reveal` above, just clipping from the bottom instead of
+   rising from it, to match the reference's "drawn from the top" feel
+   rather than skeleton-reveal's "rising into place" feel. */
+@keyframes blueprint-draw {
+  from {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* Dimension leader line: the dotted rule that extends from a hatched
+   block out to its callout number, drawn left to right after the block
+   itself has finished growing in. Scaled rather than width-animated so
+   it doesn't fight the flex row it sits in for space as it grows. */
+@keyframes blueprint-leader {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+/* Bottom "PLATE 01/02/03" flags: a small settle-in, later than every
+   block above them so the sheet reads top to bottom to last. */
+@keyframes blueprint-flag {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The reveal wipe: Next can't animate its own swap from `loading.tsx`
+   to the real route (see components/ui/blueprint-reveal.tsx), so the
+   real page paints one more copy of the blueprint sheet directly over
+   itself and wipes it away top to bottom — clipping inward from the
+   top edge until nothing is left — the same direction the reference's
+   sheet lifts off to reveal the real page underneath. */
+@keyframes blueprint-wipe {
+  from {
+    clip-path: inset(0 0 0 0);
+  }
+  to {
+    clip-path: inset(100% 0 0 0);
+  }
+}
+
 @layer components {
   .skeleton-block {
     animation: skeleton-reveal 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -161,6 +226,65 @@
     animation: footer-train-run 28s linear infinite;
     animation-delay: -9s; /* start mid-track so the train is on screen at first paint */
     will-change: transform;
+  }
+
+  /* Full-bleed drawing-sheet background: a bold blueprint blue with a
+     fine 24px grid and a bolder 96px grid on top of it, sampled from the
+     recent.design reference (#346BF4). */
+  .blueprint-sheet {
+    background-color: #346bf4;
+    background-image:
+      repeating-linear-gradient(to right, rgba(255, 255, 255, 0.16) 0 1px, transparent 1px 96px),
+      repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.16) 0 1px, transparent 1px 96px),
+      repeating-linear-gradient(to right, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 24px),
+      repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 24px);
+  }
+
+  /* Ruler ticks: a slim strip of its own (not combined onto
+     `.blueprint-sheet` — two `background-image`s on one element means
+     the second silently wins and the grid disappears) sized by its own
+     height in `BlueprintSheet`, like a CAD viewport ruler along the top
+     edge. */
+  .blueprint-ruler-strip {
+    background-color: rgba(255, 255, 255, 0.06);
+    background-image: repeating-linear-gradient(
+      to right,
+      rgba(255, 255, 255, 0.45) 0 1px,
+      transparent 1px 24px
+    );
+  }
+
+  /* The diagonally-hatched "material fill" every placeholder block uses
+     in the reference, instead of a flat color or a shimmer sweep. */
+  .blueprint-hatch {
+    background-color: rgba(255, 255, 255, 0.1);
+    background-image: repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.32) 0 1px,
+      transparent 1px 7px
+    );
+    border: 1px solid rgba(255, 255, 255, 0.45);
+  }
+
+  .blueprint-block {
+    animation: blueprint-draw 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+    transform-origin: top;
+  }
+
+  /* Delay is set inline per-instance (BlueprintBlock passes the same
+     delayMs to both its hatch fill and its leader line) so the leader
+     always starts just after its own block finishes drawing. */
+  .blueprint-leader {
+    animation: blueprint-leader 0.4s ease-out both;
+    transform-origin: left;
+  }
+
+  .blueprint-plate {
+    animation: blueprint-flag 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .blueprint-wipe {
+    animation: blueprint-wipe 0.6s cubic-bezier(0.65, 0, 0.35, 1) both;
   }
 }
 
