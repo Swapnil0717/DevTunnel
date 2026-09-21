@@ -123,3 +123,40 @@ export async function unstarGithubProject(slug: string): Promise<GithubStarStatu
 
   return (await res.json()) as GithubStarStatus;
 }
+
+/**
+ * `POST /github-projects/:slug/contribute` or
+ * `POST /github-open-source-tools/:slug/contribute` (devtunnel-backend
+ * src/routes/githubCatalogContribute.ts) — the raw GitHub catalog detail
+ * pages' **Contribute** button (`ContributeToRepoButton`).
+ *
+ * Records that the signed-in contributor has joined this repository, so it
+ * shows up under their profile's Projects tab. It is the GitHub-catalog
+ * counterpart of `joinDevtunnelProject` (`lib/projects/client-api.ts`) and
+ * means the same thing: "I want to work on this", never delivered work. It
+ * does not fork the repository, open anything on GitHub, or touch the
+ * contributor's GitHub account in any way.
+ *
+ * Idempotent server-side, so a double-click or a returning contributor gets
+ * the same `{ contributing: true }` back rather than an error.
+ */
+export async function joinGithubCatalogRepo(
+  basePath: "/github-projects" | "/github-open-source-tools",
+  slug: string,
+): Promise<{ contributing: boolean }> {
+  const res = await fetch(`${API_BASE_URL}${basePath}/${encodeURIComponent(slug)}/contribute`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    const { code, message } = await parseErrorBody(res);
+    throw new GithubProjectsApiError(
+      message ?? `Failed to join repository (${res.status})`,
+      res.status,
+      code,
+    );
+  }
+
+  return (await res.json()) as { contributing: boolean };
+}

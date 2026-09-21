@@ -5,11 +5,14 @@ import { getServerContributionsSummary } from "@/lib/profile/get-server-contribu
 import { getServerDevTunnelContributionsSummary } from "@/lib/profile/get-server-devtunnel-contributions-summary";
 import { getServerDevTunnelStats } from "@/lib/profile/get-server-devtunnel-stats";
 import { getServerMilestoneWindow } from "@/lib/profile/get-server-milestone-window";
+import { getServerProfileActivity } from "@/lib/profile/get-server-profile-activity";
 import { ProfileHeader } from "@/components/profile/profile-header";
 import { ProfileTags } from "@/components/profile/profile-tags";
 import { ProfileStats } from "@/components/profile/profile-stats";
 import { MilestoneTrack } from "@/components/profile/milestone-track";
 import { ProfileTabs } from "@/components/profile/profile-tabs";
+import { ProfileProjectsList } from "@/components/profile/profile-projects-list";
+import { ProfileTasksList } from "@/components/profile/profile-tasks-list";
 
 export const metadata: Metadata = buildMetadata({
   title: "Your profile",
@@ -32,8 +35,8 @@ export const metadata: Metadata = buildMetadata({
 // file, matching the components/home/* convention elsewhere in this
 // codebase.
 //
-// The profile page's stats now pull from FIVE real backend sources,
-// fetched here in parallel:
+// The profile page now pulls from SIX real backend sources, fetched here
+// in parallel:
 //   - getServerUser() — GET /auth/me (devtunnel-backend src/routes/auth.ts),
 //     now including every onboarding field + `isMaintainer` (see
 //     ProfileTags).
@@ -50,19 +53,25 @@ export const metadata: Metadata = buildMetadata({
 //   - getServerMilestoneWindow() — GET /users/me/contributions/milestones
 //     (src/routes/devtunnelStats.ts) — the rolling 30-day day strip,
 //     checkpoints, and bonus goals rendered by MilestoneTrack.
+//   - getServerProfileActivity() — GET /users/me/profile-activity
+//     (src/routes/profileActivity.ts) — the projects this contributor has
+//     joined or is contributing to, and every task they've viewed, started,
+//     submitted for review or finished. Fills the Projects and Tasks tabs.
 // Each fetcher independently returns `null` on failure so one source
 // going down never blocks the rest of the page — see the comments on
 // each fetcher for why (Frontend_Development_Rules.txt rule 58: never
 // invent a number, always render an honest "not available" state
 // instead).
 export default async function ProfilePage() {
-  const [user, githubSummary, devtunnelSummary, devtunnelStats, milestoneWindow] = await Promise.all([
-    getServerUser(),
-    getServerContributionsSummary(),
-    getServerDevTunnelContributionsSummary(),
-    getServerDevTunnelStats(),
-    getServerMilestoneWindow(),
-  ]);
+  const [user, githubSummary, devtunnelSummary, devtunnelStats, milestoneWindow, activity] =
+    await Promise.all([
+      getServerUser(),
+      getServerContributionsSummary(),
+      getServerDevTunnelContributionsSummary(),
+      getServerDevTunnelStats(),
+      getServerMilestoneWindow(),
+      getServerProfileActivity(),
+    ]);
 
   return (
     <main className="px-3 py-4 sm:px-[26px] sm:py-[22px]">
@@ -79,7 +88,12 @@ export default async function ProfilePage() {
               devtunnelStats={devtunnelStats}
             />
             <MilestoneTrack milestoneWindow={milestoneWindow} />
-            <ProfileTabs />
+            <ProfileTabs
+              projectCount={activity ? activity.projects.length : null}
+              taskCount={activity ? activity.tasks.length : null}
+              projectsPanel={<ProfileProjectsList projects={activity ? activity.projects : null} />}
+              tasksPanel={<ProfileTasksList tasks={activity ? activity.tasks : null} />}
+            />
           </div>
         </div>
       ) : (

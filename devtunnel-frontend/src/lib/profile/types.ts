@@ -105,3 +105,78 @@ export type MilestoneWindow = {
   nextCheckpoint: MilestoneCheckpoint | null;
   bonusGoals: MilestoneBonusGoal[];
 };
+
+/**
+ * The Profile page's **Projects** and **Tasks** tabs —
+ * `GET /users/me/profile-activity` (devtunnel-backend
+ * src/routes/profileActivity.ts). `src/db/profileActivity.ts` there
+ * documents where every field comes from; in short, each one is a fact a
+ * table already records (a button press, `dev start`, `dev submit`, a task
+ * reaching `DONE`, a page view), never something inferred or self-reported.
+ */
+
+/**
+ * The furthest stage the viewer reached on a task. `VIEWED` is "opened the
+ * task page, hasn't started it"; the other three are `TaskStatus`
+ * (`lib/tasks/types.ts`) for a task the viewer claimed — the same lifecycle
+ * the task-progress tracker and Home's "Your tasks" use, so a task reads the
+ * same everywhere (`lib/tasks/progress.ts`).
+ */
+export type ProfileTaskStage = "VIEWED" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
+
+export type ProfileTask = {
+  taskId: string;
+  title: string;
+  projectSlug: string;
+  projectName: string;
+  stage: ProfileTaskStage;
+  /** Last time the viewer opened the task page. */
+  viewedAt: string | null; // ISO 8601
+  /** `dev start`. */
+  startedAt: string | null;
+  /** `dev submit` — when the pull request was opened. Opened, not merged. */
+  submittedAt: string | null;
+  /** The task reached `DONE`. */
+  completedAt: string | null;
+  pullRequest: { number: number | null; url: string | null } | null;
+  /** The newest of the timestamps above. */
+  occurredAt: string;
+};
+
+/**
+ * What the entry is, which decides its link and its label:
+ *  - `project`        — an onboarded DevTunnel project (`/projects/:slug`)
+ *  - `tool`           — an onboarded DevTunnel open source tool (`/opensource-tools/:slug`)
+ *  - `github-project` — a raw GitHub catalog repository joined from `/github-projects`
+ *  - `github-tool`    — one joined from `/github-open-source-tools`
+ */
+export type ProfileProjectKind = "project" | "tool" | "github-project" | "github-tool";
+
+export type ProfileProjectTaskCounts = {
+  /** Tasks the viewer opened but hasn't started. */
+  viewed: number;
+  inProgress: number;
+  inReview: number;
+  done: number;
+};
+
+export type ProfileProject = {
+  id: string;
+  kind: ProfileProjectKind;
+  slug: string;
+  name: string;
+  primaryTech: string | null;
+  repositoryFullName: string | null;
+  /** When they pressed Contribute. `null` when they're contributing without ever having joined (e.g. started a task from the CLI). */
+  joinedAt: string | null;
+  /** `CONTRIBUTING` once there's work in it (a task started/submitted/finished); `JOINED` is intent only. */
+  status: "JOINED" | "CONTRIBUTING";
+  /** Only for `kind: "project"` — tools and raw GitHub repositories have no DevTunnel tasks. */
+  taskCounts: ProfileProjectTaskCounts | null;
+  lastActivityAt: string;
+};
+
+export type ProfileActivity = {
+  projects: ProfileProject[];
+  tasks: ProfileTask[];
+};

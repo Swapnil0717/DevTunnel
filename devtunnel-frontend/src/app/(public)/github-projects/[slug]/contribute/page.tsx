@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { buildMetadata } from "@/lib/seo";
-import { getGithubProjectBySlug } from "@/lib/github-projects/api";
+import { getGithubProjectBySlug, getGithubRepoMembership } from "@/lib/github-projects/api";
 import { RepoLogo } from "@/components/admin/repo-logo";
 import { ChevronLeftIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
@@ -60,10 +60,11 @@ export async function generateMetadata({
  *    (sql/017). The Tasks tab (`ContributeTasksPanel`) says so directly,
  *    with the fix being "convert this into a DevTunnel project or tool",
  *    not "go find a different one".
- *  - `viewerIsContributing` is always `false` — there's no join
- *    relationship to have joined yet (`ContributeToRepoButton` doesn't
- *    call a join endpoint the way `ContributeButton` does, precisely
- *    because none exists for a raw catalog entry).
+ *  - `viewerIsContributing` comes from `getGithubRepoMembership` —
+ *    whether the viewer already pressed **Contribute** on this repository
+ *    (`ContributeToRepoButton` records that through
+ *    `POST /github-projects/:slug/contribute`). It is `false` for anyone
+ *    who hasn't, and when that read fails.
  *
  * Frontend-only, and reusing `getGithubProjectBySlug` — the exact fetch
  * `/github-projects/:slug` itself already makes. No new endpoint, no
@@ -80,7 +81,10 @@ export default async function GithubProjectContributePage({
   params,
 }: GithubProjectContributePageProps) {
   const { slug } = await params;
-  const result = await getGithubProjectBySlug(slug);
+  const [result, isContributing] = await Promise.all([
+    getGithubProjectBySlug(slug),
+    getGithubRepoMembership("/github-projects", slug),
+  ]);
 
   if (result.status === "not-found") {
     notFound();
@@ -121,7 +125,7 @@ export default async function GithubProjectContributePage({
     detailHref: `/github-projects/${project.slug}`,
     listHref: "/github-projects",
     listLabel: "GitHub Projects",
-    viewerIsContributing: false,
+    viewerIsContributing: isContributing,
     tasks: [],
   };
 

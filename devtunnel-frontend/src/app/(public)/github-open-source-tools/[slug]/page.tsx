@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { buildMetadata } from "@/lib/seo";
 import { SITE_URL } from "@/lib/config";
 import { getGithubOpenSourceToolBySlug } from "@/lib/github-open-source-tools/api";
+import { getGithubRepoMembership } from "@/lib/github-projects/api";
 import { RepoLogo } from "@/components/admin/repo-logo";
 import { ChevronLeftIcon, GitBranchIcon } from "@/components/layout/nav-icons";
 import { formatRelativeTime } from "@/lib/home/format-relative-time";
@@ -91,7 +92,13 @@ export async function generateMetadata({
  */
 export default async function GithubToolDetailPage({ params }: GithubToolDetailPageProps) {
   const { slug } = await params;
-  const result = await getGithubOpenSourceToolBySlug(slug);
+  // The membership read is independent of the repository fetch, so run them
+  // together — it only decides whether the header button says "Contribute"
+  // or "Continue contributing", and degrades to `false` if it fails.
+  const [result, isContributing] = await Promise.all([
+    getGithubOpenSourceToolBySlug(slug),
+    getGithubRepoMembership("/github-open-source-tools", slug),
+  ]);
 
   if (result.status === "not-found") {
     notFound();
@@ -171,7 +178,11 @@ export default async function GithubToolDetailPage({ params }: GithubToolDetailP
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <ContributeToRepoButton slug={tool.slug} basePath="/github-open-source-tools" />
+          <ContributeToRepoButton
+            slug={tool.slug}
+            basePath="/github-open-source-tools"
+            initialIsContributing={isContributing}
+          />
           <a
             href={tool.repositoryUrl}
             target="_blank"

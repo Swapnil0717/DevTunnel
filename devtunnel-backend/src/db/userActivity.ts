@@ -13,6 +13,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  *  - `PULL_REQUEST_SUBMITTED`  — `pull_requests.created_at` (`dev submit`, sql/031/033)
  *  - `TASK_COMPLETED`          — `tasks.completed_at` on a `DONE` task (sql/004 trigger)
  *  - `PROJECT_STARTED`         — `projects.assignee_started_at` (`dev start --project`, sql/032)
+ *  - `PROJECT_JOINED`          — `project_contributors.joined_at` ("Contribute to this project", sql/026)
  *
  * Why not `devtunnel.activity_log` (sql/004), which already exists? It only
  * holds `PROJECT_CREATED` / `TASK_COMPLETED` / `PULL_REQUEST_MERGED` and
@@ -37,7 +38,8 @@ export type RecentActivityType =
   | "TASK_STARTED"
   | "PULL_REQUEST_SUBMITTED"
   | "TASK_COMPLETED"
-  | "PROJECT_STARTED";
+  | "PROJECT_STARTED"
+  | "PROJECT_JOINED";
 
 export interface RecentActivityItem {
   /** Stable per event (`type:subject`), safe as a React key. */
@@ -95,6 +97,11 @@ interface ProjectRefRow {
   name: string;
 }
 
+interface JoinedProjectRow {
+  project_id: string;
+  joined_at: string;
+}
+
 interface PullRequestTaskRow {
   id: string;
   title: string;
@@ -110,7 +117,7 @@ export async function listRecentActivityForUser(
   userId: string,
   limit: number,
 ): Promise<RecentActivityItem[]> {
-  const [tasksResult, pullRequestsResult, projectClaimsResult] = await Promise.all([
+  const [tasksResult, pullRequestsResult, projectClaimsResult, projectJoinsResult] = await Promise.all([
     supabase
       .from("tasks")
       .select("id, title, status, project_id, assignee_started_at, completed_at")
@@ -131,6 +138,12 @@ export async function listRecentActivityForUser(
       .is("deleted_at", null)
       .order("assignee_started_at", { ascending: false, nullsFirst: false })
       .limit(SCAN_LIMIT),
+    supabase
+      .from("project_contributors")
+      .select("project_id, joined_at")
+      .eq("user_id", userId)
+      .order("joined_at", { ascending: false })
+      .limit(SCAN_LIMIT),
   ]);
 
   if (tasksResult.error) {
@@ -143,16 +156,25 @@ export async function listRecentActivityForUser(
     throw new Error(`Failed to load your project activity: ${projectClaimsResult.error.message}`);
   }
 
+  if (projectJoinsResult.error) {
+    throw new Error(`Failed to load your joined projects: ${projectJoinsResult.error.message}`);
+  }
+
   const taskRows = (tasksResult.data ?? []) as unknown as TaskRow[];
   const pullRequestRows = (pullRequestsResult.data ?? []) as unknown as PullRequestRow[];
   const claimedProjectRows = (projectClaimsResult.data ?? []) as unknown as ClaimedProjectRow[];
+  const joinedProjectRows = (projectJoinsResult.data ?? []) as unknown as JoinedProjectRow[];
 
   // Names/slugs for the projects behind tasks and pull requests — one batched
   // query, not one per row. A project that has been soft-deleted is absent
   // from the map, and events pointing at it are dropped below: a link to a
   // project that no longer exists would only lead to a 404.
   const projectIds = Array.from(
-    new Set([...taskRows.map((row) => row.project_id), ...pullRequestRows.map((row) => row.project_id)]),
+    new Set([
+      ...taskRows.map((row) => row.project_id),
+      ...pullRequestRows.map((row) => row.project_id),
+      ...joinedProjectRows.map((row) => row.project_id),
+    ]),
   );
   const projectsById = new Map<string, ProjectRefRow>();
   if (projectIds.length > 0) {
@@ -256,6 +278,25 @@ export async function listRecentActivityForUser(
       occurredAt: row.assignee_started_at,
       pullRequest: null,
       subjectKey: `project:${row.id}`,
+    });
+  }
+
+  // A project the contributor pressed "Contribute" on. Same `project:<id>`
+  // subject as a whole-project claim, so if they later `dev start --project`
+  // it, only the newer of the two shows.
+  for (const row of joinedProjectRows) {
+    const project = projectsById.get(row.project_id);
+    if (!project) continue;
+    candidates.push({
+      id: `PROJECT_JOINED:${row.project_id}`,
+      type: "PROJECT_JOINED",
+      title: project.name,
+      projectSlug: project.slug,
+      projectName: project.name,
+      taskId: null,
+      occurredAt: row.joined_at,
+      pullRequest: null,
+      subjectKey: `project:${row.project_id}`,
     });
   }
 

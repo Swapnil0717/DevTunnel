@@ -81,3 +81,40 @@ export async function getGithubProjectBySlug(
     return { status: "error" };
   }
 }
+
+/**
+ * `GET /github-projects/:slug/contribute-status` or
+ * `GET /github-open-source-tools/:slug/contribute-status` (devtunnel-backend
+ * src/routes/githubCatalogContribute.ts) — has the signed-in viewer already
+ * pressed **Contribute** on this repository?
+ *
+ * A separate read rather than a field on `GithubProjectDetail`: the backend
+ * caches one detail payload for every viewer, so a per-viewer flag can't ride
+ * on it (the same reason the star fields are attached after the cache).
+ *
+ * Returns `false` on any failure — a signed-out visitor, a network error, an
+ * older backend without this route. The only cost of a wrong `false` is that
+ * the button says "Contribute" instead of "Continue contributing", so this
+ * never blocks or errors a page; it degrades to the previous behavior.
+ */
+export async function getGithubRepoMembership(
+  basePath: "/github-projects" | "/github-open-source-tools",
+  slug: string,
+): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}${basePath}/${encodeURIComponent(slug)}/contribute-status`,
+      {
+        headers: { cookie: (await cookies()).toString() },
+        cache: "no-store",
+      },
+    );
+
+    if (!res.ok) return false;
+
+    const body = (await res.json()) as { contributing?: boolean };
+    return body.contributing === true;
+  } catch {
+    return false;
+  }
+}

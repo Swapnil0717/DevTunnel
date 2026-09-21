@@ -18,6 +18,8 @@ import { contribute } from "./routes/contribute";
 import { submissions } from "./routes/submissions";
 import { settings } from "./routes/settings";
 import { userActivity } from "./routes/userActivity";
+import { profileActivity } from "./routes/profileActivity";
+import { githubCatalogContribute } from "./routes/githubCatalogContribute";
 import { admin } from "./routes/admin/index";
 import { runDailyDiscovery } from "./lib/aiDiscoveryAgent";
 import { warmGithubCatalogs, warmContributorIssuesScan } from "./lib/cacheWarmers";
@@ -49,6 +51,12 @@ app.route("/", contribute);
 app.route("/", submissions);
 app.route("/", settings);
 app.route("/", userActivity);
+// Profile page: `POST /tasks/:id/view` + `GET /users/me/profile-activity`
+// (src/routes/profileActivity.ts), and the raw GitHub catalogs' "Contribute"
+// button (`POST /github-projects/:slug/contribute` and its tools twin,
+// src/routes/githubCatalogContribute.ts).
+app.route("/", profileActivity);
+app.route("/", githubCatalogContribute);
 app.route("/admin", admin);
 
 app.onError(handleError);

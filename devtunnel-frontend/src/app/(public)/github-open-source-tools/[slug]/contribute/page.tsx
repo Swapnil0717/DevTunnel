@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { buildMetadata } from "@/lib/seo";
 import { getGithubOpenSourceToolBySlug } from "@/lib/github-open-source-tools/api";
+import { getGithubRepoMembership } from "@/lib/github-projects/api";
 import { RepoLogo } from "@/components/admin/repo-logo";
 import { ChevronLeftIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
@@ -64,8 +65,11 @@ export async function generateMetadata({
  *    (sql/017). The Tasks tab (`ContributeTasksPanel`) says so directly:
  *    this task will be available once the repository is converted into a
  *    DevTunnel project or tool.
- *  - `viewerIsContributing` is always `false` — there's no join
- *    relationship to have joined yet.
+ *  - `viewerIsContributing` comes from `getGithubRepoMembership` —
+ *    whether the viewer already pressed **Contribute** on this repository
+ *    (`ContributeToRepoButton` records that through
+ *    `POST /github-open-source-tools/:slug/contribute`). It is `false` for
+ *    anyone who hasn't, and when that read fails.
  *
  * Frontend-only, reusing `getGithubOpenSourceToolBySlug` — the exact
  * fetch `/github-open-source-tools/:slug` itself already makes. No new
@@ -82,7 +86,10 @@ export default async function GithubToolContributePage({
   params,
 }: GithubToolContributePageProps) {
   const { slug } = await params;
-  const result = await getGithubOpenSourceToolBySlug(slug);
+  const [result, isContributing] = await Promise.all([
+    getGithubOpenSourceToolBySlug(slug),
+    getGithubRepoMembership("/github-open-source-tools", slug),
+  ]);
 
   if (result.status === "not-found") {
     notFound();
@@ -123,7 +130,7 @@ export default async function GithubToolContributePage({
     detailHref: `/github-open-source-tools/${tool.slug}`,
     listHref: "/github-open-source-tools",
     listLabel: "Github Open Source Tools",
-    viewerIsContributing: false,
+    viewerIsContributing: isContributing,
     tasks: [],
   };
 

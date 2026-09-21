@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { buildMetadata } from "@/lib/seo";
 import { SITE_URL } from "@/lib/config";
-import { getGithubProjectBySlug } from "@/lib/github-projects/api";
+import { getGithubProjectBySlug, getGithubRepoMembership } from "@/lib/github-projects/api";
 import { RepoLogo } from "@/components/admin/repo-logo";
 import { ChevronLeftIcon, GitBranchIcon } from "@/components/layout/nav-icons";
 import { formatRelativeTime } from "@/lib/home/format-relative-time";
@@ -91,7 +91,13 @@ export default async function GithubProjectDetailPage({
   params,
 }: GithubProjectDetailPageProps) {
   const { slug } = await params;
-  const result = await getGithubProjectBySlug(slug);
+  // The membership read is independent of the repository fetch, so run them
+  // together — it only decides whether the header button says "Contribute"
+  // or "Continue contributing", and degrades to `false` if it fails.
+  const [result, isContributing] = await Promise.all([
+    getGithubProjectBySlug(slug),
+    getGithubRepoMembership("/github-projects", slug),
+  ]);
 
   if (result.status === "not-found") {
     notFound();
@@ -171,7 +177,11 @@ export default async function GithubProjectDetailPage({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <ContributeToRepoButton slug={project.slug} basePath="/github-projects" />
+          <ContributeToRepoButton
+            slug={project.slug}
+            basePath="/github-projects"
+            initialIsContributing={isContributing}
+          />
           <a
             href={project.repositoryUrl}
             target="_blank"

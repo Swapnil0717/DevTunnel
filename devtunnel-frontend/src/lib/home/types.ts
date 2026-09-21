@@ -17,7 +17,8 @@ export type ProjectSummary = {
  *
  * Only four things are ever reported, each a fact the backend recorded:
  * a task started (`dev start`), a pull request submitted (`dev submit`), a
- * task finished, or a whole project claimed (`dev start --project`). There
+ * task finished, a whole project claimed (`dev start --project`), or a
+ * project joined (the "Contribute to this project" button). There
  * is deliberately no "merged" event — see `lib/tasks/progress.ts`.
  *
  * The list is one row per task/project, showing its *latest* event, so a task
@@ -27,7 +28,8 @@ export type RecentActivityType =
   | "TASK_STARTED"
   | "PULL_REQUEST_SUBMITTED"
   | "TASK_COMPLETED"
-  | "PROJECT_STARTED";
+  | "PROJECT_STARTED"
+  | "PROJECT_JOINED";
 
 export type RecentActivity = {
   id: string;

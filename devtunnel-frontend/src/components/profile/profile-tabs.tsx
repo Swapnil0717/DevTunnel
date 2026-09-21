@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ContributionCalendar } from "./contribution-calendar";
 
 const TABS = [
@@ -11,7 +11,10 @@ const TABS = [
   {
     id: "projects",
     label: "Projects",
-    empty: "You haven't joined any projects yet.",
+  },
+  {
+    id: "tasks",
+    label: "Tasks",
   },
   {
     id: "pull-requests",
@@ -20,11 +23,24 @@ const TABS = [
   },
 ] as const;
 
+type TabId = (typeof TABS)[number]["id"];
+
+interface ProfileTabsProps {
+  /** The Projects tab's content — rendered on the server (`ProfileProjectsList`) and passed through. */
+  projectsPanel: ReactNode;
+  /** The Tasks tab's content (`ProfileTasksList`). */
+  tasksPanel: ReactNode;
+  /** How many projects the viewer has joined or is contributing to. `null` when that couldn't be loaded. */
+  projectCount: number | null;
+  /** How many tasks the viewer has viewed, started, submitted or finished. `null` when that couldn't be loaded. */
+  taskCount: number | null;
+}
+
 /**
  * Real, accessible tab UI (Frontend_Development_Rules.txt rule 4 —
  * semantic HTML/ARIA over generic divs).
  *
- * "Contribution history" now renders two real contribution calendars
+ * "Contribution history" renders two real contribution calendars
  * side by side — GitHub's (`ContributionCalendar source="github"`,
  * backed by `GET /users/me/contributions`) and DevTunnel's own
  * (`source="devtunnel"`, backed by `GET /users/me/contributions/devtunnel`
@@ -32,19 +48,35 @@ const TABS = [
  * can see their GitHub activity next to what they've specifically done
  * through DevTunnel (tasks completed, PRs merged here).
  *
- * "Projects" and "Pull requests merged" still render an honest empty
- * state for now — the profile page's stat cards (ProfileStats) already
- * surface the real counts for these from `GET /users/me/devtunnel-stats`;
- * a browsable per-tab list of the actual projects/PRs is a further step
- * once devtunnel-backend exposes list (not just count) endpoints for
- * them, so this tab doesn't invent a list here
- * (Frontend_Development_Rules.txt rule 58).
+ * **"Projects" and "Tasks" now show real lists** (from
+ * `GET /users/me/profile-activity`): the projects the contributor has joined
+ * or is contributing to, and the tasks they've viewed, started, submitted for
+ * review or finished. Their content is built by the profile page (a Server
+ * Component, so both lists arrive on first paint) and passed in as
+ * `projectsPanel` / `tasksPanel` — this component only owns which tab is
+ * showing. The tab labels carry the counts, so the numbers are visible before
+ * a tab is opened; a count is left off, not shown as 0, when the request
+ * behind it failed.
+ *
+ * "Pull requests merged" still renders an honest empty state — the profile
+ * page's stat card (ProfileStats) already surfaces the real count from
+ * `GET /users/me/devtunnel-stats`, and a browsable list of merged PRs is a
+ * further step, so this tab doesn't invent one here
+ * (Frontend_Development_Rules.txt rule 58). Pull requests the contributor
+ * has *submitted* (opened, not merged) appear on the Tasks tab, against the
+ * task they were opened for.
  */
-export function ProfileTabs() {
-  const [activeId, setActiveId] = useState<(typeof TABS)[number]["id"]>(
-    TABS[0].id,
-  );
+export function ProfileTabs({
+  projectsPanel,
+  tasksPanel,
+  projectCount,
+  taskCount,
+}: ProfileTabsProps) {
+  const [activeId, setActiveId] = useState<TabId>(TABS[0].id);
   const active = TABS.find((tab) => tab.id === activeId) ?? TABS[0];
+
+  const countFor = (id: TabId): number | null =>
+    id === "projects" ? projectCount : id === "tasks" ? taskCount : null;
 
   return (
     <div>
@@ -55,6 +87,7 @@ export function ProfileTabs() {
       >
         {TABS.map((tab) => {
           const isActive = tab.id === activeId;
+          const count = countFor(tab.id);
           return (
             <button
               key={tab.id}
@@ -71,6 +104,7 @@ export function ProfileTabs() {
               }`}
             >
               {tab.label}
+              {count !== null ? <span className="ml-1.5 text-text-faint">{count}</span> : null}
             </button>
           );
         })}
@@ -97,6 +131,10 @@ export function ProfileTabs() {
               <ContributionCalendar source="devtunnel" />
             </div>
           </div>
+        ) : active.id === "projects" ? (
+          projectsPanel
+        ) : active.id === "tasks" ? (
+          tasksPanel
         ) : (
           <div className="rounded-lg border border-border-subtle bg-surface px-4 py-8 text-center text-[12.5px] text-text-dim">
             {active.empty}

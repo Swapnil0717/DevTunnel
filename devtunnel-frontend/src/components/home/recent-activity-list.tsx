@@ -19,6 +19,7 @@ const ACTIVITY_STAGE: Record<RecentActivityType, { status: TaskStatus; label: st
   PULL_REQUEST_SUBMITTED: { status: "IN_REVIEW", label: stageFor("IN_REVIEW").label },
   TASK_COMPLETED: { status: "DONE", label: stageFor("DONE").label },
   PROJECT_STARTED: { status: "IN_PROGRESS", label: "Project started" },
+  PROJECT_JOINED: { status: "OPEN", label: "Joined project" },
 };
 
 /** Task-level events open the task; project-level ones (a claimed project) open the project. */
@@ -64,7 +65,7 @@ export async function RecentActivityList() {
   if (result.status === "empty") {
     return (
       <SectionMessage>
-        No recent activity yet. Once you start a task, it&apos;ll show up here.
+        No recent activity yet. Once you join a project or start a task, it&apos;ll show up here.
       </SectionMessage>
     );
   }

@@ -12,6 +12,7 @@ import { ChevronLeftIcon, IssueIcon, GitBranchIcon } from "@/components/layout/n
 import { SectionMessage } from "@/components/home/section-message";
 import { TaskContributeButton } from "@/components/tasks/task-contribute-button";
 import { TaskProgressTracker } from "@/components/tasks/task-progress-tracker";
+import { TaskViewTracker } from "@/components/tasks/task-view-tracker";
 import { getTaskClaim } from "@/lib/tasks/progress";
 import {
   TaskDescriptionSection,
@@ -147,6 +148,8 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
+      {/* Records that the signed-in contributor has seen this task — see `TaskViewTracker`. */}
+      <TaskViewTracker taskId={task.id} />
       <Link
         href="/tasks"
         className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
