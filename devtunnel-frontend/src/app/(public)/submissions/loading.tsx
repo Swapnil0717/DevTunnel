@@ -43,7 +43,7 @@ export default function SubmissionsLoading() {
         {Array.from({ length: 5 }).map((_, index) => (
           <div
             key={index}
-            className="flex gap-3 rounded-[10px] border border-blueprint/15 bg-blueprint/[0.05]-raised p-4"
+            className="flex gap-3 rounded-[10px] border border-blueprint/15 bg-blueprint/[0.07] p-4"
           >
             <div className="flex shrink-0 flex-col items-center gap-1">
               <BlueprintFill className="h-8 w-9 rounded-[7px]" />

@@ -16,7 +16,7 @@ export default function GithubProjectDetailLoading() {
     <BlueprintSheet
       sheetLabel="Sheet 09.1 — Project"
       revLabel="Rev — loading project"
-      contentClassName="w-full mx-auto max-w-4xl px-6 py-10"
+      contentClassName="w-full mx-auto max-w-5xl px-6 py-10"
     >
       <BlueprintDetailHeader
         withLogo

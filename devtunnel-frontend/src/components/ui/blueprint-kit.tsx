@@ -104,9 +104,9 @@ export function BlueprintPageHeader({
 }) {
   return (
     <div className="mb-8 flex flex-wrap items-start justify-between gap-4" aria-hidden="true">
-      <div className="flex flex-col gap-1.5">
-        <BlueprintFill className="h-5 w-44" />
-        <BlueprintFill className="h-3 w-72" />
+      <div className="flex flex-col gap-1">
+        <BlueprintFill className="h-7 w-52" />
+        <BlueprintFill className="h-5 w-80" />
       </div>
       {actions ?? (withAction ? <BlueprintFill className="h-9 w-36" /> : null)}
     </div>
@@ -131,24 +131,58 @@ function BlueprintDimension({ label }: { label: string }) {
   );
 }
 
-/** A bordered table-shaped placeholder: header bar + N row placeholders, dimensioned along its bottom edge. */
-export function BlueprintTable({ rows = 6, columns = 5 }: { rows?: number; columns?: number }) {
+/**
+ * A bordered table-shaped placeholder: header bar + N row placeholders,
+ * dimensioned along its bottom edge. `headings` are the real column
+ * labels (`TasksTable`, `IssuesTable`, the admin tables all render a
+ * fixed, known set) rendered as actual small-caps text rather than bars
+ * — there's nothing to guess here, so there's no reason to hide it
+ * behind a placeholder. `rounded-[10px]` and `py-3` match the real
+ * tables' own corner radius and cell padding (`overflow-hidden
+ * rounded-[10px] border border-border`); `twoLineColumns` gives that
+ * many leading columns a second, shorter placeholder line stacked under
+ * the first — the real first columns are almost always a title/name
+ * line plus a muted meta line (e.g. `TasksTable`'s Task and Project
+ * cells), so a single bar undershoots the real ~62px row height.
+ */
+export function BlueprintTable({
+  headings,
+  rows = 6,
+  twoLineColumns = 2,
+}: {
+  headings: string[];
+  rows?: number;
+  twoLineColumns?: number;
+}) {
+  const columns = headings.length;
   return (
     <div aria-hidden="true">
-      <div className="overflow-hidden rounded-[4px] border border-blueprint/25">
-        <div className="flex gap-4 border-b border-blueprint/25 bg-blueprint/[0.05] px-4 py-2.5">
-          {Array.from({ length: columns }).map((_, index) => (
-            <BlueprintFill key={index} className="h-2.5 flex-1" />
+      <div className="overflow-hidden rounded-[10px] border border-blueprint/25">
+        <div className="flex gap-4 border-b border-blueprint/25 bg-blueprint/[0.05] px-4 py-3">
+          {headings.map((heading) => (
+            <span
+              key={heading}
+              className="flex-1 text-[11px] font-normal uppercase tracking-wide text-blueprint/60"
+            >
+              {heading}
+            </span>
           ))}
         </div>
         {Array.from({ length: rows }).map((_, rowIndex) => (
           <div
             key={rowIndex}
-            className="flex items-center gap-4 border-b border-blueprint/25 px-4 py-3 last:border-b-0"
+            className="flex items-start gap-4 border-b border-blueprint/25 px-4 py-3.5 last:border-b-0"
           >
-            {Array.from({ length: columns }).map((_, colIndex) => (
-              <BlueprintFill key={colIndex} className="h-3 flex-1" />
-            ))}
+            {Array.from({ length: columns }).map((_, colIndex) =>
+              colIndex < twoLineColumns ? (
+                <div key={colIndex} className="flex flex-1 flex-col gap-1.5">
+                  <BlueprintFill className="h-3 w-4/5" />
+                  <BlueprintFill className="h-2.5 w-1/2" />
+                </div>
+              ) : (
+                <BlueprintFill key={colIndex} className="mt-0.5 h-3 flex-1" />
+              ),
+            )}
           </div>
         ))}
       </div>
@@ -237,11 +271,15 @@ export function BlueprintDetailHeader({
 
 /**
  * Search box + N labeled filter-select placeholders, matching the filter
- * bar every admin Explorer renders above its table/grid
+ * bar every **admin** Explorer renders above its table/grid
  * (`AdminProjectsExplorer`, `AdminTasksExplorer`,
- * `AdminOpenSourceToolsExplorer`, `AdminActivityExplorer`) — previously
- * missing from every one of those `loading.tsx` files, so the table/grid
- * used to jump down the page the moment real data replaced the skeleton.
+ * `AdminOpenSourceToolsExplorer`, `AdminActivityExplorer`) — search on
+ * the left, filters right-aligned on the same row
+ * (`sm:flex-row … sm:justify-between`). The **public** list pages
+ * (`/projects`, `/opensource-tools`, `/github-projects`,
+ * `/github-open-source-tools`, `/tasks`, `/issues`) use a different,
+ * always-stacked layout instead — see `BlueprintPublicFilterBar` below,
+ * not this one.
  */
 export function BlueprintFilterBar({ filters = 2 }: { filters?: number }) {
   return (
@@ -257,6 +295,94 @@ export function BlueprintFilterBar({ filters = 2 }: { filters?: number }) {
             <BlueprintFill className="h-9 w-28" />
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Search box + optional "Match my profile" row + N labeled
+ * filter-select placeholders, matching the filter bar every **public**
+ * list page renders above its grid/table (`DevtunnelProjectsExplorer`,
+ * `DevtunnelOpenSourceToolsExplorer`, `GithubProjectsExplorer` — reused
+ * for both `/github-projects` and `/github-open-source-tools` —
+ * `TasksExplorer`, `IssuesExplorer`). Unlike `BlueprintFilterBar`
+ * (admin), this is a single `flex-col` stack at every breakpoint: a
+ * `max-w-xs` search box, then (for the three pages that have it) a
+ * "Match my profile" button placeholder on its own row, then a
+ * `flex-wrap items-end` row of label-over-select filters — never a
+ * search-left/filters-right split. `bottomMarginClassName` covers the
+ * one real difference in the wrapper's own spacing: the card-grid pages
+ * use `mb-4`, the two table pages (`/tasks`, `/issues`) use `mb-3`.
+ */
+export function BlueprintPublicFilterBar({
+  filters = 3,
+  withMatchProfile = false,
+  bottomMarginClassName = "mb-4",
+}: {
+  filters?: number;
+  withMatchProfile?: boolean;
+  bottomMarginClassName?: string;
+}) {
+  return (
+    <div className={`${bottomMarginClassName} flex flex-col gap-3`} aria-hidden="true">
+      <BlueprintFill className="h-9 w-full sm:max-w-xs" />
+      {withMatchProfile ? <BlueprintFill className="h-7 w-[124px]" /> : null}
+      <div className="flex flex-wrap items-end gap-2">
+        {Array.from({ length: filters }).map((_, index) => (
+          <div key={index} className="flex flex-col gap-1">
+            <BlueprintFill className="h-2 w-12" />
+            <BlueprintFill className="h-9 w-28" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The "Showing the top N … by stars / Load all" row (`LoadCatalogBar`,
+ * `components/github-projects/load-catalog-bar.tsx`) that sits above the
+ * grid on the two GitHub catalog pages (`/github-projects`,
+ * `/github-open-source-tools`) — previously missing from both
+ * `loading.tsx` files entirely, so the grid shifted up the moment that
+ * row mounted with real data.
+ */
+export function BlueprintLoadCatalogBar() {
+  return (
+    <div
+      className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2"
+      aria-hidden="true"
+    >
+      <BlueprintFill className="h-2.5 w-72" />
+      <BlueprintFill className="h-7 w-28" />
+    </div>
+  );
+}
+
+/**
+ * The numbered pagination footer (`PagePaginationControls`,
+ * `components/admin/page-pagination-controls.tsx`) every paginated
+ * list/table renders below its grid or table — a "Showing X–Y of Z…"
+ * line on the left, Previous/numbered/Next controls on the right,
+ * separated from the content above by the same `border-t pt-4` the real
+ * component uses. Previously missing from every public list page's
+ * skeleton, so the page grew taller the moment real data (and its
+ * pagination footer) replaced the placeholder grid/table.
+ */
+export function BlueprintPagination({ pageNumbers = 4 }: { pageNumbers?: number }) {
+  return (
+    <div
+      className="mt-4 flex flex-col gap-3 border-t border-blueprint/25 pt-4 sm:flex-row sm:items-center sm:justify-between"
+      aria-hidden="true"
+    >
+      <BlueprintFill className="h-2.5 w-44" />
+      <div className="flex flex-wrap items-center gap-1">
+        <BlueprintFill className="h-7 w-[72px]" />
+        {Array.from({ length: pageNumbers }).map((_, index) => (
+          <BlueprintFill key={index} className="h-7 w-[30px]" />
+        ))}
+        <BlueprintFill className="h-7 w-[52px]" />
       </div>
     </div>
   );

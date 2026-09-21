@@ -47,7 +47,11 @@ export default function AdminDashboardLoading() {
 
       <div className="mb-8">
         <BlueprintFill className="mb-2.5 h-2.5 w-32" />
-        <BlueprintTable rows={5} columns={6} />
+        <BlueprintTable
+          rows={5}
+          headings={["Time", "Action", "Resource", "Admin", "Result", "Details"]}
+          twoLineColumns={0}
+        />
       </div>
 
       <BlueprintFill className="h-[132px] w-full" />

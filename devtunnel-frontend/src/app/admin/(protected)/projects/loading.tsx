@@ -25,7 +25,20 @@ export default function AdminProjectsLoading() {
         }
       />
       <BlueprintFilterBar filters={3} />
-      <BlueprintTable rows={8} columns={8} />
+      <BlueprintTable
+        rows={8}
+        headings={[
+          "Project",
+          "GitHub repository",
+          "Author",
+          "DevTunnel contributors",
+          "GitHub contributors",
+          "Tasks",
+          "Status",
+          "Actions",
+        ]}
+        twoLineColumns={1}
+      />
     </BlueprintSheet>
   );
 }

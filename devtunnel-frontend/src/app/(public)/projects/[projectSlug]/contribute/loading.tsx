@@ -58,7 +58,7 @@ export default function ProjectContributeLoading() {
               {Array.from({ length: 4 }).map((_, index) => (
                 <div
                   key={index}
-                  className="rounded-[9px] border border-blueprint/15 bg-blueprint/[0.05]-raised p-3.5"
+                  className="rounded-[9px] border border-blueprint/15 bg-blueprint/[0.07] p-3.5"
                 >
                   <BlueprintFill className="mb-2 h-3 w-2/3" />
                   <BlueprintFill className="mb-2.5 h-2.5 w-1/2" />

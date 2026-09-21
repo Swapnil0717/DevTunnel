@@ -1,18 +1,23 @@
 import { BlueprintSheet } from "@/components/ui/blueprint-loader";
 import {
   BlueprintPageHeader,
-  BlueprintFilterBar,
+  BlueprintPublicFilterBar,
+  BlueprintLoadCatalogBar,
   BlueprintGithubProjectCardGrid,
+  BlueprintPagination,
 } from "@/components/ui/blueprint-kit";
 
 /**
  * Next.js route-segment loading boundary for `/github-projects`
  * ("GitHub Projects"). Wrapped in the exact same page shell the real
  * page renders (`mx-auto max-w-6xl px-6 py-10`, `BlueprintPageHeader`,
- * and a 3-filter `BlueprintFilterBar` matching `GithubProjectsExplorer`'s
- * real filter bar — Tech stack, Minimum stars, Sort by) so nothing
- * shifts position once `getGithubProjects()` resolves — only the grid
- * below the filters swaps from placeholders to real cards.
+ * the stacked `BlueprintPublicFilterBar` matching `GithubProjectsExplorer`'s
+ * real filter bar — Tech stack, Minimum stars, Sort by, no catalog
+ * filter or "Match my profile" row on this page — and the "Showing the
+ * top N … / Load all" `BlueprintLoadCatalogBar` above the grid) so
+ * nothing shifts position once `getGithubProjects()` resolves — only the
+ * bar, grid, and pagination footer swap from placeholders to real
+ * content.
  *
  * Renders a real skeleton grid (`BlueprintGithubProjectCardGrid`) rather
  * than a spinner: `getGithubProjects()` (`lib/github-projects/api.ts`)
@@ -30,8 +35,10 @@ export default function GithubProjectsLoading() {
       contentClassName="w-full mx-auto max-w-6xl px-6 py-10"
     >
       <BlueprintPageHeader withAction={false} />
-      <BlueprintFilterBar filters={3} />
+      <BlueprintPublicFilterBar filters={3} />
+      <BlueprintLoadCatalogBar />
       <BlueprintGithubProjectCardGrid />
+      <BlueprintPagination />
     </BlueprintSheet>
   );
 }

@@ -1,5 +1,10 @@
 import { BlueprintSheet } from "@/components/ui/blueprint-loader";
-import { BlueprintPageHeader, BlueprintFilterBar, BlueprintTable } from "@/components/ui/blueprint-kit";
+import {
+  BlueprintPageHeader,
+  BlueprintPublicFilterBar,
+  BlueprintTable,
+  BlueprintPagination,
+} from "@/components/ui/blueprint-kit";
 
 /**
  * Next.js route-segment loading boundary for `/tasks` ("Tasks").
@@ -12,11 +17,18 @@ import { BlueprintPageHeader, BlueprintFilterBar, BlueprintTable } from "@/compo
  * `/admin/tasks/loading.tsx` already uses for the same reason.
  *
  * No header action placeholder (`withAction` left at its skeleton
- * default false via omission — see below) since the real page has none:
- * unlike the Admin Tasks page's "Create task" button, this page is
- * read-only browsing, so its header is just a title + subtitle.
- * 5 filters matches `TasksExplorer`'s real filter bar (Role, Difficulty,
- * Tech stack, Project, Status).
+ * default false via omission) since the real page has none: unlike the
+ * Admin Tasks page's "Create task" button, this page is read-only
+ * browsing, so its header is just a title + subtitle.
+ *
+ * The filter bar uses `BlueprintPublicFilterBar`, not the admin
+ * side-by-side `BlueprintFilterBar`: `TasksExplorer` stacks its search
+ * box, an optional "Match my profile" row, then a wrapped row of 5
+ * label-over-select filters (Role, Difficulty, Tech stack, Project,
+ * Status) — and its wrapper is `mb-3`, not the `mb-4` the card-grid
+ * pages use. `TasksTable`'s 9 real column headings replace the old
+ * blank equal-width columns, and a `BlueprintPagination` footer now
+ * matches the real `PagePaginationControls` under the table.
  */
 export default function TasksLoading() {
   return (
@@ -26,8 +38,23 @@ export default function TasksLoading() {
       contentClassName="w-full mx-auto max-w-6xl px-6 py-10"
     >
       <BlueprintPageHeader withAction={false} />
-      <BlueprintFilterBar filters={5} />
-      <BlueprintTable rows={10} columns={9} />
+      <BlueprintPublicFilterBar filters={5} withMatchProfile bottomMarginClassName="mb-3" />
+      <BlueprintTable
+        rows={10}
+        headings={[
+          "Task",
+          "Project",
+          "GitHub issue",
+          "Role",
+          "Difficulty",
+          "Tech stack",
+          "Contributors",
+          "Status",
+          "Actions",
+        ]}
+        twoLineColumns={2}
+      />
+      <BlueprintPagination />
     </BlueprintSheet>
   );
 }

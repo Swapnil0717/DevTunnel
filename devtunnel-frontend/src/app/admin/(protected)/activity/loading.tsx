@@ -18,7 +18,11 @@ export default function AdminActivityLoading() {
     >
       <BlueprintPageHeader withAction={false} />
       <BlueprintFilterBar filters={2} />
-      <BlueprintTable rows={8} columns={6} />
+      <BlueprintTable
+        rows={8}
+        headings={["Time", "Action", "Resource", "Admin", "Result", "Details"]}
+        twoLineColumns={0}
+      />
     </BlueprintSheet>
   );
 }

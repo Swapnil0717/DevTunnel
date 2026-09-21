@@ -171,17 +171,6 @@
   }
 }
 
-/* The footer train crosses the track left to right, entering fully off
-   the left edge and leaving fully past the right one. */
-@keyframes footer-train-run {
-  from {
-    transform: translateX(-110%);
-  }
-  to {
-    transform: translateX(100vw);
-  }
-}
-
 /* Blueprint "setting out" sheet: the recent.design "portfolio page load
    animation" reference, reproduced as-is — a CAD/architectural drawing
    sheet (ruled grid + diagonally-hatched fills + dimension callouts +
@@ -328,12 +317,6 @@
   .skeleton-block:nth-child(8) { animation-delay: 420ms; }
   .skeleton-block:nth-child(n + 9) { animation-delay: 480ms; }
 
-  .footer-train {
-    animation: footer-train-run 28s linear infinite;
-    animation-delay: -9s; /* start mid-track so the train is on screen at first paint */
-    will-change: transform;
-  }
-
   /* Full-bleed drawing-sheet background: the deep accent green from
      `--blueprint-bg` with a fine 24px grid and a bolder 96px grid on top
      of it, in the recent.design reference's layout but the app's own
@@ -474,15 +457,5 @@
   /* Keep in sync with BLUEPRINT_WIPE_MS in blueprint-reveal.tsx. */
   .blueprint-wipe {
     animation: blueprint-wipe 0.8s cubic-bezier(0.65, 0, 0.35, 1) both;
-  }
-}
-
-/* Someone who asked for less motion gets a parked train, not a frozen
-   off-screen one (the blanket rule above would otherwise jump it to the
-   final keyframe). */
-@media (prefers-reduced-motion: reduce) {
-  .footer-train {
-    animation: none;
-    transform: translateX(22vw);
   }
 }

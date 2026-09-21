@@ -18,7 +18,22 @@ export default function AdminTasksLoading() {
     >
       <BlueprintPageHeader actions={<BlueprintFill className="h-9 w-[108px]" />} />
       <BlueprintFilterBar filters={7} />
-      <BlueprintTable rows={8} columns={7} />
+      <BlueprintTable
+        rows={8}
+        headings={[
+          "Task",
+          "Project",
+          "GitHub issue",
+          "Role",
+          "Difficulty",
+          "Tech stack",
+          "Contributors",
+          "Submissions",
+          "Status",
+          "Actions",
+        ]}
+        twoLineColumns={2}
+      />
     </BlueprintSheet>
   );
 }

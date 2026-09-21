@@ -17,7 +17,7 @@ export default function GithubToolDetailLoading() {
     <BlueprintSheet
       sheetLabel="Sheet 10.1 — Tool"
       revLabel="Rev — loading tool"
-      contentClassName="w-full mx-auto max-w-4xl px-6 py-10"
+      contentClassName="w-full mx-auto max-w-5xl px-6 py-10"
     >
       <BlueprintDetailHeader
         withLogo

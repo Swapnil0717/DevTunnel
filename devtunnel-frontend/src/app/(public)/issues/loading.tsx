@@ -1,15 +1,18 @@
 import { BlueprintSheet } from "@/components/ui/blueprint-loader";
-import { BlueprintFill, BlueprintPageHeader, BlueprintFilterBar } from "@/components/ui/blueprint-kit";
+import { BlueprintFill, BlueprintPageHeader, BlueprintPublicFilterBar } from "@/components/ui/blueprint-kit";
 
 /**
  * Next.js route-segment loading boundary for `/issues` ("All Issues").
  *
  * Wrapped in the exact same page shell the real page renders
- * (`mx-auto max-w-6xl px-6 py-10`, `BlueprintPageHeader`, and a
- * 5-filter `BlueprintFilterBar` matching `IssuesExplorer`'s real filter
- * bar — State, Repository, Author, Tech stack, Project) so nothing
- * shifts position once `getIssues()` resolves — only the area below the
- * filters swaps from the spinner to the real table.
+ * (`mx-auto max-w-6xl px-6 py-10`, `BlueprintPageHeader`, and the
+ * stacked `BlueprintPublicFilterBar` matching `IssuesExplorer`'s real
+ * filter bar — search, a "Match my profile" row, then 5 filters: State,
+ * Repository, Author, Tech stack, Project, with the same `mb-3` wrapper
+ * spacing the real component uses — not the admin side-by-side
+ * `BlueprintFilterBar`) so nothing shifts position once `getIssues()`
+ * resolves — only the area below the filters swaps from the spinner to
+ * the real table.
  *
  * That area deliberately stays a spinner, not a fourth skeleton table:
  * `getIssues()` walks `GET /issues`, the contributor-facing counterpart
@@ -37,7 +40,7 @@ export function IssuesLoadingSheet({ scanning = true }: { scanning?: boolean }) 
       ariaHidden={!scanning}
     >
       <BlueprintPageHeader withAction={false} />
-      <BlueprintFilterBar filters={5} />
+      <BlueprintPublicFilterBar filters={5} withMatchProfile bottomMarginClassName="mb-3" />
       {scanning ? (
         <div
           role="status"
