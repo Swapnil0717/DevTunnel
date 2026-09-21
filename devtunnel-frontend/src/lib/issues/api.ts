@@ -6,81 +6,142 @@ import type { Issue } from "./types";
 /**
  * `GET /issues` — the contributor-facing counterpart to the Admin
  * Portal's `GET /admin/new-issues` (`lib/admin/new-issues/api.ts`):
- * every open GitHub issue across DevTunnel's onboarded projects, so a
+ * open GitHub issues across DevTunnel's onboarded projects, so a
  * contributor can browse and pick one to work on from `/issues`
  * ("All Issues" in `AppSidebar` / `AppBottomNav`).
  *
- * Not confirmed against the backend yet — same documented-assumption
- * convention as `lib/home/api.ts` and `lib/admin/new-issues/api.ts`
- * (Frontend_Development_Rules.txt rule 58: don't invent data, but a
- * plausible, clearly-flagged endpoint name is fine while the backend
- * catches up — TODO: confirm the real path with backend). Every call is
- * expected to fail (network error / 404) until that route ships;
- * `getIssues` catches that and the page degrades to one honest
- * `SectionMessage`, never a blank/broken page.
+ * Confirmed against the backend (devtunnel-backend `src/routes/issues.ts`):
+ * signed-in only, sorted newest-updated-first, keyset-paginated
+ * (`limit` / `before` query params, `X-Next-Cursor` response header),
+ * and served from a KV-cached cross-project GitHub scan.
  *
- * Assumed keyset-paginated the same way every other DevTunnel list route
- * is (`limit`/`before` query params, `X-Next-Cursor` response header —
- * see `lib/admin/cursor-pagination.ts`), so this walks every page the
- * same way `fetchAllAdminPages` does and returns the complete result.
- * That's what lets `IssuesExplorer` filter the *complete* list
- * client-side and then page through it 20-at-a-time with real
- * "Page 1 of N" controls, instead of only ever being able to show
- * whatever the first backend page happened to contain.
+ * Returns only the first page (`ISSUES_PREVIEW_LIMIT` rows — the most
+ * recently updated) plus `hasMore`, not the whole list. This page used
+ * to walk *every* page of `GET /issues` before it rendered anything, so
+ * the whole page waited on the largest possible read — and one slow or
+ * failed request anywhere in that walk blanked the page. It now follows
+ * the same shape the GitHub catalog pages already use
+ * (`lib/github-projects/fetch-catalog-preview.ts`): render a useful
+ * first page immediately and let a "Load all issues" button
+ * (`lib/issues/client-api.ts`) fetch the remainder from the browser.
  *
- * `PAGE_LIMIT` is 1000, not a smaller default — same reasoning
- * `lib/admin/new-issues/api.ts` documents for `/admin/new-issues`: if
- * this route also recomputes its result from a live, cross-project
- * GitHub scan rather than a cached table, requesting the largest page
- * the backend allows keeps a walk to one call/one scan for any
- * realistic installation, instead of multiplying an already-expensive
- * scan by however many small pages the combined issue count would
- * otherwise need.
+ * Failures are never silent: the result carries a `reason` (so the page
+ * can say what actually went wrong — signed out, route not deployed,
+ * rate limited, backend error, unreachable) and every failure is logged
+ * with the HTTP status and the backend's request id, which is what
+ * shows up in `wrangler tail` for the frontend Worker.
  */
-const PAGE_LIMIT = 1000;
 
 /**
- * Safety ceiling on how many pages one request will ever walk — 200
- * pages * 1000/page is comfortably above any real installation's open
- * issue count. Stops rather than looping forever if a backend bug ever
- * made `X-Next-Cursor` repeat itself.
+ * How many issues the server-rendered first paint asks for. The list is
+ * newest-updated-first, so this is "the 200 most recently updated open
+ * issues" — twenty pages of the 10-per-page table, and plenty of rows for
+ * the Repository / Author / Tech stack / Project filters to be useful
+ * before anyone presses "Load all issues".
  */
-const MAX_PAGES = 200;
+export const ISSUES_PREVIEW_LIMIT = 200;
+
+/** How many times a transient failure (network error, 502/503/504) is retried. */
+const MAX_RETRIES = 1;
+const RETRY_DELAY_MS = 400;
+
+export type IssuesFailureReason =
+  | "signed-out"
+  | "not-found"
+  | "rate-limited"
+  | "server-error"
+  | "unreachable";
 
 export type IssuesResult =
-  | { status: "ok"; data: Issue[] }
+  | { status: "ok"; data: Issue[]; hasMore: boolean }
   | { status: "empty" }
-  | { status: "error" };
+  | { status: "error"; reason: IssuesFailureReason };
+
+function reasonForStatus(status: number): IssuesFailureReason {
+  if (status === 401 || status === 403) return "signed-out";
+  if (status === 404) return "not-found";
+  if (status === 429) return "rate-limited";
+  return "server-error";
+}
+
+function isTransient(status: number): boolean {
+  return status === 502 || status === 503 || status === 504;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function readBackendErrorCode(res: Response): Promise<string | undefined> {
+  try {
+    const body = (await res.json()) as { error?: { code?: string } };
+    return body.error?.code;
+  } catch {
+    return undefined;
+  }
+}
 
 export async function getIssues(): Promise<IssuesResult> {
+  const query = new URLSearchParams({ limit: String(ISSUES_PREVIEW_LIMIT) });
+  const url = `${API_BASE_URL}/issues?${query.toString()}`;
+
+  let cookieHeader = "";
   try {
-    const items: Issue[] = [];
-    let before: string | undefined;
-    let pages = 0;
+    cookieHeader = (await cookies()).toString();
+  } catch (err) {
+    console.error("[issues] could not read request cookies", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { status: "error", reason: "unreachable" };
+  }
 
-    do {
-      const query = new URLSearchParams({ limit: String(PAGE_LIMIT) });
-      if (before) query.set("before", before);
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    const isLastAttempt = attempt === MAX_RETRIES;
 
-      const res = await fetch(`${API_BASE_URL}/issues?${query.toString()}`, {
-        headers: { cookie: (await cookies()).toString() },
+    try {
+      const res = await fetch(url, {
+        headers: { cookie: cookieHeader },
         cache: "no-store",
       });
 
-      if (!res.ok) {
-        return items.length > 0 ? { status: "ok", data: items } : { status: "error" };
+      if (res.ok) {
+        const data = (await res.json()) as Issue[];
+        if (!Array.isArray(data)) {
+          console.error("[issues] GET /issues returned a non-array body");
+          return { status: "error", reason: "server-error" };
+        }
+        if (data.length === 0) return { status: "empty" };
+
+        return { status: "ok", data, hasMore: res.headers.get("X-Next-Cursor") !== null };
       }
 
-      const page = (await res.json()) as Issue[];
-      items.push(...page);
+      if (!isLastAttempt && isTransient(res.status)) {
+        await sleep(RETRY_DELAY_MS);
+        continue;
+      }
 
-      before = res.headers.get("X-Next-Cursor") ?? undefined;
-      pages += 1;
-    } while (before && pages < MAX_PAGES);
+      console.error("[issues] GET /issues failed", {
+        status: res.status,
+        code: await readBackendErrorCode(res),
+        requestId: res.headers.get("x-request-id"),
+        attempt: attempt + 1,
+      });
+      return { status: "error", reason: reasonForStatus(res.status) };
+    } catch (err) {
+      if (!isLastAttempt) {
+        await sleep(RETRY_DELAY_MS);
+        continue;
+      }
 
-    if (items.length === 0) return { status: "empty" };
-    return { status: "ok", data: items };
-  } catch {
-    return { status: "error" };
+      console.error("[issues] GET /issues could not be reached", {
+        error: err instanceof Error ? err.message : String(err),
+        attempt: attempt + 1,
+      });
+      return { status: "error", reason: "unreachable" };
+    }
   }
+
+  // Unreachable — the loop always returns on its last attempt — but keeps
+  // the function total for the type checker.
+  return { status: "error", reason: "server-error" };
 }

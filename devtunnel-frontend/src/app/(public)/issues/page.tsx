@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { buildMetadata } from "@/lib/seo";
-import { getIssues } from "@/lib/issues/api";
+import { getIssues, type IssuesFailureReason } from "@/lib/issues/api";
 import { IssuesExplorer } from "@/components/issues/issues-explorer";
+import { IssuesRetryButton } from "@/components/issues/issues-retry-button";
+import { SignInLink } from "@/components/auth/sign-in-link";
 import { SectionMessage } from "@/components/home/section-message";
 import { IssuesLoadingSheet } from "./loading";
 import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
@@ -21,13 +23,51 @@ export const metadata: Metadata = buildMetadata({
 });
 
 /**
+ * What the failure state tells the visitor, per `getIssues()` failure
+ * reason. The old page showed one identical "check back soon" line for
+ * every failure, which made a signed-out visit, an API outage and a
+ * rate limit indistinguishable — for the visitor and for whoever was
+ * debugging it. Only the signed-out case is something the visitor can
+ * fix themselves, so only that one offers sign-in instead of a retry.
+ */
+const FAILURE_MESSAGES: Record<Exclude<IssuesFailureReason, "signed-out">, string> = {
+  "not-found": "The issues service isn't available yet — check back soon.",
+  "rate-limited": "Too many requests right now. Wait a moment, then try again.",
+  "server-error": "Couldn't load issues right now. Please try again in a moment.",
+  unreachable: "Couldn't reach DevTunnel to load issues. Please try again in a moment.",
+};
+
+function IssuesUnavailable({ reason }: { reason: IssuesFailureReason }) {
+  if (reason === "signed-out") {
+    return (
+      <div className="flex flex-col items-start gap-3">
+        <SectionMessage>Sign in to browse open issues across DevTunnel&apos;s projects.</SectionMessage>
+        <SignInLink variant="solid">Sign in</SignInLink>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-3">
+      <SectionMessage>{FAILURE_MESSAGES[reason]}</SectionMessage>
+      {reason === "not-found" ? null : <IssuesRetryButton />}
+    </div>
+  );
+}
+
+/**
  * `/issues` — "All Issues" in `AppSidebar` / `AppBottomNav`. The
  * contributor-facing counterpart to the Admin Portal's
  * `/admin/tasks/new-issues` ("All Issue") page: every open GitHub issue
  * across DevTunnel's onboarded projects, browsable with search + filters
- * and 20-per-page pagination (`IssuesExplorer`), layered on top of one
- * fully-fetched `GET /issues` list (`getIssues` walks the backend's
- * keyset pagination in full — see `lib/issues/api.ts`).
+ * and 10-per-page pagination (`IssuesExplorer`), layered on top of
+ * `GET /issues` (`getIssues` — see `lib/issues/api.ts`).
+ *
+ * The server renders only the first page — the most recently updated
+ * issues — so the page appears quickly and one slow backend read can't
+ * hold it hostage; a "Load all issues" button in the explorer fetches
+ * the rest from the browser. This is the same shape the GitHub catalog
+ * pages use.
  *
  * Unlike the Admin page, there's no "Create task" / "Ignore" / "Sync"
  * here — those curate DevTunnel's task list and re-trigger a live
@@ -50,11 +90,11 @@ export default async function IssuesPage() {
         </div>
 
         {result.status === "error" ? (
-          <SectionMessage>Issues aren&apos;t available yet — check back soon.</SectionMessage>
+          <IssuesUnavailable reason={result.reason} />
         ) : result.status === "empty" ? (
           <SectionMessage>No open GitHub issues right now — check back soon.</SectionMessage>
         ) : (
-          <IssuesExplorer issues={result.data} />
+          <IssuesExplorer issues={result.data} hasMore={result.hasMore} />
         )}
       </main>
     </BlueprintReveal>

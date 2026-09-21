@@ -141,10 +141,20 @@ issues.get("/issues", requireAuth, async (c) => {
   // now mostly guards the *synchronous* cache-miss path: in steady state
   // with the scheduled warmer running, most requests here are cheap KV
   // reads, not live GitHub scans.
+  //
+  // Counted per signed-in user, not per connecting IP (the default): the
+  // contributor's browser doesn't call this route for the first paint —
+  // the Next.js frontend Worker does, server-side, on their behalf — so
+  // every visitor's request arrives from the frontend's own address.
+  // Keyed by IP, all contributors shared one 20-per-minute bucket and a
+  // handful of people opening All Issues at once could lock everyone out
+  // with a 429 (which the page rendered as "Issues aren't available").
+  // See `RateLimitOptions.identity` in lib/rateLimit.ts.
   const withinLimit = await checkRateLimit(c, {
     bucket: "issues-list",
     limit: 20,
     windowSeconds: 60,
+    identity: `user:${user.id}`,
   });
   if (!withinLimit) {
     return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");

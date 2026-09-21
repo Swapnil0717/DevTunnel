@@ -7,7 +7,9 @@ import { FilterSelect } from "@/components/ui/filter-select";
 import { PagePaginationControls } from "@/components/admin/page-pagination-controls";
 import { usePagePagination } from "@/lib/admin/use-page-pagination";
 import { useAuth } from "@/lib/auth/use-auth";
+import { useLoadIssueList } from "@/lib/issues/use-load-issue-list";
 import { IssuesTable } from "./issues-table";
+import { LoadIssueListBar } from "./load-issue-list-bar";
 import type { Issue, IssueState } from "@/lib/issues/types";
 
 type StateFilter = "ALL" | IssueState;
@@ -30,11 +32,19 @@ const ISSUES_PAGE_SIZE = 10;
 
 /**
  * Client-side search + filter bar for `/issues` ("All Issues"), driven
- * by the fully-fetched `GET /issues` list (`lib/issues/api.ts`) —
- * narrowed here, then paginated 10-per-page (`ISSUES_PAGE_SIZE`) — never
- * a second fabricated data source (Frontend_Development_Rules.txt rule
- * 58). Same convention as `AdminNewIssuesExplorer`, minus the admin-only
- * curation actions and at a smaller page size (see `ISSUES_PAGE_SIZE`).
+ * by the `GET /issues` list (`lib/issues/api.ts`) — narrowed here, then
+ * paginated 10-per-page (`ISSUES_PAGE_SIZE`) — never a second fabricated
+ * data source (Frontend_Development_Rules.txt rule 58). Same convention
+ * as `AdminNewIssuesExplorer`, minus the admin-only curation actions and
+ * at a smaller page size (see `ISSUES_PAGE_SIZE`).
+ *
+ * The server ships only the most recently updated first page of issues
+ * (`ISSUES_PREVIEW_LIMIT`) so the page appears quickly; when the backend
+ * has more (`hasMore`), `LoadIssueListBar` offers a "Load all issues"
+ * button that fetches the rest from the browser
+ * (`useLoadIssueList`), and the explorer's search, filters and pagination
+ * then run over the complete list. Until then the bar says outright that
+ * they only cover what's loaded.
  *
  * `usePagePagination` and `PagePaginationControls` are reused from the
  * Admin Portal rather than duplicated: both are generic, role-agnostic
@@ -51,8 +61,19 @@ const ISSUES_PAGE_SIZE = 10;
  * onboarding equivalent, so they stay at "All" until the contributor
  * picks one manually.
  */
-export function IssuesExplorer({ issues }: { issues: Issue[] }) {
+export function IssuesExplorer({
+  issues: initialIssues,
+  hasMore,
+}: {
+  /** The server-rendered first page — the most recently updated open issues. */
+  issues: Issue[];
+  /** `true` when the backend holds more issues than `issues` — offers "Load all issues". */
+  hasMore: boolean;
+}) {
   const { user } = useAuth();
+
+  const issueList = useLoadIssueList({ initialIssues, hasMore });
+  const issues = issueList.issues;
 
   const [query, setQuery] = useState("");
   const [state, setState] = useState<StateFilter>("ALL");
@@ -271,6 +292,8 @@ export function IssuesExplorer({ issues }: { issues: Issue[] }) {
           </div>
         </div>
       </div>
+
+      <LoadIssueListBar loader={issueList} />
 
       {filteredIssues.length === 0 ? (
         <SectionMessage>
