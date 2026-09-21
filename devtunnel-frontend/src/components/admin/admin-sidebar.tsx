@@ -22,6 +22,12 @@ import { ADMIN_NAV_ITEMS, type AdminNavLink } from "./admin-nav-items";
  * Group headers are plain, non-interactive labels (not links, not
  * collapsible toggles): neither "Projects" nor "Tasks" is itself a route,
  * so it never renders as a clickable target with nothing behind it.
+ *
+ * `position: fixed` to the full viewport height, same as `AppSidebar`:
+ * static while the page scrolls, and unaffected by anything rendered
+ * after the content. The admin layout reserves its width with
+ * `md:ml-[224px]` — keep that in step with `w-[224px]` below. A short
+ * viewport scrolls the sidebar inside itself (`overflow-y-auto`).
  */
 export function AdminSidebar() {
   const pathname = usePathname();
@@ -72,7 +78,7 @@ export function AdminSidebar() {
   };
 
   return (
-    <aside className="hidden w-[224px] shrink-0 flex-col border-r border-border-subtle bg-bg px-4 py-6 md:flex">
+    <aside className="fixed inset-y-0 left-0 z-20 hidden w-[224px] flex-col overflow-y-auto border-r border-border-subtle bg-bg px-4 py-6 md:flex">
       <div className="mb-1 pl-1">
         <Logo asLink={false} />
       </div>

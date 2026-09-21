@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/auth/auth-provider";
-import { TrainFooter } from "@/components/layout/train-footer";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/config";
 import "./globals.css";
 
@@ -47,10 +46,12 @@ export default function RootLayout({
             still happens server-side — see (protected)/layout.tsx; the
             (public)/layout.tsx group deliberately doesn't redirect. */}
         <AuthProvider>{children}</AuthProvider>
-        {/* Mounted once here (rather than per-route-group layout) so it
-            shows on every page — public, protected, and admin alike —
-            without duplicating it in each. See train-footer.tsx. */}
-        <TrainFooter />
+        {/* The train footer is deliberately NOT mounted here any more: a
+            root-level footer sits under the whole page, sidebar included,
+            which is what used to shove the sidebar up the screen at the
+            bottom of a page. It now lives inside each page's content
+            column — see components/layout/app-shell.tsx, the admin
+            layout, and train-footer.tsx. */}
       </body>
     </html>
   );

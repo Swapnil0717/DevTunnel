@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/layout/logo";
+import { TrainFooter } from "@/components/layout/train-footer";
 
 /**
  * Root error boundary — catches any uncaught render/runtime exception in
@@ -32,29 +33,32 @@ export default function RootError({
   }, [error]);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-6 py-24 text-center">
-      <Logo />
-      <div>
-        <h1 className="m-0 mb-2 text-xl font-medium text-text">Something went wrong</h1>
-        <p className="m-0 text-[14px] text-text-muted">
-          An unexpected error occurred. You can try again, or head back to DevTunnel.
-        </p>
-      </div>
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={reset}
-          className="inline-flex items-center justify-center rounded-md bg-text px-5 py-2.5 text-[13px] font-medium text-bg transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          Try again
-        </button>
-        <Link
-          href="/"
-          className="inline-flex items-center justify-center rounded-md border border-border bg-surface px-4 py-2 text-[13px] font-medium text-text transition-colors hover:bg-surface-raised"
-        >
-          Back to DevTunnel
-        </Link>
-      </div>
-    </main>
+    <>
+      <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-6 py-24 text-center">
+        <Logo />
+        <div>
+          <h1 className="m-0 mb-2 text-xl font-medium text-text">Something went wrong</h1>
+          <p className="m-0 text-[14px] text-text-muted">
+            An unexpected error occurred. You can try again, or head back to DevTunnel.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={reset}
+            className="inline-flex items-center justify-center rounded-md bg-text px-5 py-2.5 text-[13px] font-medium text-bg transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            Try again
+          </button>
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center rounded-md border border-border bg-surface px-4 py-2 text-[13px] font-medium text-text transition-colors hover:bg-surface-raised"
+          >
+            Back to DevTunnel
+          </Link>
+        </div>
+      </main>
+      <TrainFooter />
+    </>
   );
 }

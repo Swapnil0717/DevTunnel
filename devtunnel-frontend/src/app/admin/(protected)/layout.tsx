@@ -7,6 +7,7 @@ import { isAdmin } from "@/lib/auth/is-admin";
 import { AdminHeader } from "@/components/auth/admin-header";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { AdminMobileNav } from "@/components/admin/admin-mobile-nav";
+import { TrainFooter } from "@/components/layout/train-footer";
 
 /**
  * Real route protection for everything under `/admin` (devtunnel_workflow.txt,
@@ -34,11 +35,15 @@ import { AdminMobileNav } from "@/components/admin/admin-mobile-nav";
  * *isn't* an admin yet is supposed to sign in.
  *
  * Admin Home shell: `AdminSidebar` (branding + Module 31's full section
- * list, `md` and up) sits alongside a content column topped by
- * `AdminHeader` (current section + signed-in admin + sign-out) and, below
- * `md` where the sidebar is hidden, `AdminMobileNav` — same nav entries as
- * a horizontally scrollable strip. Every admin page (starting with the
- * Module A2 dashboard) renders inside `{children}` beneath those two.
+ * list, `md` and up) is `position: fixed`, so it stays put however far the
+ * page scrolls and the footer can never move it; the content column beside
+ * it reserves its width with `md:ml-[224px]` (keep in step with
+ * `AdminSidebar`'s `w-[224px]`). The column is topped by `AdminHeader`
+ * (current section + signed-in admin + sign-out) and, below `md` where the
+ * sidebar is hidden, `AdminMobileNav` — same nav entries as a horizontally
+ * scrollable strip. Every admin page (starting with the Module A2
+ * dashboard) renders inside `{children}` beneath those two, and the train
+ * footer closes the column — inside the page area, never under the sidebar.
  *
  * `FULL_BLEED_PATHS` is the exception to that shell: Project Onboarding
  * (`/admin/projects/new`), Task Onboarding (`/admin/tasks/new`), and Open
@@ -47,7 +52,8 @@ import { AdminMobileNav } from "@/components/admin/admin-mobile-nav";
  * `AdminSidebar` + `AdminHeader` would double up the chrome. Same
  * treatment as the contributor `/onboarding` page relative to
  * `(protected)/layout.tsx` — the auth/role check still runs unconditionally
- * above, only the shell around `{children}` is skipped.
+ * above, only the shell around `{children}` is skipped (the footer still
+ * closes the page).
  */
  const FULL_BLEED_PATHS = ["/admin/projects/new", "/admin/tasks/new", "/admin/opensource-tools/new"];
 
@@ -64,17 +70,23 @@ export default async function AdminProtectedLayout({
   }
 
   if (FULL_BLEED_PATHS.includes(pathname)) {
-    return <AuthProvider initialUser={user}>{children}</AuthProvider>;
+    return (
+      <AuthProvider initialUser={user}>
+        {children}
+        <TrainFooter />
+      </AuthProvider>
+    );
   }
 
   return (
     <AuthProvider initialUser={user}>
-      <div className="flex min-h-screen bg-bg">
+      <div className="min-h-screen bg-bg">
         <AdminSidebar />
-        <div className="flex min-h-screen flex-1 flex-col">
+        <div className="flex min-h-screen min-w-0 flex-col md:ml-[224px]">
           <AdminHeader />
           <AdminMobileNav />
           <div className="flex-1">{children}</div>
+          <TrainFooter />
         </div>
       </div>
     </AuthProvider>

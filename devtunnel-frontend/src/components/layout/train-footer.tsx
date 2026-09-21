@@ -1,52 +1,51 @@
 // devtunnel-frontend/src/components/layout/train-footer.tsx
-"use client";
 
 /**
- * Decorative footer shown at the bottom of every page. Renders the
- * animated train GIF (background stripped to transparent, linework
- * recolored to pure grayscale with a high-contrast curve — most of
- * the scene reads as true black, with only the strongest edges lit
- * up white — so it sits on the app's black `bg` token instead of its
- * own white canvas) tiled edge-to-edge with CSS `background-repeat`,
- * so it always fills the viewport width regardless of screen size
- * without needing multiple `<img>` tags.
+ * Decorative footer: the animated train GIF, shown ONCE (no tiling), at the
+ * very bottom of the page content.
  *
- * Deliberately kept strictly black and white — no color tint, no
- * accent glow — so it reads as a black-and-white illustration rather
- * than a colored decoration.
+ * Where it lives: inside the content column of each shell layout
+ * (`AppShell`, the admin layout) — never at the root, never under the
+ * sidebar. The sidebars are `position: fixed`, so this footer scrolling
+ * into view can't push, shrink or otherwise move them.
  *
- * The asset lives at `public/train-footer.gif` — a trimmed/downscaled
- * copy of the original recording (760x313, 52 frames, transparent
- * background) so it stays a reasonable size to ship on every page.
+ * Colour: the wrapper paints the app's own `bg` token, and the GIF has a
+ * transparent background (its linework is grayscale, no pixel darker than
+ * #1E1E1E), so the scene sits on exactly the page colour instead of a
+ * black rectangle. Nothing here hardcodes a background colour — change
+ * `bg` in tailwind.config.ts and the footer follows. The left/right edges
+ * are dissolved with a CSS mask (not a colour-matched gradient overlay)
+ * so the viaduct fades into the page whatever the page colour is.
  *
- * Purely decorative: `aria-hidden` + `pointer-events-none` keep it out
- * of the accessibility tree and out of the way of clicks/taps.
+ * Asset: `public/train-footer.gif` — 760x313, 52 frames, transparent
+ * background. `width`/`height` are set so the browser reserves the space
+ * before it downloads, and `loading="lazy"` keeps a multi-megabyte image
+ * from competing with the page's real content: it sits below the fold.
+ *
+ * Purely decorative: empty `alt` + `aria-hidden` keep it out of the
+ * accessibility tree, `pointer-events-none` keeps it out of the way of
+ * clicks/taps.
  */
+const EDGE_FADE =
+  "linear-gradient(to right, transparent 0%, #000 18%, #000 82%, transparent 100%)";
+
 export function TrainFooter() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none select-none relative w-full h-[130px] sm:h-[190px] overflow-hidden bg-black"
+      className="pointer-events-none mt-6 flex w-full select-none justify-center overflow-hidden bg-bg sm:mt-10"
     >
-      {/* The tiled, looping train scene itself. */}
-      <div
-        className="absolute inset-0"
-        style={{
-          backgroundImage: "url(/train-footer.gif)",
-          backgroundRepeat: "repeat-x",
-          backgroundPosition: "left bottom",
-          backgroundSize: "auto 100%",
-        }}
-      />
-
-      {/* Fade the top edge into the page background instead of a hard
-          cut, so the footer blends with whatever content sits above
-          it rather than looking clipped. Pure black, no color. */}
-      <div
-        className="absolute inset-x-0 top-0 h-10"
-        style={{
-          backgroundImage: "linear-gradient(to bottom, #000000 0%, rgba(0,0,0,0) 100%)",
-        }}
+      {/* eslint-disable-next-line @next/next/no-img-element -- animated GIF: next/image would need `unoptimized` anyway */}
+      <img
+        src="/train-footer.gif"
+        alt=""
+        width={760}
+        height={313}
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+        className="h-[150px] w-auto max-w-full object-contain object-bottom sm:h-[230px] lg:h-[280px]"
+        style={{ WebkitMaskImage: EDGE_FADE, maskImage: EDGE_FADE }}
       />
     </div>
   );

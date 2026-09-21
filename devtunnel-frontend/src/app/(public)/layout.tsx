@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { AuthProvider } from "@/lib/auth/auth-provider";
-import { AppSidebar } from "@/components/layout/app-sidebar";
-import { AppBottomNav } from "@/components/layout/app-bottom-nav";
+import { AppShell } from "@/components/layout/app-shell";
 import { GuestNotice } from "@/components/layout/guest-notice";
 import { getServerUser } from "@/lib/auth/get-server-user";
 import { needsOnboarding } from "@/lib/onboarding/needs-onboarding";
@@ -59,15 +58,9 @@ export default async function PublicLayout({
 
   return (
     <AuthProvider initialUser={user} anonymous={!user}>
-      <div className="flex min-h-screen bg-bg">
-        <AppSidebar />
-        {/* pb-16 keeps content clear of the fixed bottom nav on mobile */}
-        <div className="flex min-w-0 flex-1 flex-col pb-16 sm:pb-0">
-          {user ? null : <GuestNotice />}
-          {children}
-        </div>
-      </div>
-      <AppBottomNav />
+      {/* Fixed sidebar + content column + train footer (inside the content
+          column only) all live in AppShell — see app-shell.tsx. */}
+      <AppShell banner={user ? null : <GuestNotice />}>{children}</AppShell>
     </AuthProvider>
   );
 }

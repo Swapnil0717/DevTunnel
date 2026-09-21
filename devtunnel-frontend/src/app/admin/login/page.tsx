@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { Logo } from "@/components/layout/logo";
+import { TrainFooter } from "@/components/layout/train-footer";
 import { LoginCard } from "@/components/auth/login-card";
 import { PortalChoiceCard } from "@/components/auth/portal-choice-card";
 import {
@@ -63,25 +64,28 @@ export default async function LoginPage({
       }
 
       return (
-        <BlueprintReveal skeleton={<RouteLoading />} className="relative isolate min-h-screen w-full">
-          <main className="flex min-h-screen flex-col items-center justify-center gap-9 px-6 py-16">
-            <Logo />
+        <>
+          <BlueprintReveal skeleton={<RouteLoading />} className="relative isolate min-h-screen w-full">
+            <main className="flex min-h-screen flex-col items-center justify-center gap-9 px-6 py-16">
+              <Logo />
 
-            <h1 className="sr-only">
-              Choose how to sign in to DevTunnel
-            </h1>
+              <h1 className="sr-only">
+                Choose how to sign in to DevTunnel
+              </h1>
 
-            <PortalChoiceCard
-              name={user.name || user.username}
-              userDestination={
-                resolvedSearchParams.next &&
-                resolvedSearchParams.next.startsWith("/")
-                  ? resolvedSearchParams.next
-                  : "/home"
-              }
-            />
-          </main>
-        </BlueprintReveal>
+              <PortalChoiceCard
+                name={user.name || user.username}
+                userDestination={
+                  resolvedSearchParams.next &&
+                  resolvedSearchParams.next.startsWith("/")
+                    ? resolvedSearchParams.next
+                    : "/home"
+                }
+              />
+            </main>
+          </BlueprintReveal>
+          <TrainFooter />
+        </>
       );
     }
 
@@ -109,29 +113,32 @@ export default async function LoginPage({
     : undefined;
 
   return (
-    <BlueprintReveal skeleton={<RouteLoading />} className="relative isolate min-h-screen w-full">
-      <main className="flex min-h-screen flex-col items-center justify-center gap-9 px-6 py-16">
-        <Logo />
+    <>
+      <BlueprintReveal skeleton={<RouteLoading />} className="relative isolate min-h-screen w-full">
+        <main className="flex min-h-screen flex-col items-center justify-center gap-9 px-6 py-16">
+          <Logo />
 
-        <h1 className="sr-only">
-          Sign in to DevTunnel
-        </h1>
+          <h1 className="sr-only">
+            Sign in to DevTunnel
+          </h1>
 
-        <div className="flex w-full flex-col items-center">
-          <LoginCard next={next} />
+          <div className="flex w-full flex-col items-center">
+            <LoginCard next={next} />
 
-          <p className="mt-[22px] text-xs text-text-disabled">
-            No account? GitHub sign-in creates one automatically.
-          </p>
-        </div>
+            <p className="mt-[22px] text-xs text-text-disabled">
+              No account? GitHub sign-in creates one automatically.
+            </p>
+          </div>
 
-        <div className="w-full max-w-[340px]">
-          <AuthStatusPanel
-            status={status}
-            errorMessage={errorMessage}
-          />
-        </div>
-      </main>
-    </BlueprintReveal>
+          <div className="w-full max-w-[340px]">
+            <AuthStatusPanel
+              status={status}
+              errorMessage={errorMessage}
+            />
+          </div>
+        </main>
+      </BlueprintReveal>
+      <TrainFooter />
+    </>
   );
 }

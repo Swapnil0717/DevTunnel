@@ -1,8 +1,8 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AuthProvider } from "@/lib/auth/auth-provider";
-import { AppSidebar } from "@/components/layout/app-sidebar";
-import { AppBottomNav } from "@/components/layout/app-bottom-nav";
+import { AppShell } from "@/components/layout/app-shell";
+import { TrainFooter } from "@/components/layout/train-footer";
 import { getServerUser } from "@/lib/auth/get-server-user";
 import { needsOnboarding } from "@/lib/onboarding/needs-onboarding";
 import { isAdmin } from "@/lib/auth/is-admin";
@@ -51,9 +51,11 @@ import { signInHref } from "@/lib/auth/sign-in-href";
  * a not-yet-onboarded user would get redirected to /onboarding while
  * already on /onboarding, which is a redirect loop.
  *
- * This layout also owns the app-shell navigation: `AppSidebar` for sm+
- * screens, `AppBottomNav` for mobile. /onboarding is a full-bleed wizard
- * in the reference designs, not a shell page, so it skips both.
+ * This layout also owns the app-shell navigation via `AppShell`: a fixed
+ * `AppSidebar` for sm+ screens, `AppBottomNav` for mobile, and the train
+ * footer at the bottom of the content column. /onboarding is a full-bleed
+ * wizard in the reference designs, not a shell page, so it skips the
+ * navigation — it still gets the footer, at the bottom of the page.
  */
 export default async function ProtectedLayout({
   children,
@@ -79,19 +81,17 @@ export default async function ProtectedLayout({
   }
 
   if (pathname === "/onboarding") {
-    return <AuthProvider initialUser={user}>{children}</AuthProvider>;
+    return (
+      <AuthProvider initialUser={user}>
+        {children}
+        <TrainFooter />
+      </AuthProvider>
+    );
   }
 
   return (
     <AuthProvider initialUser={user}>
-      <div className="flex min-h-screen bg-bg">
-        <AppSidebar />
-        {/* pb-16 keeps content clear of the fixed bottom nav on mobile */}
-        <div className="flex min-w-0 flex-1 flex-col pb-16 sm:pb-0">
-          {children}
-        </div>
-      </div>
-      <AppBottomNav />
+      <AppShell>{children}</AppShell>
     </AuthProvider>
   );
 }

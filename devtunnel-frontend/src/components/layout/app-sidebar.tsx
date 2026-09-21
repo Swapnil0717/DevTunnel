@@ -46,10 +46,16 @@ import { useAuth } from "@/lib/auth/use-auth";
  * avatar/sign-out footer, so the shell never offers a link that would just
  * bounce them to /login.
  *
- * The sidebar is pinned to the viewport (`sticky top-0 h-screen`), so
- * only the page content scrolls; on a viewport too short to fit every
- * item the sidebar scrolls inside itself (`overflow-y-auto`) instead of
- * clipping the account/sign-out footer.
+ * The sidebar is `position: fixed` to the full height of the viewport, so
+ * it is static: it never moves with page scroll, and nothing rendered
+ * after the content (the train footer, a short page, a tall page) can push
+ * it — unlike the previous `sticky` version, which was bounded by its
+ * parent and slid up the screen once the page ran out. Because a fixed
+ * element leaves the document flow, the content column beside it reserves
+ * its width with `sm:ml-[208px]` (see `AppShell`) — keep that in step with
+ * `w-[208px]` below. On a viewport too short to fit every item the sidebar
+ * scrolls inside itself (`overflow-y-auto`) instead of clipping the
+ * account/sign-out footer.
  */
 const NAV_LINKS = [
   { href: "/home", label: "Home", Icon: HomeIcon, requiresAccount: true },
@@ -75,7 +81,7 @@ export function AppSidebar() {
     : NAV_LINKS;
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-[208px] shrink-0 flex-col self-start overflow-y-auto border-r border-border-subtle px-4 py-6 sm:flex">
+    <aside className="fixed inset-y-0 left-0 z-20 hidden w-[208px] flex-col overflow-y-auto border-r border-border-subtle bg-bg px-4 py-6 sm:flex">
       <div className="mb-8 pl-1">
         <Logo />
       </div>
