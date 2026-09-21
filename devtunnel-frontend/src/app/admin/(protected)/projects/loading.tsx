@@ -1,5 +1,6 @@
 // src/app/admin/(protected)/projects/loading.tsx
-import { SkeletonBlock, SkeletonPageHeader, SkeletonFilterBar, SkeletonTable } from "@/components/ui/skeleton";
+import { BlueprintSheet } from "@/components/ui/blueprint-loader";
+import { BlueprintFill, BlueprintPageHeader, BlueprintFilterBar, BlueprintTable } from "@/components/ui/blueprint-kit";
 
 /**
  * `/admin/projects` — one `getAdminProjects()` fetch, rendered as
@@ -10,17 +11,21 @@ import { SkeletonBlock, SkeletonPageHeader, SkeletonFilterBar, SkeletonTable } f
  */
 export default function AdminProjectsLoading() {
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10" aria-hidden="true">
-      <SkeletonPageHeader
+    <BlueprintSheet
+      sheetLabel="Sheet A2 — Projects"
+      revLabel="Rev — loading projects"
+      contentClassName="w-full mx-auto max-w-6xl px-6 py-10"
+    >
+      <BlueprintPageHeader
         actions={
           <div className="flex flex-wrap items-start gap-3">
-            <SkeletonBlock className="h-9 w-[168px]" />
-            <SkeletonBlock className="h-9 w-[150px]" />
+            <BlueprintFill className="h-9 w-[168px]" />
+            <BlueprintFill className="h-9 w-[150px]" />
           </div>
         }
       />
-      <SkeletonFilterBar filters={3} />
-      <SkeletonTable rows={8} columns={8} />
-    </main>
+      <BlueprintFilterBar filters={3} />
+      <BlueprintTable rows={8} columns={8} />
+    </BlueprintSheet>
   );
 }

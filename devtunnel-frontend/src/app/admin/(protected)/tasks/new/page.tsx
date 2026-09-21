@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { buildMetadata } from "@/lib/seo";
 import { TaskOnboardingWizard } from "@/components/admin/task-onboarding/task-onboarding-wizard";
+import RouteLoading from "../loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 export const metadata: Metadata = buildMetadata({
   title: "Create task",
@@ -22,5 +24,9 @@ export const metadata: Metadata = buildMetadata({
  * already covering everything under `/admin`) and set page metadata.
  */
 export default function AdminTaskOnboardingPage() {
-  return <TaskOnboardingWizard />;
+  return (
+    <BlueprintReveal skeleton={<RouteLoading />} className="relative isolate min-h-screen w-full">
+      <TaskOnboardingWizard />
+    </BlueprintReveal>
+  );
 }

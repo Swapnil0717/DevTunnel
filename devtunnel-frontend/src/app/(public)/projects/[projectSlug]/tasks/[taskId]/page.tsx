@@ -20,6 +20,8 @@ import {
   TaskIssueSection,
   TaskProjectSection,
 } from "@/components/tasks/task-detail-sections";
+import RouteLoading from "./loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 interface TaskDetailPageProps {
   params: Promise<{ projectSlug: string; taskId: string }>;
@@ -118,24 +120,26 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
 
   if (result.status === "error") {
     return (
-      <main className="mx-auto max-w-6xl px-6 py-10">
-        <Link
-          href="/tasks"
-          className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
-        >
-          <ChevronLeftIcon className="h-3.5 w-3.5" />
-          Back to Tasks
-        </Link>
-        <nav aria-label="Breadcrumb" className="mb-6 text-[12.5px] text-text-faint">
-          <Link href="/tasks" className="hover:text-accent">
-            Tasks
+      <BlueprintReveal skeleton={<RouteLoading />}>
+        <main className="mx-auto max-w-6xl px-6 py-10">
+          <Link
+            href="/tasks"
+            className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
+          >
+            <ChevronLeftIcon className="h-3.5 w-3.5" />
+            Back to Tasks
           </Link>
-          {" / "}
-          <span className="text-text-muted">Task</span>
-        </nav>
-        <h1 className="m-0 mb-4 text-xl font-medium text-text">Task</h1>
-        <SectionMessage>This task isn&apos;t available right now — check back soon.</SectionMessage>
-      </main>
+          <nav aria-label="Breadcrumb" className="mb-6 text-[12.5px] text-text-faint">
+            <Link href="/tasks" className="hover:text-accent">
+              Tasks
+            </Link>
+            {" / "}
+            <span className="text-text-muted">Task</span>
+          </nav>
+          <h1 className="m-0 mb-4 text-xl font-medium text-text">Task</h1>
+          <SectionMessage>This task isn&apos;t available right now — check back soon.</SectionMessage>
+        </main>
+      </BlueprintReveal>
     );
   }
 
@@ -147,93 +151,95 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
   const contributeHref = `/projects/${task.project.slug}/tasks/${task.id}/contribute`;
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
-      {/* Records that the signed-in contributor has seen this task — see `TaskViewTracker`. */}
-      <TaskViewTracker taskId={task.id} />
-      <Link
-        href="/tasks"
-        className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
-      >
-        <ChevronLeftIcon className="h-3.5 w-3.5" />
-        Back to Tasks
-      </Link>
-      <JsonLd
-        data={breadcrumbJsonLd([
-          { name: "Tasks", path: "/tasks" },
-          { name: task.title, path: `/projects/${projectSlug}/tasks/${taskId}` },
-        ])}
-      />
-      <nav aria-label="Breadcrumb" className="mb-6 text-[12.5px] text-text-faint">
-        <Link href="/tasks" className="hover:text-accent">
-          Tasks
+    <BlueprintReveal skeleton={<RouteLoading />}>
+      <main className="mx-auto max-w-6xl px-6 py-10">
+        {/* Records that the signed-in contributor has seen this task — see `TaskViewTracker`. */}
+        <TaskViewTracker taskId={task.id} />
+        <Link
+          href="/tasks"
+          className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
+        >
+          <ChevronLeftIcon className="h-3.5 w-3.5" />
+          Back to Tasks
         </Link>
-        {" / "}
-        <span className="text-text-muted">{task.title}</span>
-      </nav>
+        <JsonLd
+          data={breadcrumbJsonLd([
+            { name: "Tasks", path: "/tasks" },
+            { name: task.title, path: `/projects/${projectSlug}/tasks/${taskId}` },
+          ])}
+        />
+        <nav aria-label="Breadcrumb" className="mb-6 text-[12.5px] text-text-faint">
+          <Link href="/tasks" className="hover:text-accent">
+            Tasks
+          </Link>
+          {" / "}
+          <span className="text-text-muted">{task.title}</span>
+        </nav>
 
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="m-0 mb-1.5 text-xl font-medium text-text">{task.title}</h1>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-text-secondary">
-            <span className="inline-flex items-center gap-1.5">
-              <RepoLogo repositoryFullName={task.project.repositoryFullName} size={14} />
-              {task.project.name}
-            </span>
-            <span aria-hidden="true" className="text-text-faint">
-              ·
-            </span>
-            <a
-              href={task.project.repositoryUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="inline-flex items-center gap-1.5 font-mono hover:text-accent"
-            >
-              <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
-              {task.project.repositoryFullName}
-            </a>
-            <span aria-hidden="true" className="text-text-faint">
-              ·
-            </span>
-            <AdminTaskStatusBadge status={task.status} />
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="m-0 mb-1.5 text-xl font-medium text-text">{task.title}</h1>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-text-secondary">
+              <span className="inline-flex items-center gap-1.5">
+                <RepoLogo repositoryFullName={task.project.repositoryFullName} size={14} />
+                {task.project.name}
+              </span>
+              <span aria-hidden="true" className="text-text-faint">
+                ·
+              </span>
+              <a
+                href={task.project.repositoryUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex items-center gap-1.5 font-mono hover:text-accent"
+              >
+                <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
+                {task.project.repositoryFullName}
+              </a>
+              <span aria-hidden="true" className="text-text-faint">
+                ·
+              </span>
+              <AdminTaskStatusBadge status={task.status} />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-start gap-2">
+            <TaskContributeButton href={contributeHref} claim={claim} />
+            {task.githubIssue ? (
+              <a
+                href={task.githubIssue.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-[8px] border border-border bg-surface px-3.5 py-2 text-[13px] font-medium text-text hover:bg-surface-raised"
+              >
+                <IssueIcon className="h-3.5 w-3.5 shrink-0" />
+                View issue #{task.githubIssue.number}
+              </a>
+            ) : null}
           </div>
         </div>
 
-        <div className="flex flex-wrap items-start gap-2">
-          <TaskContributeButton href={contributeHref} claim={claim} />
-          {task.githubIssue ? (
-            <a
-              href={task.githubIssue.url}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-[8px] border border-border bg-surface px-3.5 py-2 text-[13px] font-medium text-text hover:bg-surface-raised"
-            >
-              <IssueIcon className="h-3.5 w-3.5 shrink-0" />
-              View issue #{task.githubIssue.number}
-            </a>
-          ) : null}
+        <div className="mb-6">
+          <TaskProgressTracker task={task} />
         </div>
-      </div>
 
-      <div className="mb-6">
-        <TaskProgressTracker task={task} />
-      </div>
-
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        <div className="flex min-w-0 flex-1 flex-col gap-6">
-          <TaskProjectSection
-            project={task.project}
-            description={projectDescription}
-            unavailable={projectResult.status !== "ok"}
-            taskProgress={projectTaskProgress}
-          />
-          <TaskDescriptionSection
-            customDescription={task.customDescription}
-            hasIssue={task.githubIssue !== null}
-          />
-          <TaskIssueSection issue={task.githubIssue} body={task.githubIssueBody} />
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+          <div className="flex min-w-0 flex-1 flex-col gap-6">
+            <TaskProjectSection
+              project={task.project}
+              description={projectDescription}
+              unavailable={projectResult.status !== "ok"}
+              taskProgress={projectTaskProgress}
+            />
+            <TaskDescriptionSection
+              customDescription={task.customDescription}
+              hasIssue={task.githubIssue !== null}
+            />
+            <TaskIssueSection issue={task.githubIssue} body={task.githubIssueBody} />
+          </div>
+          <TaskDetailSidebar task={task} />
         </div>
-        <TaskDetailSidebar task={task} />
-      </div>
-    </main>
+      </main>
+    </BlueprintReveal>
   );
 }

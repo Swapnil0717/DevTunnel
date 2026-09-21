@@ -9,6 +9,7 @@ import { RecommendedProjectsSection } from "@/components/home/recommended-projec
 import { ActiveContributionsSection } from "@/components/home/active-contributions-section";
 import { TasksSection } from "@/components/home/tasks-section";
 import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
+import HomeLoading from "./loading";
 
 // A signed-in, per-person screen: never indexable (rule 18). The root layout's
 // title template already appends " | DevTunnel", so this is just "Home" — the
@@ -44,14 +45,16 @@ export const metadata: Metadata = {
 export default async function HomePage() {
   return (
     <main
-      className="relative min-w-0 flex-1 px-4 py-6 sm:px-7 sm:pb-8 sm:pt-7"
+      className="relative isolate min-w-0 flex-1 px-4 py-6 sm:px-7 sm:pb-8 sm:pt-7"
       style={{ fontFeatureSettings: '"tnum", "cv11"' }}
     >
-      {/* `relative` above + this wrapper's `absolute inset-0` overlay
-          (BlueprintReveal) is what makes the wipe line up exactly with
-          the area `home/loading.tsx`'s blueprint sheet covered, rather
-          than the whole viewport — see blueprint-reveal.tsx. */}
-      <BlueprintReveal>
+      {/* `relative` above + `inline` here make BlueprintReveal's
+          `absolute inset-0` overlay line up exactly with the area
+          `home/loading.tsx`'s blueprint sheet covered, rather than the
+          whole viewport. The overlay paints that same loading sheet
+          (`skeleton`) so the wipe starts from the frame the loading
+          screen left off on — see blueprint-reveal.tsx. */}
+      <BlueprintReveal inline skeleton={<HomeLoading />}>
         <div className="mx-auto w-full max-w-[1040px]">
           <HomeHeader />
           <WelcomeBanner />

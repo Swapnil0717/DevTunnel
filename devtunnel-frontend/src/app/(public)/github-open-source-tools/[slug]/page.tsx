@@ -14,6 +14,8 @@ import { GithubProjectSidebar } from "@/components/github-projects/github-projec
 import { RequestToolOnboardingButton } from "@/components/github-open-source-tools/request-tool-onboarding-button";
 import { StarButton } from "@/components/github-open-source-tools/star-button";
 import { ContributeToRepoButton } from "@/components/github-projects/contribute-to-repo-button";
+import RouteLoading from "./loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 interface GithubToolDetailPageProps {
   params: Promise<{ slug: string }>;
@@ -106,6 +108,39 @@ export default async function GithubToolDetailPage({ params }: GithubToolDetailP
 
   if (result.status === "error") {
     return (
+      <BlueprintReveal skeleton={<RouteLoading />}>
+        <main className="mx-auto max-w-5xl px-6 py-10">
+          <Link
+            href="/github-open-source-tools"
+            className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
+          >
+            <ChevronLeftIcon className="h-3.5 w-3.5" />
+            Back to Github Open Source Tools
+          </Link>
+          <nav aria-label="Breadcrumb" className="mb-6 text-[12.5px] text-text-faint">
+            <Link href="/github-open-source-tools" className="hover:text-accent">
+              Github Open Source Tools
+            </Link>
+            {" / "}
+            <span className="text-text-muted">Tool</span>
+          </nav>
+          <h1 className="m-0 mb-6 text-xl font-medium text-text">Open Source Tool</h1>
+          <GithubEmptyState
+            variant="no-results"
+            title="This tool isn't available right now"
+            description="We couldn't reach GitHub for this repository just now. Check back soon, or head back to the full catalog."
+            primaryAction={{ label: "Back to Github Open Source Tools", href: "/github-open-source-tools" }}
+          />
+        </main>
+      </BlueprintReveal>
+    );
+  }
+
+  const tool = result.data;
+  const shareUrl = `${SITE_URL}/github-open-source-tools/${tool.slug}`;
+
+  return (
+    <BlueprintReveal skeleton={<RouteLoading />}>
       <main className="mx-auto max-w-5xl px-6 py-10">
         <Link
           href="/github-open-source-tools"
@@ -119,94 +154,65 @@ export default async function GithubToolDetailPage({ params }: GithubToolDetailP
             Github Open Source Tools
           </Link>
           {" / "}
-          <span className="text-text-muted">Tool</span>
+          <span className="text-text-muted">{tool.name}</span>
         </nav>
-        <h1 className="m-0 mb-6 text-xl font-medium text-text">Open Source Tool</h1>
-        <GithubEmptyState
-          variant="no-results"
-          title="This tool isn't available right now"
-          description="We couldn't reach GitHub for this repository just now. Check back soon, or head back to the full catalog."
-          primaryAction={{ label: "Back to Github Open Source Tools", href: "/github-open-source-tools" }}
-        />
-      </main>
-    );
-  }
 
-  const tool = result.data;
-  const shareUrl = `${SITE_URL}/github-open-source-tools/${tool.slug}`;
-
-  return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <Link
-        href="/github-open-source-tools"
-        className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
-      >
-        <ChevronLeftIcon className="h-3.5 w-3.5" />
-        Back to Github Open Source Tools
-      </Link>
-      <nav aria-label="Breadcrumb" className="mb-6 text-[12.5px] text-text-faint">
-        <Link href="/github-open-source-tools" className="hover:text-accent">
-          Github Open Source Tools
-        </Link>
-        {" / "}
-        <span className="text-text-muted">{tool.name}</span>
-      </nav>
-
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-4">
-          <RepoLogo repositoryFullName={tool.repositoryFullName} size={56} />
-          <div className="flex flex-col gap-1.5">
-            <h1 className="m-0 text-xl font-medium text-text">{tool.name}</h1>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-text-secondary">
-              <a
-                href={tool.repositoryUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="inline-flex items-center gap-1.5 font-mono hover:text-accent"
-              >
-                <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
-                {tool.repositoryFullName}
-              </a>
-              <span aria-hidden="true" className="text-text-faint">
-                ·
-              </span>
-              <span>
-                Updated <time dateTime={tool.pushedAt}>{formatRelativeTime(tool.pushedAt)}</time>
-              </span>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <RepoLogo repositoryFullName={tool.repositoryFullName} size={56} />
+            <div className="flex flex-col gap-1.5">
+              <h1 className="m-0 text-xl font-medium text-text">{tool.name}</h1>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-text-secondary">
+                <a
+                  href={tool.repositoryUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="inline-flex items-center gap-1.5 font-mono hover:text-accent"
+                >
+                  <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
+                  {tool.repositoryFullName}
+                </a>
+                <span aria-hidden="true" className="text-text-faint">
+                  ·
+                </span>
+                <span>
+                  Updated <time dateTime={tool.pushedAt}>{formatRelativeTime(tool.pushedAt)}</time>
+                </span>
+              </div>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <ContributeToRepoButton
+              slug={tool.slug}
+              basePath="/github-open-source-tools"
+              initialIsContributing={isContributing}
+            />
+            <a
+              href={tool.repositoryUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-[8px] border border-border bg-surface px-3.5 py-2 text-[13px] font-medium text-text hover:bg-surface-raised"
+            >
+              <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
+              View on GitHub
+            </a>
+            <StarButton
+              slug={tool.slug}
+              initialStarredByViewer={tool.isStarredByViewer}
+              initialLocalStarCount={tool.localStarCount}
+            />
+            <RequestToolOnboardingButton slug={tool.slug} />
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <ContributeToRepoButton
-            slug={tool.slug}
-            basePath="/github-open-source-tools"
-            initialIsContributing={isContributing}
-          />
-          <a
-            href={tool.repositoryUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-[8px] border border-border bg-surface px-3.5 py-2 text-[13px] font-medium text-text hover:bg-surface-raised"
-          >
-            <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
-            View on GitHub
-          </a>
-          <StarButton
-            slug={tool.slug}
-            initialStarredByViewer={tool.isStarredByViewer}
-            initialLocalStarCount={tool.localStarCount}
-          />
-          <RequestToolOnboardingButton slug={tool.slug} />
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+          <div className="min-w-0 flex-1">
+            <GithubProjectDetailTabs project={tool} issuesBasePath="/github-open-source-tools" />
+          </div>
+          <GithubProjectSidebar project={tool} shareUrl={shareUrl} />
         </div>
-      </div>
-
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        <div className="min-w-0 flex-1">
-          <GithubProjectDetailTabs project={tool} issuesBasePath="/github-open-source-tools" />
-        </div>
-        <GithubProjectSidebar project={tool} shareUrl={shareUrl} />
-      </div>
-    </main>
+      </main>
+    </BlueprintReveal>
   );
 }

@@ -3,6 +3,8 @@ import { buildMetadata } from "@/lib/seo";
 import { getTasks } from "@/lib/tasks/api";
 import { TasksExplorer } from "@/components/tasks/tasks-explorer";
 import { SectionMessage } from "@/components/home/section-message";
+import RouteLoading from "./loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 /**
  * Indexable when the list actually loaded (rules 2, 27); a failed or empty
@@ -44,22 +46,24 @@ export default async function TasksPage() {
   const result = await getTasks();
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
-      <div className="mb-8">
-        <h1 className="m-0 mb-1 text-xl font-medium text-text">Tasks</h1>
-        <p className="m-0 text-sm text-text-muted">
-          Every task DevTunnel currently provides to contributors — search or filter by role,
-          difficulty, tech stack, or project to find something to work on.
-        </p>
-      </div>
+    <BlueprintReveal skeleton={<RouteLoading />}>
+      <main className="mx-auto max-w-6xl px-6 py-10">
+        <div className="mb-8">
+          <h1 className="m-0 mb-1 text-xl font-medium text-text">Tasks</h1>
+          <p className="m-0 text-sm text-text-muted">
+            Every task DevTunnel currently provides to contributors — search or filter by role,
+            difficulty, tech stack, or project to find something to work on.
+          </p>
+        </div>
 
-      {result.status === "error" ? (
-        <SectionMessage>Tasks aren&apos;t available yet — check back soon.</SectionMessage>
-      ) : result.status === "empty" ? (
-        <SectionMessage>No tasks have been onboarded yet.</SectionMessage>
-      ) : (
-        <TasksExplorer tasks={result.data} />
-      )}
-    </main>
+        {result.status === "error" ? (
+          <SectionMessage>Tasks aren&apos;t available yet — check back soon.</SectionMessage>
+        ) : result.status === "empty" ? (
+          <SectionMessage>No tasks have been onboarded yet.</SectionMessage>
+        ) : (
+          <TasksExplorer tasks={result.data} />
+        )}
+      </main>
+    </BlueprintReveal>
   );
 }

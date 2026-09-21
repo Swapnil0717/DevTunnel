@@ -3,6 +3,8 @@ import { buildMetadata } from "@/lib/seo";
 import { getAdminActivityLog } from "@/lib/admin/activity/api";
 import { AdminActivityExplorer } from "@/components/admin/activity/admin-activity-explorer";
 import { SectionMessage } from "@/components/home/section-message";
+import RouteLoading from "./loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 export const metadata: Metadata = buildMetadata({
   title: "Activity",
@@ -28,21 +30,23 @@ export default async function AdminActivityPage() {
   const result = await getAdminActivityLog();
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
-      <div className="mb-8">
-        <h1 className="m-0 mb-1 text-xl font-medium text-text">Activity</h1>
-        <p className="m-0 text-sm text-text-muted">
-          Audit log of admin actions and access checks — newest first.
-        </p>
-      </div>
+    <BlueprintReveal skeleton={<RouteLoading />} className="relative isolate min-h-screen w-full">
+      <main className="mx-auto max-w-6xl px-6 py-10">
+        <div className="mb-8">
+          <h1 className="m-0 mb-1 text-xl font-medium text-text">Activity</h1>
+          <p className="m-0 text-sm text-text-muted">
+            Audit log of admin actions and access checks — newest first.
+          </p>
+        </div>
 
-      {result.status === "error" ? (
-        <SectionMessage>Activity isn&apos;t available yet — check back soon.</SectionMessage>
-      ) : result.status === "empty" ? (
-        <SectionMessage>No admin activity has been recorded yet.</SectionMessage>
-      ) : (
-        <AdminActivityExplorer entries={result.data} />
-      )}
-    </main>
+        {result.status === "error" ? (
+          <SectionMessage>Activity isn&apos;t available yet — check back soon.</SectionMessage>
+        ) : result.status === "empty" ? (
+          <SectionMessage>No admin activity has been recorded yet.</SectionMessage>
+        ) : (
+          <AdminActivityExplorer entries={result.data} />
+        )}
+      </main>
+    </BlueprintReveal>
   );
 }

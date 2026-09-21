@@ -1,5 +1,6 @@
 // src/app/admin/(protected)/activity/loading.tsx
-import { SkeletonPageHeader, SkeletonFilterBar, SkeletonTable } from "@/components/ui/skeleton";
+import { BlueprintSheet } from "@/components/ui/blueprint-loader";
+import { BlueprintPageHeader, BlueprintFilterBar, BlueprintTable } from "@/components/ui/blueprint-kit";
 
 /**
  * `/admin/activity` — one `getAdminActivityLog()` fetch, rendered as
@@ -10,10 +11,14 @@ import { SkeletonPageHeader, SkeletonFilterBar, SkeletonTable } from "@/componen
  */
 export default function AdminActivityLoading() {
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10" aria-hidden="true">
-      <SkeletonPageHeader withAction={false} />
-      <SkeletonFilterBar filters={2} />
-      <SkeletonTable rows={8} columns={6} />
-    </main>
+    <BlueprintSheet
+      sheetLabel="Sheet A1 — Activity"
+      revLabel="Rev — loading activity"
+      contentClassName="w-full mx-auto max-w-6xl px-6 py-10"
+    >
+      <BlueprintPageHeader withAction={false} />
+      <BlueprintFilterBar filters={2} />
+      <BlueprintTable rows={8} columns={6} />
+    </BlueprintSheet>
   );
 }

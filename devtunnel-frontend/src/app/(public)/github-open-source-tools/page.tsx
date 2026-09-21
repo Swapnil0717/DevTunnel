@@ -9,6 +9,8 @@ import {
 } from "@/components/github-projects/github-projects-explorer";
 import { SectionMessage } from "@/components/home/section-message";
 import { SkeletonFilterBar, SkeletonGithubProjectCardGrid } from "@/components/ui/skeleton";
+import RouteLoading from "./loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 export const metadata: Metadata = buildMetadata({
   title: "Github Open Source Tools",
@@ -97,53 +99,55 @@ export default async function GithubOpenSourceToolsPage({
   };
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
-      <div className="mb-8">
-        <h1 className="m-0 mb-1 text-xl font-medium text-text">Github Open Source Tools</h1>
-        <p className="m-0 text-sm text-text-muted">
-          Real open-source developer tools from across GitHub — search or filter by tech stack,
-          stars, and activity to find one worth exploring.
-        </p>
-      </div>
+    <BlueprintReveal skeleton={<RouteLoading />}>
+      <main className="mx-auto max-w-6xl px-6 py-10">
+        <div className="mb-8">
+          <h1 className="m-0 mb-1 text-xl font-medium text-text">Github Open Source Tools</h1>
+          <p className="m-0 text-sm text-text-muted">
+            Real open-source developer tools from across GitHub — search or filter by tech stack,
+            stars, and activity to find one worth exploring.
+          </p>
+        </div>
 
-      {result.status === "error" ? (
-        <SectionMessage>
-          GitHub open source tools aren&apos;t available yet — check back soon.
-        </SectionMessage>
-      ) : result.status === "empty" ? (
-        <SectionMessage>
-          {activeFilter === NO_CATALOG_FILTER
-            ? "No open source tools found — check back soon."
-            : "No open-source alternatives to paid software found — check back soon."}
-        </SectionMessage>
-      ) : (
-        // See `/github-projects/page.tsx` for why this needs a Suspense
-        // boundary (GithubProjectsExplorer calls useSearchParams).
-        <Suspense
-          fallback={
-            <>
-              <SkeletonFilterBar filters={4} />
-              <SkeletonGithubProjectCardGrid />
-            </>
-          }
-        >
-          <GithubProjectsExplorer
-            projects={result.data}
-            catalogFilter={catalogFilter}
-            // The server renders only the first page; "Load all tools"
-            // fetches the rest — for the same `?filter=` population the
-            // preview came from, so a filtered view never fills up with
-            // unfiltered rows.
-            catalogLoad={{
-              path: "/github-open-source-tools",
-              noun: "tools",
-              filter: activeFilter === NO_CATALOG_FILTER ? undefined : activeFilter,
-              hasMore: result.hasMore,
-            }}
-            cardBasePath="/github-open-source-tools"
-          />
-        </Suspense>
-      )}
-    </main>
+        {result.status === "error" ? (
+          <SectionMessage>
+            GitHub open source tools aren&apos;t available yet — check back soon.
+          </SectionMessage>
+        ) : result.status === "empty" ? (
+          <SectionMessage>
+            {activeFilter === NO_CATALOG_FILTER
+              ? "No open source tools found — check back soon."
+              : "No open-source alternatives to paid software found — check back soon."}
+          </SectionMessage>
+        ) : (
+          // See `/github-projects/page.tsx` for why this needs a Suspense
+          // boundary (GithubProjectsExplorer calls useSearchParams).
+          <Suspense
+            fallback={
+              <>
+                <SkeletonFilterBar filters={4} />
+                <SkeletonGithubProjectCardGrid />
+              </>
+            }
+          >
+            <GithubProjectsExplorer
+              projects={result.data}
+              catalogFilter={catalogFilter}
+              // The server renders only the first page; "Load all tools"
+              // fetches the rest — for the same `?filter=` population the
+              // preview came from, so a filtered view never fills up with
+              // unfiltered rows.
+              catalogLoad={{
+                path: "/github-open-source-tools",
+                noun: "tools",
+                filter: activeFilter === NO_CATALOG_FILTER ? undefined : activeFilter,
+                hasMore: result.hasMore,
+              }}
+              cardBasePath="/github-open-source-tools"
+            />
+          </Suspense>
+        )}
+      </main>
+    </BlueprintReveal>
   );
 }

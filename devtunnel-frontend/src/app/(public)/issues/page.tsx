@@ -3,6 +3,8 @@ import { buildMetadata } from "@/lib/seo";
 import { getIssues } from "@/lib/issues/api";
 import { IssuesExplorer } from "@/components/issues/issues-explorer";
 import { SectionMessage } from "@/components/home/section-message";
+import { IssuesLoadingSheet } from "./loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 export const metadata: Metadata = buildMetadata({
   title: "All Issues",
@@ -37,22 +39,24 @@ export default async function IssuesPage() {
   const result = await getIssues();
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
-      <div className="mb-8">
-        <h1 className="m-0 mb-1 text-xl font-medium text-text">All Issues</h1>
-        <p className="m-0 text-sm text-text-muted">
-          Every open GitHub issue across DevTunnel&apos;s onboarded projects — search or filter to
-          find something to work on.
-        </p>
-      </div>
+    <BlueprintReveal skeleton={<IssuesLoadingSheet scanning={false} />}>
+      <main className="mx-auto max-w-6xl px-6 py-10">
+        <div className="mb-8">
+          <h1 className="m-0 mb-1 text-xl font-medium text-text">All Issues</h1>
+          <p className="m-0 text-sm text-text-muted">
+            Every open GitHub issue across DevTunnel&apos;s onboarded projects — search or filter to
+            find something to work on.
+          </p>
+        </div>
 
-      {result.status === "error" ? (
-        <SectionMessage>Issues aren&apos;t available yet — check back soon.</SectionMessage>
-      ) : result.status === "empty" ? (
-        <SectionMessage>No open GitHub issues right now — check back soon.</SectionMessage>
-      ) : (
-        <IssuesExplorer issues={result.data} />
-      )}
-    </main>
+        {result.status === "error" ? (
+          <SectionMessage>Issues aren&apos;t available yet — check back soon.</SectionMessage>
+        ) : result.status === "empty" ? (
+          <SectionMessage>No open GitHub issues right now — check back soon.</SectionMessage>
+        ) : (
+          <IssuesExplorer issues={result.data} />
+        )}
+      </main>
+    </BlueprintReveal>
   );
 }

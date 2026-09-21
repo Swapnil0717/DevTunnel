@@ -4,6 +4,8 @@ import { buildMetadata } from "@/lib/seo";
 import { getServerUser } from "@/lib/auth/get-server-user";
 import { needsOnboarding } from "@/lib/onboarding/needs-onboarding";
 import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
+import RouteLoading from "./loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 export const metadata: Metadata = buildMetadata({
   title: "Set up your profile",
@@ -46,5 +48,9 @@ export default async function OnboardingPage() {
     redirect("/home");
   }
 
-  return <OnboardingWizard user={user} />;
+  return (
+    <BlueprintReveal skeleton={<RouteLoading />}>
+      <OnboardingWizard user={user} />
+    </BlueprintReveal>
+  );
 }

@@ -10,6 +10,8 @@ import { ContributePageHeader } from "@/components/contribute/contribute-page-he
 import { ContributeTabs } from "@/components/contribute/contribute-tabs";
 import { ContributeSidebar } from "@/components/contribute/contribute-sidebar";
 import type { ContributeTarget } from "@/lib/contribute/types";
+import RouteLoading from "./loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 interface GithubProjectContributePageProps {
   params: Promise<{ slug: string }>;
@@ -92,19 +94,21 @@ export default async function GithubProjectContributePage({
 
   if (result.status === "error") {
     return (
-      <main className="mx-auto max-w-6xl px-6 py-10">
-        <Link
-          href="/github-projects"
-          className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
-        >
-          <ChevronLeftIcon className="h-3.5 w-3.5" />
-          Back to GitHub Projects
-        </Link>
-        <h1 className="m-0 mb-6 text-xl font-medium text-text">Contribute</h1>
-        <SectionMessage>
-          This repository isn&apos;t available right now — check back soon.
-        </SectionMessage>
-      </main>
+      <BlueprintReveal skeleton={<RouteLoading />}>
+        <main className="mx-auto max-w-6xl px-6 py-10">
+          <Link
+            href="/github-projects"
+            className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
+          >
+            <ChevronLeftIcon className="h-3.5 w-3.5" />
+            Back to GitHub Projects
+          </Link>
+          <h1 className="m-0 mb-6 text-xl font-medium text-text">Contribute</h1>
+          <SectionMessage>
+            This repository isn&apos;t available right now — check back soon.
+          </SectionMessage>
+        </main>
+      </BlueprintReveal>
     );
   }
 
@@ -130,18 +134,20 @@ export default async function GithubProjectContributePage({
   };
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
-      <ContributePageHeader
-        target={target}
-        logo={<RepoLogo repositoryFullName={project.repositoryFullName} size={56} />}
-      />
+    <BlueprintReveal skeleton={<RouteLoading />}>
+      <main className="mx-auto max-w-6xl px-6 py-10">
+        <ContributePageHeader
+          target={target}
+          logo={<RepoLogo repositoryFullName={project.repositoryFullName} size={56} />}
+        />
 
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        <div className="min-w-0 flex-1">
-          <ContributeTabs target={target} />
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+          <div className="min-w-0 flex-1">
+            <ContributeTabs target={target} />
+          </div>
+          <ContributeSidebar target={target} />
         </div>
-        <ContributeSidebar target={target} />
-      </div>
-    </main>
+      </main>
+    </BlueprintReveal>
   );
 }

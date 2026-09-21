@@ -1,5 +1,6 @@
 // src/app/admin/(protected)/tasks/loading.tsx
-import { SkeletonBlock, SkeletonPageHeader, SkeletonFilterBar, SkeletonTable } from "@/components/ui/skeleton";
+import { BlueprintSheet } from "@/components/ui/blueprint-loader";
+import { BlueprintFill, BlueprintPageHeader, BlueprintFilterBar, BlueprintTable } from "@/components/ui/blueprint-kit";
 
 /**
  * `/admin/tasks` — one `getAdminTasks()` fetch, rendered as
@@ -10,10 +11,14 @@ import { SkeletonBlock, SkeletonPageHeader, SkeletonFilterBar, SkeletonTable } f
  */
 export default function AdminTasksLoading() {
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10" aria-hidden="true">
-      <SkeletonPageHeader actions={<SkeletonBlock className="h-9 w-[108px]" />} />
-      <SkeletonFilterBar filters={7} />
-      <SkeletonTable rows={8} columns={7} />
-    </main>
+    <BlueprintSheet
+      sheetLabel="Sheet A3 — Tasks"
+      revLabel="Rev — loading tasks"
+      contentClassName="w-full mx-auto max-w-6xl px-6 py-10"
+    >
+      <BlueprintPageHeader actions={<BlueprintFill className="h-9 w-[108px]" />} />
+      <BlueprintFilterBar filters={7} />
+      <BlueprintTable rows={8} columns={7} />
+    </BlueprintSheet>
   );
 }

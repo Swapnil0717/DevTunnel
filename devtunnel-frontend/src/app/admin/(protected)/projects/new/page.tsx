@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { buildMetadata } from "@/lib/seo";
 import { ProjectOnboardingWizard } from "@/components/admin/onboarding/project-onboarding-wizard";
+import RouteLoading from "../loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 export const metadata: Metadata = buildMetadata({
   title: "Project onboarding",
@@ -25,5 +27,9 @@ export const metadata: Metadata = buildMetadata({
  * `/admin`) and set page metadata.
  */
 export default function AdminProjectOnboardingPage() {
-  return <ProjectOnboardingWizard />;
+  return (
+    <BlueprintReveal skeleton={<RouteLoading />} className="relative isolate min-h-screen w-full">
+      <ProjectOnboardingWizard />
+    </BlueprintReveal>
+  );
 }

@@ -27,29 +27,52 @@
  */
 
 import type { ReactNode } from "react";
+import { BlueprintClock } from "@/components/ui/blueprint-reveal";
+
+/**
+ * Every offset below is `delayMs` minus `--bp-elapsed` (globals.css /
+ * blueprint-reveal.tsx): inside a `BlueprintReveal` overlay the variable
+ * holds how long the loading sheet was already visible, so the overlay's
+ * copy resumes mid-drawing instead of starting over. Everywhere else the
+ * variable is unset and this is just `delayMs`.
+ */
+const withElapsed = (delayMs: number) => `calc(${delayMs}ms - var(--bp-elapsed, 0ms))`;
 
 export function BlueprintSheet({
   sheetLabel,
   revLabel,
+  contentClassName = "mx-auto w-full max-w-[1040px] px-4 pb-10 pt-6 sm:px-7",
+  ariaHidden = true,
   children,
 }: {
   /** Top-left label, e.g. "SHEET 01 — HOME". */
   sheetLabel: string;
   /** Top-right label, e.g. "REV — loading your workspace". */
   revLabel: string;
+  /**
+   * Classes for the column the blocks sit in. Pass the same width and
+   * padding the route's real `<main>` uses (e.g. `mx-auto w-full
+   * max-w-6xl px-6 py-10`) so every placeholder lands exactly where the
+   * real content will — the ruler and labels are absolutely positioned
+   * over the sheet's margin and don't push the content down.
+   */
+  contentClassName?: string;
+  /** Pass `false` only when the sheet carries a real status message a screen reader should announce (the `/issues` live-scan notice). */
+  ariaHidden?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className="blueprint-sheet relative min-h-screen w-full overflow-hidden" aria-hidden="true">
+    <div className="blueprint-sheet relative min-h-screen w-full overflow-hidden" aria-hidden={ariaHidden ? "true" : undefined}>
+      <BlueprintClock />
       {/* Own element, own fixed height — see the comment on
           `.blueprint-ruler-strip` in globals.css for why this can't just
           be another class on the grid div above. */}
-      <div className="blueprint-ruler-strip h-[7px] w-full" />
-      <div className="flex items-center justify-between px-4 py-2 text-[10px] uppercase tracking-wide text-white/70 sm:px-6">
+      <div className="blueprint-ruler-strip absolute inset-x-0 top-0 h-[7px]" />
+      <div className="absolute inset-x-0 top-[7px] flex items-center justify-between px-4 py-1.5 text-[10px] uppercase tracking-wide text-white/70 sm:px-6">
         <span>{sheetLabel}</span>
         <span className="text-right">{revLabel}</span>
       </div>
-      <div className="mx-auto w-full max-w-[1040px] px-4 pb-10 pt-6 sm:px-7">{children}</div>
+      <div className={`blueprint-sheet-content ${contentClassName}`}>{children}</div>
     </div>
   );
 }
@@ -68,12 +91,12 @@ export function BlueprintBlock({
   rounded?: string;
 }) {
   return (
-    <div style={{ animationDelay: `${delayMs}ms` }} className={`blueprint-block ${className}`}>
+    <div style={{ animationDelay: withElapsed(delayMs) }} className={`blueprint-block ${className}`}>
       <div className={`blueprint-hatch h-full w-full ${rounded}`} />
       {dimension ? (
         <div className="mt-1 flex items-center gap-1.5">
           <span
-            style={{ animationDelay: `${delayMs + 250}ms` }}
+            style={{ animationDelay: withElapsed(delayMs + 250) }}
             className="blueprint-leader h-px w-10 flex-1 max-w-[64px] border-t border-dotted border-white/50"
           />
           <span className="shrink-0 rounded-[2px] border border-white/40 bg-white/10 px-1 py-px text-[9px] leading-tight text-white/80">
@@ -88,7 +111,7 @@ export function BlueprintBlock({
 export function BlueprintPlate({ label, delayMs = 0 }: { label: string; delayMs?: number }) {
   return (
     <div
-      style={{ animationDelay: `${delayMs}ms` }}
+      style={{ animationDelay: withElapsed(delayMs) }}
       className="blueprint-plate relative aspect-[4/3] overflow-hidden rounded-[2px] border border-white/40 bg-white/[0.06]"
     >
       <span className="absolute left-1.5 top-1.5 z-10 rounded-[2px] border border-white/40 bg-white/15 px-1 py-px text-[9px] uppercase leading-tight text-white/85">

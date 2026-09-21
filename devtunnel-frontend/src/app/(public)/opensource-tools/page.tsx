@@ -3,6 +3,8 @@ import { buildMetadata } from "@/lib/seo";
 import { getOpenSourceTools } from "@/lib/opensource-tools/api";
 import { DevtunnelOpenSourceToolsExplorer } from "@/components/opensource-tools/devtunnel-opensource-tools-explorer";
 import { SectionMessage } from "@/components/home/section-message";
+import RouteLoading from "./loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 /**
  * Indexable when the list actually loaded (rules 2, 27); a failed or empty
@@ -50,24 +52,26 @@ export default async function OpenSourceToolsPage() {
   const result = await getOpenSourceTools();
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
-      <div className="mb-8">
-        <h1 className="m-0 mb-1 text-xl font-medium text-text">Open Source Tools on Devtunnel</h1>
-        <p className="m-0 text-sm text-text-muted">
-          Developer tools curated on DevTunnel — search or filter by language and label to find
-          one worth using.
-        </p>
-      </div>
+    <BlueprintReveal skeleton={<RouteLoading />}>
+      <main className="mx-auto max-w-6xl px-6 py-10">
+        <div className="mb-8">
+          <h1 className="m-0 mb-1 text-xl font-medium text-text">Open Source Tools on Devtunnel</h1>
+          <p className="m-0 text-sm text-text-muted">
+            Developer tools curated on DevTunnel — search or filter by language and label to find
+            one worth using.
+          </p>
+        </div>
 
-      {result.status === "error" ? (
-        <SectionMessage>
-          Open source tools aren&apos;t available yet — check back soon.
-        </SectionMessage>
-      ) : result.status === "empty" ? (
-        <SectionMessage>No open source tools have been added yet — check back soon.</SectionMessage>
-      ) : (
-        <DevtunnelOpenSourceToolsExplorer tools={result.data} />
-      )}
-    </main>
+        {result.status === "error" ? (
+          <SectionMessage>
+            Open source tools aren&apos;t available yet — check back soon.
+          </SectionMessage>
+        ) : result.status === "empty" ? (
+          <SectionMessage>No open source tools have been added yet — check back soon.</SectionMessage>
+        ) : (
+          <DevtunnelOpenSourceToolsExplorer tools={result.data} />
+        )}
+      </main>
+    </BlueprintReveal>
   );
 }

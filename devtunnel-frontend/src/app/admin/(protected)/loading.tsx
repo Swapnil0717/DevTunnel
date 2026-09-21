@@ -1,5 +1,6 @@
 // src/app/admin/(protected)/loading.tsx
-import { SkeletonBlock, SkeletonStatCards, SkeletonTable } from "@/components/ui/skeleton";
+import { BlueprintSheet } from "@/components/ui/blueprint-loader";
+import { BlueprintFill, BlueprintStatCards, BlueprintTable } from "@/components/ui/blueprint-kit";
 
 /**
  * `/admin` dashboard loading boundary. The page fires 6 requests in
@@ -16,36 +17,40 @@ import { SkeletonBlock, SkeletonStatCards, SkeletonTable } from "@/components/ui
  */
 export default function AdminDashboardLoading() {
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10" aria-hidden="true">
-      <SkeletonBlock className="mb-1 h-6 w-48" />
-      <SkeletonBlock className="mb-8 h-3 w-80" />
+    <BlueprintSheet
+      sheetLabel="Sheet A0 — Admin"
+      revLabel="Rev — loading dashboard"
+      contentClassName="w-full mx-auto max-w-5xl px-6 py-10"
+    >
+      <BlueprintFill className="mb-1 h-6 w-48" />
+      <BlueprintFill className="mb-8 h-3 w-80" />
 
       <div className="mb-8">
-        <SkeletonBlock className="mb-2.5 h-2.5 w-32" />
-        <SkeletonStatCards count={4} />
+        <BlueprintFill className="mb-2.5 h-2.5 w-32" />
+        <BlueprintStatCards count={4} />
       </div>
 
       <div className="mb-8">
-        <SkeletonBlock className="mb-2.5 h-2.5 w-40" />
-        <SkeletonStatCards count={3} />
+        <BlueprintFill className="mb-2.5 h-2.5 w-40" />
+        <BlueprintStatCards count={3} />
       </div>
 
       <div className="mb-8">
-        <SkeletonBlock className="mb-2.5 h-2.5 w-28" />
-        <SkeletonBlock className="h-[140px] w-full" />
+        <BlueprintFill className="mb-2.5 h-2.5 w-28" />
+        <BlueprintFill className="h-[140px] w-full" />
       </div>
 
       <div className="mb-8">
-        <SkeletonBlock className="mb-2.5 h-2.5 w-36" />
-        <SkeletonStatCards count={4} />
+        <BlueprintFill className="mb-2.5 h-2.5 w-36" />
+        <BlueprintStatCards count={4} />
       </div>
 
       <div className="mb-8">
-        <SkeletonBlock className="mb-2.5 h-2.5 w-32" />
-        <SkeletonTable rows={5} columns={6} />
+        <BlueprintFill className="mb-2.5 h-2.5 w-32" />
+        <BlueprintTable rows={5} columns={6} />
       </div>
 
-      <SkeletonBlock className="h-[132px] w-full" />
-    </main>
+      <BlueprintFill className="h-[132px] w-full" />
+    </BlueprintSheet>
   );
 }

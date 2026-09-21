@@ -7,6 +7,8 @@ import { ProfileSettingsForm } from "@/components/settings/profile-settings-form
 import { ConnectedAccountCard } from "@/components/settings/connected-account-card";
 import { NotificationPreferencesForm } from "@/components/settings/notification-preferences-form";
 import { DeleteAccountButton } from "@/components/settings/delete-account-button";
+import RouteLoading from "./loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 export const metadata: Metadata = buildMetadata({
   title: "Settings",
@@ -33,38 +35,40 @@ export default async function SettingsPage() {
   ]);
 
   return (
-    <main className="px-4 py-5 sm:px-[26px] sm:py-[22px]">
-      <div className="mx-auto w-full max-w-[640px]">
-        <h1 className="m-0 mb-1 text-xl font-medium text-text">Settings</h1>
-        <p className="m-0 mb-6 text-[13px] text-text-muted">
-          Manage your profile, notifications, and connected accounts.
-        </p>
-
-        {user ? (
-          <div className="flex flex-col gap-6">
-            <ProfileSettingsForm user={user} />
-
-            <ConnectedAccountCard user={user} />
-
-            <NotificationPreferencesForm initialPreferences={notificationPreferences} />
-
-            <section className="rounded-[10px] border border-border bg-surface p-5">
-              <h2 className="m-0 mb-3 text-sm font-medium text-text">Session</h2>
-              <p className="m-0 mb-3 text-[13px] text-text-muted">
-                Sign out of DevTunnel on this device.
-              </p>
-              <LogoutButton />
-            </section>
-
-            <DeleteAccountButton />
-          </div>
-        ) : (
-          <p className="text-[14px] text-text-muted">
-            We couldn&apos;t load your account right now. Try refreshing the
-            page.
+    <BlueprintReveal skeleton={<RouteLoading />}>
+      <main className="px-4 py-5 sm:px-[26px] sm:py-[22px]">
+        <div className="mx-auto w-full max-w-[640px]">
+          <h1 className="m-0 mb-1 text-xl font-medium text-text">Settings</h1>
+          <p className="m-0 mb-6 text-[13px] text-text-muted">
+            Manage your profile, notifications, and connected accounts.
           </p>
-        )}
-      </div>
-    </main>
+
+          {user ? (
+            <div className="flex flex-col gap-6">
+              <ProfileSettingsForm user={user} />
+
+              <ConnectedAccountCard user={user} />
+
+              <NotificationPreferencesForm initialPreferences={notificationPreferences} />
+
+              <section className="rounded-[10px] border border-border bg-surface p-5">
+                <h2 className="m-0 mb-3 text-sm font-medium text-text">Session</h2>
+                <p className="m-0 mb-3 text-[13px] text-text-muted">
+                  Sign out of DevTunnel on this device.
+                </p>
+                <LogoutButton />
+              </section>
+
+              <DeleteAccountButton />
+            </div>
+          ) : (
+            <p className="text-[14px] text-text-muted">
+              We couldn&apos;t load your account right now. Try refreshing the
+              page.
+            </p>
+          )}
+        </div>
+      </main>
+    </BlueprintReveal>
   );
 }

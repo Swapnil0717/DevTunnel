@@ -13,6 +13,8 @@ import { MilestoneTrack } from "@/components/profile/milestone-track";
 import { ProfileTabs } from "@/components/profile/profile-tabs";
 import { ProfileProjectsList } from "@/components/profile/profile-projects-list";
 import { ProfileTasksList } from "@/components/profile/profile-tasks-list";
+import RouteLoading from "./loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 export const metadata: Metadata = buildMetadata({
   title: "Your profile",
@@ -74,34 +76,36 @@ export default async function ProfilePage() {
     ]);
 
   return (
-    <main className="px-3 py-4 sm:px-[26px] sm:py-[22px]">
-      <h1 className="sr-only">Your profile</h1>
+    <BlueprintReveal skeleton={<RouteLoading />}>
+      <main className="px-3 py-4 sm:px-[26px] sm:py-[22px]">
+        <h1 className="sr-only">Your profile</h1>
 
-      {user ? (
-        <div className="mx-auto w-full max-w-[1100px] overflow-hidden rounded-xl border border-border bg-bg">
-          <div className="p-4 sm:p-8">
-            <ProfileHeader user={user} />
-            <ProfileTags user={user} />
-            <ProfileStats
-              githubSummary={githubSummary}
-              devtunnelSummary={devtunnelSummary}
-              devtunnelStats={devtunnelStats}
-            />
-            <MilestoneTrack milestoneWindow={milestoneWindow} />
-            <ProfileTabs
-              projectCount={activity ? activity.projects.length : null}
-              taskCount={activity ? activity.tasks.length : null}
-              projectsPanel={<ProfileProjectsList projects={activity ? activity.projects : null} />}
-              tasksPanel={<ProfileTasksList tasks={activity ? activity.tasks : null} />}
-            />
+        {user ? (
+          <div className="mx-auto w-full max-w-[1100px] overflow-hidden rounded-xl border border-border bg-bg">
+            <div className="p-4 sm:p-8">
+              <ProfileHeader user={user} />
+              <ProfileTags user={user} />
+              <ProfileStats
+                githubSummary={githubSummary}
+                devtunnelSummary={devtunnelSummary}
+                devtunnelStats={devtunnelStats}
+              />
+              <MilestoneTrack milestoneWindow={milestoneWindow} />
+              <ProfileTabs
+                projectCount={activity ? activity.projects.length : null}
+                taskCount={activity ? activity.tasks.length : null}
+                projectsPanel={<ProfileProjectsList projects={activity ? activity.projects : null} />}
+                tasksPanel={<ProfileTasksList tasks={activity ? activity.tasks : null} />}
+              />
+            </div>
           </div>
-        </div>
-      ) : (
-        <p className="text-[14px] text-text-muted">
-          We couldn&apos;t load your profile right now. Try refreshing the
-          page.
-        </p>
-      )}
-    </main>
+        ) : (
+          <p className="text-[14px] text-text-muted">
+            We couldn&apos;t load your profile right now. Try refreshing the
+            page.
+          </p>
+        )}
+      </main>
+    </BlueprintReveal>
   );
 }

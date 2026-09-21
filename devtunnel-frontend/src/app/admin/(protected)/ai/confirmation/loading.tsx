@@ -1,9 +1,10 @@
 // src/app/admin/(protected)/ai/confirmation/loading.tsx
-import { SkeletonBlock, SkeletonPageHeader } from "@/components/ui/skeleton";
+import { BlueprintSheet } from "@/components/ui/blueprint-loader";
+import { BlueprintFill, BlueprintPageHeader } from "@/components/ui/blueprint-kit";
 import {
-  SkeletonGroqBudgetPanel,
-  SkeletonBudgetShareEditor,
-  SkeletonAiQueueSection,
+  BlueprintGroqBudgetPanel,
+  BlueprintBudgetShareEditor,
+  BlueprintAiQueueSection,
 } from "@/components/admin/ai-discovery/ai-discovery-skeletons";
 
 /**
@@ -16,18 +17,22 @@ import {
  */
 export default function AdminAiConfirmationLoading() {
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10" aria-hidden="true">
-      <SkeletonPageHeader withAction={false} />
-      <SkeletonGroqBudgetPanel withPhaseBreakdown />
-      <SkeletonBudgetShareEditor />
+    <BlueprintSheet
+      sheetLabel="Sheet A5.4 — AI confirmation"
+      revLabel="Rev — loading budget"
+      contentClassName="w-full mx-auto max-w-6xl px-6 py-10"
+    >
+      <BlueprintPageHeader withAction={false} />
+      <BlueprintGroqBudgetPanel withPhaseBreakdown />
+      <BlueprintBudgetShareEditor />
       <div className="flex flex-col gap-8">
         {Array.from({ length: 3 }).map((_, index) => (
           <div key={index}>
-            <SkeletonBlock className="mb-3 h-3.5 w-32" />
-            <SkeletonAiQueueSection rows={2} />
+            <BlueprintFill className="mb-3 h-3.5 w-32" />
+            <BlueprintAiQueueSection rows={2} />
           </div>
         ))}
       </div>
-    </main>
+    </BlueprintSheet>
   );
 }

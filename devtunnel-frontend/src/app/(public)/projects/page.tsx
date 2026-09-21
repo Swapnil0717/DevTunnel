@@ -3,6 +3,8 @@ import { buildMetadata } from "@/lib/seo";
 import { getRecommendedProjects } from "@/lib/home/api";
 import { DevtunnelProjectsExplorer } from "@/components/projects/devtunnel-projects-explorer";
 import { SectionMessage } from "@/components/home/section-message";
+import RouteLoading from "./loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 /**
  * Indexable when the list actually loaded (rules 2, 27); a failed or empty
@@ -64,22 +66,24 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
   const initialShowFilter = resolvedSearchParams?.recommended === "true" ? "RECOMMENDED" : "ALL";
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
-      <div className="mb-8">
-        <h1 className="m-0 mb-1 text-xl font-medium text-text">Projects on Devtunnel</h1>
-        <p className="m-0 text-sm text-text-muted">
-          Projects curated on DevTunnel — search or filter by tech stack, or sort by how well
-          each one matches your profile.
-        </p>
-      </div>
+    <BlueprintReveal skeleton={<RouteLoading />}>
+      <main className="mx-auto max-w-6xl px-6 py-10">
+        <div className="mb-8">
+          <h1 className="m-0 mb-1 text-xl font-medium text-text">Projects on Devtunnel</h1>
+          <p className="m-0 text-sm text-text-muted">
+            Projects curated on DevTunnel — search or filter by tech stack, or sort by how well
+            each one matches your profile.
+          </p>
+        </div>
 
-      {result.status === "error" ? (
-        <SectionMessage>Projects aren&apos;t available yet — check back soon.</SectionMessage>
-      ) : result.status === "empty" ? (
-        <SectionMessage>No projects have been added yet — check back soon.</SectionMessage>
-      ) : (
-        <DevtunnelProjectsExplorer projects={result.data} initialShowFilter={initialShowFilter} />
-      )}
-    </main>
+        {result.status === "error" ? (
+          <SectionMessage>Projects aren&apos;t available yet — check back soon.</SectionMessage>
+        ) : result.status === "empty" ? (
+          <SectionMessage>No projects have been added yet — check back soon.</SectionMessage>
+        ) : (
+          <DevtunnelProjectsExplorer projects={result.data} initialShowFilter={initialShowFilter} />
+        )}
+      </main>
+    </BlueprintReveal>
   );
 }

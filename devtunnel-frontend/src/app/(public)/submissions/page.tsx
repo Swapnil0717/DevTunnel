@@ -3,6 +3,8 @@ import { buildMetadata } from "@/lib/seo";
 import { getSubmissions } from "@/lib/submissions/api";
 import { DEFAULT_SUBMISSION_FILTERS } from "@/lib/submissions/types";
 import { SubmissionsExplorer } from "@/components/submissions/submissions-explorer";
+import RouteLoading from "./loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 /**
  * Indexable when the list actually loaded (rules 2, 27); a failed or empty
@@ -60,20 +62,22 @@ export default async function SubmissionsPage() {
   const result = await getSubmissions(DEFAULT_SUBMISSION_FILTERS);
 
   return (
-    <main className="w-full px-6 py-10 lg:px-10">
-      <div className="mb-6">
-        <h1 className="m-0 mb-1 text-xl font-medium text-text">Community</h1>
-        <p className="m-0 max-w-[70ch] text-[13px] leading-relaxed text-text-muted">
-          Projects and tools submitted by contributors. These aren&apos;t
-          curated by DevTunnel — each one carries the name of whoever
-          submitted it, and upvotes are what move something up the list.
-        </p>
-      </div>
+    <BlueprintReveal skeleton={<RouteLoading />}>
+      <main className="w-full px-6 py-10 lg:px-10">
+        <div className="mb-6">
+          <h1 className="m-0 mb-1 text-xl font-medium text-text">Community</h1>
+          <p className="m-0 max-w-[70ch] text-[13px] leading-relaxed text-text-muted">
+            Projects and tools submitted by contributors. These aren&apos;t
+            curated by DevTunnel — each one carries the name of whoever
+            submitted it, and upvotes are what move something up the list.
+          </p>
+        </div>
 
-      <SubmissionsExplorer
-        initialSubmissions={result.status === "ok" ? result.data : []}
-        initialError={result.status === "error"}
-      />
-    </main>
+        <SubmissionsExplorer
+          initialSubmissions={result.status === "ok" ? result.data : []}
+          initialError={result.status === "error"}
+        />
+      </main>
+    </BlueprintReveal>
   );
 }

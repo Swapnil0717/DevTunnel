@@ -13,6 +13,8 @@ import { GithubProjectSidebar } from "@/components/github-projects/github-projec
 import { RequestOnboardingButton } from "@/components/github-projects/request-onboarding-button";
 import { StarButton } from "@/components/github-projects/star-button";
 import { ContributeToRepoButton } from "@/components/github-projects/contribute-to-repo-button";
+import RouteLoading from "./loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 interface GithubProjectDetailPageProps {
   params: Promise<{ slug: string }>;
@@ -105,6 +107,39 @@ export default async function GithubProjectDetailPage({
 
   if (result.status === "error") {
     return (
+      <BlueprintReveal skeleton={<RouteLoading />}>
+        <main className="mx-auto max-w-5xl px-6 py-10">
+          <Link
+            href="/github-projects"
+            className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
+          >
+            <ChevronLeftIcon className="h-3.5 w-3.5" />
+            Back to GitHub Projects
+          </Link>
+          <nav aria-label="Breadcrumb" className="mb-6 text-[12.5px] text-text-faint">
+            <Link href="/github-projects" className="hover:text-accent">
+              GitHub Projects
+            </Link>
+            {" / "}
+            <span className="text-text-muted">Project</span>
+          </nav>
+          <h1 className="m-0 mb-6 text-xl font-medium text-text">GitHub Project</h1>
+          <GithubEmptyState
+            variant="no-results"
+            title="This project isn't available right now"
+            description="We couldn't reach GitHub for this repository just now. Check back soon, or head back to the full catalog."
+            primaryAction={{ label: "Back to GitHub Projects", href: "/github-projects" }}
+          />
+        </main>
+      </BlueprintReveal>
+    );
+  }
+
+  const project = result.data;
+  const shareUrl = `${SITE_URL}/github-projects/${project.slug}`;
+
+  return (
+    <BlueprintReveal skeleton={<RouteLoading />}>
       <main className="mx-auto max-w-5xl px-6 py-10">
         <Link
           href="/github-projects"
@@ -118,94 +153,65 @@ export default async function GithubProjectDetailPage({
             GitHub Projects
           </Link>
           {" / "}
-          <span className="text-text-muted">Project</span>
+          <span className="text-text-muted">{project.name}</span>
         </nav>
-        <h1 className="m-0 mb-6 text-xl font-medium text-text">GitHub Project</h1>
-        <GithubEmptyState
-          variant="no-results"
-          title="This project isn't available right now"
-          description="We couldn't reach GitHub for this repository just now. Check back soon, or head back to the full catalog."
-          primaryAction={{ label: "Back to GitHub Projects", href: "/github-projects" }}
-        />
-      </main>
-    );
-  }
 
-  const project = result.data;
-  const shareUrl = `${SITE_URL}/github-projects/${project.slug}`;
-
-  return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <Link
-        href="/github-projects"
-        className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
-      >
-        <ChevronLeftIcon className="h-3.5 w-3.5" />
-        Back to GitHub Projects
-      </Link>
-      <nav aria-label="Breadcrumb" className="mb-6 text-[12.5px] text-text-faint">
-        <Link href="/github-projects" className="hover:text-accent">
-          GitHub Projects
-        </Link>
-        {" / "}
-        <span className="text-text-muted">{project.name}</span>
-      </nav>
-
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-4">
-          <RepoLogo repositoryFullName={project.repositoryFullName} size={56} />
-          <div className="flex flex-col gap-1.5">
-            <h1 className="m-0 text-xl font-medium text-text">{project.name}</h1>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-text-secondary">
-              <a
-                href={project.repositoryUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="inline-flex items-center gap-1.5 font-mono hover:text-accent"
-              >
-                <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
-                {project.repositoryFullName}
-              </a>
-              <span aria-hidden="true" className="text-text-faint">
-                ·
-              </span>
-              <span>
-                Updated <time dateTime={project.pushedAt}>{formatRelativeTime(project.pushedAt)}</time>
-              </span>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <RepoLogo repositoryFullName={project.repositoryFullName} size={56} />
+            <div className="flex flex-col gap-1.5">
+              <h1 className="m-0 text-xl font-medium text-text">{project.name}</h1>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-text-secondary">
+                <a
+                  href={project.repositoryUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="inline-flex items-center gap-1.5 font-mono hover:text-accent"
+                >
+                  <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
+                  {project.repositoryFullName}
+                </a>
+                <span aria-hidden="true" className="text-text-faint">
+                  ·
+                </span>
+                <span>
+                  Updated <time dateTime={project.pushedAt}>{formatRelativeTime(project.pushedAt)}</time>
+                </span>
+              </div>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <ContributeToRepoButton
+              slug={project.slug}
+              basePath="/github-projects"
+              initialIsContributing={isContributing}
+            />
+            <a
+              href={project.repositoryUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-[8px] border border-border bg-surface px-3.5 py-2 text-[13px] font-medium text-text hover:bg-surface-raised"
+            >
+              <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
+              View on GitHub
+            </a>
+            <StarButton
+              slug={project.slug}
+              initialStarredByViewer={project.isStarredByViewer}
+              initialLocalStarCount={project.localStarCount}
+            />
+            <RequestOnboardingButton slug={project.slug} />
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <ContributeToRepoButton
-            slug={project.slug}
-            basePath="/github-projects"
-            initialIsContributing={isContributing}
-          />
-          <a
-            href={project.repositoryUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-[8px] border border-border bg-surface px-3.5 py-2 text-[13px] font-medium text-text hover:bg-surface-raised"
-          >
-            <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
-            View on GitHub
-          </a>
-          <StarButton
-            slug={project.slug}
-            initialStarredByViewer={project.isStarredByViewer}
-            initialLocalStarCount={project.localStarCount}
-          />
-          <RequestOnboardingButton slug={project.slug} />
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+          <div className="min-w-0 flex-1">
+            <GithubProjectDetailTabs project={project} issuesBasePath="/github-projects" />
+          </div>
+          <GithubProjectSidebar project={project} shareUrl={shareUrl} />
         </div>
-      </div>
-
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        <div className="min-w-0 flex-1">
-          <GithubProjectDetailTabs project={project} issuesBasePath="/github-projects" />
-        </div>
-        <GithubProjectSidebar project={project} shareUrl={shareUrl} />
-      </div>
-    </main>
+      </main>
+    </BlueprintReveal>
   );
 }

@@ -1,9 +1,10 @@
-import { SkeletonBlock, SkeletonDetailHeader } from "@/components/ui/skeleton";
+import { BlueprintSheet } from "@/components/ui/blueprint-loader";
+import { BlueprintFill, BlueprintDetailHeader } from "@/components/ui/blueprint-kit";
 
 /**
  * Next.js route-segment loading boundary for `/projects/:projectSlug`.
  *
- * Same shimmer-skeleton convention as
+ * Same blueprint-sheet convention as
  * `/projects/:projectSlug/tasks/:taskId/loading.tsx`, shaped to this
  * page's actual layout so the swap to real content doesn't visibly
  * reflow: logo + header with three action buttons, then the two-column
@@ -12,49 +13,53 @@ import { SkeletonBlock, SkeletonDetailHeader } from "@/components/ui/skeleton";
  */
 export default function ProjectDetailLoading() {
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10" aria-hidden="true">
-      <SkeletonDetailHeader
+    <BlueprintSheet
+      sheetLabel="Sheet 05.1 — Project"
+      revLabel="Rev — loading project"
+      contentClassName="w-full mx-auto max-w-6xl px-6 py-10"
+    >
+      <BlueprintDetailHeader
         withLogo
         meta={
           <>
-            <SkeletonBlock className="h-3 w-40" />
-            <span className="text-text-faint">·</span>
-            <SkeletonBlock className="h-3 w-16" />
-            <span className="text-text-faint">·</span>
-            <SkeletonBlock className="h-3 w-28" />
+            <BlueprintFill className="h-3 w-40" />
+            <span className="text-white/50">·</span>
+            <BlueprintFill className="h-3 w-16" />
+            <span className="text-white/50">·</span>
+            <BlueprintFill className="h-3 w-28" />
           </>
         }
         actions={
           <>
-            <SkeletonBlock className="h-9 w-[190px]" />
-            <SkeletonBlock className="h-9 w-[92px]" />
-            <SkeletonBlock className="h-9 w-[132px]" />
+            <BlueprintFill className="h-9 w-[190px]" />
+            <BlueprintFill className="h-9 w-[92px]" />
+            <BlueprintFill className="h-9 w-[132px]" />
           </>
         }
       />
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
-          <div className="mb-4 flex gap-4 border-b border-border-subtle pb-[9px]">
+          <div className="mb-4 flex gap-4 border-b border-white/15 pb-[9px]">
             {["w-24", "w-20", "w-16", "w-[82px]"].map((width) => (
-              <SkeletonBlock key={width} className={`h-3 ${width}`} />
+              <BlueprintFill key={width} className={`h-3 ${width}`} />
             ))}
           </div>
 
-          <div className="rounded-[10px] border border-border bg-surface p-5">
+          <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
             <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[180px_1fr]">
               {Array.from({ length: 8 }).map((_, index) => (
-                <SkeletonBlock
+                <BlueprintFill
                   key={index}
                   className={index % 2 === 0 ? "h-2.5 w-28" : "h-2.5 w-40"}
                 />
               ))}
             </div>
-            <div className="mt-4 border-t border-border-subtle pt-4">
-              <SkeletonBlock className="mb-2 h-2.5 w-20" />
+            <div className="mt-4 border-t border-white/15 pt-4">
+              <BlueprintFill className="mb-2 h-2.5 w-20" />
               <div className="flex flex-wrap gap-1.5">
                 {Array.from({ length: 5 }).map((_, index) => (
-                  <SkeletonBlock key={index} className="h-5 w-16 rounded-md" />
+                  <BlueprintFill key={index} className="h-5 w-16 rounded-md" />
                 ))}
               </div>
             </div>
@@ -62,41 +67,41 @@ export default function ProjectDetailLoading() {
         </div>
 
         <aside className="flex w-full flex-col gap-4 lg:w-[280px] lg:shrink-0">
-          <div className="rounded-[10px] border border-border bg-surface p-4">
-            <SkeletonBlock className="mb-3 h-2.5 w-14" />
-            <SkeletonBlock className="mb-2 h-2.5 w-full" />
-            <SkeletonBlock className="mb-3.5 h-2.5 w-3/4" />
+          <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-4">
+            <BlueprintFill className="mb-3 h-2.5 w-14" />
+            <BlueprintFill className="mb-2 h-2.5 w-full" />
+            <BlueprintFill className="mb-3.5 h-2.5 w-3/4" />
             <div className="mb-3.5 flex flex-wrap gap-1.5">
               {Array.from({ length: 3 }).map((_, index) => (
-                <SkeletonBlock key={index} className="h-5 w-14 rounded-md" />
+                <BlueprintFill key={index} className="h-5 w-14 rounded-md" />
               ))}
             </div>
-            <div className="flex flex-col gap-2 border-t border-border-subtle pt-3">
+            <div className="flex flex-col gap-2 border-t border-white/15 pt-3">
               {Array.from({ length: 6 }).map((_, index) => (
-                <SkeletonBlock key={index} className="h-2.5 w-full" />
+                <BlueprintFill key={index} className="h-2.5 w-full" />
               ))}
             </div>
           </div>
 
-          <div className="rounded-[10px] border border-border bg-surface p-4">
-            <SkeletonBlock className="mb-3 h-2.5 w-20" />
+          <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-4">
+            <BlueprintFill className="mb-3 h-2.5 w-20" />
             <div className="flex items-center gap-2.5">
-              <SkeletonBlock className="h-9 w-9 shrink-0 rounded-full" />
+              <BlueprintFill className="h-9 w-9 shrink-0 rounded-full" />
               <div className="flex-1">
-                <SkeletonBlock className="mb-1.5 h-2.5 w-24" />
-                <SkeletonBlock className="h-2.5 w-16" />
+                <BlueprintFill className="mb-1.5 h-2.5 w-24" />
+                <BlueprintFill className="h-2.5 w-16" />
               </div>
             </div>
           </div>
 
           {Array.from({ length: 2 }).map((_, index) => (
-            <div key={index} className="rounded-[10px] border border-border bg-surface p-4">
-              <SkeletonBlock className="mb-3 h-2.5 w-16" />
-              <SkeletonBlock className="h-8 w-full rounded-[8px]" />
+            <div key={index} className="rounded-[10px] border border-white/25 bg-white/[0.05] p-4">
+              <BlueprintFill className="mb-3 h-2.5 w-16" />
+              <BlueprintFill className="h-8 w-full rounded-[8px]" />
             </div>
           ))}
         </aside>
       </div>
-    </main>
+    </BlueprintSheet>
   );
 }

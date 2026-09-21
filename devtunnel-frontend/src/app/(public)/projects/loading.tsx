@@ -1,14 +1,15 @@
+import { BlueprintSheet } from "@/components/ui/blueprint-loader";
 import {
-    SkeletonPageHeader,
-    SkeletonFilterBar,
-    SkeletonDevtunnelProjectCardGrid,
-  } from "@/components/ui/skeleton";
+    BlueprintPageHeader,
+    BlueprintFilterBar,
+    BlueprintDevtunnelProjectCardGrid,
+  } from "@/components/ui/blueprint-kit";
   
   /**
    * Next.js route-segment loading boundary for `/projects` ("Projects on
    * Devtunnel"). Wrapped in the same page shell the real page renders
-   * (`mx-auto max-w-6xl px-6 py-10`, `SkeletonPageHeader`, and a 3-filter
-   * `SkeletonFilterBar` matching `DevtunnelProjectsExplorer`'s real filter
+   * (`mx-auto max-w-6xl px-6 py-10`, `BlueprintPageHeader`, and a 3-filter
+   * `BlueprintFilterBar` matching `DevtunnelProjectsExplorer`'s real filter
    * bar — Show, Tech stack, Sort by) so nothing shifts position once
    * `getRecommendedProjects()` resolves — only the grid below the filters
    * swaps from placeholders to real cards, same convention
@@ -16,10 +17,14 @@ import {
    */
   export default function ProjectsLoading() {
     return (
-      <main className="mx-auto max-w-6xl px-6 py-10">
-        <SkeletonPageHeader withAction={false} />
-        <SkeletonFilterBar filters={3} />
-        <SkeletonDevtunnelProjectCardGrid />
-      </main>
+      <BlueprintSheet
+        sheetLabel="Sheet 05 — Projects"
+        revLabel="Rev — loading projects"
+        contentClassName="w-full mx-auto max-w-6xl px-6 py-10"
+      >
+        <BlueprintPageHeader withAction={false} />
+        <BlueprintFilterBar filters={3} />
+        <BlueprintDevtunnelProjectCardGrid />
+      </BlueprintSheet>
     );
   }

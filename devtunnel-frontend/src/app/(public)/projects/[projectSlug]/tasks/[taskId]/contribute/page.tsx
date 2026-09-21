@@ -17,6 +17,8 @@ import { getTaskClaim } from "@/lib/tasks/progress";
 import { buildTaskWorkflowSteps } from "@/lib/contribute/task-workflow";
 import { DEVELOPER_ROLE_LABEL, EXPERIENCE_LEVEL_LABEL } from "@/lib/onboarding/types";
 import type { ContributeTarget } from "@/lib/contribute/types";
+import RouteLoading from "./loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 interface TaskContributePageProps {
   params: Promise<{ projectSlug: string; taskId: string }>;
@@ -110,17 +112,19 @@ export default async function TaskContributePage({ params }: TaskContributePageP
 
   if (result.status === "error") {
     return (
-      <main className="mx-auto max-w-6xl px-6 py-10">
-        <Link
-          href="/tasks"
-          className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
-        >
-          <ChevronLeftIcon className="h-3.5 w-3.5" />
-          Back to Tasks
-        </Link>
-        <h1 className="m-0 mb-6 text-xl font-medium text-text">Contribute</h1>
-        <SectionMessage>This task isn&apos;t available right now — check back soon.</SectionMessage>
-      </main>
+      <BlueprintReveal skeleton={<RouteLoading />}>
+        <main className="mx-auto max-w-6xl px-6 py-10">
+          <Link
+            href="/tasks"
+            className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
+          >
+            <ChevronLeftIcon className="h-3.5 w-3.5" />
+            Back to Tasks
+          </Link>
+          <h1 className="m-0 mb-6 text-xl font-medium text-text">Contribute</h1>
+          <SectionMessage>This task isn&apos;t available right now — check back soon.</SectionMessage>
+        </main>
+      </BlueprintReveal>
     );
   }
 
@@ -161,213 +165,215 @@ export default async function TaskContributePage({ params }: TaskContributePageP
   }
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
-      <Link
-        href={taskHref}
-        className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
-      >
-        <ChevronLeftIcon className="h-3.5 w-3.5" />
-        Back to task
-      </Link>
-      <nav aria-label="Breadcrumb" className="mb-6 text-[12.5px] text-text-faint">
-        <Link href="/tasks" className="hover:text-accent">
-          Tasks
+    <BlueprintReveal skeleton={<RouteLoading />}>
+      <main className="mx-auto max-w-6xl px-6 py-10">
+        <Link
+          href={taskHref}
+          className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
+        >
+          <ChevronLeftIcon className="h-3.5 w-3.5" />
+          Back to task
         </Link>
-        {" / "}
-        <Link href={taskHref} className="hover:text-accent">
-          {task.title}
-        </Link>
-        {" / "}
-        <span className="text-text-muted">Contribute</span>
-      </nav>
+        <nav aria-label="Breadcrumb" className="mb-6 text-[12.5px] text-text-faint">
+          <Link href="/tasks" className="hover:text-accent">
+            Tasks
+          </Link>
+          {" / "}
+          <Link href={taskHref} className="hover:text-accent">
+            {task.title}
+          </Link>
+          {" / "}
+          <span className="text-text-muted">Contribute</span>
+        </nav>
 
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="m-0 mb-1.5 text-xl font-medium text-text">Contribute to this task</h1>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-text-secondary">
-            <span className="inline-flex items-center gap-1.5">
-              <RepoLogo repositoryFullName={task.project.repositoryFullName} size={14} />
-              {task.project.name}
-            </span>
-            <span aria-hidden="true" className="text-text-faint">
-              ·
-            </span>
-            <a
-              href={task.project.repositoryUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="inline-flex items-center gap-1.5 font-mono hover:text-accent"
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="m-0 mb-1.5 text-xl font-medium text-text">Contribute to this task</h1>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-text-secondary">
+              <span className="inline-flex items-center gap-1.5">
+                <RepoLogo repositoryFullName={task.project.repositoryFullName} size={14} />
+                {task.project.name}
+              </span>
+              <span aria-hidden="true" className="text-text-faint">
+                ·
+              </span>
+              <a
+                href={task.project.repositoryUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex items-center gap-1.5 font-mono hover:text-accent"
+              >
+                <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
+                {task.project.repositoryFullName}
+              </a>
+              <span aria-hidden="true" className="text-text-faint">
+                ·
+              </span>
+              <AdminTaskStatusBadge status={task.status} />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-start gap-2">
+            <Link
+              href={taskHref}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-[8px] border border-border bg-surface px-3.5 py-2 text-[13px] font-medium text-text hover:bg-surface-raised"
             >
-              <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
-              {task.project.repositoryFullName}
-            </a>
-            <span aria-hidden="true" className="text-text-faint">
-              ·
-            </span>
-            <AdminTaskStatusBadge status={task.status} />
+              Task overview
+            </Link>
+            {task.githubIssue ? (
+              <a
+                href={task.githubIssue.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-[8px] border border-border bg-surface px-3.5 py-2 text-[13px] font-medium text-text hover:bg-surface-raised"
+              >
+                <IssueIcon className="h-3.5 w-3.5 shrink-0" />
+                View issue #{task.githubIssue.number}
+              </a>
+            ) : null}
           </div>
         </div>
 
-        <div className="flex flex-wrap items-start gap-2">
-          <Link
-            href={taskHref}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-[8px] border border-border bg-surface px-3.5 py-2 text-[13px] font-medium text-text hover:bg-surface-raised"
-          >
-            Task overview
-          </Link>
-          {task.githubIssue ? (
-            <a
-              href={task.githubIssue.url}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-[8px] border border-border bg-surface px-3.5 py-2 text-[13px] font-medium text-text hover:bg-surface-raised"
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+          <div className="flex min-w-0 flex-1 flex-col gap-6">
+            <TaskProgressTracker task={task} />
+
+            <section
+              aria-labelledby="contribute-task-heading"
+              className="rounded-[10px] border border-border bg-surface p-5"
             >
-              <IssueIcon className="h-3.5 w-3.5 shrink-0" />
-              View issue #{task.githubIssue.number}
-            </a>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        <div className="flex min-w-0 flex-1 flex-col gap-6">
-          <TaskProgressTracker task={task} />
-
-          <section
-            aria-labelledby="contribute-task-heading"
-            className="rounded-[10px] border border-border bg-surface p-5"
-          >
-            <h2
-              id="contribute-task-heading"
-              className="m-0 mb-3 text-[11px] uppercase tracking-wide text-text-faint"
-            >
-              The task
-            </h2>
-            <p className="m-0 text-[14px] font-medium text-text">{task.title}</p>
-            {task.githubIssue ? (
-              <p className="m-0 mt-1 text-[12.5px] text-text-secondary">
-                From GitHub issue{" "}
-                <span className="font-mono text-text-muted">#{task.githubIssue.number}</span> —{" "}
-                {task.githubIssue.title}
-              </p>
-            ) : null}
-
-            <dl className="m-0 mt-4 grid grid-cols-[92px_1fr] gap-x-4 gap-y-2.5 text-[12.5px]">
-              <dt className="text-text-faint">Role</dt>
-              <dd className="m-0 text-text-secondary">
-                {task.roles.length
-                  ? task.roles.map((role) => DEVELOPER_ROLE_LABEL[role]).join(", ")
-                  : "—"}
-              </dd>
-              <dt className="text-text-faint">Difficulty</dt>
-              <dd className="m-0 text-text-secondary">
-                {task.difficulty ? EXPERIENCE_LEVEL_LABEL[task.difficulty] : "—"}
-              </dd>
-            </dl>
-
-            {task.techStack.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {task.techStack.map((value) => (
-                  <span
-                    key={value}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-tag-tech-border bg-tag-tech-bg px-2 py-0.5 text-[11.5px] text-tag-tech-text"
-                  >
-                    <TechIcon name={value} />
-                    {value}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-
-            <p className="m-0 mt-4 border-t border-border-subtle pt-3 text-[12px] text-text-faint">
-              Read the full brief and the original issue on the{" "}
-              <Link href={taskHref} className="text-text-secondary hover:text-accent">
-                task page
-              </Link>{" "}
-              before you start.
-            </p>
-          </section>
-
-          {claim === "done" || claim === "other" ? (
-            <section className="rounded-[10px] border border-border bg-surface p-5">
-              <h2 className="m-0 mb-2 text-[13px] font-medium text-text">
-                {claim === "done"
-                  ? "This task is already done"
-                  : "Another contributor has already started this task"}
+              <h2
+                id="contribute-task-heading"
+                className="m-0 mb-3 text-[11px] uppercase tracking-wide text-text-faint"
+              >
+                The task
               </h2>
-              <p className="m-0 text-[12.5px] leading-relaxed text-text-secondary">
-                {claim === "done"
-                  ? "Someone has completed and submitted it, so there's nothing left to start."
-                  : "Only one contributor can work on a task at a time, so starting it now would be rejected."}{" "}
-                Pick another task from{" "}
-                <Link href={projectTasksHref} className="text-text hover:text-accent">
-                  {task.project.name}
-                </Link>{" "}
-                or browse{" "}
-                <Link href="/tasks" className="text-text hover:text-accent">
-                  every open task
-                </Link>
-                .
-              </p>
-            </section>
-          ) : (
-            <>
-              {claim === "unknown" ? (
-                <SectionMessage>
-                  This task is already underway. If it&apos;s yours,{" "}
-                  <code className="font-mono">dev start</code> picks up where you left off. If
-                  another contributor has claimed it, <code className="font-mono">dev start</code>{" "}
-                  will tell you — pick a different task from this project instead.
-                </SectionMessage>
+              <p className="m-0 text-[14px] font-medium text-text">{task.title}</p>
+              {task.githubIssue ? (
+                <p className="m-0 mt-1 text-[12.5px] text-text-secondary">
+                  From GitHub issue{" "}
+                  <span className="font-mono text-text-muted">#{task.githubIssue.number}</span> —{" "}
+                  {task.githubIssue.title}
+                </p>
               ) : null}
 
-              <section
-                aria-label="Contribute with the DevTunnel CLI"
-                className="rounded-[10px] border border-border bg-surface p-5"
-              >
-                <TaskContributeCliPanel taskId={task.id} />
-              </section>
+              <dl className="m-0 mt-4 grid grid-cols-[92px_1fr] gap-x-4 gap-y-2.5 text-[12.5px]">
+                <dt className="text-text-faint">Role</dt>
+                <dd className="m-0 text-text-secondary">
+                  {task.roles.length
+                    ? task.roles.map((role) => DEVELOPER_ROLE_LABEL[role]).join(", ")
+                    : "—"}
+                </dd>
+                <dt className="text-text-faint">Difficulty</dt>
+                <dd className="m-0 text-text-secondary">
+                  {task.difficulty ? EXPERIENCE_LEVEL_LABEL[task.difficulty] : "—"}
+                </dd>
+              </dl>
 
-              <section
-                aria-label="Contribute manually with Git"
-                className="rounded-[10px] border border-border bg-surface p-5"
-              >
-                {workflowSteps ? (
-                  <>
-                    <p className="m-0 mb-4 text-[12.5px] leading-relaxed text-text-secondary">
-                      Prefer to work without the CLI? The same result by hand — fork, branch, commit
-                      and open the pull request yourself
-                      {task.githubIssue ? (
-                        <>
-                          , linking issue{" "}
-                          <span className="font-mono text-text-muted">#{task.githubIssue.number}</span>
-                        </>
-                      ) : null}
-                      .
-                    </p>
-                    <ContributeWorkflowPanel
-                      steps={workflowSteps}
-                      repositoryUrl={task.project.repositoryUrl || null}
-                      contributingGuideUrl={
-                        task.project.repositoryUrl
-                          ? `${task.project.repositoryUrl}/blob/HEAD/CONTRIBUTING.md`
-                          : null
-                      }
-                    />
-                  </>
-                ) : (
+              {task.techStack.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {task.techStack.map((value) => (
+                    <span
+                      key={value}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-tag-tech-border bg-tag-tech-bg px-2 py-0.5 text-[11.5px] text-tag-tech-text"
+                    >
+                      <TechIcon name={value} />
+                      {value}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+
+              <p className="m-0 mt-4 border-t border-border-subtle pt-3 text-[12px] text-text-faint">
+                Read the full brief and the original issue on the{" "}
+                <Link href={taskHref} className="text-text-secondary hover:text-accent">
+                  task page
+                </Link>{" "}
+                before you start.
+              </p>
+            </section>
+
+            {claim === "done" || claim === "other" ? (
+              <section className="rounded-[10px] border border-border bg-surface p-5">
+                <h2 className="m-0 mb-2 text-[13px] font-medium text-text">
+                  {claim === "done"
+                    ? "This task is already done"
+                    : "Another contributor has already started this task"}
+                </h2>
+                <p className="m-0 text-[12.5px] leading-relaxed text-text-secondary">
+                  {claim === "done"
+                    ? "Someone has completed and submitted it, so there's nothing left to start."
+                    : "Only one contributor can work on a task at a time, so starting it now would be rejected."}{" "}
+                  Pick another task from{" "}
+                  <Link href={projectTasksHref} className="text-text hover:text-accent">
+                    {task.project.name}
+                  </Link>{" "}
+                  or browse{" "}
+                  <Link href="/tasks" className="text-text hover:text-accent">
+                    every open task
+                  </Link>
+                  .
+                </p>
+              </section>
+            ) : (
+              <>
+                {claim === "unknown" ? (
                   <SectionMessage>
-                    This project has no linked GitHub repository, so there&apos;s no fork-and-pull-request
-                    flow to walk through.
+                    This task is already underway. If it&apos;s yours,{" "}
+                    <code className="font-mono">dev start</code> picks up where you left off. If
+                    another contributor has claimed it, <code className="font-mono">dev start</code>{" "}
+                    will tell you — pick a different task from this project instead.
                   </SectionMessage>
-                )}
-              </section>
-            </>
-          )}
-        </div>
+                ) : null}
 
-        {sidebarTarget ? <ContributeSidebar target={sidebarTarget} /> : null}
-      </div>
-    </main>
+                <section
+                  aria-label="Contribute with the DevTunnel CLI"
+                  className="rounded-[10px] border border-border bg-surface p-5"
+                >
+                  <TaskContributeCliPanel taskId={task.id} />
+                </section>
+
+                <section
+                  aria-label="Contribute manually with Git"
+                  className="rounded-[10px] border border-border bg-surface p-5"
+                >
+                  {workflowSteps ? (
+                    <>
+                      <p className="m-0 mb-4 text-[12.5px] leading-relaxed text-text-secondary">
+                        Prefer to work without the CLI? The same result by hand — fork, branch, commit
+                        and open the pull request yourself
+                        {task.githubIssue ? (
+                          <>
+                            , linking issue{" "}
+                            <span className="font-mono text-text-muted">#{task.githubIssue.number}</span>
+                          </>
+                        ) : null}
+                        .
+                      </p>
+                      <ContributeWorkflowPanel
+                        steps={workflowSteps}
+                        repositoryUrl={task.project.repositoryUrl || null}
+                        contributingGuideUrl={
+                          task.project.repositoryUrl
+                            ? `${task.project.repositoryUrl}/blob/HEAD/CONTRIBUTING.md`
+                            : null
+                        }
+                      />
+                    </>
+                  ) : (
+                    <SectionMessage>
+                      This project has no linked GitHub repository, so there&apos;s no fork-and-pull-request
+                      flow to walk through.
+                    </SectionMessage>
+                  )}
+                </section>
+              </>
+            )}
+          </div>
+
+          {sidebarTarget ? <ContributeSidebar target={sidebarTarget} /> : null}
+        </div>
+      </main>
+    </BlueprintReveal>
   );
 }

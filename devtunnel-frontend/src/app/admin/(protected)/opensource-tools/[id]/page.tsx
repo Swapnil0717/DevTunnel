@@ -9,6 +9,8 @@ import { EditOpenSourceToolDetailsPanel } from "@/components/admin/opensource-to
 import { ChevronLeftIcon, GitBranchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
+import RouteLoading from "./loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 interface OpenSourceToolDetailPageProps {
   params: Promise<{ id: string }>;
@@ -76,6 +78,35 @@ export default async function AdminOpenSourceToolDetailPage({
 
   if (result.status === "error") {
     return (
+      <BlueprintReveal skeleton={<RouteLoading />} className="relative isolate min-h-screen w-full">
+        <main className="mx-auto max-w-4xl px-6 py-10">
+          <Link
+            href="/admin/opensource-tools"
+            className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
+          >
+            <ChevronLeftIcon className="h-3.5 w-3.5" />
+            Back to Open Source Tools
+          </Link>
+          <nav aria-label="Breadcrumb" className="mb-6 text-[12.5px] text-text-faint">
+            <Link href="/admin/opensource-tools" className="hover:text-accent">
+              Open Source Tools
+            </Link>
+            {" / "}
+            <span className="text-text-muted">Tool</span>
+          </nav>
+          <h1 className="m-0 mb-4 text-xl font-medium text-text">Open Source Tool</h1>
+          <SectionMessage>
+            This tool isn&apos;t available right now — check back soon.
+          </SectionMessage>
+        </main>
+      </BlueprintReveal>
+    );
+  }
+
+  const tool = result.data;
+
+  return (
+    <BlueprintReveal skeleton={<RouteLoading />} className="relative isolate min-h-screen w-full">
       <main className="mx-auto max-w-4xl px-6 py-10">
         <Link
           href="/admin/opensource-tools"
@@ -89,100 +120,75 @@ export default async function AdminOpenSourceToolDetailPage({
             Open Source Tools
           </Link>
           {" / "}
-          <span className="text-text-muted">Tool</span>
+          <span className="text-text-muted">{tool.name}</span>
         </nav>
-        <h1 className="m-0 mb-4 text-xl font-medium text-text">Open Source Tool</h1>
-        <SectionMessage>
-          This tool isn&apos;t available right now — check back soon.
-        </SectionMessage>
-      </main>
-    );
-  }
 
-  const tool = result.data;
-
-  return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
-      <Link
-        href="/admin/opensource-tools"
-        className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
-      >
-        <ChevronLeftIcon className="h-3.5 w-3.5" />
-        Back to Open Source Tools
-      </Link>
-      <nav aria-label="Breadcrumb" className="mb-6 text-[12.5px] text-text-faint">
-        <Link href="/admin/opensource-tools" className="hover:text-accent">
-          Open Source Tools
-        </Link>
-        {" / "}
-        <span className="text-text-muted">{tool.name}</span>
-      </nav>
-
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-4">
-          <OpenSourceToolLogo name={tool.name} sourceUrl={tool.sourceUrl} size={56} />
-          <div>
-            <h1 className="m-0 mb-1.5 text-xl font-medium text-text">{tool.name}</h1>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-text-secondary">
-              <a
-                href={tool.sourceUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="inline-flex items-center gap-1.5 font-mono hover:text-accent"
-              >
-                <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
-                {tool.sourceUrl}
-              </a>
-              {tool.primaryLanguage ? (
-                <>
-                  <span aria-hidden="true" className="text-text-faint">
-                    ·
-                  </span>
-                  <span>{tool.primaryLanguage}</span>
-                </>
-              ) : null}
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <OpenSourceToolLogo name={tool.name} sourceUrl={tool.sourceUrl} size={56} />
+            <div>
+              <h1 className="m-0 mb-1.5 text-xl font-medium text-text">{tool.name}</h1>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] text-text-secondary">
+                <a
+                  href={tool.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="inline-flex items-center gap-1.5 font-mono hover:text-accent"
+                >
+                  <GitBranchIcon className="h-3.5 w-3.5 shrink-0" />
+                  {tool.sourceUrl}
+                </a>
+                {tool.primaryLanguage ? (
+                  <>
+                    <span aria-hidden="true" className="text-text-faint">
+                      ·
+                    </span>
+                    <span>{tool.primaryLanguage}</span>
+                  </>
+                ) : null}
+              </div>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={tool.sourceUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="inline-flex items-center rounded-[8px] border border-border bg-surface px-3.5 py-2 text-[13px] font-medium text-text hover:bg-surface-raised"
+            >
+              View source
+            </a>
+            <DeleteOpenSourceToolButton
+              toolId={tool.id}
+              toolName={tool.name}
+              variant="button"
+              redirectTo="/admin/opensource-tools"
+            />
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <a
-            href={tool.sourceUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="inline-flex items-center rounded-[8px] border border-border bg-surface px-3.5 py-2 text-[13px] font-medium text-text hover:bg-surface-raised"
-          >
-            View source
-          </a>
-          <DeleteOpenSourceToolButton
-            toolId={tool.id}
-            toolName={tool.name}
-            variant="button"
-            redirectTo="/admin/opensource-tools"
-          />
-        </div>
-      </div>
+        <EditOpenSourceToolDetailsPanel tool={tool} startInEditMode={startInEditMode} />
 
-      <EditOpenSourceToolDetailsPanel tool={tool} startInEditMode={startInEditMode} />
-
-      <section
-        aria-labelledby="tool-readme-heading"
-        className="rounded-[10px] border border-border bg-surface p-5"
-      >
-        <h2
-          id="tool-readme-heading"
-          className="m-0 mb-2 text-[11px] uppercase tracking-wide text-text-faint"
+        <section
+          aria-labelledby="tool-readme-heading"
+          className="rounded-[10px] border border-border bg-surface p-5"
         >
-          README
-        </h2>
-        <div className="max-h-[420px] overflow-y-auto rounded-md border border-border-subtle bg-surface-raised p-4">
-          {tool.readme ? (
-            <MarkdownReadme content={tool.readme} sourceUrl={tool.sourceUrl} />
-          ) : (
-            <p className="m-0 text-[12px] text-text-faint">No README found.</p>
-          )}
-        </div>
-      </section>
-    </main>
+          <h2
+            id="tool-readme-heading"
+            className="m-0 mb-2 text-[11px] uppercase tracking-wide text-text-faint"
+          >
+            README
+          </h2>
+          <div className="max-h-[420px] overflow-y-auto rounded-md border border-border-subtle bg-surface-raised p-4">
+            {tool.readme ? (
+              <MarkdownReadme content={tool.readme} sourceUrl={tool.sourceUrl} />
+            ) : (
+              <p className="m-0 text-[12px] text-text-faint">No README found.</p>
+            )}
+          </div>
+        </section>
+      </main>
+    </BlueprintReveal>
   );
 }

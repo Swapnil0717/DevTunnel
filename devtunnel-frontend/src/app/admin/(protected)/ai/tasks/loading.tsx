@@ -1,9 +1,10 @@
 // src/app/admin/(protected)/ai/tasks/loading.tsx
-import { SkeletonPageHeader } from "@/components/ui/skeleton";
+import { BlueprintSheet } from "@/components/ui/blueprint-loader";
+import { BlueprintPageHeader } from "@/components/ui/blueprint-kit";
 import {
-  SkeletonGroqBudgetPanel,
-  SkeletonRunButtonRow,
-  SkeletonAiQueueSection,
+  BlueprintGroqBudgetPanel,
+  BlueprintRunButtonRow,
+  BlueprintAiQueueSection,
 } from "@/components/admin/ai-discovery/ai-discovery-skeletons";
 
 /**
@@ -15,11 +16,15 @@ import {
  */
 export default function AdminAiTasksLoading() {
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10" aria-hidden="true">
-      <SkeletonPageHeader withAction={false} />
-      <SkeletonGroqBudgetPanel />
-      <SkeletonRunButtonRow withSecondary />
-      <SkeletonAiQueueSection rows={4} />
-    </main>
+    <BlueprintSheet
+      sheetLabel="Sheet A5.3 — AI tasks"
+      revLabel="Rev — loading queue"
+      contentClassName="w-full mx-auto max-w-6xl px-6 py-10"
+    >
+      <BlueprintPageHeader withAction={false} />
+      <BlueprintGroqBudgetPanel />
+      <BlueprintRunButtonRow withSecondary />
+      <BlueprintAiQueueSection rows={4} />
+    </BlueprintSheet>
   );
 }

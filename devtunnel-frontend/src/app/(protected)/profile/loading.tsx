@@ -1,4 +1,5 @@
-import { SkeletonBlock, SkeletonStatCards } from "@/components/ui/skeleton";
+import { BlueprintSheet } from "@/components/ui/blueprint-loader";
+import { BlueprintFill, BlueprintStatCards } from "@/components/ui/blueprint-kit";
 
 /**
  * `/profile` — fetches `getServerUser`, `getServerContributionsSummary`,
@@ -7,21 +8,25 @@ import { SkeletonBlock, SkeletonStatCards } from "@/components/ui/skeleton";
  */
 export default function ProfileLoading() {
   return (
-    <div className="mx-auto w-full max-w-[720px] px-4 py-5" aria-hidden="true">
+    <BlueprintSheet
+      sheetLabel="Sheet 03 — Profile"
+      revLabel="Rev — loading your profile"
+      contentClassName="mx-auto w-full max-w-[720px] px-4 py-5"
+    >
       <div className="mb-5 flex items-start gap-3.5">
-        <SkeletonBlock className="h-14 w-14 shrink-0 rounded-full" />
+        <BlueprintFill className="h-14 w-14 shrink-0 rounded-full" />
         <div className="flex flex-1 flex-col gap-2">
-          <SkeletonBlock className="h-4 w-40" />
-          <SkeletonBlock className="h-3 w-24" />
+          <BlueprintFill className="h-4 w-40" />
+          <BlueprintFill className="h-3 w-24" />
         </div>
       </div>
-      <SkeletonStatCards count={4} />
-      <div className="mt-5 flex gap-4 border-b border-border pb-2">
-        <SkeletonBlock className="h-3 w-32" />
-        <SkeletonBlock className="h-3 w-16" />
-        <SkeletonBlock className="h-3 w-28" />
+      <BlueprintStatCards count={4} />
+      <div className="mt-5 flex gap-4 border-b border-white/25 pb-2">
+        <BlueprintFill className="h-3 w-32" />
+        <BlueprintFill className="h-3 w-16" />
+        <BlueprintFill className="h-3 w-28" />
       </div>
-      <SkeletonBlock className="mt-4 h-[280px] w-full" />
-    </div>
+      <BlueprintFill className="mt-4 h-[280px] w-full" />
+    </BlueprintSheet>
   );
 }

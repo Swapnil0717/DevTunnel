@@ -1,5 +1,6 @@
 // src/app/admin/(protected)/opensource-tools/loading.tsx
-import { SkeletonBlock, SkeletonPageHeader, SkeletonFilterBar, SkeletonToolCardGrid } from "@/components/ui/skeleton";
+import { BlueprintSheet } from "@/components/ui/blueprint-loader";
+import { BlueprintFill, BlueprintPageHeader, BlueprintFilterBar, BlueprintToolCardGrid } from "@/components/ui/blueprint-kit";
 
 /**
  * `/admin/opensource-tools` — one `getAdminOpenSourceTools()` fetch,
@@ -9,10 +10,14 @@ import { SkeletonBlock, SkeletonPageHeader, SkeletonFilterBar, SkeletonToolCardG
  */
 export default function AdminOpenSourceToolsLoading() {
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10" aria-hidden="true">
-      <SkeletonPageHeader actions={<SkeletonBlock className="h-9 w-[92px]" />} />
-      <SkeletonFilterBar filters={2} />
-      <SkeletonToolCardGrid count={6} />
-    </main>
+    <BlueprintSheet
+      sheetLabel="Sheet A4 — Open source tools"
+      revLabel="Rev — loading tools"
+      contentClassName="w-full mx-auto max-w-6xl px-6 py-10"
+    >
+      <BlueprintPageHeader actions={<BlueprintFill className="h-9 w-[92px]" />} />
+      <BlueprintFilterBar filters={2} />
+      <BlueprintToolCardGrid count={6} />
+    </BlueprintSheet>
   );
 }
