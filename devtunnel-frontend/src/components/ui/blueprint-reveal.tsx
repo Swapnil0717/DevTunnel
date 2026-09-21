@@ -17,21 +17,31 @@ import {
  * otherwise swap to the real page after a few milliseconds and nobody
  * would ever see the sheet draw itself, so `BlueprintReveal` keeps the
  * sheet up until this much time has passed in total (the sheet takes
- * ~1.1s to finish drawing — see `.blueprint-sheet-content` in
+ * ~1.35s to fill and finish drawing — see `.blueprint-sheet-content` in
  * globals.css). Change it here, in one place, to make every route's
  * loading animation longer or shorter.
  */
-export const BLUEPRINT_MIN_VISIBLE_MS = 1400;
+export const BLUEPRINT_MIN_VISIBLE_MS = 1600;
 
 /**
  * Even when the data was slow and the sheet has long since finished
  * drawing, hold the fully drawn sheet for this long after the real page
- * arrives, so the wipe never fires in the same instant as the swap.
+ * arrives, so the content never appears in the same instant as the swap.
  */
 export const BLUEPRINT_MIN_HOLD_MS = 350;
 
+/**
+ * How long the loaded content sits on the blueprint before the sheet
+ * lifts off to reveal the page's own background — the beat in the
+ * reference where the text is readable on the blue and only then does
+ * the page "colour in".
+ */
+export const BLUEPRINT_SETTLE_MS = 700;
+
 /** Keep in sync with `.blueprint-wipe` in globals.css. */
 const BLUEPRINT_WIPE_MS = 800;
+
+type BlueprintPhase = "covering" | "revealing" | "settled" | "lifting" | "done";
 
 /**
  * A `loading.tsx` sheet that was on screen a moment ago and an overlay
@@ -79,19 +89,35 @@ export function BlueprintClock() {
 
 /**
  * Bridges `loading.tsx`'s blueprint sheet into the real page it
- * precedes. Next has no hook for "the route just finished loading" — it
+ * precedes, and plays the rest of the recent.design "page load"
+ * sequence. Next has no hook for "the route just finished loading" — it
  * swaps a `loading.tsx` fallback for the real segment the instant
  * streaming finishes, with no way to animate that swap from inside
- * `loading.tsx` itself. So the real page animates the exit instead.
+ * `loading.tsx` itself. So the real page animates the exit instead, in
+ * four beats:
  *
- * `BlueprintReveal` paints the route's own loading sheet (`skeleton`,
- * the same component `loading.tsx` renders) directly over its children
- * the moment it mounts, continues its drawing animation from where the
- * loading screen left off, keeps it up for at least
- * `BLUEPRINT_MIN_VISIBLE_MS` in total, then wipes it away top to bottom
- * (`.blueprint-wipe`, globals.css) to reveal the real content — the
- * "page load animation" reference from recent.design: skeleton draws
- * itself, then the page appears from behind it.
+ *  1. `covering` — the route's own loading sheet (`skeleton`, the same
+ *     component `loading.tsx` renders) is painted over the page,
+ *     continuing its drawing animation from where the loading screen
+ *     left off, and held until it has been visible for at least
+ *     `BLUEPRINT_MIN_VISIBLE_MS` in total. The real content is hidden
+ *     behind it.
+ *  2. `revealing` — that cover wipes away top to bottom
+ *     (`.blueprint-wipe`), taking the placeholder blocks with it and
+ *     uncovering the REAL CONTENT — drawn on the blueprint's own green,
+ *     because a second copy of the plain sheet (the "backdrop") sits
+ *     behind the content the whole time.
+ *  3. `settled` — content on blueprint, held for `BLUEPRINT_SETTLE_MS`
+ *     so the data is actually seen loading in.
+ *  4. `lifting` — the backdrop wipes away top to bottom, revealing the
+ *     app's real page colour underneath. Then `done`: both layers are
+ *     unmounted outright, so nothing can catch pointer events or sit in
+ *     the accessibility tree.
+ *
+ * The backdrop is positioned `-z-10` inside this component's own
+ * `isolate` stacking context, which paints it above the app shell's
+ * background but below every in-flow child — so children never need a
+ * wrapper or a z-index of their own.
  *
  * Usage — wrap a route's real content and hand it the route's own
  * loading component:
@@ -103,21 +129,13 @@ export function BlueprintClock() {
  *
  * By default it renders its own `relative isolate` wrapper
  * (`min-h-screen`, the same height the loading sheet has) and lays the
- * overlay over that.
- * Pass `inline` when the caller already provides a positioned ancestor
- * that should define the overlay's area (Home's padded `<main>`).
+ * layers over that. Pass `inline` when the caller already provides a
+ * positioned, isolated ancestor that should define their area (Home's
+ * padded `<main>`).
  *
- * Three phases, `covering` → `wiping` → `done`:
- *  - `covering` (first paint, including SSR): the overlay is fully
- *    opaque, so the real page never flashes through before the wipe.
- *  - `wiping`: starts once the minimum on-screen time has passed.
- *  - `done`: the overlay unmounts outright (not just hidden) once its
- *    animation ends, so it can't catch pointer events or sit in the
- *    accessibility tree.
- *
- * `prefers-reduced-motion`: the blanket rule in globals.css collapses
- * every animation's duration, and the hold timers below are skipped, so
- * the overlay resolves to `done` almost immediately.
+ * `prefers-reduced-motion`: every wait below collapses to zero and the
+ * blanket rule in globals.css collapses the animations, so the layers
+ * resolve to `done` almost immediately.
  */
 export function BlueprintReveal({
   children,
@@ -128,25 +146,26 @@ export function BlueprintReveal({
   children: ReactNode;
   /** The route's own loading sheet, e.g. `<Loading />` from `./loading`. */
   skeleton?: ReactNode;
-  /** Skip the wrapper; the overlay fills the nearest positioned ancestor. */
+  /** Skip the wrapper; the layers fill the nearest positioned ancestor. */
   inline?: boolean;
   /**
    * Classes for the wrapper (ignored with `inline`). Must keep `relative`
-   * and `isolate` — the first anchors the overlay, the second keeps its
-   * z-index from climbing over the app's fixed bottom nav. Default is a
+   * and `isolate` — the first anchors the layers, the second keeps their
+   * z-indexes from climbing over the app's fixed bottom nav. Default is a
    * flex column, matching the app shell's own content slot; admin pages
    * pass a plain block wrapper because their slot is a block container
    * and `mx-auto` mains behave differently in a flex column.
    */
   className?: string;
 }) {
-  const [phase, setPhase] = useState<"covering" | "wiping" | "done">("covering");
-  const overlayRef = useRef<HTMLDivElement>(null);
+  const [phase, setPhase] = useState<BlueprintPhase>("covering");
+  const coverRef = useRef<HTMLDivElement>(null);
   // Read the loading sheet's clock exactly once. A ref (not a value
   // recomputed inside the effect) so React StrictMode's dev-only second
   // pass through the effect below reuses it instead of finding the clock
   // already consumed and resetting the offset to zero.
   const elapsedRef = useRef<number | null>(null);
+  const reducedMotionRef = useRef(false);
 
   useIsomorphicLayoutEffect(() => {
     if (elapsedRef.current === null) {
@@ -166,50 +185,65 @@ export function BlueprintReveal({
     }
     const elapsedMs = elapsedRef.current ?? 0;
 
-    overlayRef.current?.style.setProperty("--bp-elapsed", `${Math.round(elapsedMs)}ms`);
+    coverRef.current?.style.setProperty("--bp-elapsed", `${Math.round(elapsedMs)}ms`);
 
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const waitMs = reducedMotion
+    reducedMotionRef.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const waitMs = reducedMotionRef.current
       ? 0
       : Math.max(BLUEPRINT_MIN_VISIBLE_MS - elapsedMs, BLUEPRINT_MIN_HOLD_MS);
 
-    const timer = window.setTimeout(() => setPhase("wiping"), waitMs);
+    const timer = window.setTimeout(() => setPhase("revealing"), waitMs);
     return () => window.clearTimeout(timer);
   }, []);
 
-  // Safety net: if the browser never fires `animationend` (tab in the
-  // background, animations disabled), don't leave the overlay up forever.
+  // Everything after the first wait is a plain timer chain. Timers rather
+  // than `animationend`: that event bubbles from every block's own
+  // animation and never fires at all in a background tab.
   useEffect(() => {
-    if (phase !== "wiping") return;
-    const timer = window.setTimeout(() => setPhase("done"), BLUEPRINT_WIPE_MS + 400);
+    const scale = reducedMotionRef.current ? 0 : 1;
+    const next: Partial<Record<BlueprintPhase, [BlueprintPhase, number]>> = {
+      revealing: ["settled", BLUEPRINT_WIPE_MS * scale],
+      settled: ["lifting", BLUEPRINT_SETTLE_MS * scale],
+      lifting: ["done", BLUEPRINT_WIPE_MS * scale],
+    };
+    const step = next[phase];
+    if (!step) return;
+    const timer = window.setTimeout(() => setPhase(step[0]), step[1]);
     return () => window.clearTimeout(timer);
   }, [phase]);
 
-  const overlay =
-    phase !== "done" ? (
-      <BlueprintOverlayContext.Provider value={true}>
+  const coverVisible = phase === "covering" || phase === "revealing";
+  const backdropVisible = phase !== "done";
+
+  const layers = (
+    <BlueprintOverlayContext.Provider value={true}>
+      {backdropVisible ? (
         <div
-          ref={overlayRef}
           aria-hidden="true"
-          onAnimationEnd={(event) => {
-            // Bubbles up from every block's own draw animation — only the
-            // overlay's own wipe finishing means we're done.
-            if (event.target === event.currentTarget && phase === "wiping") setPhase("done");
-          }}
+          className={`blueprint-sheet pointer-events-none absolute inset-0 -z-10 ${
+            phase === "lifting" ? "blueprint-wipe" : ""
+          }`}
+        />
+      ) : null}
+      {coverVisible ? (
+        <div
+          ref={coverRef}
+          aria-hidden="true"
           className={`blueprint-sheet blueprint-overlay absolute inset-0 z-50 overflow-hidden ${
-            phase === "wiping" ? "blueprint-wipe pointer-events-none" : ""
+            phase === "revealing" ? "blueprint-wipe pointer-events-none" : ""
           }`}
         >
           {skeleton}
         </div>
-      </BlueprintOverlayContext.Provider>
-    ) : null;
+      ) : null}
+    </BlueprintOverlayContext.Provider>
+  );
 
   if (inline) {
     return (
       <>
         {children}
-        {overlay}
+        {layers}
       </>
     );
   }
@@ -217,7 +251,7 @@ export function BlueprintReveal({
   return (
     <div className={className}>
       {children}
-      {overlay}
+      {layers}
     </div>
   );
 }

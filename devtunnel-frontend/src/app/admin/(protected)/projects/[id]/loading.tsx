@@ -40,9 +40,9 @@ export default function AdminProjectDetailLoading() {
         meta={
           <>
             <BlueprintFill className="h-3 w-40" />
-            <span className="text-white/50">·</span>
+            <span className="text-blueprint/50">·</span>
             <BlueprintFill className="h-3 w-20" />
-            <span className="text-white/50">·</span>
+            <span className="text-blueprint/50">·</span>
             <BlueprintFill className="h-4 w-16 rounded-full" />
           </>
         }
@@ -62,7 +62,7 @@ export default function AdminProjectDetailLoading() {
         <BlueprintStatCards count={5} />
       </div>
 
-      <div className="mb-8 rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+      <div className="mb-8 rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
         <div className="mb-2 flex items-center justify-between gap-3">
           <BlueprintFill className="h-2.5 w-24" />
           <BlueprintFill className="h-5 w-12" />
@@ -71,7 +71,7 @@ export default function AdminProjectDetailLoading() {
         <BlueprintFill className="mt-2 h-3 w-4/5" />
       </div>
 
-      <div className="mb-8 rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+      <div className="mb-8 rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
         <div className="mb-3 flex items-center justify-between gap-3">
           <BlueprintFill className="h-2.5 w-24" />
           <BlueprintFill className="h-5 w-12" />
@@ -99,7 +99,7 @@ export default function AdminProjectDetailLoading() {
           {Array.from({ length: 3 }).map((_, index) => (
             <div
               key={index}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-white/25 bg-white/[0.05] px-4 py-3"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] px-4 py-3"
             >
               <BlueprintFill className="h-3.5 w-2/5" />
               <div className="flex shrink-0 items-center gap-3">
@@ -111,7 +111,7 @@ export default function AdminProjectDetailLoading() {
         </div>
       </div>
 
-      <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+      <div className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
         <BlueprintFill className="mb-2 h-2.5 w-20" />
         <BlueprintFill className="h-[260px] w-full" />
       </div>

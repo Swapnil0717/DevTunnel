@@ -10,14 +10,14 @@ export default function AdminLoginLoading() {
       contentClassName="w-full flex min-h-[70vh] flex-col items-center justify-center gap-9 px-6 py-16"
     >
       <BlueprintFill className="h-6 w-[150px]" />
-      <div className="w-full max-w-[340px] rounded-[10px] border border-white/25 bg-white/[0.05] px-[26px] py-7">
+      <div className="w-full max-w-[340px] rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] px-[26px] py-7">
         <BlueprintFill className="mx-auto mb-2 h-3.5 w-40" />
         <BlueprintFill className="mx-auto mb-6 h-3 w-56" />
         <BlueprintFill className="h-10 w-full" />
         <div className="my-[18px] flex items-center gap-2">
-          <div className="h-px flex-1 bg-white/25" />
+          <div className="h-px flex-1 bg-blueprint/25" />
           <BlueprintFill className="h-2 w-24" />
-          <div className="h-px flex-1 bg-white/25" />
+          <div className="h-px flex-1 bg-blueprint/25" />
         </div>
         <BlueprintFill className="mx-auto h-2.5 w-48" />
       </div>

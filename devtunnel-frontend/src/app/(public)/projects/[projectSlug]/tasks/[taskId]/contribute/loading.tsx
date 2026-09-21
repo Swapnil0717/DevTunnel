@@ -19,9 +19,9 @@ export default function TaskContributeLoading() {
         meta={
           <>
             <BlueprintFill className="h-3 w-28" />
-            <span className="text-white/50">·</span>
+            <span className="text-blueprint/50">·</span>
             <BlueprintFill className="h-3 w-36" />
-            <span className="text-white/50">·</span>
+            <span className="text-blueprint/50">·</span>
             <BlueprintFill className="h-4 w-16 rounded-full" />
           </>
         }
@@ -35,7 +35,7 @@ export default function TaskContributeLoading() {
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-6">
-          <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+          <div className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
             <BlueprintFill className="mb-4 h-2.5 w-16" />
             <div className="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-4">
               {Array.from({ length: 4 }).map((_, index) => (
@@ -48,7 +48,7 @@ export default function TaskContributeLoading() {
             </div>
           </div>
 
-          <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+          <div className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
             <BlueprintFill className="mb-3 h-2.5 w-20" />
             <BlueprintFill className="mb-2 h-3.5 w-3/5" />
             <BlueprintFill className="mb-4 h-3 w-4/5" />
@@ -56,7 +56,7 @@ export default function TaskContributeLoading() {
             <BlueprintFill className="h-2.5 w-32" />
           </div>
 
-          <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+          <div className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
             <BlueprintFill className="mb-4 h-3.5 w-56" />
             <div className="flex flex-col gap-2">
               {Array.from({ length: 5 }).map((_, index) => (
@@ -65,7 +65,7 @@ export default function TaskContributeLoading() {
             </div>
           </div>
 
-          <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+          <div className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
             <BlueprintFill className="mb-4 h-3.5 w-64" />
             <div className="flex flex-col gap-2">
               {Array.from({ length: 4 }).map((_, index) => (
@@ -77,7 +77,7 @@ export default function TaskContributeLoading() {
 
         <div className="flex w-full flex-col gap-4 lg:w-[280px] lg:shrink-0">
           {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="rounded-[10px] border border-white/25 bg-white/[0.05] p-4">
+            <div key={index} className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-4">
               <BlueprintFill className="mb-3 h-2.5 w-28" />
               <BlueprintFill className="mb-2 h-3 w-full" />
               <BlueprintFill className="h-3 w-3/4" />

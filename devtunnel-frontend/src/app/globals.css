@@ -6,6 +6,17 @@
   :root {
     --font-sans: var(--font-inter);
     --font-mono: var(--font-jetbrains-mono);
+
+    /* Blueprint loading sheet palette, derived from the app's own
+       `accent` green (#1D9E75) instead of a foreign blue: a deep accent
+       green for the sheet, and a light accent tint (#5DCAA5 — the same
+       tone as `status.success-label`) for every grid line, hatch stroke
+       and callout. Change these two and every loading screen follows.
+       `--blueprint-line` is space-separated RGB so it can take an alpha
+       (`rgb(var(--blueprint-line) / 0.3)`) both here and through the
+       `blueprint` colour in tailwind.config.ts. */
+    --blueprint-bg: #0b3d2e;
+    --blueprint-line: 93 202 165;
   }
 
   * {
@@ -220,6 +231,35 @@
   }
 }
 
+/* The sheet's own colour fills the page top to bottom when a route
+   starts loading (clip opens downward from the top edge), instead of
+   appearing all at once. */
+@keyframes blueprint-fill-in {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* The bright leading edge that rides along the front of every top-to-bottom
+   colour change (fill-in and both wipes), so the direction reads clearly.
+   Fades out as it reaches the bottom. */
+@keyframes blueprint-edge {
+  0% {
+    top: 0;
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
 @layer components {
   .skeleton-block {
     animation: skeleton-reveal 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -243,16 +283,17 @@
     will-change: transform;
   }
 
-  /* Full-bleed drawing-sheet background: a bold blueprint blue with a
-     fine 24px grid and a bolder 96px grid on top of it, sampled from the
-     recent.design reference (#346BF4). */
+  /* Full-bleed drawing-sheet background: the deep accent green from
+     `--blueprint-bg` with a fine 24px grid and a bolder 96px grid on top
+     of it, in the recent.design reference's layout but the app's own
+     colours. */
   .blueprint-sheet {
-    background-color: #346bf4;
+    background-color: var(--blueprint-bg);
     background-image:
-      repeating-linear-gradient(to right, rgba(255, 255, 255, 0.16) 0 1px, transparent 1px 96px),
-      repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.16) 0 1px, transparent 1px 96px),
-      repeating-linear-gradient(to right, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 24px),
-      repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 24px);
+      repeating-linear-gradient(to right, rgb(var(--blueprint-line) / 0.16) 0 1px, transparent 1px 96px),
+      repeating-linear-gradient(to bottom, rgb(var(--blueprint-line) / 0.16) 0 1px, transparent 1px 96px),
+      repeating-linear-gradient(to right, rgb(var(--blueprint-line) / 0.07) 0 1px, transparent 1px 24px),
+      repeating-linear-gradient(to bottom, rgb(var(--blueprint-line) / 0.07) 0 1px, transparent 1px 24px);
   }
 
   /* Ruler ticks: a slim strip of its own (not combined onto
@@ -261,10 +302,10 @@
      height in `BlueprintSheet`, like a CAD viewport ruler along the top
      edge. */
   .blueprint-ruler-strip {
-    background-color: rgba(255, 255, 255, 0.06);
+    background-color: rgb(var(--blueprint-line) / 0.06);
     background-image: repeating-linear-gradient(
       to right,
-      rgba(255, 255, 255, 0.45) 0 1px,
+      rgb(var(--blueprint-line) / 0.45) 0 1px,
       transparent 1px 24px
     );
   }
@@ -272,13 +313,13 @@
   /* The diagonally-hatched "material fill" every placeholder block uses
      in the reference, instead of a flat color or a shimmer sweep. */
   .blueprint-hatch {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: rgb(var(--blueprint-line) / 0.1);
     background-image: repeating-linear-gradient(
       45deg,
-      rgba(255, 255, 255, 0.32) 0 1px,
+      rgb(var(--blueprint-line) / 0.32) 0 1px,
       transparent 1px 7px
     );
-    border: 1px solid rgba(255, 255, 255, 0.45);
+    border: 1px solid rgb(var(--blueprint-line) / 0.45);
   }
 
   /* Every blueprint animation reads `--bp-elapsed`, which
@@ -301,13 +342,13 @@
      changing the row's layout. Siblings stagger by position, the same
      nine-step convention `.skeleton-block` uses. */
   .blueprint-fill {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: rgb(var(--blueprint-line) / 0.1);
     background-image: repeating-linear-gradient(
       45deg,
-      rgba(255, 255, 255, 0.32) 0 1px,
+      rgb(var(--blueprint-line) / 0.32) 0 1px,
       transparent 1px 7px
     );
-    border: 1px solid rgba(255, 255, 255, 0.45);
+    border: 1px solid rgb(var(--blueprint-line) / 0.45);
   }
   .blueprint-fill:nth-child(2) { animation-delay: calc(60ms - var(--bp-elapsed, 0ms)); }
   .blueprint-fill:nth-child(3) { animation-delay: calc(120ms - var(--bp-elapsed, 0ms)); }
@@ -331,10 +372,42 @@
     animation: blueprint-flag 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
-  /* The sheet's content column — see `blueprint-sheet-draw` above. */
+  /* The sheet's content column — see `blueprint-sheet-draw` above. It
+     starts a beat after the colour begins filling (`.blueprint-fill-in`)
+     so the green is already coming down ahead of the drawing. */
   .blueprint-sheet-content {
     animation: blueprint-sheet-draw 1.1s cubic-bezier(0.45, 0, 0.2, 1) both;
+    animation-delay: calc(250ms - var(--bp-elapsed, 0ms));
+  }
+
+  /* Root of a loading sheet: the colour fills the page top to bottom. */
+  .blueprint-fill-in {
+    animation: blueprint-fill-in 0.7s cubic-bezier(0.45, 0, 0.2, 1) both;
     animation-delay: calc(0ms - var(--bp-elapsed, 0ms));
+  }
+
+  .blueprint-wipe::before,
+  .blueprint-fill-in::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    z-index: 60;
+    height: 2px;
+    pointer-events: none;
+    background: rgb(var(--blueprint-line) / 0.9);
+    animation: blueprint-edge 0.8s cubic-bezier(0.65, 0, 0.35, 1) both;
+  }
+
+  /* While filling, the edge is the bottom of the visible region, so it
+     sits just above `top`; while wiping it's the top of the visible
+     region, so it sits just below. */
+  .blueprint-fill-in::before {
+    animation-duration: 0.7s;
+    animation-timing-function: cubic-bezier(0.45, 0, 0.2, 1);
+    animation-delay: calc(0ms - var(--bp-elapsed, 0ms));
+    transform: translateY(-100%);
   }
 
   /* Inside a reveal overlay the overlay itself already carries the grid

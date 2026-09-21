@@ -23,9 +23,9 @@ export default function ProjectDetailLoading() {
         meta={
           <>
             <BlueprintFill className="h-3 w-40" />
-            <span className="text-white/50">·</span>
+            <span className="text-blueprint/50">·</span>
             <BlueprintFill className="h-3 w-16" />
-            <span className="text-white/50">·</span>
+            <span className="text-blueprint/50">·</span>
             <BlueprintFill className="h-3 w-28" />
           </>
         }
@@ -40,13 +40,13 @@ export default function ProjectDetailLoading() {
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
-          <div className="mb-4 flex gap-4 border-b border-white/15 pb-[9px]">
+          <div className="mb-4 flex gap-4 border-b border-blueprint/15 pb-[9px]">
             {["w-24", "w-20", "w-16", "w-[82px]"].map((width) => (
               <BlueprintFill key={width} className={`h-3 ${width}`} />
             ))}
           </div>
 
-          <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+          <div className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
             <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[180px_1fr]">
               {Array.from({ length: 8 }).map((_, index) => (
                 <BlueprintFill
@@ -55,7 +55,7 @@ export default function ProjectDetailLoading() {
                 />
               ))}
             </div>
-            <div className="mt-4 border-t border-white/15 pt-4">
+            <div className="mt-4 border-t border-blueprint/15 pt-4">
               <BlueprintFill className="mb-2 h-2.5 w-20" />
               <div className="flex flex-wrap gap-1.5">
                 {Array.from({ length: 5 }).map((_, index) => (
@@ -67,7 +67,7 @@ export default function ProjectDetailLoading() {
         </div>
 
         <aside className="flex w-full flex-col gap-4 lg:w-[280px] lg:shrink-0">
-          <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-4">
+          <div className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-4">
             <BlueprintFill className="mb-3 h-2.5 w-14" />
             <BlueprintFill className="mb-2 h-2.5 w-full" />
             <BlueprintFill className="mb-3.5 h-2.5 w-3/4" />
@@ -76,14 +76,14 @@ export default function ProjectDetailLoading() {
                 <BlueprintFill key={index} className="h-5 w-14 rounded-md" />
               ))}
             </div>
-            <div className="flex flex-col gap-2 border-t border-white/15 pt-3">
+            <div className="flex flex-col gap-2 border-t border-blueprint/15 pt-3">
               {Array.from({ length: 6 }).map((_, index) => (
                 <BlueprintFill key={index} className="h-2.5 w-full" />
               ))}
             </div>
           </div>
 
-          <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-4">
+          <div className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-4">
             <BlueprintFill className="mb-3 h-2.5 w-20" />
             <div className="flex items-center gap-2.5">
               <BlueprintFill className="h-9 w-9 shrink-0 rounded-full" />
@@ -95,7 +95,7 @@ export default function ProjectDetailLoading() {
           </div>
 
           {Array.from({ length: 2 }).map((_, index) => (
-            <div key={index} className="rounded-[10px] border border-white/25 bg-white/[0.05] p-4">
+            <div key={index} className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-4">
               <BlueprintFill className="mb-3 h-2.5 w-16" />
               <BlueprintFill className="h-8 w-full rounded-[8px]" />
             </div>

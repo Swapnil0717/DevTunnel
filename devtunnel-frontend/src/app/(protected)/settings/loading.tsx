@@ -12,7 +12,7 @@ export default function SettingsLoading() {
       <div className="mx-auto w-full max-w-[640px]">
         <BlueprintFill className="mb-6 h-6 w-28" />
         <div className="flex flex-col gap-6">
-          <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+          <div className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
             <BlueprintFill className="mb-3 h-4 w-20" />
             <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3">
               <BlueprintFill className="h-3 w-12" />
@@ -21,7 +21,7 @@ export default function SettingsLoading() {
               <BlueprintFill className="h-3 w-32" />
             </div>
           </div>
-          <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+          <div className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
             <BlueprintFill className="mb-3 h-4 w-16" />
             <BlueprintFill className="mb-3 h-3 w-56" />
             <BlueprintFill className="h-9 w-24" />

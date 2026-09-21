@@ -12,9 +12,9 @@ export default function AdminTaskDetailLoading() {
         meta={
           <>
             <BlueprintFill className="h-3 w-28" />
-            <span className="text-white/50">·</span>
+            <span className="text-blueprint/50">·</span>
             <BlueprintFill className="h-3 w-36" />
-            <span className="text-white/50">·</span>
+            <span className="text-blueprint/50">·</span>
             <BlueprintFill className="h-4 w-16 rounded-full" />
           </>
         }
@@ -31,7 +31,7 @@ export default function AdminTaskDetailLoading() {
         <BlueprintStatCards count={3} />
       </div>
 
-      <div className="mb-8 rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+      <div className="mb-8 rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
         <div className="mb-3 flex items-center justify-between gap-3">
           <BlueprintFill className="h-2.5 w-20" />
           <BlueprintFill className="h-5 w-12" />
@@ -48,7 +48,7 @@ export default function AdminTaskDetailLoading() {
         </div>
       </div>
 
-      <div className="mb-8 rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+      <div className="mb-8 rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
         <BlueprintFill className="mb-3 h-2.5 w-20" />
         <div className="flex flex-wrap gap-1.5">
           {Array.from({ length: 5 }).map((_, index) => (
@@ -57,7 +57,7 @@ export default function AdminTaskDetailLoading() {
         </div>
       </div>
 
-      <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+      <div className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
         <BlueprintFill className="mb-2 h-2.5 w-24" />
         <BlueprintFill className="mb-3 h-3.5 w-3/5" />
         <BlueprintFill className="h-[260px] w-full" />

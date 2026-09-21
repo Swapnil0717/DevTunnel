@@ -22,7 +22,7 @@ export default function GithubProjectContributeLoading() {
         meta={
           <>
             <BlueprintFill className="h-3 w-40" />
-            <span className="text-white/50">·</span>
+            <span className="text-blueprint/50">·</span>
             <BlueprintFill className="h-3 w-36" />
           </>
         }
@@ -36,13 +36,13 @@ export default function GithubProjectContributeLoading() {
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
-          <div className="mb-4 flex gap-4 border-b border-white/15 pb-[9px]">
+          <div className="mb-4 flex gap-4 border-b border-blueprint/15 pb-[9px]">
             {["w-[124px]", "w-[104px]", "w-[92px]"].map((width) => (
               <BlueprintFill key={width} className={`h-3 ${width}`} />
             ))}
           </div>
 
-          <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-4">
+          <div className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-4">
             <div className="mb-3 flex flex-wrap gap-1.5">
               {Array.from({ length: 4 }).map((_, index) => (
                 <BlueprintFill key={index} className="h-6 w-20 rounded-[7px]" />
@@ -58,7 +58,7 @@ export default function GithubProjectContributeLoading() {
               {Array.from({ length: 4 }).map((_, index) => (
                 <div
                   key={index}
-                  className="rounded-[9px] border border-white/15 bg-white/[0.05]-raised p-3.5"
+                  className="rounded-[9px] border border-blueprint/15 bg-blueprint/[0.05]-raised p-3.5"
                 >
                   <BlueprintFill className="mb-2 h-3 w-2/3" />
                   <BlueprintFill className="mb-2.5 h-2.5 w-1/2" />
@@ -75,7 +75,7 @@ export default function GithubProjectContributeLoading() {
 
         <aside className="flex w-full flex-col gap-4 lg:w-[280px] lg:shrink-0">
           {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="rounded-[10px] border border-white/25 bg-white/[0.05] p-4">
+            <div key={index} className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-4">
               <BlueprintFill className="mb-3 h-2.5 w-24" />
               <div className="flex flex-col gap-2">
                 {Array.from({ length: 4 }).map((_, rowIndex) => (

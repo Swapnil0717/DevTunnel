@@ -40,7 +40,7 @@ function BlueprintBudgetMetricRow() {
  */
 export function BlueprintGroqBudgetPanel({ withPhaseBreakdown = false }: { withPhaseBreakdown?: boolean }) {
   return (
-    <div className="mb-6 rounded-[8px] border border-white/15 bg-white/[0.03] p-3.5" aria-hidden="true">
+    <div className="mb-6 rounded-[8px] border border-blueprint/15 bg-blueprint/[0.03] p-3.5" aria-hidden="true">
       <div className="flex items-center gap-1.5">
         <BlueprintFill className="h-3.5 w-3.5 shrink-0 rounded-full" />
         <BlueprintFill className="h-3 w-28" />
@@ -50,7 +50,7 @@ export function BlueprintGroqBudgetPanel({ withPhaseBreakdown = false }: { withP
       <BlueprintBudgetMetricRow />
 
       {withPhaseBreakdown ? (
-        <div className="mt-3.5 border-t border-white/15 pt-3">
+        <div className="mt-3.5 border-t border-blueprint/15 pt-3">
           <div className="mb-2 flex items-center justify-between">
             <BlueprintFill className="h-2.5 w-20" />
             <BlueprintFill className="h-2.5 w-28" />
@@ -84,7 +84,7 @@ export function BlueprintGroqBudgetPanel({ withPhaseBreakdown = false }: { withP
  */
 export function BlueprintBudgetShareEditor() {
   return (
-    <div className="mb-6 rounded-[8px] border border-white/15 bg-white/[0.03] p-3.5" aria-hidden="true">
+    <div className="mb-6 rounded-[8px] border border-blueprint/15 bg-blueprint/[0.03] p-3.5" aria-hidden="true">
       <div className="flex items-center gap-1.5">
         <BlueprintFill className="h-3.5 w-3.5 shrink-0 rounded-full" />
         <BlueprintFill className="h-3 w-32" />
@@ -100,7 +100,7 @@ export function BlueprintBudgetShareEditor() {
         ))}
       </div>
 
-      <div className="mt-3 flex items-center justify-between border-t border-white/15 pt-2.5">
+      <div className="mt-3 flex items-center justify-between border-t border-blueprint/15 pt-2.5">
         <BlueprintFill className="h-2.5 w-20" />
         <div className="flex items-center gap-2">
           <BlueprintFill className="h-7 w-28 rounded-md" />
@@ -129,7 +129,7 @@ export function BlueprintRunButtonRow({ withSecondary = false }: { withSecondary
 /** One `<li>` item card inside `AiDiscoveryQueue`'s list: title link, subtitle line, a row of meta chips, a reasoning line, and two action buttons. */
 function BlueprintQueueItem() {
   return (
-    <li className="rounded-lg border border-white/25 p-4" aria-hidden="true">
+    <li className="rounded-lg border border-blueprint/25 p-4" aria-hidden="true">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
           <BlueprintFill className="h-3.5 w-64 max-w-full" />
@@ -158,7 +158,7 @@ function BlueprintQueueItem() {
 export function BlueprintAiQueueSection({ rows = 3 }: { rows?: number }) {
   return (
     <div className="flex flex-col gap-3" aria-hidden="true">
-      <div className="flex flex-col gap-3 rounded-lg border border-white/15 bg-white/[0.03] p-3">
+      <div className="flex flex-col gap-3 rounded-lg border border-blueprint/15 bg-blueprint/[0.03] p-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex flex-wrap items-end gap-3">
             <BlueprintFill className="h-8 w-full rounded-[8px] sm:w-64" />

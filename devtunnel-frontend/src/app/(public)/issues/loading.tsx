@@ -41,12 +41,12 @@ export function IssuesLoadingSheet({ scanning = true }: { scanning?: boolean }) 
       {scanning ? (
         <div
           role="status"
-          className="flex flex-col items-center gap-2 rounded-[4px] border border-dashed border-white/40 bg-white/[0.05] px-6 py-14 text-center"
+          className="flex flex-col items-center gap-2 rounded-[4px] border border-dashed border-blueprint/40 bg-blueprint/[0.05] px-6 py-14 text-center"
         >
-          <p className="m-0 text-[12.5px] text-white">
+          <p className="m-0 text-[12.5px] text-text">
             Scanning DevTunnel&apos;s projects for open GitHub issues…
           </p>
-          <p className="m-0 max-w-[420px] text-[11.5px] text-white/70">
+          <p className="m-0 max-w-[420px] text-[11.5px] text-blueprint/70">
             This checks every onboarded repo live, so larger project lists can take a little
             while. Feel free to leave this tab open — it&apos;ll load automatically.
           </p>

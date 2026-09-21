@@ -31,7 +31,7 @@ export default function HomeLoading() {
       <BlueprintBlock className="mb-5 h-7 w-72" delayMs={100} />
 
       {/* Journey card: three summary rows, each with a dimension callout — the reference's paragraph treatment. */}
-      <div className="mb-3 rounded-[4px] border border-white/25 p-4">
+      <div className="mb-3 rounded-[4px] border border-blueprint/25 p-4">
         <BlueprintBlock className="mb-3 h-2.5 w-40" delayMs={160} />
         <div className="mb-1.5 flex flex-col gap-3">
           <BlueprintBlock className="h-3.5 w-full" dimension="444" delayMs={220} />
@@ -43,7 +43,7 @@ export default function HomeLoading() {
       {/* Stat strip: three columns. */}
       <div className="mb-9 grid grid-cols-3 gap-3">
         {[400, 440, 480].map((delayMs, index) => (
-          <div key={index} className="rounded-[4px] border border-white/25 p-3.5">
+          <div key={index} className="rounded-[4px] border border-blueprint/25 p-3.5">
             <BlueprintBlock className="mb-2 h-2.5 w-16" delayMs={delayMs} />
             <BlueprintBlock className="h-6 w-10" delayMs={delayMs + 30} />
           </div>

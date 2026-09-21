@@ -8,12 +8,12 @@
  * Every export mirrors the `skeleton.tsx` helper of the same name with
  * `Skeleton` → `Blueprint` (props unchanged); `BlueprintFill` is the
  * `SkeletonBlock` equivalent. Where a skeleton draws a `bg-surface`
- * card, this draws a faint white-tinted panel with a hairline outline;
+ * card, this draws a faint accent-tinted panel with a hairline outline;
  * where it draws a shimmering bar, this draws a diagonally hatched
  * bar that is "drawn" in from its top edge (`.blueprint-fill`,
  * globals.css). Compose them inside `<BlueprintSheet>`, never directly
- * on the app's normal light/dark background — the hatch is white and
- * would be invisible there. Inline, already-rendered UI (the Home
+ * on the page background — they're drawn as light accent "ink" and
+ * assume the sheet's deep green behind them. Inline, already-rendered UI (the Home
  * journey card, "load more" pagination) keeps using `skeleton.tsx`.
  */
 
@@ -74,7 +74,7 @@ export function BlueprintStatCards({ count = 4 }: { count?: number }) {
   return (
     <div className={`grid grid-cols-2 gap-3 ${gridColsClass}`} aria-hidden="true">
       {Array.from({ length: count }).map((_, index) => (
-        <div key={index} className="rounded-[10px] border border-white/25 bg-white/[0.05] px-4 py-3.5">
+        <div key={index} className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] px-4 py-3.5">
           <BlueprintFill className="mb-2 h-2.5 w-16" />
           <BlueprintFill className="h-5 w-10" />
         </div>
@@ -122,11 +122,11 @@ export function BlueprintPageHeader({
 function BlueprintDimension({ label }: { label: string }) {
   return (
     <div className="mt-1.5 flex items-center gap-1.5" aria-hidden="true">
-      <span className="blueprint-leader h-px flex-1 border-t border-dotted border-white/50" />
-      <span className="shrink-0 rounded-[2px] border border-white/40 bg-white/10 px-1 py-px text-[9px] leading-tight text-white/80">
+      <span className="blueprint-leader h-px flex-1 border-t border-dotted border-blueprint/50" />
+      <span className="shrink-0 rounded-[2px] border border-blueprint/40 bg-blueprint/10 px-1 py-px text-[9px] leading-tight text-blueprint/80">
         {label}
       </span>
-      <span className="blueprint-leader h-px flex-1 border-t border-dotted border-white/50" />
+      <span className="blueprint-leader h-px flex-1 border-t border-dotted border-blueprint/50" />
     </div>
   );
 }
@@ -135,8 +135,8 @@ function BlueprintDimension({ label }: { label: string }) {
 export function BlueprintTable({ rows = 6, columns = 5 }: { rows?: number; columns?: number }) {
   return (
     <div aria-hidden="true">
-      <div className="overflow-hidden rounded-[4px] border border-white/25">
-        <div className="flex gap-4 border-b border-white/25 bg-white/[0.05] px-4 py-2.5">
+      <div className="overflow-hidden rounded-[4px] border border-blueprint/25">
+        <div className="flex gap-4 border-b border-blueprint/25 bg-blueprint/[0.05] px-4 py-2.5">
           {Array.from({ length: columns }).map((_, index) => (
             <BlueprintFill key={index} className="h-2.5 flex-1" />
           ))}
@@ -144,7 +144,7 @@ export function BlueprintTable({ rows = 6, columns = 5 }: { rows?: number; colum
         {Array.from({ length: rows }).map((_, rowIndex) => (
           <div
             key={rowIndex}
-            className="flex items-center gap-4 border-b border-white/25 px-4 py-3 last:border-b-0"
+            className="flex items-center gap-4 border-b border-blueprint/25 px-4 py-3 last:border-b-0"
           >
             {Array.from({ length: columns }).map((_, colIndex) => (
               <BlueprintFill key={colIndex} className="h-3 flex-1" />
@@ -271,12 +271,12 @@ export function BlueprintFilterBar({ filters = 2 }: { filters?: number }) {
 export function BlueprintQueueList({ rows = 4 }: { rows?: number }) {
   return (
     <div className="flex flex-col gap-3" aria-hidden="true">
-      <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-white/15 bg-white/[0.03] p-3">
+      <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-blueprint/15 bg-blueprint/[0.03] p-3">
         <BlueprintFill className="h-9 w-full sm:w-64" />
         <BlueprintFill className="h-9 w-32" />
       </div>
       {Array.from({ length: rows }).map((_, index) => (
-        <div key={index} className="rounded-lg border border-white/25 p-4">
+        <div key={index} className="rounded-lg border border-blueprint/25 p-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
               <BlueprintFill className="h-3.5 w-2/5" />
@@ -306,13 +306,13 @@ export function BlueprintToolCardGrid({ count = 6 }: { count?: number }) {
       {Array.from({ length: count }).map((_, index) => (
         <div
           key={index}
-          className="flex flex-col items-center rounded-[10px] border border-white/25 bg-white/[0.05] p-4"
+          className="flex flex-col items-center rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-4"
         >
           <BlueprintFill className="h-[88px] w-[88px] rounded-[12px]" />
           <BlueprintFill className="mt-2.5 h-3.5 w-24" />
           <BlueprintFill className="mt-1.5 h-2.5 w-32" />
           <BlueprintFill className="mt-1.5 h-2.5 w-14 rounded-full" />
-          <div className="mt-3 flex w-full items-center justify-center gap-2 border-t border-white/15 pt-2.5">
+          <div className="mt-3 flex w-full items-center justify-center gap-2 border-t border-blueprint/15 pt-2.5">
             <BlueprintFill className="h-5 w-10" />
             <BlueprintFill className="h-5 w-10" />
             <BlueprintFill className="h-5 w-10" />
@@ -337,7 +337,7 @@ export function BlueprintToolCardGrid({ count = 6 }: { count?: number }) {
       {Array.from({ length: count }).map((_, index) => (
         <div
           key={index}
-          className="flex flex-col rounded-[10px] border border-white/25 bg-white/[0.05] p-4"
+          className="flex flex-col rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-4"
         >
           <div className="mb-2.5 flex items-start gap-2.5">
             <BlueprintFill className="h-8 w-8 shrink-0 rounded-full" />
@@ -352,7 +352,7 @@ export function BlueprintToolCardGrid({ count = 6 }: { count?: number }) {
             <BlueprintFill className="h-4 w-14 rounded-full" />
             <BlueprintFill className="h-4 w-12 rounded-full" />
           </div>
-          <div className="mt-auto flex items-center justify-between gap-2 border-t border-white/15 pt-2.5">
+          <div className="mt-auto flex items-center justify-between gap-2 border-t border-blueprint/15 pt-2.5">
             <BlueprintFill className="h-3 w-24" />
             <BlueprintFill className="h-3 w-16" />
           </div>
@@ -377,7 +377,7 @@ export function BlueprintToolCardGrid({ count = 6 }: { count?: number }) {
       {Array.from({ length: count }).map((_, index) => (
         <div
           key={index}
-          className="flex flex-col rounded-[10px] border border-white/25 bg-white/[0.05] p-4"
+          className="flex flex-col rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-4"
         >
           <div className="mb-2.5 flex items-start gap-2.5">
             <BlueprintFill className="h-8 w-8 shrink-0 rounded-[10px]" />
@@ -391,7 +391,7 @@ export function BlueprintToolCardGrid({ count = 6 }: { count?: number }) {
           <div className="mb-3 flex gap-1.5">
             <BlueprintFill className="h-4 w-14 rounded-full" />
           </div>
-          <div className="mt-auto flex items-center justify-between gap-2 border-t border-white/15 pt-2.5">
+          <div className="mt-auto flex items-center justify-between gap-2 border-t border-blueprint/15 pt-2.5">
             <BlueprintFill className="h-3 w-24" />
             <BlueprintFill className="h-3 w-16" />
           </div>
@@ -415,7 +415,7 @@ export function BlueprintToolCardGrid({ count = 6 }: { count?: number }) {
       {Array.from({ length: count }).map((_, index) => (
         <div
           key={index}
-          className="flex flex-col rounded-[10px] border border-white/25 bg-white/[0.05] p-4"
+          className="flex flex-col rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-4"
         >
           <div className="mb-2.5 flex items-start gap-2.5">
             <BlueprintFill className="h-8 w-8 shrink-0 rounded-[10px]" />
@@ -430,7 +430,7 @@ export function BlueprintToolCardGrid({ count = 6 }: { count?: number }) {
             <BlueprintFill className="h-4 w-14 rounded-full" />
             <BlueprintFill className="h-4 w-12 rounded-full" />
           </div>
-          <div className="mt-auto flex items-center justify-between gap-2 border-t border-white/15 pt-2.5">
+          <div className="mt-auto flex items-center justify-between gap-2 border-t border-blueprint/15 pt-2.5">
             <BlueprintFill className="h-3 w-16" />
             <BlueprintFill className="h-3 w-20" />
           </div>

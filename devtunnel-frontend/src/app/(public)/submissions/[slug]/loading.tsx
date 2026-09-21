@@ -22,9 +22,9 @@ export default function SubmissionDetailLoading() {
         meta={
           <>
             <BlueprintFill className="h-3 w-16" />
-            <span className="text-white/50">·</span>
+            <span className="text-blueprint/50">·</span>
             <BlueprintFill className="h-3 w-40" />
-            <span className="text-white/50">·</span>
+            <span className="text-blueprint/50">·</span>
             <BlueprintFill className="h-3 w-24" />
           </>
         }
@@ -38,12 +38,12 @@ export default function SubmissionDetailLoading() {
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+          <div className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
             <BlueprintFill className="mb-3 h-2.5 w-14" />
             <BlueprintFill className="mb-2 h-3 w-full" />
             <BlueprintFill className="h-3 w-2/3" />
           </div>
-          <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+          <div className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
             <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[140px_1fr]">
               <BlueprintFill className="h-2.5 w-20" />
               <BlueprintFill className="h-2.5 w-2/5" />
@@ -52,13 +52,13 @@ export default function SubmissionDetailLoading() {
               <BlueprintFill className="h-2.5 w-20" />
               <BlueprintFill className="h-2.5 w-1/2" />
             </div>
-            <div className="mt-4 flex flex-wrap gap-1.5 border-t border-white/15 pt-4">
+            <div className="mt-4 flex flex-wrap gap-1.5 border-t border-blueprint/15 pt-4">
               {Array.from({ length: 5 }).map((_, index) => (
                 <BlueprintFill key={index} className="h-5 w-16 rounded-md" />
               ))}
             </div>
           </div>
-          <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+          <div className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
             <BlueprintFill className="mb-3 h-2.5 w-16" />
             <BlueprintFill className="mb-2 h-3 w-full" />
             <BlueprintFill className="mb-2 h-3 w-5/6" />

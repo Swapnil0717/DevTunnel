@@ -21,7 +21,7 @@ export default function ProfileLoading() {
         </div>
       </div>
       <BlueprintStatCards count={4} />
-      <div className="mt-5 flex gap-4 border-b border-white/25 pb-2">
+      <div className="mt-5 flex gap-4 border-b border-blueprint/25 pb-2">
         <BlueprintFill className="h-3 w-32" />
         <BlueprintFill className="h-3 w-16" />
         <BlueprintFill className="h-3 w-28" />

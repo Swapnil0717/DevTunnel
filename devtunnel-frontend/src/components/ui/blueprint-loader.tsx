@@ -62,13 +62,13 @@ export function BlueprintSheet({
   children: ReactNode;
 }) {
   return (
-    <div className="blueprint-sheet relative min-h-screen w-full overflow-hidden" aria-hidden={ariaHidden ? "true" : undefined}>
+    <div className="blueprint-sheet blueprint-fill-in relative min-h-screen w-full overflow-hidden" aria-hidden={ariaHidden ? "true" : undefined}>
       <BlueprintClock />
       {/* Own element, own fixed height — see the comment on
           `.blueprint-ruler-strip` in globals.css for why this can't just
           be another class on the grid div above. */}
       <div className="blueprint-ruler-strip absolute inset-x-0 top-0 h-[7px]" />
-      <div className="absolute inset-x-0 top-[7px] flex items-center justify-between px-4 py-1.5 text-[10px] uppercase tracking-wide text-white/70 sm:px-6">
+      <div className="absolute inset-x-0 top-[7px] flex items-center justify-between px-4 py-1.5 text-[10px] uppercase tracking-wide text-blueprint/70 sm:px-6">
         <span>{sheetLabel}</span>
         <span className="text-right">{revLabel}</span>
       </div>
@@ -97,9 +97,9 @@ export function BlueprintBlock({
         <div className="mt-1 flex items-center gap-1.5">
           <span
             style={{ animationDelay: withElapsed(delayMs + 250) }}
-            className="blueprint-leader h-px w-10 flex-1 max-w-[64px] border-t border-dotted border-white/50"
+            className="blueprint-leader h-px w-10 flex-1 max-w-[64px] border-t border-dotted border-blueprint/50"
           />
-          <span className="shrink-0 rounded-[2px] border border-white/40 bg-white/10 px-1 py-px text-[9px] leading-tight text-white/80">
+          <span className="shrink-0 rounded-[2px] border border-blueprint/40 bg-blueprint/10 px-1 py-px text-[9px] leading-tight text-blueprint/80">
             {dimension}
           </span>
         </div>
@@ -112,9 +112,9 @@ export function BlueprintPlate({ label, delayMs = 0 }: { label: string; delayMs?
   return (
     <div
       style={{ animationDelay: withElapsed(delayMs) }}
-      className="blueprint-plate relative aspect-[4/3] overflow-hidden rounded-[2px] border border-white/40 bg-white/[0.06]"
+      className="blueprint-plate relative aspect-[4/3] overflow-hidden rounded-[2px] border border-blueprint/40 bg-blueprint/[0.06]"
     >
-      <span className="absolute left-1.5 top-1.5 z-10 rounded-[2px] border border-white/40 bg-white/15 px-1 py-px text-[9px] uppercase leading-tight text-white/85">
+      <span className="absolute left-1.5 top-1.5 z-10 rounded-[2px] border border-blueprint/40 bg-blueprint/15 px-1 py-px text-[9px] uppercase leading-tight text-blueprint/85">
         {label}
       </span>
       {/* The reference draws each empty plate as a box with a corner-to-corner X — a
@@ -122,7 +122,7 @@ export function BlueprintPlate({ label, delayMs = 0 }: { label: string; delayMs?
       <svg
         viewBox="0 0 100 75"
         preserveAspectRatio="none"
-        className="absolute inset-0 h-full w-full text-white/25"
+        className="absolute inset-0 h-full w-full text-blueprint/25"
       >
         <line x1="0" y1="0" x2="100" y2="75" stroke="currentColor" strokeWidth="0.6" />
         <line x1="100" y1="0" x2="0" y2="75" stroke="currentColor" strokeWidth="0.6" />

@@ -29,7 +29,7 @@ export default function AdminOpenSourceToolDetailLoading() {
         meta={
           <>
             <BlueprintFill className="h-3 w-48" />
-            <span className="text-white/50">·</span>
+            <span className="text-blueprint/50">·</span>
             <BlueprintFill className="h-3 w-16" />
           </>
         }
@@ -41,7 +41,7 @@ export default function AdminOpenSourceToolDetailLoading() {
         }
       />
 
-      <div className="mb-8 rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+      <div className="mb-8 rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
         <div className="mb-2 flex items-center justify-between gap-3">
           <BlueprintFill className="h-2.5 w-24" />
           <BlueprintFill className="h-5 w-12" />
@@ -50,7 +50,7 @@ export default function AdminOpenSourceToolDetailLoading() {
         <BlueprintFill className="mt-2 h-3 w-4/5" />
       </div>
 
-      <div className="mb-8 rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+      <div className="mb-8 rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
         <div className="mb-3 flex items-center justify-between gap-3">
           <BlueprintFill className="h-2.5 w-14" />
           <BlueprintFill className="h-5 w-12" />
@@ -62,7 +62,7 @@ export default function AdminOpenSourceToolDetailLoading() {
         </div>
       </div>
 
-      <div className="mb-8 rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+      <div className="mb-8 rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
         <div className="mb-2 flex items-center justify-between gap-3">
           <BlueprintFill className="h-2.5 w-32" />
           <BlueprintFill className="h-5 w-12" />
@@ -74,7 +74,7 @@ export default function AdminOpenSourceToolDetailLoading() {
         </div>
       </div>
 
-      <div className="rounded-[10px] border border-white/25 bg-white/[0.05] p-5">
+      <div className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5">
         <BlueprintFill className="mb-2 h-2.5 w-20" />
         <BlueprintFill className="h-[260px] w-full" />
       </div>

@@ -28,6 +28,12 @@ const config: Config = {
           DEFAULT: "#1D9E75",
           foreground: "#0A0A0A",
         },
+        // Ink colour of the blueprint loading sheet (lines, hatching,
+        // callouts) — a light tint of `accent`, driven by the same
+        // `--blueprint-line` variable globals.css uses for the sheet's own
+        // grid so the two can never drift apart. `<alpha-value>` is what
+        // makes `border-blueprint/25`-style opacity modifiers work.
+        blueprint: "rgb(var(--blueprint-line) / <alpha-value>)",
         status: {
           idle: "#639922",
           "idle-bg": "#151A0C",
