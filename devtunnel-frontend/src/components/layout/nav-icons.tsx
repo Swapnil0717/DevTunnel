@@ -379,3 +379,13 @@
      </svg>
    );
  }
+
+ /** Inline "→" used by the Home redesign primary CTA and "See all" links. */
+ export function ArrowRightIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M5 12h14" />
+       <path d="M13 6l6 6-6 6" />
+     </svg>
+   );
+ }

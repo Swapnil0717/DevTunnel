@@ -1,31 +1,40 @@
 import { ProjectCard } from "./project-card";
-import { SectionMessage } from "./section-message";
+import { HomeMessage } from "./home-message";
+import { HOME_PROJECT_GRID } from "./styles";
 import { getRecommendedProjects } from "@/lib/home/api";
+import { pickRecommendedProjects } from "@/lib/home/recommended-projects";
 
+/**
+ * Home's "Recommended for you" cards — the best-matching few, not the whole
+ * catalog (see `pickRecommendedProjects`); "See all" opens `/projects` for
+ * the rest.
+ */
 export async function RecommendedProjectsList() {
   const result = await getRecommendedProjects();
 
   if (result.status === "error") {
     return (
-      <SectionMessage>
+      <HomeMessage>
         Project recommendations aren&apos;t available yet — check back soon.
-      </SectionMessage>
+      </HomeMessage>
     );
   }
 
   if (result.status === "empty") {
     return (
-      <SectionMessage>
+      <HomeMessage>
         Complete your profile to get project recommendations.
-      </SectionMessage>
+      </HomeMessage>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-      {result.data.map((project) => (
-        <ProjectCard key={project.slug} project={project} />
+    <ul className={`${HOME_PROJECT_GRID} m-0 list-none p-0`}>
+      {pickRecommendedProjects(result.data).map((project) => (
+        <li key={project.slug} className="flex">
+          <ProjectCard project={project} />
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }

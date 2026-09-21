@@ -3,18 +3,41 @@
  * Shared skeleton building blocks for route-level `loading.tsx` files.
  *
  * `SkeletonBlock` is the one primitive that actually renders the
- * shimmer effect (a translucent band sweeping left-to-right via the
- * `shimmer` keyframes in tailwind.config.ts); every other helper below
- * composes `SkeletonBlock` rather than drawing its own `bg-surface`
- * div, so the animation only needs to change in one place.
+ * animation; every other helper below composes `SkeletonBlock` rather than
+ * drawing its own `bg-surface` div, so it only needs to change in one place.
+ * Two layers of motion:
+ *
+ *  - Entrance (`.skeleton-block`, globals.css): each block rises and its
+ *    clip opens from the bottom edge, staggered by sibling position, so a
+ *    loading page builds itself top to bottom — the page-load reveal from
+ *    the recent.design "portfolio page load animation" reference.
+ *  - Shimmer: a soft band in the app's accent green sweeping left-to-right
+ *    (the `shimmer` keyframes in tailwind.config.ts).
+ *
+ * Both respect `prefers-reduced-motion` (see globals.css).
  */
 
  import type { ReactNode } from "react";
 
- export function SkeletonBlock({ className = "" }: { className?: string }) {
+ /**
+  * `delayMs` overrides the sibling-position stagger from globals.css. Use it
+  * when blocks that should build in sequence aren't siblings — one per row of
+  * a list, one per card in a grid — so each row/card can pass its own index.
+  */
+ export function SkeletonBlock({
+  className = "",
+  delayMs,
+}: {
+  className?: string;
+  delayMs?: number;
+}) {
   return (
-    <div className={`relative overflow-hidden rounded-lg bg-surface ${className}`} aria-hidden="true">
-      <div className="absolute inset-0 animate-shimmer bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
+    <div
+      className={`skeleton-block relative overflow-hidden rounded-lg bg-surface ${className}`}
+      style={delayMs === undefined ? undefined : { animationDelay: `${delayMs}ms` }}
+      aria-hidden="true"
+    >
+      <div className="absolute inset-0 animate-shimmer bg-gradient-to-r from-transparent via-accent/[0.12] to-transparent" />
     </div>
   );
 }

@@ -1,35 +1,36 @@
 import { TaskRow } from "./task-row";
-import { SectionMessage } from "./section-message";
+import { HomeMessage } from "./home-message";
+import { HOME_LIST } from "./styles";
 import { getRecommendedTasks } from "@/lib/home/api";
 
 /**
  * "Recommended tasks" on Home — open, unclaimed tasks that fit the
  * contributor's onboarding profile, best fit first, from
- * `GET /users/me/recommended-tasks`. Each row says why it was picked
- * ("Match · Backend Developer"), so the list can be trusted and not just
- * read as a random selection.
+ * `GET /users/me/recommended-tasks` (the backend already caps it at a short
+ * list). Each row says why it was picked ("Match · Backend Developer"), so
+ * the list can be trusted and not just read as a random selection.
  */
 export async function RecommendedTasksList() {
   const result = await getRecommendedTasks();
 
   if (result.status === "error") {
     return (
-      <SectionMessage>
+      <HomeMessage>
         Recommended tasks aren&apos;t available yet — check back soon.
-      </SectionMessage>
+      </HomeMessage>
     );
   }
 
   if (result.status === "empty") {
     return (
-      <SectionMessage>
+      <HomeMessage>
         No open tasks match your profile right now — check back soon.
-      </SectionMessage>
+      </HomeMessage>
     );
   }
 
   return (
-    <ul className="flex flex-col gap-1.5 list-none p-0 m-0">
+    <ul className={`${HOME_LIST} m-0 list-none p-0`}>
       {result.data.map((task) => (
         <li key={task.taskId}>
           <TaskRow

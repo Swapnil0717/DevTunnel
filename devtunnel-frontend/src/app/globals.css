@@ -105,3 +105,71 @@
     background: transparent;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Skeleton reveal + footer train                                      */
+/* ------------------------------------------------------------------ */
+
+/* Keyframes sit outside any @layer so Tailwind never tree-shakes them. */
+
+/* Page-load reveal for skeleton blocks: each block rises into place while
+   its clip opens from the bottom edge upward — the "portfolio page load"
+   entrance from the recent.design reference, applied to every loading
+   state through `SkeletonBlock` (components/ui/skeleton.tsx). */
+@keyframes skeleton-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    clip-path: inset(100% 0 0 0);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* The footer train crosses the track left to right, entering fully off
+   the left edge and leaving fully past the right one. */
+@keyframes footer-train-run {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(100vw);
+  }
+}
+
+@layer components {
+  .skeleton-block {
+    animation: skeleton-reveal 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* Stagger siblings so a stack of placeholders builds top to bottom
+     instead of appearing all at once. Nine steps covers every skeleton in
+     the app; anything later just shares the last delay. */
+  .skeleton-block:nth-child(2) { animation-delay: 60ms; }
+  .skeleton-block:nth-child(3) { animation-delay: 120ms; }
+  .skeleton-block:nth-child(4) { animation-delay: 180ms; }
+  .skeleton-block:nth-child(5) { animation-delay: 240ms; }
+  .skeleton-block:nth-child(6) { animation-delay: 300ms; }
+  .skeleton-block:nth-child(7) { animation-delay: 360ms; }
+  .skeleton-block:nth-child(8) { animation-delay: 420ms; }
+  .skeleton-block:nth-child(n + 9) { animation-delay: 480ms; }
+
+  .footer-train {
+    animation: footer-train-run 28s linear infinite;
+    animation-delay: -9s; /* start mid-track so the train is on screen at first paint */
+    will-change: transform;
+  }
+}
+
+/* Someone who asked for less motion gets a parked train, not a frozen
+   off-screen one (the blanket rule above would otherwise jump it to the
+   final keyframe). */
+@media (prefers-reduced-motion: reduce) {
+  .footer-train {
+    animation: none;
+    transform: translateX(22vw);
+  }
+}

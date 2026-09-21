@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/auth/auth-provider";
+import { SiteFooter } from "@/components/layout/site-footer";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/config";
 import "./globals.css";
 
@@ -46,6 +47,11 @@ export default function RootLayout({
             still happens server-side — see (protected)/layout.tsx; the
             (public)/layout.tsx group deliberately doesn't redirect. */}
         <AuthProvider>{children}</AuthProvider>
+        {/* One footer for every route. It lives outside AuthProvider on
+            purpose — it's static and needs no account state — and after
+            `children`, so each page's own shell (which is `min-h-screen`)
+            has finished before it starts. */}
+        <SiteFooter />
       </body>
     </html>
   );
