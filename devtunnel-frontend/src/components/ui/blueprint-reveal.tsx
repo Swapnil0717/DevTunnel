@@ -133,9 +133,12 @@ export function BlueprintClock() {
  * positioned, isolated ancestor that should define their area (Home's
  * padded `<main>`).
  *
- * `prefers-reduced-motion`: every wait below collapses to zero and the
- * blanket rule in globals.css collapses the animations, so the layers
- * resolve to `done` almost immediately.
+ * `prefers-reduced-motion`: the timing is unchanged — the same four
+ * beats play — but globals.css swaps the top-to-bottom sweeps for plain
+ * cross-fades (no travelling edge, no drawing-in). Collapsing everything
+ * to zero instead would make the page jump from skeleton straight to
+ * finished content, which is exactly the hard cut this sequence exists
+ * to avoid.
  */
 export function BlueprintReveal({
   children,
@@ -165,7 +168,6 @@ export function BlueprintReveal({
   // pass through the effect below reuses it instead of finding the clock
   // already consumed and resetting the offset to zero.
   const elapsedRef = useRef<number | null>(null);
-  const reducedMotionRef = useRef(false);
 
   useIsomorphicLayoutEffect(() => {
     if (elapsedRef.current === null) {
@@ -187,10 +189,11 @@ export function BlueprintReveal({
 
     coverRef.current?.style.setProperty("--bp-elapsed", `${Math.round(elapsedMs)}ms`);
 
-    reducedMotionRef.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const waitMs = reducedMotionRef.current
-      ? 0
-      : Math.max(BLUEPRINT_MIN_VISIBLE_MS - elapsedMs, BLUEPRINT_MIN_HOLD_MS);
+    // No `prefers-reduced-motion` shortcut here: collapsing these waits to
+    // zero is what turned the whole sequence into a hard cut from skeleton
+    // to page. People who asked for less motion get the same beats as
+    // cross-fades instead (see the reduced-motion block in globals.css).
+    const waitMs = Math.max(BLUEPRINT_MIN_VISIBLE_MS - elapsedMs, BLUEPRINT_MIN_HOLD_MS);
 
     const timer = window.setTimeout(() => setPhase("revealing"), waitMs);
     return () => window.clearTimeout(timer);
@@ -200,11 +203,10 @@ export function BlueprintReveal({
   // than `animationend`: that event bubbles from every block's own
   // animation and never fires at all in a background tab.
   useEffect(() => {
-    const scale = reducedMotionRef.current ? 0 : 1;
     const next: Partial<Record<BlueprintPhase, [BlueprintPhase, number]>> = {
-      revealing: ["settled", BLUEPRINT_WIPE_MS * scale],
-      settled: ["lifting", BLUEPRINT_SETTLE_MS * scale],
-      lifting: ["done", BLUEPRINT_WIPE_MS * scale],
+      revealing: ["settled", BLUEPRINT_WIPE_MS],
+      settled: ["lifting", BLUEPRINT_SETTLE_MS],
+      lifting: ["done", BLUEPRINT_WIPE_MS],
     };
     const step = next[phase];
     if (!step) return;

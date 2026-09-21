@@ -72,6 +72,37 @@
       animation-duration: 2.4s !important;
       animation-iteration-count: infinite !important;
     }
+
+    /* The blueprint page-load sequence (fill, content-on-blueprint, page
+       colour) is the app's loading indicator, so it must never collapse
+       into a hard cut: with the blanket rule above alone every clip-path
+       sweep lasts 0.001ms and the sheet jumps straight from skeleton to
+       finished page. Someone who asked for less motion still gets the
+       same four beats, at the same timing, as plain cross-fades — no
+       sweeping clip-path, no travelling edge line, nothing drawn in
+       piece by piece. These need `!important` (and the higher
+       specificity of a class) to beat the `*` rule above. Keep the
+       durations in step with BLUEPRINT_WIPE_MS in blueprint-reveal.tsx. */
+    .blueprint-fill-in {
+      animation-name: blueprint-fade-in !important;
+      animation-duration: 0.7s !important;
+    }
+    .blueprint-sheet-content,
+    .blueprint-block,
+    .blueprint-fill,
+    .blueprint-leader,
+    .blueprint-plate {
+      animation-name: blueprint-fade-in !important;
+      animation-duration: 0.4s !important;
+    }
+    .blueprint-wipe {
+      animation-name: blueprint-fade-out !important;
+      animation-duration: 0.8s !important;
+    }
+    .blueprint-fill-in::before,
+    .blueprint-wipe::before {
+      display: none !important;
+    }
   }
 
   /* Custom scrollbar — thin, rounded, dark-surface-matching thumb that
@@ -246,6 +277,26 @@
 /* The bright leading edge that rides along the front of every top-to-bottom
    colour change (fill-in and both wipes), so the direction reads clearly.
    Fades out as it reaches the bottom. */
+/* Reduced-motion stand-ins for the sweeps above: same beats, opacity only
+   (see the `prefers-reduced-motion` block near the top of this file). */
+@keyframes blueprint-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes blueprint-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
 @keyframes blueprint-edge {
   0% {
     top: 0;
