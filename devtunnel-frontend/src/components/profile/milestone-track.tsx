@@ -88,7 +88,9 @@ export function MilestoneTrack({ milestoneWindow }: { milestoneWindow: Milestone
     .sort((a, b) => a - b)
     .reduce<number | null>((smallest, position, index, positions) => {
       if (index === 0) return smallest;
-      const gap = position - positions[index - 1];
+      const previous = positions[index - 1];
+      if (previous === undefined) return smallest;
+      const gap = position - previous;
       if (gap <= 0) return smallest;
       return smallest === null ? gap : Math.min(smallest, gap);
     }, null);

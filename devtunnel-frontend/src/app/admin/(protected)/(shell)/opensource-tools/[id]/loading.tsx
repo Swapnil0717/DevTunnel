@@ -1,4 +1,4 @@
-// src/app/admin/(protected)/opensource-tools/[id]/loading.tsx
+// src/app/admin/(protected)/(shell)/opensource-tools/[id]/loading.tsx
 import { BlueprintSheet } from "@/components/ui/blueprint-loader";
 import { BlueprintFill, BlueprintDetailHeader } from "@/components/ui/blueprint-kit";
 

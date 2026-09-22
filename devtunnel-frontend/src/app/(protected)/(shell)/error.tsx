@@ -3,13 +3,18 @@
 import { useEffect } from "react";
 
 /**
- * Fallback error boundary for `/onboarding` — the one route directly under
- * `(protected)` that isn't in the `(shell)` group (see
- * `onboarding/layout.tsx`), so it has no sidebar around it to preserve.
- * Every other protected page (home, profile, settings, dashboard,
- * submissions/new, submissions/:slug/edit) is caught first by
- * `(shell)/error.tsx`, which renders inside `AppShell` so the sidebar stays
- * mounted — this one is the plain, shell-less version for the wizard.
+ * Error boundary for every shell page — /home, /profile, /settings,
+ * /dashboard, /submissions/new, /submissions/:slug/edit. Renders inside
+ * `(shell)/layout.tsx`'s `{children}` slot, one level *below* `AppShell`
+ * (see that file), so `AppSidebar`/`AppBottomNav` stay mounted and the
+ * person never loses the app shell just because one page's content threw.
+ *
+ * `/onboarding` isn't in the `(shell)` group (it's full-bleed, no sidebar —
+ * see `onboarding/layout.tsx`) and falls back to the plain
+ * `(protected)/error.tsx` one level up instead.
+ *
+ * Doesn't attempt its own "back to home" link — the sidebar/bottom nav
+ * already sitting around this boundary covers that.
  */
 export default function ProtectedError({
   error,
@@ -24,7 +29,7 @@ export default function ProtectedError({
   }, [error]);
 
   return (
-    <div className="flex min-h-screen flex-1 flex-col items-center justify-center gap-4 px-6 py-16 text-center">
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 py-16 text-center">
       <div>
         <h2 className="m-0 mb-1 text-[15px] font-medium text-text">This page hit a snag</h2>
         <p className="m-0 text-[13px] text-text-muted">

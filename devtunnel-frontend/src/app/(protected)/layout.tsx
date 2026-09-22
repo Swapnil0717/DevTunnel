@@ -1,8 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AuthProvider } from "@/lib/auth/auth-provider";
-import { AppShell } from "@/components/layout/app-shell";
-import { TrainFooter } from "@/components/layout/train-footer";
 import { getServerUser } from "@/lib/auth/get-server-user";
 import { needsOnboarding } from "@/lib/onboarding/needs-onboarding";
 import { isAdmin } from "@/lib/auth/is-admin";
@@ -51,11 +49,17 @@ import { signInHref } from "@/lib/auth/sign-in-href";
  * a not-yet-onboarded user would get redirected to /onboarding while
  * already on /onboarding, which is a redirect loop.
  *
- * This layout also owns the app-shell navigation via `AppShell`: a fixed
- * `AppSidebar` for sm+ screens, `AppBottomNav` for mobile, and the train
- * footer at the bottom of the content column. /onboarding is a full-bleed
- * wizard in the reference designs, not a shell page, so it skips the
- * navigation — it still gets the footer, at the bottom of the page.
+ * What this layout does NOT own any more is the app-shell chrome
+ * (`AppSidebar`/`AppBottomNav` vs. the full-bleed onboarding wizard). That
+ * used to be a runtime `if (pathname === "/onboarding")` branch right here,
+ * which could make the sidebar disappear on a client-side navigation and
+ * only come back after a full page reload — see the comment on
+ * `(shell)/layout.tsx` for the full explanation. The shell is now a
+ * structural decision made by Next.js's routing: shell pages live under
+ * `(shell)/layout.tsx`, and /onboarding lives under its own
+ * `onboarding/layout.tsx`. This layout only handles auth and hands
+ * `children` straight through, wrapped in the one `AuthProvider` every
+ * route in this group shares.
  */
 export default async function ProtectedLayout({
   children,
@@ -80,18 +84,9 @@ export default async function ProtectedLayout({
     redirect("/onboarding");
   }
 
-  if (pathname === "/onboarding") {
-    return (
-      <AuthProvider initialUser={user} enforceSession loginPath="/login">
-        {children}
-        <TrainFooter />
-      </AuthProvider>
-    );
-  }
-
   return (
     <AuthProvider initialUser={user} enforceSession loginPath="/login">
-      <AppShell>{children}</AppShell>
+      {children}
     </AuthProvider>
   );
 }

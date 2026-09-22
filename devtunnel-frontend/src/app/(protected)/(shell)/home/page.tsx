@@ -28,7 +28,7 @@ export const metadata: Metadata = {
  *
  * Layout follows devtunnel_user_home_redesign.html. Content is capped at
  * max-w-[1040px] and centered — without it, on a wide monitor the sidebar's
- * fixed 208px leaves the rest of the row to stretch the project grid far
+ * fixed 240px leaves the rest of the row to stretch the project grid far
  * wider than it was designed for, which reads as empty/unfinished rather than
  * intentional.
  *

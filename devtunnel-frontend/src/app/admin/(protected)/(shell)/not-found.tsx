@@ -11,9 +11,9 @@ import Link from "next/link";
  * except retyping the URL.
  *
  * This file fixes that the same way the per-route `loading.tsx` files
- * fixed the blank-panel problem: it renders inside
- * `admin/(protected)/layout.tsx`'s `{children}`, so the sidebar/header
- * stay mounted and the admin gets a real way back in.
+ * fixed the blank-panel problem: it renders inside `(shell)/layout.tsx`'s
+ * `{children}`, one level below the admin shell, so the sidebar/header stay
+ * mounted and the admin gets a real way back in.
  */
 export default function AdminNotFound() {
   return (

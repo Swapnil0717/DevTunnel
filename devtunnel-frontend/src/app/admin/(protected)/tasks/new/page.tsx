@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { buildMetadata } from "@/lib/seo";
 import { TaskOnboardingWizard } from "@/components/admin/task-onboarding/task-onboarding-wizard";
-import RouteLoading from "../loading";
+import RouteLoading from "../../(shell)/tasks/loading";
 import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 export const metadata: Metadata = buildMetadata({

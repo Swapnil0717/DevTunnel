@@ -4,10 +4,6 @@ import { AuthProvider } from "@/lib/auth/auth-provider";
 
 import { getServerUser } from "@/lib/auth/get-server-user";
 import { isAdmin } from "@/lib/auth/is-admin";
-import { AdminHeader } from "@/components/auth/admin-header";
-import { AdminSidebar } from "@/components/admin/admin-sidebar";
-import { AdminMobileNav } from "@/components/admin/admin-mobile-nav";
-import { TrainFooter } from "@/components/layout/train-footer";
 
 /**
  * Real route protection for everything under `/admin` (devtunnel_workflow.txt,
@@ -34,29 +30,32 @@ import { TrainFooter } from "@/components/layout/train-footer";
  * `role: "ADMIN"` to render can't also host the page where someone who
  * *isn't* an admin yet is supposed to sign in.
  *
- * Admin Home shell: `AdminSidebar` (branding + Module 31's full section
- * list, `md` and up) is `position: fixed`, so it stays put however far the
- * page scrolls and the footer can never move it; the content column beside
- * it reserves its width with `md:ml-[224px]` (keep in step with
- * `AdminSidebar`'s `w-[224px]`). The column is topped by `AdminHeader`
- * (current section + signed-in admin + sign-out) and, below `md` where the
- * sidebar is hidden, `AdminMobileNav` — same nav entries as a horizontally
- * scrollable strip. Every admin page (starting with the Module A2
- * dashboard) renders inside `{children}` beneath those two, and the train
- * footer closes the column — inside the page area, never under the sidebar.
+ * What this layout does NOT own any more is the admin shell chrome
+ * (`AdminSidebar`/`AdminHeader`/`AdminMobileNav` vs. the full-bleed
+ * onboarding wizards). That used to be a runtime
+ * `FULL_BLEED_PATHS.includes(pathname)` check right here, comparing the
+ * current pathname (read via `headers()`) against
+ * `/admin/projects/new`, `/admin/tasks/new`, `/admin/opensource-tools/new`
+ * and branching this layout's returned JSX on the result. This layout is
+ * shared by every page under `/admin`, and Next.js can reuse an
+ * already-rendered layout segment across a client-side navigation between
+ * sibling pages — so a layout whose JSX *shape* depends on the exact
+ * current pathname (rather than only on its own segment + children) could
+ * end up showing whichever chrome an earlier admin page rendered, until a
+ * full page reload forced a fresh server render. (Same bug, same fix, as
+ * `(protected)/layout.tsx` on the contributor side — see the comment on
+ * `(shell)/layout.tsx` there for the full explanation.)
  *
- * `FULL_BLEED_PATHS` is the exception to that shell: Project Onboarding
- * (`/admin/projects/new`), Task Onboarding (`/admin/tasks/new`), and Open
- * Source Tool Onboarding (`/admin/opensource-tools/new`) are each a
- * multi-step wizard with its own sidebar, so stacking any of them inside
- * `AdminSidebar` + `AdminHeader` would double up the chrome. Same
- * treatment as the contributor `/onboarding` page relative to
- * `(protected)/layout.tsx` — the auth/role check still runs unconditionally
- * above, only the shell around `{children}` is skipped (the footer still
- * closes the page).
+ * The fix is structural instead of pathname-based: `/admin/projects/new`,
+ * `/admin/tasks/new` and `/admin/opensource-tools/new` each live in their
+ * own `new/layout.tsx` (no admin shell, just the train footer), sibling to
+ * the rest of their section rather than nested under it, and every other
+ * admin page lives under `(shell)/layout.tsx`. Which layout renders is now
+ * decided by Next.js's own routing, so it can't go stale across a
+ * client-side navigation. This layout only handles auth and hands
+ * `children` straight through, wrapped in the one `AuthProvider` every
+ * route under `/admin` shares.
  */
- const FULL_BLEED_PATHS = ["/admin/projects/new", "/admin/tasks/new", "/admin/opensource-tools/new"];
-
 export default async function AdminProtectedLayout({
   children,
 }: {
@@ -69,26 +68,9 @@ export default async function AdminProtectedLayout({
     redirect(`/admin/login?next=${encodeURIComponent(pathname)}`);
   }
 
-  if (FULL_BLEED_PATHS.includes(pathname)) {
-    return (
-      <AuthProvider initialUser={user} enforceSession loginPath="/admin/login">
-        {children}
-        <TrainFooter />
-      </AuthProvider>
-    );
-  }
-
   return (
     <AuthProvider initialUser={user} enforceSession loginPath="/admin/login">
-      <div className="min-h-screen bg-bg">
-        <AdminSidebar />
-        <div className="flex min-h-screen min-w-0 flex-col md:ml-[224px]">
-          <AdminHeader />
-          <AdminMobileNav />
-          <div className="flex-1">{children}</div>
-          <TrainFooter />
-        </div>
-      </div>
+      {children}
     </AuthProvider>
   );
 }

@@ -1,4 +1,4 @@
-// src/app/admin/(protected)/ai/tools/loading.tsx
+// src/app/admin/(protected)/(shell)/ai/tasks/loading.tsx
 import { BlueprintSheet } from "@/components/ui/blueprint-loader";
 import { BlueprintPageHeader } from "@/components/ui/blueprint-kit";
 import {
@@ -8,22 +8,22 @@ import {
 } from "@/components/admin/ai-discovery/ai-discovery-skeletons";
 
 /**
- * `/admin/ai/tools` — one `getAiDiscoveredTools("PENDING")` fetch,
+ * `/admin/ai/tasks` — one `getAiDiscoveredTasks("PENDING")` fetch,
  * rendered as `AiDiscoveryRunButton` (its own `GroqQuotaPanel`, scoped
- * to `kind="tools"` — no phase breakdown — plus the run button)
- * followed by `AiDiscoveryQueue`'s search/filter toolbar + card list —
- * never a table.
+ * to `kind="tasks"`, plus the run button AND the Tasks-only second
+ * "Auto-convert issues until budget runs out" button) followed by
+ * `AiDiscoveryQueue`'s toolbar + card list — never a table.
  */
-export default function AdminAiToolsLoading() {
+export default function AdminAiTasksLoading() {
   return (
     <BlueprintSheet
-      sheetLabel="Sheet A5.2 — AI tools"
+      sheetLabel="Sheet A5.3 — AI tasks"
       revLabel="Rev — loading queue"
       contentClassName="w-full mx-auto max-w-6xl px-6 py-10"
     >
       <BlueprintPageHeader withAction={false} />
       <BlueprintGroqBudgetPanel />
-      <BlueprintRunButtonRow />
+      <BlueprintRunButtonRow withSecondary />
       <BlueprintAiQueueSection rows={4} />
     </BlueprintSheet>
   );

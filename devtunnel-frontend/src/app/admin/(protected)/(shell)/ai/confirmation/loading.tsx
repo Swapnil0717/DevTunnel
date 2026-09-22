@@ -1,4 +1,4 @@
-// src/app/admin/(protected)/ai/confirmation/loading.tsx
+// src/app/admin/(protected)/(shell)/ai/confirmation/loading.tsx
 import { BlueprintSheet } from "@/components/ui/blueprint-loader";
 import { BlueprintFill, BlueprintPageHeader } from "@/components/ui/blueprint-kit";
 import {
