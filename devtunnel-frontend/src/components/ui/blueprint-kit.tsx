@@ -527,6 +527,107 @@ export function BlueprintToolCardGrid({ count = 6 }: { count?: number }) {
   );
 }
 /**
+ * The shared two-panel layout every onboarding wizard renders —
+ * `ProjectOnboardingWizard`, `TaskOnboardingWizard`,
+ * `OpenSourceToolOnboardingWizard`, and `SubmissionOnboardingWizard`
+ * all return the exact same shell (`<main class="flex min-h-screen
+ * w-full flex-col bg-bg lg:flex-row">`): a fixed-width `<aside>` with a
+ * "Back to X" link, the logo, a mobile horizontal step strip, a
+ * desktop title/blurb + vertical numbered `StepIndicator` rail, and a
+ * footnote line; then a flexed content column, centered and capped at
+ * `max-w-[720px]`, holding the current step's own content plus its
+ * Back/Continue button row. Previously each of the four `.../new`
+ * pages either had no dedicated `loading.tsx` at all or (worse)
+ * borrowed the list page's table/grid skeleton for this completely
+ * different two-panel wizard shape. Like every other helper here, real
+ * copy is never rendered as text (`BlueprintPageHeader` and
+ * `BlueprintDetailHeader` don't either) — only `stepLabels`' *length*
+ * (each wizard's real step count: 5 for Project/Task/Tool, 3 for
+ * Submission) and `currentStep` shape the rail, so each route's
+ * `loading.tsx` just passes its own `STEP_LABELS` array.
+ */
+export function BlueprintWizardLayout({
+  stepLabels,
+  currentStep = 1,
+}: {
+  stepLabels: string[];
+  currentStep?: number;
+}) {
+  const totalSteps = stepLabels.length;
+  return (
+    <main className="flex min-h-screen w-full flex-col bg-bg lg:flex-row" aria-hidden="true">
+      <aside className="flex flex-shrink-0 flex-col gap-6 border-b border-blueprint/25 px-4 py-5 sm:px-6 lg:w-[320px] lg:justify-between lg:gap-0 lg:border-b-0 lg:border-r lg:px-10 lg:py-12 xl:w-[380px]">
+        <BlueprintFill className="h-3 w-28" />
+
+        <div className="flex items-center justify-between lg:block">
+          <BlueprintFill className="h-6 w-32 lg:hidden" />
+          <div className="hidden items-center gap-1.5 lg:flex">
+            <BlueprintFill className="h-5 w-5 rounded-[6px]" />
+            <BlueprintFill className="h-3.5 w-20" />
+          </div>
+          <div className="flex items-center gap-2 lg:hidden">
+            <span className="font-mono text-[11px] text-blueprint/50">1/{totalSteps}</span>
+            <div className="flex gap-1">
+              {Array.from({ length: totalSteps }).map((_, index) => (
+                <BlueprintFill key={index} className="h-[3px] w-[22px] rounded-sm" />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="hidden lg:block">
+          <BlueprintFill className="mb-1 h-[19px] w-48" />
+          <div className="mb-10 flex flex-col gap-1.5">
+            <BlueprintFill className="h-2.5 w-[260px]" />
+            <BlueprintFill className="h-2.5 w-[200px]" />
+          </div>
+          <ol className="m-0 flex list-none flex-col p-0">
+            {stepLabels.map((label, index) => {
+              const stepNumber = index + 1;
+              const isCurrent = stepNumber === currentStep;
+              return (
+                <li key={label ?? stepNumber} className="flex gap-3 pb-7 last:pb-0">
+                  <div className="flex flex-col items-center">
+                    <span
+                      className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border text-[11px] ${
+                        isCurrent ? "border-blueprint/60" : "border-blueprint/25"
+                      }`}
+                    >
+                      <BlueprintFill className="h-full w-full rounded-full" delayMs={index * 60} />
+                    </span>
+                    {stepNumber < totalSteps ? (
+                      <span className="mt-1 w-px flex-1 bg-blueprint/25" />
+                    ) : null}
+                  </div>
+                  <div className="pt-0.5">
+                    <BlueprintFill className="h-3 w-24" delayMs={index * 60} />
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+
+        <BlueprintFill className="hidden h-2.5 w-full max-w-[260px] lg:block" />
+      </aside>
+
+      <div className="flex flex-1 items-center justify-center px-4 py-6 sm:px-6 sm:py-10 lg:px-16 lg:py-14 xl:px-20">
+        <div className="flex w-full max-w-[720px] flex-col gap-6 sm:gap-8">
+          <div className="flex flex-1 flex-col gap-4">
+            <BlueprintFill className="h-5 w-56" />
+            <BlueprintFill className="h-40 w-full rounded-[10px]" />
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-blueprint/15 pt-6">
+            <BlueprintFill className="h-9 w-20" />
+            <BlueprintFill className="h-9 w-28" />
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+/**
  * N `DevtunnelOpenSourceToolCard`-shaped placeholders for
  * `/opensource-tools`'s card grid — same left-aligned logo + name/source
  * row, two-line description, tag row, and bordered footer shape as

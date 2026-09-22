@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { buildMetadata } from "@/lib/seo";
 import { SubmissionOnboardingWizard } from "@/components/submissions/onboarding/submission-onboarding-wizard";
+import RouteLoading from "./loading";
+import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 export const metadata: Metadata = buildMetadata({
   title: "Submit a project or tool",
@@ -27,5 +29,9 @@ export const metadata: Metadata = buildMetadata({
  * losing it.
  */
 export default function SubmitToCommunityPage() {
-  return <SubmissionOnboardingWizard />;
+  return (
+    <BlueprintReveal skeleton={<RouteLoading />} className="relative isolate min-h-screen w-full">
+      <SubmissionOnboardingWizard />
+    </BlueprintReveal>
+  );
 }

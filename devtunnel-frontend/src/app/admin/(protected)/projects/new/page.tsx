@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { buildMetadata } from "@/lib/seo";
 import { ProjectOnboardingWizard } from "@/components/admin/onboarding/project-onboarding-wizard";
-import RouteLoading from "../../(shell)/projects/loading";
+import RouteLoading from "./loading";
 import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 export const metadata: Metadata = buildMetadata({

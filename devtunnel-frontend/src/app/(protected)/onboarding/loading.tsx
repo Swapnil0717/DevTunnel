@@ -1,25 +1,26 @@
 import { BlueprintSheet } from "@/components/ui/blueprint-loader";
-import { BlueprintFill } from "@/components/ui/blueprint-kit";
+import { BlueprintWizardLayout } from "@/components/ui/blueprint-kit";
+
+const STEP_LABELS = ["Welcome", "Your profile", "Get started", "Review"];
 
 /**
  * `/onboarding` — calls `getServerUser()` before it can decide whether
  * to redirect (already onboarded → `/home`, signed out → `/login`) or
- * render `OnboardingWizard`.
+ * render `OnboardingWizard`, which shares the exact same two-panel
+ * shell as the admin/submission onboarding wizards (sidebar step rail
+ * + centered step content) — see `BlueprintWizardLayout`. Previously
+ * this rendered a generic progress-dots-and-box shape instead of that
+ * sidebar, so the real page's layout shifted the moment it mounted.
  */
 export default function OnboardingLoading() {
   return (
     <BlueprintSheet
       sheetLabel="Sheet 02 — Onboarding"
       revLabel="Rev — preparing your setup"
-      contentClassName="mx-auto flex min-h-[70vh] w-full max-w-[560px] flex-col gap-6 px-6 py-12"
+      contentClassName="w-full"
+      ariaHidden
     >
-      <div className="flex items-center gap-2">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <BlueprintFill key={index} className="h-1.5 flex-1 rounded-full" />
-        ))}
-      </div>
-      <BlueprintFill className="h-6 w-56" />
-      <BlueprintFill className="h-[320px] w-full" />
+      <BlueprintWizardLayout stepLabels={STEP_LABELS} currentStep={1} />
     </BlueprintSheet>
   );
 }
