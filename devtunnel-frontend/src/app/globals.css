@@ -25,6 +25,16 @@
 
   html {
     -webkit-text-size-adjust: 100%;
+
+    /* Always reserve the vertical scrollbar's width, whether or not the
+       page is currently tall enough to need one. Without this, switching
+       to a taller tab on the Contribute page (e.g. "How to submit") can
+       push the page past the viewport height, the scrollbar appears, and
+       the content column narrows by the scrollbar's width — a visible
+       horizontal shift every time someone changes tabs. Reserving the
+       space up front keeps the page's content width constant regardless
+       of how tall any given tab's content is. */
+    scrollbar-gutter: stable;
   }
 
   body {

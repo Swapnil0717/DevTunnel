@@ -14,8 +14,8 @@ import { TrainFooter } from "./train-footer";
  *    the document flow entirely: it never scrolls with the page and nothing
  *    below the content — the footer included — can move it.
  *  - Because it's out of flow, the content column reserves its width
- *    itself with `sm:ml-[208px]`. Keep that in step with `AppSidebar`'s
- *    `w-[208px]`.
+ *    itself with `sm:ml-[240px]`. Keep that in step with `AppSidebar`'s
+ *    `w-[240px]`.
  *  - `TrainFooter` is the last child *inside* the content column, so it
  *    spans the page area only — never the sidebar. `children` sit in a
  *    `flex-1` wrapper so the footer rests at the bottom of the viewport on
@@ -34,7 +34,7 @@ export function AppShell({
     <>
       <div className="min-h-screen bg-bg">
         <AppSidebar />
-        <div className="flex min-h-screen min-w-0 flex-col pb-16 sm:ml-[208px] sm:pb-0">
+        <div className="flex min-h-screen min-w-0 flex-col pb-16 sm:ml-[240px] sm:pb-0">
           {banner}
           <div className="flex min-w-0 flex-1 flex-col">{children}</div>
           <TrainFooter />

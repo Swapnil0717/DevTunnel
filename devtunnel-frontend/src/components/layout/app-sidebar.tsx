@@ -52,8 +52,8 @@ import { useAuth } from "@/lib/auth/use-auth";
  * it — unlike the previous `sticky` version, which was bounded by its
  * parent and slid up the screen once the page ran out. Because a fixed
  * element leaves the document flow, the content column beside it reserves
- * its width with `sm:ml-[208px]` (see `AppShell`) — keep that in step with
- * `w-[208px]` below. On a viewport too short to fit every item the sidebar
+ * its width with `sm:ml-[240px]` (see `AppShell`) — keep that in step with
+ * `w-[240px]` below. On a viewport too short to fit every item the sidebar
  * scrolls inside itself (`overflow-y-auto`) instead of clipping the
  * account/sign-out footer.
  */
@@ -81,7 +81,7 @@ export function AppSidebar() {
     : NAV_LINKS;
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-20 hidden w-[208px] flex-col overflow-y-auto border-r border-border-subtle bg-bg px-4 py-6 sm:flex">
+    <aside className="fixed inset-y-0 left-0 z-20 hidden w-[240px] flex-col overflow-y-auto border-r border-border-subtle bg-bg px-4 py-6 sm:flex">
       <div className="mb-8 pl-1">
         <Logo />
       </div>
