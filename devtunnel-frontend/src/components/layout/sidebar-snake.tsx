@@ -107,9 +107,9 @@ export function SidebarSnake({ containerRef, hrefs }: SidebarSnakeProps) {
       anchors.forEach((a) => {
         const rect = localRect(a);
         const ipath = rectLoop(rect);
-        if (masterPath.length > 0) {
-          const prevPoint = masterPath[masterPath.length - 1];
-          const startPoint = ipath[0];
+        if (masterPath.length > 0 && ipath.length > 0) {
+          const prevPoint = masterPath[masterPath.length - 1]!;
+          const startPoint = ipath[0]!;
           if (prevPoint.x === startPoint.x) {
             for (let y = prevPoint.y + 1; y < startPoint.y; y++) {
               masterPath.push({ x: prevPoint.x, y });
@@ -129,7 +129,7 @@ export function SidebarSnake({ containerRef, hrefs }: SidebarSnakeProps) {
 
     function pathPoint(idx: number): Point {
       idx = Math.max(0, Math.min(masterPath.length - 1, idx));
-      return masterPath[idx];
+      return masterPath[idx]!;
     }
 
     function resetSnake() {
@@ -187,7 +187,7 @@ export function SidebarSnake({ containerRef, hrefs }: SidebarSnakeProps) {
 
     function render() {
       for (let i = 0; i < snake.length; i++) {
-        const s = snake[i];
+        const s = snake[i]!;
         const el = ensureSeg(i);
         el.style.transform = `translate(${s.x * CELL}px,${s.y * CELL}px)`;
         el.style.background = i === 0 ? "var(--snake-head)" : "var(--snake-body)";
@@ -195,7 +195,7 @@ export function SidebarSnake({ containerRef, hrefs }: SidebarSnakeProps) {
         el.style.display = "block";
       }
       for (let i = snake.length; i < segPool.length; i++) {
-        segPool[i].style.display = "none";
+        segPool[i]!.style.display = "none";
       }
 
       let fc: Point | null = null;
@@ -237,7 +237,7 @@ export function SidebarSnake({ containerRef, hrefs }: SidebarSnakeProps) {
           pendingGrowth += 1;
           let range: Range | null = null;
           for (const key in itemRanges) {
-            const r = itemRanges[key];
+            const r = itemRanges[key]!;
             if (headIdx >= r.start && headIdx < r.start + r.len) {
               range = r;
               break;
