@@ -1,6 +1,7 @@
 // devtunnel-frontend/src/components/layout/app-sidebar.tsx
 "use client";
 
+import { useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "./logo";
@@ -20,6 +21,7 @@ import {
 } from "./nav-icons";
 import { SignInLink } from "../auth/sign-in-link";
 import { useAuth } from "@/lib/auth/use-auth";
+import { SidebarSnake } from "./sidebar-snake";
 
 /**
  * Left app-shell navigation for sm and up. Below sm, `AppBottomNav`
@@ -79,6 +81,7 @@ export function AppSidebar() {
   const links: readonly NavLink[] = isSignedOut
     ? NAV_LINKS.filter((link) => !link.requiresAccount)
     : NAV_LINKS;
+  const navListRef = useRef<HTMLUListElement>(null);
 
   return (
     <aside className="fixed inset-y-0 left-0 z-20 hidden w-[240px] flex-col overflow-y-auto border-r border-border-subtle bg-bg px-4 py-6 sm:flex">
@@ -86,14 +89,15 @@ export function AppSidebar() {
         <Logo />
       </div>
 
-      <nav aria-label="Primary" className="flex-1">
-        <ul className="flex flex-col gap-1.5 list-none p-0 m-0">
+      <nav aria-label="Primary" className="relative flex-1">
+        <ul ref={navListRef} className="flex flex-col gap-1.5 list-none p-0 m-0">
           {links.map(({ href, label, Icon }) => {
             const isActive = pathname === href || pathname?.startsWith(`${href}/`);
             return (
               <li key={href}>
                 <Link
                   href={href}
+                  data-snake-href={href}
                   aria-current={isActive ? "page" : undefined}
                   className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${
                     isActive
@@ -108,6 +112,7 @@ export function AppSidebar() {
             );
           })}
         </ul>
+        <SidebarSnake containerRef={navListRef} hrefs={links.map((l) => l.href)} />
       </nav>
 
       <PortalSwitchLink from="user" className="mb-2 w-full justify-center" />
