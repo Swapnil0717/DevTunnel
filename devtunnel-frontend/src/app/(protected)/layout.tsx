@@ -82,7 +82,7 @@ export default async function ProtectedLayout({
 
   if (pathname === "/onboarding") {
     return (
-      <AuthProvider initialUser={user}>
+      <AuthProvider initialUser={user} enforceSession loginPath="/login">
         {children}
         <TrainFooter />
       </AuthProvider>
@@ -90,7 +90,7 @@ export default async function ProtectedLayout({
   }
 
   return (
-    <AuthProvider initialUser={user}>
+    <AuthProvider initialUser={user} enforceSession loginPath="/login">
       <AppShell>{children}</AppShell>
     </AuthProvider>
   );

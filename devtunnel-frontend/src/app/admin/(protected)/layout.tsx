@@ -71,7 +71,7 @@ export default async function AdminProtectedLayout({
 
   if (FULL_BLEED_PATHS.includes(pathname)) {
     return (
-      <AuthProvider initialUser={user}>
+      <AuthProvider initialUser={user} enforceSession loginPath="/admin/login">
         {children}
         <TrainFooter />
       </AuthProvider>
@@ -79,7 +79,7 @@ export default async function AdminProtectedLayout({
   }
 
   return (
-    <AuthProvider initialUser={user}>
+    <AuthProvider initialUser={user} enforceSession loginPath="/admin/login">
       <div className="min-h-screen bg-bg">
         <AdminSidebar />
         <div className="flex min-h-screen min-w-0 flex-col md:ml-[224px]">

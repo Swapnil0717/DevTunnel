@@ -98,7 +98,29 @@ export async function getValidGithubAccessToken(
   const stillValid = accessExpiresAt === null || accessExpiresAt - REFRESH_MARGIN_MS > Date.now();
 
   if (stillValid) {
-    return decryptSecret(data.github_access_token_encrypted, env.GITHUB_TOKEN_ENCRYPTION_KEY);
+    try {
+      return await decryptSecret(data.github_access_token_encrypted, env.GITHUB_TOKEN_ENCRYPTION_KEY);
+    } catch (err) {
+      // decryptSecret throws if the encryption key was rotated since this
+      // token was stored, or the ciphertext is otherwise unreadable. This
+      // used to propagate uncaught out of this function, which meant every
+      // route that calls getValidGithubAccessToken (GET /issues,
+      // GET /admin/new-issues, contributions.ts) turned into an unhandled
+      // exception -> a generic 500 on every single request from this user,
+      // with no way to self-heal. Treat it the same way an expired/revoked
+      // refresh token is already treated below: log it, clear the dead
+      // token so we don't keep tripping over it, and fall through to the
+      // refresh-token path (or `null`, i.e. "ask the user to reconnect
+      // GitHub") instead of failing the whole request.
+      logger.warn("github_access_token_decrypt_failed", {
+        userId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      await clearGithubTokens(supabase, userId).catch((clearErr) =>
+        logger.error("github_token_clear_failed", { userId, error: String(clearErr) }),
+      );
+      return null;
+    }
   }
 
   if (!data.github_refresh_token_encrypted) return null;
