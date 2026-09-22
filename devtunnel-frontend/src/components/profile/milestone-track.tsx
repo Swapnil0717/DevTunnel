@@ -17,6 +17,9 @@ const CHECKPOINT_ICONS: Record<MilestoneCheckpoint["iconId"], (props: { classNam
   crown: CrownIcon,
 };
 
+/** Pixel width of each absolutely-positioned checkpoint label — keep in step with the `w-[74px]` below. */
+const CHECKPOINT_LABEL_WIDTH = 74;
+
 const DATE_LABEL_FORMATTER = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
@@ -67,6 +70,35 @@ export function MilestoneTrack({ milestoneWindow }: { milestoneWindow: Milestone
   const { days, activeDayCount, checkpoints, nextCheckpoint, bonusGoals, fromDate, toDate } = milestoneWindow;
   const progressPercent = Math.min(100, (activeDayCount / milestoneWindow.windowDays) * 100);
 
+  // Each checkpoint label is a fixed CHECKPOINT_LABEL_WIDTH-px box centered
+  // (`-translate-x-1/2`) on a `left: N%` position along the track, so two
+  // checkpoints whose thresholds are close together (today: "Warm-up" at
+  // day 3 and "Regular" at day 7, 13% of the 30-day window apart) need the
+  // track itself to be wide enough that 13% of it still clears
+  // CHECKPOINT_LABEL_WIDTH px, or their labels print on top of each other.
+  // Computed from the real thresholds rather than hardcoded to today's
+  // values, so this keeps working if the backend's MILESTONE_CHECKPOINTS
+  // ever change. `trackMinWidth` is the narrowest the track can ever get
+  // without guaranteeing an overlap; below that width the track scrolls
+  // horizontally instead (see the wrapping `overflow-x-auto` below) —
+  // same "scroll rather than collide" pattern the rest of this app uses
+  // for wide tables and the contribution calendar.
+  const smallestCheckpointGapPercent = checkpoints
+    .map((checkpoint) => checkpoint.threshold / milestoneWindow.windowDays)
+    .sort((a, b) => a - b)
+    .reduce<number | null>((smallest, position, index, positions) => {
+      if (index === 0) return smallest;
+      const gap = position - positions[index - 1];
+      if (gap <= 0) return smallest;
+      return smallest === null ? gap : Math.min(smallest, gap);
+    }, null);
+  const trackMinWidth = Math.max(
+    320,
+    smallestCheckpointGapPercent
+      ? Math.ceil(CHECKPOINT_LABEL_WIDTH / smallestCheckpointGapPercent)
+      : 320,
+  );
+
   return (
     <div className="mb-5" aria-label="30-day milestones">
       <div className="mb-2.5 flex flex-wrap items-end justify-between gap-2.5">
@@ -104,61 +136,69 @@ export function MilestoneTrack({ milestoneWindow }: { milestoneWindow: Milestone
           <span className="text-[11px] text-text-dim">{dateLabel(toDate)}</span>
         </div>
 
-        {/* Checkpoint track */}
-        <div className="relative mx-[38px] h-[84px]">
-          <div className="absolute left-0 right-0 top-[15px] h-1 rounded-full bg-border" />
-          <div
-            className="absolute left-0 top-[15px] h-1 rounded-full bg-accent"
-            style={{ width: `${progressPercent}%` }}
-          />
-          {checkpoints.map((checkpoint) => {
-            const Icon = CHECKPOINT_ICONS[checkpoint.iconId];
-            const isNext = nextCheckpoint?.id === checkpoint.id;
-            const statusText = checkpoint.reached
-              ? "Reached"
-              : isNext
-                ? `${checkpoint.daysRemaining} more day${checkpoint.daysRemaining === 1 ? "" : "s"}`
-                : "Locked";
+        {/* Checkpoint track — horizontally scrollable rather than squeezed:
+            below `trackMinWidth` the fixed-width labels below would start
+            overlapping (see the comment above), so the track keeps its
+            computed minimum width and scrolls instead. The `-mx-3 px-3`
+            / `sm:mx-0 sm:px-0` pair bleeds the scroll area to the
+            surrounding panel's own edges on mobile, same technique the
+            profile page's contribution calendar uses. */}
+        <div className="-mx-3 overflow-x-auto overflow-y-hidden px-3 sm:mx-0 sm:overflow-visible sm:px-0">
+          <div className="relative mx-[38px] h-[84px]" style={{ minWidth: `${trackMinWidth}px` }}>
+            <div className="absolute left-0 right-0 top-[15px] h-1 rounded-full bg-border" />
+            <div
+              className="absolute left-0 top-[15px] h-1 rounded-full bg-accent"
+              style={{ width: `${progressPercent}%` }}
+            />
+            {checkpoints.map((checkpoint) => {
+              const Icon = CHECKPOINT_ICONS[checkpoint.iconId];
+              const isNext = nextCheckpoint?.id === checkpoint.id;
+              const statusText = checkpoint.reached
+                ? "Reached"
+                : isNext
+                  ? `${checkpoint.daysRemaining} more day${checkpoint.daysRemaining === 1 ? "" : "s"}`
+                  : "Locked";
 
-            return (
-              <div
-                key={checkpoint.id}
-                className="absolute top-0 w-[74px] -translate-x-1/2 text-center"
-                style={{ left: `${(checkpoint.threshold / milestoneWindow.windowDays) * 100}%` }}
-              >
+              return (
                 <div
-                  className={`mx-auto mb-1.5 flex h-[34px] w-[34px] items-center justify-center rounded-full border ${
-                    checkpoint.reached
-                      ? "border-accent bg-surface-selected text-status-success-label"
-                      : isNext
-                        ? "border-dashed border-status-success-label bg-bg text-text"
-                        : "border-dashed border-border-subtle bg-bg text-text-disabled"
-                  }`}
+                  key={checkpoint.id}
+                  className="absolute top-0 w-[74px] -translate-x-1/2 text-center"
+                  style={{ left: `${(checkpoint.threshold / milestoneWindow.windowDays) * 100}%` }}
                 >
-                  <Icon className="h-4 w-4" />
+                  <div
+                    className={`mx-auto mb-1.5 flex h-[34px] w-[34px] items-center justify-center rounded-full border ${
+                      checkpoint.reached
+                        ? "border-accent bg-surface-selected text-status-success-label"
+                        : isNext
+                          ? "border-dashed border-status-success-label bg-bg text-text"
+                          : "border-dashed border-border-subtle bg-bg text-text-disabled"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <p
+                    className={`m-0 text-[11px] ${
+                      checkpoint.reached || isNext ? "text-text-secondary" : "text-text-muted"
+                    }`}
+                  >
+                    {checkpoint.label}
+                  </p>
+                  <p className="m-0 text-[10.5px] text-text-dim">Day {checkpoint.threshold}</p>
+                  <p
+                    className={`m-0 text-[10.5px] ${
+                      checkpoint.reached
+                        ? "text-status-success-label"
+                        : isNext
+                          ? "text-text"
+                          : "text-text-faint"
+                    }`}
+                  >
+                    {statusText}
+                  </p>
                 </div>
-                <p
-                  className={`m-0 text-[11px] ${
-                    checkpoint.reached || isNext ? "text-text-secondary" : "text-text-muted"
-                  }`}
-                >
-                  {checkpoint.label}
-                </p>
-                <p className="m-0 text-[10.5px] text-text-dim">Day {checkpoint.threshold}</p>
-                <p
-                  className={`m-0 text-[10.5px] ${
-                    checkpoint.reached
-                      ? "text-status-success-label"
-                      : isNext
-                        ? "text-text"
-                        : "text-text-faint"
-                  }`}
-                >
-                  {statusText}
-                </p>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
 
         <p className="mt-1.5 text-center text-[12.5px]">
