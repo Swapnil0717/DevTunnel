@@ -1,6 +1,10 @@
 import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth";
-import { handleCatalogListRequest, type CatalogRouteConfig } from "../lib/githubCatalog";
+import {
+  handleCatalogListRequest,
+  handleCatalogRefreshRequest,
+  type CatalogRouteConfig,
+} from "../lib/githubCatalog";
 import { getEnv } from "../config/env";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
@@ -162,6 +166,17 @@ export const CATALOG_CONFIG: CatalogRouteConfig = {
  */
 githubOpenSourceTools.get("/github-open-source-tools", requireAuth, (c) =>
   handleCatalogListRequest(c, CATALOG_CONFIG),
+);
+
+/**
+ * `POST /github-open-source-tools/refresh` — sibling of
+ * `POST /github-projects/refresh` (see that route's doc comment); same
+ * `?filter=` handling, so refreshing while "Alternative to paid
+ * software" is selected re-scans that filter's own slot, not the base
+ * catalog.
+ */
+githubOpenSourceTools.post("/github-open-source-tools/refresh", requireAuth, (c) =>
+  handleCatalogRefreshRequest(c, CATALOG_CONFIG),
 );
 
 /**

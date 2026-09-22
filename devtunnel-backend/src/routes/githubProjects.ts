@@ -1,6 +1,10 @@
 import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth";
-import { handleCatalogListRequest, type CatalogRouteConfig } from "../lib/githubCatalog";
+import {
+  handleCatalogListRequest,
+  handleCatalogRefreshRequest,
+  type CatalogRouteConfig,
+} from "../lib/githubCatalog";
 import { getEnv } from "../config/env";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
@@ -79,6 +83,20 @@ export const CATALOG_CONFIG: CatalogRouteConfig = {
  */
 githubProjects.get("/github-projects", requireAuth, (c) =>
   handleCatalogListRequest(c, CATALOG_CONFIG),
+);
+
+/**
+ * `POST /github-projects/refresh` — the "Refresh" button on
+ * `/github-projects` (`RefreshCatalogButton`). Re-scans this catalog
+ * right now (bounded to a cold-start-depth scan — see
+ * `handleCatalogRefreshRequest`'s and `forceRefreshCatalog`'s own doc
+ * comments for why a full deep scan never runs on the request path) so
+ * the contributor's very next `GET /github-projects` reflects GitHub's
+ * current trending/newest repositories instead of waiting out the
+ * scheduled warmer's cadence.
+ */
+githubProjects.post("/github-projects/refresh", requireAuth, (c) =>
+  handleCatalogRefreshRequest(c, CATALOG_CONFIG),
 );
 
 /**

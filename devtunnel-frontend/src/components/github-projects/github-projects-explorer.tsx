@@ -9,6 +9,7 @@ import { PagePaginationControls } from "@/components/admin/page-pagination-contr
 import { usePagePagination } from "@/lib/admin/use-page-pagination";
 import { GithubProjectCard } from "./github-project-card";
 import { LoadCatalogBar } from "./load-catalog-bar";
+import { RefreshCatalogButton } from "./refresh-catalog-button";
 import { useLoadFullCatalog } from "@/lib/github-projects/use-load-full-catalog";
 import type { GithubProjectSummary } from "@/lib/github-projects/types";
 
@@ -255,22 +256,26 @@ export function GithubProjectsExplorer({
   return (
     <div>
       <div className="mb-4 flex flex-col gap-3">
-        <div className="relative w-full sm:max-w-xs">
-          <label htmlFor="github-projects-search" className="sr-only">
-            Search GitHub projects by name, description, owner, or tech stack
-          </label>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="relative w-full sm:max-w-xs">
+            <label htmlFor="github-projects-search" className="sr-only">
+              Search GitHub projects by name, description, owner, or tech stack
+            </label>
 
-          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
+            <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-faint" />
 
-          <input
-            id="github-projects-search"
-            name="github-projects-search"
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search by project, description, owner, or tech stack"
-            className="w-full rounded-[8px] border border-border bg-surface py-2 pl-8 pr-3 text-[12.5px] text-text placeholder:text-text-faint focus:outline-none focus:ring-2 focus:ring-accent/40"
-          />
+            <input
+              id="github-projects-search"
+              name="github-projects-search"
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search by project, description, owner, or tech stack"
+              className="w-full rounded-[8px] border border-border bg-surface py-2 pl-8 pr-3 text-[12.5px] text-text placeholder:text-text-faint focus:outline-none focus:ring-2 focus:ring-accent/40"
+            />
+          </div>
+
+          {catalogLoad ? <RefreshCatalogButton loader={loader} noun={catalogLoad.noun} /> : null}
         </div>
 
         <div className="flex flex-wrap items-end gap-2">

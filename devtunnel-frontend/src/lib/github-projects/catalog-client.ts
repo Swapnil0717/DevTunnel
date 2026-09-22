@@ -114,3 +114,71 @@ export async function fetchFullCatalog(
 
   return Array.from(byId.values());
 }
+
+export interface CatalogRefreshResult {
+  /** `"refreshed"` when a new scan actually ran; `"already-fresh"` when a very recent refresh made another one unnecessary. Either way the catalog behind `path` is current. */
+  status: "refreshed" | "already-fresh";
+  repositoryCount: number;
+}
+
+/**
+ * The "Refresh" button's action (`POST {path}/refresh`,
+ * devtunnel-backend `lib/githubCatalog.ts` `handleCatalogRefreshRequest`)
+ * — re-scans this catalog against GitHub right now instead of waiting on
+ * the scheduled warmer, so the button can reflect newly-trending or
+ * newly-created repositories on demand.
+ *
+ * Does not itself return the refreshed rows — the backend scan result
+ * isn't paginated the way `GET` responses are, and re-deriving that here
+ * would duplicate `fetchFullCatalog`'s own pagination walk. Callers
+ * should follow a successful refresh with `fetchFullCatalog` (or a
+ * server-side re-fetch, e.g. `router.refresh()`) to pull the now-current
+ * catalog.
+ *
+ * Rejects with `CatalogLoadError` on any failure, same conventions as
+ * `fetchFullCatalog` — a `409` (`catalog_refresh_in_progress`, another
+ * scan already running) and a `429` (rate limited) are both expected,
+ * recoverable outcomes a caller should show as "try again shortly"
+ * rather than a hard failure.
+ */
+export async function refreshCatalog(
+  path: string,
+  options: { filter?: string; signal?: AbortSignal } = {},
+): Promise<CatalogRefreshResult> {
+  const { filter, signal } = options;
+  const query = new URLSearchParams();
+  if (filter) query.set("filter", filter);
+  const queryString = query.toString();
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}/refresh${queryString ? `?${queryString}` : ""}`, {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      signal,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    throw new CatalogLoadError(
+      "Couldn't reach DevTunnel. Check your connection and try again.",
+      0,
+    );
+  }
+
+  if (!res.ok) {
+    const { code, message } = await parseErrorBody(res);
+    throw new CatalogLoadError(
+      message ?? `Couldn't refresh right now (${res.status}).`,
+      res.status,
+      code,
+    );
+  }
+
+  const body = (await res.json().catch(() => null)) as CatalogRefreshResult | null;
+  if (!body || (body.status !== "refreshed" && body.status !== "already-fresh")) {
+    throw new CatalogLoadError("Got an unexpected response while refreshing.", res.status);
+  }
+
+  return body;
+}

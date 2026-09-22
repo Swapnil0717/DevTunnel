@@ -419,6 +419,108 @@ async function buildCatalogOnColdStart(
 }
 
 /**
+ * `POST` handler for a catalog's "Refresh" button
+ * (`RefreshCatalogButton`, devtunnel-frontend `components/github-projects/`)
+ * — validates `?filter=` exactly like `handleCatalogListRequest`, rate
+ * limits per signed-in user (a tighter bucket than the list route, since
+ * this can trigger a real GitHub scan), and calls `forceRefreshCatalog`.
+ * Shared by both `POST /github-projects/refresh` and
+ * `POST /github-open-source-tools/refresh` so the rate-limit bucket
+ * naming, validation, and response shape only exist once.
+ */
+export async function handleCatalogRefreshRequest(
+  c: Context<{ Bindings: Env; Variables: Variables }>,
+  config: CatalogRouteConfig,
+) {
+  const env: ValidatedEnv = getEnv(c.env);
+  const user = c.get("user");
+  if (!user) {
+    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+  }
+
+  // A real GitHub scan, not a cheap KV read — a noticeably tighter budget
+  // than `${config.name}-list`'s 60/minute. `forceRefreshCatalog`'s own
+  // `MANUAL_REFRESH_MIN_INTERVAL_SECONDS` guard already protects the
+  // shared GITHUB_DISCOVERY_TOKEN budget across *every* contributor; this
+  // just stops one contributor from hammering the endpoint itself.
+  const withinLimit = await checkRateLimit(c, {
+    bucket: `${config.name}-refresh`,
+    limit: 5,
+    windowSeconds: 300,
+    identity: `user:${user.id}`,
+  });
+  if (!withinLimit) {
+    return errorResponse(c, 429, "rate_limited", "Too many refresh requests. Try again shortly.");
+  }
+
+  const parsed = z.object({ filter: z.string().optional() }).safeParse({
+    filter: c.req.query("filter"),
+  });
+  if (!parsed.success) {
+    return errorResponse(
+      c,
+      400,
+      "invalid_query",
+      parsed.error.issues[0]?.message ?? "Invalid query parameters",
+    );
+  }
+
+  let discoveryQueries = config.discoveryQueries;
+  let cacheSlot = config.cacheKey;
+  if (parsed.data.filter !== undefined) {
+    const filterConfig = config.filters?.[parsed.data.filter];
+    if (!filterConfig) {
+      return errorResponse(
+        c,
+        400,
+        "invalid_filter",
+        `Unknown filter "${parsed.data.filter}" for this catalog`,
+      );
+    }
+    discoveryQueries = filterConfig.discoveryQueries;
+    cacheSlot = filterConfig.cacheKey;
+  }
+
+  try {
+    const result = await forceRefreshCatalog(env, c.env, cacheSlot, discoveryQueries);
+
+    if (result.status === "busy") {
+      c.header("Retry-After", "15");
+      return errorResponse(
+        c,
+        409,
+        "catalog_refresh_in_progress",
+        "A refresh is already in progress. Try again shortly.",
+      );
+    }
+
+    if (result.status === "no-data") {
+      return errorResponse(
+        c,
+        502,
+        "github_unavailable",
+        "Couldn't reach GitHub to refresh this catalog right now",
+      );
+    }
+
+    return c.json(
+      {
+        status: result.status,
+        repositoryCount: result.repositoryCount,
+      },
+      200,
+    );
+  } catch (err) {
+    logger.error(`${config.name}_refresh_failed`, {
+      error: err instanceof Error ? err.message : String(err),
+      filter: parsed.data.filter ?? null,
+      requestId: c.get("requestId"),
+    });
+    return errorResponse(c, 500, "internal_error", "Couldn't refresh this catalog right now");
+  }
+}
+
+/**
  * Handles one `GET` request for a GitHub-wide catalog route: rate limit,
  * validate `limit`/`before`, read the cached catalog, paginate it in
  * memory, respond. Shared by every route built with this module so a fix
@@ -640,5 +742,98 @@ export async function warmCatalogRoute(
       filterConfig.discoveryQueries,
       maxPages,
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Manual, contributor-triggered refresh ("Refresh" button on /github-projects
+// and /github-open-source-tools)
+//
+// Everything above this point deliberately keeps a full, deep re-scan
+// (`warmCatalogRoute`/`warmCatalogCacheKey`, up to `DEFAULT_MAX_PAGES_PER_QUERY`
+// pages per query) off the request path — that's the whole point of
+// `handleCatalogListRequest`'s doc comment: "Request handlers never start a
+// full scan themselves." A manual refresh has to respect that same budget
+// constraint, so it reuses the same *shallow* scan the cold-start path
+// already runs (`COLD_START_MAX_PAGES_PER_QUERY` — one page per query,
+// ~7-21 GitHub Search calls depending on the catalog, a few seconds paced)
+// rather than the warmer's deep one. That's a deliberate trade: a manual
+// refresh trades completeness for staying inside one HTTP request's
+// lifetime, same as the very first visitor after a deploy already gets.
+// ---------------------------------------------------------------------------
+
+/**
+ * A manual refresh this recently is treated as "already up to date" rather
+ * than spending another round of GitHub Search calls — protects the shared
+ * `GITHUB_DISCOVERY_TOKEN` budget from repeated clicks (by one contributor,
+ * or several different ones in close succession) without needing a second,
+ * separate cooldown mechanism beyond the cache itself.
+ */
+const MANUAL_REFRESH_MIN_INTERVAL_SECONDS = 60;
+
+export type ForceRefreshCatalogResult =
+  | { status: "refreshed"; repositoryCount: number }
+  /** Already refreshed inside `MANUAL_REFRESH_MIN_INTERVAL_SECONDS` — nothing re-scanned. */
+  | { status: "already-fresh"; repositoryCount: number }
+  /** Another scan (the scheduled warmer, or someone else's refresh) is in progress right now. */
+  | { status: "busy" }
+  /** The scan ran but GitHub returned nothing usable — the existing cached catalog, if any, is left untouched. */
+  | { status: "no-data" };
+
+/**
+ * The `POST .../refresh` handlers' actual work: re-scan one catalog slot
+ * right now, at cold-start depth, and replace its cached entry — so the
+ * very next `GET` (the frontend's own re-fetch after a successful refresh)
+ * serves the new data instead of waiting up to `CATALOG_CACHE_SOFT_TTL_SECONDS`
+ * for the scheduled warmer.
+ *
+ * Guarded two ways against hammering GitHub's Search budget:
+ *  - `MANUAL_REFRESH_MIN_INTERVAL_SECONDS`: a cache entry younger than that
+ *    is reported `"already-fresh"` without re-scanning at all.
+ *  - The shared `SCAN_LOCK_NAME` lock (same one `buildCatalogOnColdStart`
+ *    and the warmer use): if another scan already holds it, this reports
+ *    `"busy"` immediately rather than queuing behind it — the caller's own
+ *    per-user rate limit plus this lock together mean at most one scan for
+ *    this slot runs at a time, from any source.
+ */
+export async function forceRefreshCatalog(
+  env: ValidatedEnv,
+  workerEnv: Env,
+  cacheSlot: string,
+  discoveryQueries: string[],
+): Promise<ForceRefreshCatalogResult> {
+  const recent = await getCachedSWR<CatalogSummary[]>(
+    workerEnv,
+    cacheSlot,
+    MANUAL_REFRESH_MIN_INTERVAL_SECONDS,
+  );
+  if (recent.status === "fresh") {
+    return { status: "already-fresh", repositoryCount: recent.value.length };
+  }
+
+  const locked = await tryAcquireLock(workerEnv, SCAN_LOCK_NAME, SCAN_LOCK_TTL_SECONDS);
+  if (!locked) {
+    return { status: "busy" };
+  }
+
+  try {
+    const scan = await scanCatalog(env, discoveryQueries, {
+      maxPagesPerQuery: COLD_START_MAX_PAGES_PER_QUERY,
+    });
+
+    if (scan.items.length === 0) {
+      logger.warn("catalog_manual_refresh_produced_nothing", { slot: cacheSlot });
+      return { status: "no-data" };
+    }
+
+    await setCachedSWR(workerEnv, cacheSlot, scan.items, CATALOG_CACHE_HARD_TTL_SECONDS);
+    logger.info("catalog_manual_refresh_stored", {
+      slot: cacheSlot,
+      repositories: scan.items.length,
+      complete: scan.complete,
+    });
+    return { status: "refreshed", repositoryCount: scan.items.length };
+  } finally {
+    await releaseLock(workerEnv, SCAN_LOCK_NAME);
   }
 }
