@@ -1,0 +1,362 @@
+{
+  "examples": [
+
+    {
+      "example_name": "1_normal_task",
+      "notes": "Well-written issue; most fields EXPLICIT or SUPPORTED_BY_CONTEXT, none UNKNOWN, no review required.",
+      "record": {
+        "schema_version": "2.0.0",
+        "task_identity": {
+          "task_id": "3f1a2b3c-4d5e-4f60-8a9b-1c2d3e4f5061",
+          "created_at": "2026-09-20T10:15:00Z",
+          "source_issue": {
+            "repo": "acme/checkout-service",
+            "issue_number": 482,
+            "issue_url": "https://github.com/acme/checkout-service/issues/482",
+            "snapshot_fetched_at": "2026-09-20T10:14:30Z",
+            "issue_title_raw": "Discount code field accepts codes with trailing whitespace and fails silently"
+          }
+        },
+        "task": {
+          "title": "Trim and validate discount code input before applying",
+          "summary": "Discount codes with trailing/leading whitespace are rejected without any user-facing error.",
+          "objective": "Ensure discount code entry is robust to whitespace and gives clear feedback on invalid codes.",
+          "description": "The issue reports that pasting a discount code with a trailing space causes the 'Apply' action to no-op with no error message. Reporter identified the bug in the checkout form's discount code handler.",
+          "expected_outcome": "Discount codes are trimmed before validation; invalid codes show an inline error message instead of failing silently.",
+          "role": "Frontend",
+          "experience_level": "Beginner",
+          "complexity": "Low",
+          "task_type": "Bug",
+          "technologies": ["JavaScript", "React"],
+          "languages": ["JavaScript"],
+          "frameworks": ["React"],
+          "technical_areas": ["checkout", "form validation"],
+          "components": ["DiscountCodeInput.tsx"],
+          "systems": [],
+          "affected_areas": ["checkout flow"],
+          "dependencies": [],
+          "scope": {
+            "in_scope": ["Trim whitespace on discount code input", "Add inline validation error state"],
+            "out_of_scope": ["Backend discount-code validation logic"]
+          },
+          "acceptance_criteria": [
+            "Codes with leading/trailing whitespace are accepted if otherwise valid",
+            "An invalid code shows an inline error instead of silently failing"
+          ],
+          "constraints": []
+        },
+        "provenance": {
+          "task_type": { "source": "EXPLICIT", "evidence": "Issue reports codes fail silently -> defect in existing behavior", "confidence": 0.95 },
+          "role": { "source": "INFERRED", "evidence": "Component named is a .tsx form input; issue describes client-side form behavior", "confidence": 0.85 },
+          "experience_level": { "source": "INFERRED", "evidence": "Localized string-trim + validation-state fix in a single component, no cross-system change", "confidence": 0.7 },
+          "complexity": { "source": "INFERRED", "evidence": "Single component, no described side effects on backend or data model", "confidence": 0.75 },
+          "components": { "source": "EXPLICIT", "evidence": "Reporter names DiscountCodeInput.tsx directly", "confidence": 0.9 },
+          "technical_areas": { "source": "SUPPORTED_BY_CONTEXT", "evidence": "Issue is filed under the 'checkout' label and discusses the discount-code field", "confidence": 0.8 },
+          "expected_outcome": { "source": "EXPLICIT", "evidence": "Reporter states codes should not fail silently", "confidence": 0.85 },
+          "scope": { "source": "INFERRED", "evidence": "Scope narrowed to the reported input-handling defect only", "confidence": 0.7 },
+          "acceptance_criteria": { "source": "INFERRED", "evidence": "Derived directly from expected_outcome", "confidence": 0.75 }
+        },
+        "uncertainty": {
+          "explicit_information": [
+            { "field": "task_type", "evidence": "Issue reports codes fail silently" },
+            { "field": "components", "evidence": "DiscountCodeInput.tsx named directly" }
+          ],
+          "inferred_information": [
+            { "field": "role", "evidence": "Client-side .tsx component implicated" },
+            { "field": "complexity", "evidence": "Single-component, no cross-system impact described" }
+          ],
+          "uncertain_information": [],
+          "missing_information": []
+        },
+        "confidence": { "overall_confidence": 0.81, "method": "weighted_mean_v1" },
+        "review": { "review_required": false, "review_reasons": [] }
+      }
+    },
+
+    {
+      "example_name": "2_ambiguous_task",
+      "notes": "Issue text supports two plausible readings of task_type and role; both flagged as uncertain rather than silently resolved.",
+      "record": {
+        "schema_version": "2.0.0",
+        "task_identity": {
+          "task_id": "7c8d9e0f-1a2b-4c3d-9e4f-5061728394a5",
+          "created_at": "2026-09-20T11:00:00Z",
+          "source_issue": {
+            "repo": "acme/notifications",
+            "issue_number": 118,
+            "issue_url": "https://github.com/acme/notifications/issues/118",
+            "snapshot_fetched_at": "2026-09-20T10:59:00Z",
+            "issue_title_raw": "Push notifications sometimes arrive twice"
+          }
+        },
+        "task": {
+          "title": "Investigate and resolve duplicate push notification delivery",
+          "summary": "Users occasionally receive the same push notification twice; cause is not identified in the issue.",
+          "objective": "Eliminate duplicate delivery of push notifications.",
+          "description": "Reporter describes intermittent duplicate notifications with no repro steps, device info, or indication of whether this is a client re-render issue or a server re-send issue.",
+          "expected_outcome": "Each notification event results in exactly one delivered push notification.",
+          "role": "Unknown",
+          "experience_level": "Unknown",
+          "complexity": "Medium",
+          "task_type": "Bug",
+          "technologies": [],
+          "languages": [],
+          "frameworks": [],
+          "technical_areas": ["notifications"],
+          "components": [],
+          "systems": ["notification-service"],
+          "affected_areas": ["push notifications"],
+          "dependencies": [],
+          "scope": {
+            "in_scope": ["Identify root cause of duplicate delivery"],
+            "out_of_scope": []
+          },
+          "acceptance_criteria": [
+            "Root cause of duplicate delivery is identified and documented",
+            "Fix verified to eliminate duplicates under the reproduced condition"
+          ],
+          "constraints": []
+        },
+        "provenance": {
+          "task_type": { "source": "EXPLICIT", "evidence": "Reporter states notifications 'sometimes arrive twice'", "confidence": 0.9 },
+          "role": { "source": "UNKNOWN", "evidence": null, "confidence": null },
+          "experience_level": { "source": "UNKNOWN", "evidence": null, "confidence": null },
+          "complexity": { "source": "INFERRED", "evidence": "Intermittent, cross-boundary (client vs server) defects are typically harder to isolate than single-component bugs", "confidence": 0.45 },
+          "systems": { "source": "INFERRED", "evidence": "Push delivery is owned by notification-service per issue's repo context", "confidence": 0.6 },
+          "technical_areas": { "source": "EXPLICIT", "evidence": "Issue title and body concern notifications", "confidence": 0.85 }
+        },
+        "uncertainty": {
+          "explicit_information": [
+            { "field": "task_type", "evidence": "Reporter states duplicates occur" }
+          ],
+          "inferred_information": [
+            { "field": "systems", "evidence": "Notification delivery attributed to notification-service" }
+          ],
+          "uncertain_information": [
+            { "field": "complexity", "evidence": "No repro steps or device info given", "note": "Could be Low (simple retry-logic bug) or High (race condition across services); insufficient basis to pick one." }
+          ],
+          "missing_information": [
+            "Whether duplicates occur on a single device or across devices",
+            "Whether this is client-side (re-render) or server-side (re-send)",
+            "Repro steps or frequency"
+          ]
+        },
+        "confidence": { "overall_confidence": 0.42, "method": "weighted_mean_v1" },
+        "review": { "review_required": true, "review_reasons": ["role is Unknown", "experience_level is Unknown", "overall_confidence below 0.5 threshold"] }
+      }
+    },
+
+    {
+      "example_name": "3_insufficient_information_task",
+      "notes": "One-line issue with no body. Nearly every field returns Unknown rather than a guess.",
+      "record": {
+        "schema_version": "2.0.0",
+        "task_identity": {
+          "task_id": "9a0b1c2d-3e4f-4061-8283-94a5b6c7d8e9",
+          "created_at": "2026-09-20T11:20:00Z",
+          "source_issue": {
+            "repo": "acme/mobile-app",
+            "issue_number": 55,
+            "issue_url": "https://github.com/acme/mobile-app/issues/55",
+            "snapshot_fetched_at": "2026-09-20T11:19:45Z",
+            "issue_title_raw": "App is slow"
+          }
+        },
+        "task": {
+          "title": "App is slow",
+          "summary": "Issue consists of a two-word title with no body, labels, or comments.",
+          "objective": "Unknown",
+          "description": "No description provided beyond the title.",
+          "expected_outcome": "Unknown",
+          "role": "Unknown",
+          "experience_level": "Unknown",
+          "complexity": "Unknown",
+          "task_type": "Other",
+          "technologies": [],
+          "languages": [],
+          "frameworks": [],
+          "technical_areas": [],
+          "components": [],
+          "systems": [],
+          "affected_areas": [],
+          "dependencies": [],
+          "scope": { "in_scope": [], "out_of_scope": [] },
+          "acceptance_criteria": [],
+          "constraints": []
+        },
+        "provenance": {
+          "task_type": { "source": "SUPPORTED_BY_CONTEXT", "evidence": "'slow' is a performance complaint, but no target, screen, or condition is named", "confidence": 0.4 },
+          "role": { "source": "UNKNOWN", "evidence": null, "confidence": null },
+          "experience_level": { "source": "UNKNOWN", "evidence": null, "confidence": null },
+          "complexity": { "source": "UNKNOWN", "evidence": null, "confidence": null },
+          "objective": { "source": "UNKNOWN", "evidence": null, "confidence": null },
+          "expected_outcome": { "source": "UNKNOWN", "evidence": null, "confidence": null }
+        },
+        "uncertainty": {
+          "explicit_information": [],
+          "inferred_information": [],
+          "uncertain_information": [
+            { "field": "task_type", "evidence": "'slow' implies Performance or Bug", "note": "Set to Other pending clarification rather than guessing between Performance and Bug." }
+          ],
+          "missing_information": [
+            "Which screen, action, or flow is slow",
+            "Device/platform and app version",
+            "Any measurements or comparison to expected performance",
+            "Whether this is new or long-standing behavior"
+          ]
+        },
+        "confidence": { "overall_confidence": 0.07, "method": "weighted_mean_v1" },
+        "review": { "review_required": true, "review_reasons": ["role is Unknown", "experience_level is Unknown", "complexity is Unknown", "acceptance_criteria is empty", "overall_confidence below 0.5 threshold"] }
+      }
+    },
+
+    {
+      "example_name": "4_context_aware_task",
+      "notes": "Issue body alone is thin, but existing labels and a linked comment thread supply usable context (treated as signal, not ground truth).",
+      "record": {
+        "schema_version": "2.0.0",
+        "task_identity": {
+          "task_id": "b1c2d3e4-f506-4718-9293-a4b5c6d7e8f9",
+          "created_at": "2026-09-20T12:05:00Z",
+          "source_issue": {
+            "repo": "acme/auth-gateway",
+            "issue_number": 271,
+            "issue_url": "https://github.com/acme/auth-gateway/issues/271",
+            "snapshot_fetched_at": "2026-09-20T12:04:10Z",
+            "issue_title_raw": "Token refresh occasionally 500s"
+          }
+        },
+        "task": {
+          "title": "Fix intermittent 500 on token refresh endpoint",
+          "summary": "The token refresh endpoint returns HTTP 500 under conditions not detailed in the issue body, but a maintainer comment narrows it to expired refresh tokens.",
+          "objective": "Token refresh should fail gracefully (4xx) instead of erroring (5xx) on invalid/expired tokens.",
+          "description": "Issue body only states the symptom. A maintainer comment thread clarifies the 500 occurs specifically when the refresh token itself has expired, which should be a client error, not a server error.",
+          "expected_outcome": "Expired refresh tokens return a 401 with a clear error code instead of a 500.",
+          "role": "Backend",
+          "experience_level": "Intermediate",
+          "complexity": "Medium",
+          "task_type": "Bug",
+          "technologies": ["Node.js"],
+          "languages": ["TypeScript"],
+          "frameworks": ["Express"],
+          "technical_areas": ["authentication", "error handling"],
+          "components": ["token-refresh-handler"],
+          "systems": ["auth-gateway"],
+          "affected_areas": ["API error responses"],
+          "dependencies": [],
+          "scope": {
+            "in_scope": ["Catch expired-token case in refresh handler", "Return 401 with structured error body"],
+            "out_of_scope": ["Broader error-handling refactor across auth-gateway"]
+          },
+          "acceptance_criteria": [
+            "Refreshing with an expired token returns 401, not 500",
+            "Response body includes a machine-readable error code for 'refresh_token_expired'"
+          ],
+          "constraints": ["Must not change the response shape for the success path"]
+        },
+        "provenance": {
+          "task_type": { "source": "EXPLICIT", "evidence": "Issue title states the endpoint '500s'", "confidence": 0.9 },
+          "role": { "source": "EXPLICIT", "evidence": "Issue concerns a server endpoint's HTTP status code behavior", "confidence": 0.9 },
+          "components": { "source": "SUPPORTED_BY_CONTEXT", "evidence": "Maintainer comment names the refresh handler as the source of the 500", "confidence": 0.75 },
+          "expected_outcome": { "source": "SUPPORTED_BY_CONTEXT", "evidence": "Maintainer comment states expired tokens should be a client error, implying 401 semantics", "confidence": 0.7 },
+          "complexity": { "source": "INFERRED", "evidence": "Fix is localized to one handler's error path once cause is known via context", "confidence": 0.65 },
+          "experience_level": { "source": "INFERRED", "evidence": "Requires correct HTTP semantics and existing error-handling conventions, but no new subsystem design", "confidence": 0.55 }
+        },
+        "uncertainty": {
+          "explicit_information": [
+            { "field": "task_type", "evidence": "Issue title states the endpoint 500s" },
+            { "field": "role", "evidence": "Server endpoint status-code behavior" }
+          ],
+          "inferred_information": [
+            { "field": "complexity", "evidence": "Localized fix once cause is known" }
+          ],
+          "uncertain_information": [
+            { "field": "experience_level", "evidence": "No indication of team's existing error-handling conventions", "note": "Confidence kept at 0.55; could shift with repo access in a later phase." }
+          ],
+          "missing_information": [
+            "Whether other token-validation failure modes have the same 500 bug"
+          ]
+        },
+        "confidence": { "overall_confidence": 0.74, "method": "weighted_mean_v1" },
+        "review": { "review_required": false, "review_reasons": [] }
+      }
+    },
+
+    {
+      "example_name": "5_multi_component_task",
+      "notes": "Work spans multiple named components and two systems; dependencies field is exercised.",
+      "record": {
+        "schema_version": "2.0.0",
+        "task_identity": {
+          "task_id": "c2d3e4f5-0617-4829-a3b4-c5d6e7f80912",
+          "created_at": "2026-09-20T13:30:00Z",
+          "source_issue": {
+            "repo": "acme/platform",
+            "issue_number": 903,
+            "issue_url": "https://github.com/acme/platform/issues/903",
+            "snapshot_fetched_at": "2026-09-20T13:29:20Z",
+            "issue_title_raw": "Add CSV export to the reporting dashboard"
+          }
+        },
+        "task": {
+          "title": "Add CSV export to the reporting dashboard",
+          "summary": "New feature: users can export the reporting dashboard's current view as a CSV file.",
+          "objective": "Let users take dashboard data out of the app for offline analysis.",
+          "description": "Issue requests a CSV export button on the reporting dashboard. Exporting requires a new backend export endpoint, a frontend trigger/download flow, and reuse of the existing report-generation service's query layer.",
+          "expected_outcome": "A visible 'Export CSV' control on the dashboard produces a correctly formatted CSV matching the currently displayed report.",
+          "role": "Fullstack",
+          "experience_level": "Intermediate",
+          "complexity": "Medium",
+          "task_type": "Feature",
+          "technologies": ["React", "Node.js", "PostgreSQL"],
+          "languages": ["TypeScript", "SQL"],
+          "frameworks": ["React", "Express"],
+          "technical_areas": ["reporting", "data export"],
+          "components": ["ReportingDashboard.tsx", "export-controller", "ReportQueryService"],
+          "systems": ["reporting-service", "dashboard-frontend"],
+          "affected_areas": ["reporting dashboard UI", "reporting-service API surface"],
+          "dependencies": [
+            { "type": "requires", "ref": "ReportQueryService", "description": "Export endpoint reuses existing query logic rather than duplicating it" },
+            { "type": "relates_to", "ref": "#889", "description": "Prior issue introduced the current dashboard filter state that export must respect" }
+          ],
+          "scope": {
+            "in_scope": ["CSV export endpoint", "Frontend export button and download handling", "Respecting current dashboard filters in the export"],
+            "out_of_scope": ["Export formats other than CSV", "Scheduled/emailed exports"]
+          },
+          "acceptance_criteria": [
+            "Export button is visible on the reporting dashboard",
+            "Exported CSV reflects the currently applied filters",
+            "Export of a large report does not block the UI thread"
+          ],
+          "constraints": ["Must reuse ReportQueryService rather than adding a parallel query path"]
+        },
+        "provenance": {
+          "task_type": { "source": "EXPLICIT", "evidence": "Issue explicitly requests adding CSV export", "confidence": 0.95 },
+          "role": { "source": "INFERRED", "evidence": "Requires both a frontend control and a backend endpoint", "confidence": 0.85 },
+          "components": { "source": "SUPPORTED_BY_CONTEXT", "evidence": "Dashboard component and report query service are named in repo context linked from the issue", "confidence": 0.7 },
+          "dependencies": { "source": "SUPPORTED_BY_CONTEXT", "evidence": "Issue links #889 and references reuse of existing query logic", "confidence": 0.65 },
+          "complexity": { "source": "INFERRED", "evidence": "Touches frontend, a new endpoint, and an existing service, but no new data model", "confidence": 0.6 },
+          "constraints": { "source": "EXPLICIT", "evidence": "Maintainer comment states export must reuse ReportQueryService", "confidence": 0.85 }
+        },
+        "uncertainty": {
+          "explicit_information": [
+            { "field": "task_type", "evidence": "Issue explicitly requests CSV export" },
+            { "field": "constraints", "evidence": "Must reuse ReportQueryService" }
+          ],
+          "inferred_information": [
+            { "field": "role", "evidence": "Requires both frontend and backend work" }
+          ],
+          "uncertain_information": [
+            { "field": "complexity", "evidence": "Multi-component but no new data model", "note": "Could move to High if the query layer can't support the needed filter combinations without changes." }
+          ],
+          "missing_information": [
+            "Maximum expected report size, relevant to whether streaming export is needed"
+          ]
+        },
+        "confidence": { "overall_confidence": 0.77, "method": "weighted_mean_v1" },
+        "review": { "review_required": false, "review_reasons": [] }
+      }
+    }
+
+  ]
+}
