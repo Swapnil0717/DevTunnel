@@ -1,0 +1,93 @@
+[
+    {
+      "field": "task_type",
+      "value": "Feature",
+      "source": "EXPLICIT",
+      "pointers": ["S2"],
+      "evidence_text": "Or, could it be added?",
+      "confidence": 0.6
+    },
+    {
+      "field": "role",
+      "value": "Unknown",
+      "source": "UNKNOWN",
+      "pointers": [],
+      "evidence_text": null,
+      "confidence": null
+    },
+    {
+      "field": "experience_level",
+      "value": "Unknown",
+      "source": "UNKNOWN",
+      "pointers": [],
+      "evidence_text": null,
+      "confidence": null
+    },
+    {
+      "field": "complexity",
+      "value": "Low",
+      "source": "INFERRED",
+      "pointers": ["S3"],
+      "evidence_text": "Or, could it be added?\n\nNo, sorry.",
+      "confidence": 0.4
+    },
+    {
+      "field": "title",
+      "value": "Prettier strips angle brackets from links, and rustdoc is now unhappy about that",
+      "source": "EXPLICIT",
+      "pointers": ["S1"],
+      "evidence_text": "Prettier strips angle brackets from links, and rustdoc is now unhappy about that",
+      "confidence": 0.9
+    },
+    {
+      "field": "summary",
+      "value": "Reporter asked whether Prettier could preserve angle brackets around non-inline markdown links, since removing them triggered a cargo doc warning in their Rust project; a maintainer declined the request as out of scope, and the reporter later found the warning was not reliably reproducible.",
+      "source": "SUPPORTED_BY_CONTEXT",
+      "pointers": ["S2", "S3", "S5"],
+      "evidence_text": "I can't reproduce the `cargo doc` warning anymore. It appears to be something spurious unleashed, possibly, by some other mistake in the `README.md`.",
+      "confidence": 0.65
+    },
+    {
+      "field": "objective",
+      "value": "Determine whether Prettier should support preserving angle brackets around non-inline markdown link URLs; a maintainer has already declined this as a feature.",
+      "source": "SUPPORTED_BY_CONTEXT",
+      "pointers": ["S3"],
+      "evidence_text": "Or, could it be added?\n\nNo, sorry.",
+      "confidence": 0.55
+    },
+    {
+      "field": "expected_outcome",
+      "value": "No code change is expected; the maintainer declined the feature request and the reporter's underlying cargo doc warning turned out not to be reliably reproducible.",
+      "source": "EXPLICIT",
+      "pointers": ["S3", "S5"],
+      "evidence_text": "No, sorry.",
+      "confidence": 0.6
+    },
+    {
+      "field": "acceptance_criteria",
+      "value": [],
+      "source": "UNKNOWN",
+      "pointers": [],
+      "evidence_text": null,
+      "confidence": null
+    },
+    {
+      "field": "scope",
+      "value": {
+        "in_scope": [],
+        "out_of_scope": ["adding an option to preserve angle brackets around non-inline markdown links"]
+      },
+      "source": "EXPLICIT",
+      "pointers": ["S3"],
+      "evidence_text": "Or, could it be added?\n\nNo, sorry.",
+      "confidence": 0.6
+    },
+    {
+      "field": "technical_areas",
+      "value": ["markdown", "link formatting"],
+      "source": "SUPPORTED_BY_CONTEXT",
+      "pointers": ["S2"],
+      "evidence_text": "Prettier strips angle brackets from non-inline links",
+      "confidence": 0.55
+    }
+  ]

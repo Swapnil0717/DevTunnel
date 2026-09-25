@@ -1,0 +1,107 @@
+[
+    {
+      "field": "task_type",
+      "value": "Feature",
+      "source": "EXPLICIT",
+      "pointers": ["S1"],
+      "evidence_text": "Support directives in MDX parser",
+      "confidence": 0.9
+    },
+    {
+      "field": "role",
+      "value": "Unknown",
+      "source": "UNKNOWN",
+      "pointers": [],
+      "evidence_text": null,
+      "confidence": null
+    },
+    {
+      "field": "experience_level",
+      "value": "Unknown",
+      "source": "UNKNOWN",
+      "pointers": [],
+      "evidence_text": null,
+      "confidence": null
+    },
+    {
+      "field": "complexity",
+      "value": "Medium",
+      "source": "INFERRED",
+      "pointers": ["S2"],
+      "evidence_text": "This change can commit to the `mdx` branch for `mdx` parser and backport to main later, or change in `markdown` parser first.",
+      "confidence": 0.5
+    },
+    {
+      "field": "title",
+      "value": "Support directives in MDX parser",
+      "source": "EXPLICIT",
+      "pointers": ["S1"],
+      "evidence_text": "Support directives in MDX parser",
+      "confidence": 0.95
+    },
+    {
+      "field": "summary",
+      "value": "Add support for directive syntax in Prettier's MDX parser; this is needed to unblock an MDX upgrade, and prior work toward it was started but left unfinished.",
+      "source": "SUPPORTED_BY_CONTEXT",
+      "pointers": ["S1", "S2"],
+      "evidence_text": "It's required to upgrade MDX",
+      "confidence": 0.6
+    },
+    {
+      "field": "objective",
+      "value": "Implement directive parsing support in the MDX parser (and optionally the markdown parser); pretty-printing of directives is not required, but existing formatting must not break.",
+      "source": "SUPPORTED_BY_CONTEXT",
+      "pointers": ["S2"],
+      "evidence_text": "We don't need to print it pretty, just don't break it.",
+      "confidence": 0.6
+    },
+    {
+      "field": "expected_outcome",
+      "value": "The MDX parser recognizes and correctly handles directives without breaking existing formatting, unblocking the pending MDX upgrade PR.",
+      "source": "INFERRED",
+      "pointers": ["S2"],
+      "evidence_text": "It's required to upgrade MDX",
+      "confidence": 0.5
+    },
+    {
+      "field": "acceptance_criteria",
+      "value": [
+        "MDX parser parses directive syntax without breaking existing output/formatting",
+        "Change lands on the mdx branch (or markdown parser) and can be backported to main"
+      ],
+      "source": "INFERRED",
+      "pointers": ["S2"],
+      "evidence_text": "This change can commit to the `mdx` branch for `mdx` parser and backport to main later, or change in `markdown` parser first.",
+      "confidence": 0.45
+    },
+    {
+      "field": "scope",
+      "value": {
+        "in_scope": ["MDX parser directive support", "optionally markdown parser directive support"],
+        "out_of_scope": ["pretty-printing/nicely formatting directives"]
+      },
+      "source": "SUPPORTED_BY_CONTEXT",
+      "pointers": ["S2"],
+      "evidence_text": "We don't need to print it pretty, just don't break it.",
+      "confidence": 0.55
+    },
+    {
+      "field": "technical_areas",
+      "value": ["MDX", "Markdown", "parser"],
+      "source": "SUPPORTED_BY_CONTEXT",
+      "pointers": ["S4"],
+      "evidence_text": "lang:mdx",
+      "confidence": 0.6
+    },
+    {
+      "field": "dependencies",
+      "value": [
+        {"type": "relates_to", "ref": "#18533", "description": "MDX upgrade PR this issue is required to unblock"},
+        {"type": "relates_to", "ref": "#19343", "description": "Prior PR that started this work but was left unfinished"}
+      ],
+      "source": "SUPPORTED_BY_CONTEXT",
+      "pointers": ["S2"],
+      "evidence_text": "I started #19343, but I don't have time to finish.",
+      "confidence": 0.6
+    }
+  ]

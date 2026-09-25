@@ -1,0 +1,154 @@
+collection_id: prettier_prettier-20135
+(save Claude's reply -- ONLY the JSON array -- to data/manual_responses/prettier_prettier-20135.json)
+======================================================================
+--- SYSTEM PROMPT (send this as context / instructions) ---
+
+You are labeling a GitHub issue for the ITU-1 dataset. You are given numbered TEXT SEGMENTS (verbatim, never paraphrase them) and must output a JSON array of field proposals -- nothing else, no markdown fences, no commentary.
+
+Each element of the array must be an object:
+{
+  "field": "<field name>",
+  "value": <the value -- string, list of strings, or the scope object>,
+  "source": "EXPLICIT" | "SUPPORTED_BY_CONTEXT" | "INFERRED" | "UNKNOWN",
+  "pointers": ["S1", "S3", ...],   // segment_ids this claim is grounded in; [] if UNKNOWN
+  "evidence_text": "<verbatim substring copied from a pointed segment>" | null,
+  "confidence": <0.0-1.0> | null   // null only when source is UNKNOWN
+}
+
+Grounding rules (violating these gets the claim silently discarded):
+- evidence_text must be an exact, verbatim substring of the text of a
+  segment you listed in pointers. Never paraphrase, summarize, or
+  reconstruct a quote from memory -- copy it exactly.
+- source=EXPLICIT only when the issue's own title/body/label text directly
+  states the value. source=SUPPORTED_BY_CONTEXT when a comment or label
+  supports it. source=INFERRED when you are inferring from indirect signal
+  (e.g. judging complexity from described scope). source=UNKNOWN with no
+  pointers/evidence/confidence when you have no real signal -- prefer
+  UNKNOWN over a low-confidence guess.
+
+Required fields, every time (use source=UNKNOWN + empty/appropriate-default
+value when you have no signal -- do not omit the field):
+  task_type   one of: Bug, Feature, Improvement, Refactor, Performance,
+              Security, Maintenance, Documentation, Other, Unknown
+  role        one of: Frontend, Backend, Fullstack, Unknown
+  experience_level  one of: Beginner, Intermediate, Advanced, Unknown
+  complexity  one of: Low, Medium, High, Unknown
+  title       short string
+  summary     1-3 sentence string
+  objective   string: what needs to be done
+  expected_outcome  string: what "done" looks like
+  acceptance_criteria  list of strings (can be [] with source UNKNOWN)
+  scope       {"in_scope": [...], "out_of_scope": [...]} (empty lists OK)
+
+Optional fields, include only when you have real signal, otherwise omit
+entirely (do not send empty-UNKNOWN versions of these -- the caller fills
+defaults for any you skip):
+  technologies, languages, frameworks, technical_areas, components,
+  systems, affected_areas (all lists of strings), dependencies (list of
+  {"type": "blocks"|"blocked_by"|"relates_to"|"requires", "ref": "...",
+  "description": "..."})
+
+A pre-fill hint from a cheap heuristic may be given below. Treat it as a
+suggestion only -- verify against the actual segment text and override or
+discard it if it's wrong. Output the JSON array now.
+
+--- USER MESSAGE (send this too) ---
+
+TEXT SEGMENTS:
+[S1] (ISSUE_TITLE) [3.9 regression] Markdown: $...$ parsed as inline math across code spans, deleting spaces
+[S2] (ISSUE_BODY) **Prettier 3.9.8** (regression introduced in **3.9.0**, last good version **3.8.5**)
+
+[Playground link](https://prettier.io/playground/#N4Igxg9gdgLgprEAuEAqVBVAznLACAEgDEB5E9PAMwCcIBbPAAwEMA6LAC0b2agBMmAI3ZcANHgAOAGwCu+RgQBCAQQBK3GvSZgRjcYLiUI1ODygBPGBwCWUAOZ44UnHmoyo+DnBOsAOlH90AGUIGWowOD4AWk06KIIAERIAFSIASQAZAFEgqmspXAoovClrLHgBWyZ2GAgAdyipCDBmKSjrOyhjOEZWPGSvcxLrADdTaCkh2yxrPlMrUxMJCH9eAWYTSRkpAsqoPEEh3oAvTnDuEetmJkSU9Oyg7gAKOpswDjwyvBwYPFqmAB+AHpWHwIDBKPlcNwqiczmBGABKPoAaTg5n8cAAHsw6NJcEgmNjltQYFhWKcxExWlccOTKXomHxrNR6ZxGYxIHiCjBrNAsECOQB9aQyOzTIFNZhzagU9l+KAgUQgCASXn85CgDa0OoABQ2CCwyBArTqzHMRuVgmozDAAGs4DAgri4BlbHBkJRWjhlRBBAArOBgGAAdRtEmNEhMOGoYyVIGttodTokttsdmQMDccGVODo1kz2eVxO81joCBgrRIEm8zFq1F1EBm6sVKAQfHjJeoZYrrWS3igG2suE93pzIBm9gKAEUZOCPUgvc5x-6sFigumZ3P4KPl8qAI7buC62gSI0oZhYKJQOCRSLxrPMfLpgDC9DozGNrSk8cndgKygwFm1iCDI8C6t4bo3ruPogBwMB0FIIY2PAWCphEQSGtYvKXDA5jGmAWCWiAIwyHAaT8BWQRgN2arKPwQR4QUMHjlGTZwGGzARheUhmhanb8CQlBQQuIBSJQ8bTN4MAnswdgfixyqpqy3jGh+1B2mCdSKkp3awCGsxWMgACMAAMpnKiYh4sseNryZ+i5jsqlaCAZfBGUgABMypyHAyTMII55LrBcB0AYfBzHwGS8HYMhyXARDGB+QHpl+YEQCAAC+mVAA)
+
+```sh
+# Options:
+--parser markdown --prose-wrap always --print-width 100
+# (the space deletion in the first paragraph also reproduces with no options at all)
+```
+
+**Input:**
+
+```markdown
+**Uses $FOO** from `a.sh` and `b.sh`, plus `$BAR` from `c.sh`, before anything else runs here.
+
+**Sourced-from-$DOTFILES files** - listed in `.stow-local-ignore`. They live only inside the repo
+and are pulled in by `.zshrc` via `$DOTFILES` (which is set to `~/.dotfiles` in `.zshrc`). Key
+examples: `exports.zsh`, `aliases.zsh`, `dirs.zsh`, `completions/`, `_plugins/loader.zsh`.
+```
+
+**Output:**
+
+```markdown
+**Uses $FOO** from `a.sh` and `b.sh`, plus `$BAR`from`c.sh`, before anything else runs here.
+
+**Sourced-from-$DOTFILES files** - listed in `.stow-local-ignore`. They live only inside the repo
+and are pulled in by `.zshrc` via `$DOTFILES`(which is set to`~/.dotfiles`in`.zshrc`). Key examples: `exports.zsh`, `aliases.zsh`, `dirs.zsh`, `completions/`, `_plugins/loader.zsh`.
+```
+
+**Expected output:**
+
+```markdown
+**Uses $FOO** from `a.sh` and `b.sh`, plus `$BAR` from `c.sh`, before anything else runs here.
+
+**Sourced-from-$DOTFILES files** - listed in `.stow-local-ignore`. They live only inside the repo
+and are pulled in by `.zshrc` via `$DOTFILES` (which is set to `~/.dotfiles` in `.zshrc`). Key
+examples: `exports.zsh`, `aliases.zsh`, `dirs.zsh`, `completions/`, `_plugins/loader.zsh`.
+```
+
+**Why?**
+
+Two things go wrong, both from the same cause.
+
+Spaces get deleted. `` `$BAR` from `c.sh` `` comes back as `` `$BAR`from`c.sh` ``, and the second
+paragraph loses four more the same way. That's content loss rather than reformatting, and the result is
+stable, so running Prettier again doesn't bring them back and nothing warns you about it.
+
+Prose stops wrapping. The last two lines of the second paragraph get joined into one 181 character line
+and left there, well past the 100 I asked for. 3.8.5 wraps the same text correctly.
+
+The cause is inline math. Since 3.9.0 a `$ ... $` pair gets matched straight across backtick code spans,
+so everything between the `$` in `**Uses $FOO**` and the `$` in `` `$BAR` `` becomes a single `inlineMath`
+node. `--debug-print-ast` on the first paragraph:
+
+3.8.5:
+
+```
+['inlineCode', 'paragraph', 'root', 'strong', 'text']
+```
+
+3.9.8:
+
+```
+['inlineCode', 'inlineMath', 'paragraph', 'root', 'text']
+inlineMath value: 'FOO** from `a.sh` and `b.sh`, plus `'
+```
+
+That explains both symptoms. The math node swallows the closing `**` and both opening backticks, which
+re-pairs every backtick after it, so ` from ` parses as a code span instead of plain text and CommonMark
+strips one padding space from each side of it. And since math content is atomic it can't be broken, so
+any paragraph containing one of these bogus nodes can no longer be wrapped.
+
+CommonMark gives code spans precedence over other inline constructs, so a math span shouldn't be able to
+start or end in the middle of one. I'm guessing this came along with the micromark upgrade in #18277,
+since 3.8.5 parses the same line as `strong` + `inlineCode` and leaves it alone.
+
+Not specific to lists or to `proseWrap`, I hit it first in a numbered list and a plain paragraph behaves
+the same. Pretty easy to run into in any docs that mention shell variables more than once in the same
+paragraph, `$HOME`, `$PATH`, `$DOTFILES` and so on. Thanks!
+
+[S3] (LABEL) lang:markdown
+[S4] (COMMENT) Hi @Abdellox - I have a reproducing example in the playground and in the issue description. You can use these as baseline for reproducing the problem. The expected output is also there.
+
+My environment:
+
+Operating system: macOS 26 (Tahoe)
+Node version: v24.18.0
+PNPM version: 11.7.0
+NPM version: 11.16.0
+Prettier version: 3.9.8
+
+Is there anything else I can provide?
+[S5] (COMMENT) Fixed in #20140, released as v3.9.9 https://github.com/prettier/prettier/releases/tag/3.9.9
+
+PRE-FILL HINT (verify, do not trust blindly):
+(no pre-fill hint available)

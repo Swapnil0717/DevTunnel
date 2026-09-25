@@ -1,0 +1,74 @@
+collection_id: prettier_prettier-20149
+(save Claude's reply -- ONLY the JSON array -- to data/manual_responses/prettier_prettier-20149.json)
+======================================================================
+--- SYSTEM PROMPT (send this as context / instructions) ---
+
+You are labeling a GitHub issue for the ITU-1 dataset. You are given numbered TEXT SEGMENTS (verbatim, never paraphrase them) and must output a JSON array of field proposals -- nothing else, no markdown fences, no commentary.
+
+Each element of the array must be an object:
+{
+  "field": "<field name>",
+  "value": <the value -- string, list of strings, or the scope object>,
+  "source": "EXPLICIT" | "SUPPORTED_BY_CONTEXT" | "INFERRED" | "UNKNOWN",
+  "pointers": ["S1", "S3", ...],   // segment_ids this claim is grounded in; [] if UNKNOWN
+  "evidence_text": "<verbatim substring copied from a pointed segment>" | null,
+  "confidence": <0.0-1.0> | null   // null only when source is UNKNOWN
+}
+
+Grounding rules (violating these gets the claim silently discarded):
+- evidence_text must be an exact, verbatim substring of the text of a
+  segment you listed in pointers. Never paraphrase, summarize, or
+  reconstruct a quote from memory -- copy it exactly.
+- source=EXPLICIT only when the issue's own title/body/label text directly
+  states the value. source=SUPPORTED_BY_CONTEXT when a comment or label
+  supports it. source=INFERRED when you are inferring from indirect signal
+  (e.g. judging complexity from described scope). source=UNKNOWN with no
+  pointers/evidence/confidence when you have no real signal -- prefer
+  UNKNOWN over a low-confidence guess.
+
+Required fields, every time (use source=UNKNOWN + empty/appropriate-default
+value when you have no signal -- do not omit the field):
+  task_type   one of: Bug, Feature, Improvement, Refactor, Performance,
+              Security, Maintenance, Documentation, Other, Unknown
+  role        one of: Frontend, Backend, Fullstack, Unknown
+  experience_level  one of: Beginner, Intermediate, Advanced, Unknown
+  complexity  one of: Low, Medium, High, Unknown
+  title       short string
+  summary     1-3 sentence string
+  objective   string: what needs to be done
+  expected_outcome  string: what "done" looks like
+  acceptance_criteria  list of strings (can be [] with source UNKNOWN)
+  scope       {"in_scope": [...], "out_of_scope": [...]} (empty lists OK)
+
+Optional fields, include only when you have real signal, otherwise omit
+entirely (do not send empty-UNKNOWN versions of these -- the caller fills
+defaults for any you skip):
+  technologies, languages, frameworks, technical_areas, components,
+  systems, affected_areas (all lists of strings), dependencies (list of
+  {"type": "blocks"|"blocked_by"|"relates_to"|"requires", "ref": "...",
+  "description": "..."})
+
+A pre-fill hint from a cheap heuristic may be given below. Treat it as a
+suggestion only -- verify against the actual segment text and override or
+discard it if it's wrong. Output the JSON array now.
+
+--- USER MESSAGE (send this too) ---
+
+TEXT SEGMENTS:
+[S1] (ISSUE_TITLE) Support directives in MDX parser
+[S2] (ISSUE_BODY) It's required to upgrade MDX https://github.com/prettier/prettier/pull/18533#issuecomment-4670556378 .
+
+I started #19343, but I don't have time to finish.
+
+Note: 
+
+1. This change is required for #18533, but I'm open to support it in markdown parser too, see https://github.com/prettier/prettier/issues/8640#issuecomment-4998251017. This change can commit to the `mdx` branch for `mdx` parser and backport to main later, or change in `markdown` parser first.
+2. We don't need to print it pretty, just don't break it.
+
+
+
+[S3] (LABEL) help wanted
+[S4] (LABEL) lang:mdx
+
+PRE-FILL HINT (verify, do not trust blindly):
+(no pre-fill hint available)

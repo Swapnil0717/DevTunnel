@@ -1,0 +1,139 @@
+collection_id: prettier_prettier-19985
+(save Claude's reply -- ONLY the JSON array -- to data/manual_responses/prettier_prettier-19985.json)
+======================================================================
+--- SYSTEM PROMPT (send this as context / instructions) ---
+
+You are labeling a GitHub issue for the ITU-1 dataset. You are given numbered TEXT SEGMENTS (verbatim, never paraphrase them) and must output a JSON array of field proposals -- nothing else, no markdown fences, no commentary.
+
+Each element of the array must be an object:
+{
+  "field": "<field name>",
+  "value": <the value -- string, list of strings, or the scope object>,
+  "source": "EXPLICIT" | "SUPPORTED_BY_CONTEXT" | "INFERRED" | "UNKNOWN",
+  "pointers": ["S1", "S3", ...],   // segment_ids this claim is grounded in; [] if UNKNOWN
+  "evidence_text": "<verbatim substring copied from a pointed segment>" | null,
+  "confidence": <0.0-1.0> | null   // null only when source is UNKNOWN
+}
+
+Grounding rules (violating these gets the claim silently discarded):
+- evidence_text must be an exact, verbatim substring of the text of a
+  segment you listed in pointers. Never paraphrase, summarize, or
+  reconstruct a quote from memory -- copy it exactly.
+- source=EXPLICIT only when the issue's own title/body/label text directly
+  states the value. source=SUPPORTED_BY_CONTEXT when a comment or label
+  supports it. source=INFERRED when you are inferring from indirect signal
+  (e.g. judging complexity from described scope). source=UNKNOWN with no
+  pointers/evidence/confidence when you have no real signal -- prefer
+  UNKNOWN over a low-confidence guess.
+
+Required fields, every time (use source=UNKNOWN + empty/appropriate-default
+value when you have no signal -- do not omit the field):
+  task_type   one of: Bug, Feature, Improvement, Refactor, Performance,
+              Security, Maintenance, Documentation, Other, Unknown
+  role        one of: Frontend, Backend, Fullstack, Unknown
+  experience_level  one of: Beginner, Intermediate, Advanced, Unknown
+  complexity  one of: Low, Medium, High, Unknown
+  title       short string
+  summary     1-3 sentence string
+  objective   string: what needs to be done
+  expected_outcome  string: what "done" looks like
+  acceptance_criteria  list of strings (can be [] with source UNKNOWN)
+  scope       {"in_scope": [...], "out_of_scope": [...]} (empty lists OK)
+
+Optional fields, include only when you have real signal, otherwise omit
+entirely (do not send empty-UNKNOWN versions of these -- the caller fills
+defaults for any you skip):
+  technologies, languages, frameworks, technical_areas, components,
+  systems, affected_areas (all lists of strings), dependencies (list of
+  {"type": "blocks"|"blocked_by"|"relates_to"|"requires", "ref": "...",
+  "description": "..."})
+
+A pre-fill hint from a cheap heuristic may be given below. Treat it as a
+suggestion only -- verify against the actual segment text and override or
+discard it if it's wrong. Output the JSON array now.
+
+--- USER MESSAGE (send this too) ---
+
+TEXT SEGMENTS:
+[S1] (ISSUE_TITLE) Markdown: a Liquid tag alone on its line is reflowed into the neighbouring paragraph with `proseWrap: always`
+[S2] (ISSUE_BODY) **Prettier 3.9.6**
+[Playground link](https://prettier.io/playground/#N4Igxg9gdgLgprEAuEwCkACMBDANriAVxgxgE8AHOAXgB0QBLKAMwnozQF9aoAxCAE6kAFnAwBnbAGsxEZhjgAPbAFsKuOABoRYgUXgCA5OIwVCAI1wMwGbABM7AuOJMMTAVgB0ANk8B2TwAOWyg7DAYYEwoBBgA3bHhbBycXcJMARgAGT2zs9M8edAwAehx8fQ5uKBBNEAgKGAZocWRQCmwBcTgBZBAVDqk7CAB3atroiC6AdQFsCl68YewyFvGY2CmGOxhhZHSAJkzOTiA)
+
+```sh
+# Options (if any):
+--parser markdown
+--prose-wrap always
+--print-width 120
+```
+
+**Input:**
+
+```markdown
+{% callout type="info" %}
+For the sake of example, the router's public address is 5.6.7.8 and its private address is 10.0.0.1.
+{% /callout %}
+```
+
+**Output:**
+
+```markdown
+{% callout type="info" %} For the sake of example, the router's public address is 5.6.7.8 and its private address is
+10.0.0.1. {% /callout %}
+```
+
+**Expected output:**
+
+```markdown
+{% callout type="info" %}
+For the sake of example, the router's public address is 5.6.7.8 and its private address is
+10.0.0.1.
+{% /callout %}
+```
+
+**Why?**
+
+Prettier has understood `{% ... %}` Liquid tags in Markdown since 1.13 (#3695): it parses them as an inline
+`liquidNode` and never edits their contents. But it has no block form of that node. A tag that stands alone on a line
+is, to the paragraph printer, the first word of the paragraph next to it, and `proseWrap: always` (and `never`) reflows
+the two onto shared lines.
+
+In every language that uses this syntax — Liquid in Jekyll (`{% highlight %}`, `{% include %}`, `{% raw %}`), Markdoc
+(`{% callout %}`, `{% if %}`), Twig — a tag alone on a line is a block tag and a tag inside a line of text is an inline
+tag. The reflow changes which one it is. Markdoc, for example, renders the output above as an inline tag inside a `<p>`,
+which puts an `<aside>` inside a paragraph. Two tags on adjacent lines fare worse
+([playground](https://prettier.io/playground/#N4Igxg9gdgLgprEAuEB1OACA7gJwJbwYwAWmAznDgG6UYBmeOZMAdADpTACkGA9HnQxcAvh24YBGADYBDKAHMMAXiUY2IAFZl1Q0VBAAaEBAAOMPNDLJQJmU0rIQAWzsBrACYQs+oyZwQKVBwZE0cZKSwZAE8rX3xYVDx3EmQARgAmAAZhYSA)):
+
+```markdown
+We write the server first.
+{% /if %}
+{% if lang == "js" %}
+```
+
+becomes
+
+```markdown
+We write the server first. {% /if %}
+{% if lang == "js" %}
+```
+
+where the closing tag is now inline and the opening one is still a block, so they no longer pair, and Markdoc drops the
+section. Because the result is Prettier's own output, `prettier --check` passes on it: the damage is silent in CI.
+
+`proseWrap: preserve` (the default) is unaffected, since it keeps the author's line breaks. The problem appears exactly
+when a project turns on wrapping, which is when people run `--check` in CI and rely on it.
+
+**Suggestion:** treat a Liquid tag that occupies a whole line (leading whitespace allowed, nothing else on the line) as a
+block-level node, the way a block `html` node is handled: print it verbatim, never fill it into a neighbouring
+paragraph, and keep whether a blank line separated it from its neighbours. Inline tags, the current behaviour, are
+untouched.
+
+**Workaround:** a parser plugin that spreads the built-in Markdown parser and adds a `preprocess` step which puts a blank
+line on each side of every standalone tag line (outside code fences) makes Prettier see each tag line as its own
+paragraph. About forty lines; happy to share it or to turn the suggestion above into a PR if the maintainers want it.
+
+[S3] (LABEL) lang:markdown
+[S4] (COMMENT) Working on a focused fix so a Liquid/Markdoc tag that stands alone on its line stays a block boundary under `proseWrap: always` / `never`, instead of being reflowed into the neighbouring paragraph. Will add regression fixtures and open a PR linking this issue.
+[S5] (COMMENT) Stepping back - on current main the reported inputs already keep standalone Liquid tags as block boundaries under proseWrap always/never (AST is root liquidNode + paragraph + liquidNode). Likely fixed since the report; happy to reopen if there is a remaining repro.
+
+PRE-FILL HINT (verify, do not trust blindly):
+role: Fullstack (heuristic, confidence 0.35)

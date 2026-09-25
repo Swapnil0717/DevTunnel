@@ -1,0 +1,107 @@
+[
+    {
+      "field": "task_type",
+      "value": "Bug",
+      "source": "EXPLICIT",
+      "pointers": ["S1"],
+      "evidence_text": "a Liquid tag alone on its line is reflowed into the neighbouring paragraph with `proseWrap: always`",
+      "confidence": 0.9
+    },
+    {
+      "field": "role",
+      "value": "Unknown",
+      "source": "UNKNOWN",
+      "pointers": [],
+      "evidence_text": null,
+      "confidence": null
+    },
+    {
+      "field": "experience_level",
+      "value": "Advanced",
+      "source": "INFERRED",
+      "pointers": ["S2"],
+      "evidence_text": "a parser plugin that spreads the built-in Markdown parser and adds a `preprocess` step",
+      "confidence": 0.5
+    },
+    {
+      "field": "complexity",
+      "value": "Medium",
+      "source": "INFERRED",
+      "pointers": ["S2"],
+      "evidence_text": "Prettier has understood `{% ... %}` Liquid tags in Markdown since 1.13 (#3695): it parses them as an inline\n`liquidNode` and never edits their contents. But it has no block form of that node.",
+      "confidence": 0.5
+    },
+    {
+      "field": "title",
+      "value": "Markdown: a Liquid tag alone on its line is reflowed into the neighbouring paragraph with `proseWrap: always`",
+      "source": "EXPLICIT",
+      "pointers": ["S1"],
+      "evidence_text": "Markdown: a Liquid tag alone on its line is reflowed into the neighbouring paragraph with `proseWrap: always`",
+      "confidence": 0.95
+    },
+    {
+      "field": "summary",
+      "value": "Prettier's markdown printer has no block-level representation for a standalone Liquid/Markdoc tag, so with proseWrap set to always or never it gets reflowed into the adjacent paragraph, silently breaking paired tags across templating languages; a later comment suggests this may already be fixed on main.",
+      "source": "SUPPORTED_BY_CONTEXT",
+      "pointers": ["S2", "S5"],
+      "evidence_text": "Likely fixed since the report; happy to reopen if there is a remaining repro.",
+      "confidence": 0.6
+    },
+    {
+      "field": "objective",
+      "value": "Treat a Liquid/Markdoc tag that occupies a whole line as a block-level node in the markdown printer, printing it verbatim and never filling it into a neighbouring paragraph, while leaving inline tag handling unchanged.",
+      "source": "EXPLICIT",
+      "pointers": ["S2"],
+      "evidence_text": "treat a Liquid tag that occupies a whole line (leading whitespace allowed, nothing else on the line) as a\nblock-level node, the way a block `html` node is handled: print it verbatim, never fill it into a neighbouring\nparagraph, and keep whether a blank line separated it from its neighbours.",
+      "confidence": 0.75
+    },
+    {
+      "field": "expected_outcome",
+      "value": "Given the example input, Prettier's markdown output matches the issue's 'Expected output' block, keeping standalone Liquid tags on their own lines instead of reflowing them into the surrounding paragraph.",
+      "source": "EXPLICIT",
+      "pointers": ["S2"],
+      "evidence_text": "{% callout type=\"info\" %}\nFor the sake of example, the router's public address is 5.6.7.8 and its private address is\n10.0.0.1.\n{% /callout %}",
+      "confidence": 0.8
+    },
+    {
+      "field": "acceptance_criteria",
+      "value": [
+        "A Liquid/Markdoc tag alone on its own line (leading whitespace allowed, nothing else on the line) is printed verbatim on its own line under proseWrap: always and never",
+        "Two paired standalone tags on adjacent lines (e.g. closing/opening tags of a conditional block) remain unpaired-safe, i.e. neither is reflowed into a neighbouring paragraph",
+        "Inline Liquid tag behavior (tag appearing within a line of text) is unchanged"
+      ],
+      "source": "SUPPORTED_BY_CONTEXT",
+      "pointers": ["S2"],
+      "evidence_text": "Inline tags, the current behaviour, are\nuntouched.",
+      "confidence": 0.55
+    },
+    {
+      "field": "scope",
+      "value": {
+        "in_scope": ["markdown printer handling of standalone Liquid/Markdoc/Twig-style {% %} tags under proseWrap always/never"],
+        "out_of_scope": ["proseWrap: preserve behavior (already unaffected, since it keeps original line breaks)"]
+      },
+      "source": "EXPLICIT",
+      "pointers": ["S2"],
+      "evidence_text": "`proseWrap: preserve` (the default) is unaffected, since it keeps the author's line breaks.",
+      "confidence": 0.7
+    },
+    {
+      "field": "technical_areas",
+      "value": ["markdown", "proseWrap", "liquidNode", "Markdoc", "Jekyll/Liquid templating"],
+      "source": "EXPLICIT",
+      "pointers": ["S2", "S3"],
+      "evidence_text": "Prettier has understood `{% ... %}` Liquid tags in Markdown since 1.13 (#3695): it parses them as an inline\n`liquidNode`",
+      "confidence": 0.65
+    },
+    {
+      "field": "dependencies",
+      "value": [
+        {"type": "relates_to", "ref": "#3695", "description": "Original PR that added inline Liquid tag parsing to the markdown printer"}
+      ],
+      "source": "EXPLICIT",
+      "pointers": ["S2"],
+      "evidence_text": "Prettier has understood `{% ... %}` Liquid tags in Markdown since 1.13 (#3695)",
+      "confidence": 0.7
+    }
+  ]

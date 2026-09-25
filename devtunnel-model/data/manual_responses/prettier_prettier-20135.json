@@ -1,0 +1,108 @@
+[
+    {
+      "field": "task_type",
+      "value": "Bug",
+      "source": "EXPLICIT",
+      "pointers": ["S1"],
+      "evidence_text": "[3.9 regression] Markdown: $...$ parsed as inline math across code spans, deleting spaces",
+      "confidence": 0.95
+    },
+    {
+      "field": "role",
+      "value": "Backend",
+      "source": "INFERRED",
+      "pointers": ["S2"],
+      "evidence_text": "a `$ ... $` pair gets matched straight across backtick code spans",
+      "confidence": 0.45
+    },
+    {
+      "field": "experience_level",
+      "value": "Advanced",
+      "source": "INFERRED",
+      "pointers": ["S2"],
+      "evidence_text": "`--debug-print-ast` on the first paragraph",
+      "confidence": 0.5
+    },
+    {
+      "field": "complexity",
+      "value": "Medium",
+      "source": "INFERRED",
+      "pointers": ["S2"],
+      "evidence_text": "CommonMark gives code spans precedence over other inline constructs, so a math span shouldn't be able to\nstart or end in the middle of one.",
+      "confidence": 0.5
+    },
+    {
+      "field": "title",
+      "value": "[3.9 regression] Markdown: $...$ parsed as inline math across code spans, deleting spaces",
+      "source": "EXPLICIT",
+      "pointers": ["S1"],
+      "evidence_text": "[3.9 regression] Markdown: $...$ parsed as inline math across code spans, deleting spaces",
+      "confidence": 0.95
+    },
+    {
+      "field": "summary",
+      "value": "A regression introduced in Prettier 3.9.0 causes a $...$ inline-math span to be matched across backtick code spans in markdown, which mis-pairs subsequent backticks, deletes spaces adjacent to the resulting bogus code spans, and prevents the containing paragraph from being wrapped. Already fixed in a later release.",
+      "source": "EXPLICIT",
+      "pointers": ["S2", "S5"],
+      "evidence_text": "Fixed in #20140, released as v3.9.9",
+      "confidence": 0.85
+    },
+    {
+      "field": "objective",
+      "value": "Fix the markdown inline-math parsing so a $ ... $ span cannot start or end in the middle of a backtick code span, restoring correct space handling and prose wrapping for paragraphs containing repeated shell-style $VAR references.",
+      "source": "EXPLICIT",
+      "pointers": ["S2"],
+      "evidence_text": "CommonMark gives code spans precedence over other inline constructs, so a math span shouldn't be able to\nstart or end in the middle of one.",
+      "confidence": 0.75
+    },
+    {
+      "field": "expected_outcome",
+      "value": "Given the example input, Prettier's markdown output matches the issue's 'Expected output' block exactly, with no spaces deleted around code spans and normal prose wrapping restored.",
+      "source": "EXPLICIT",
+      "pointers": ["S2"],
+      "evidence_text": "**Uses $FOO** from `a.sh` and `b.sh`, plus `$BAR` from `c.sh`, before anything else runs here.",
+      "confidence": 0.8
+    },
+    {
+      "field": "acceptance_criteria",
+      "value": [
+        "Running prettier --parser markdown --prose-wrap always --print-width 100 on the provided input produces the 'Expected output' shown in the issue",
+        "Spaces adjacent to backtick code spans are no longer deleted when a $ character appears elsewhere in the same paragraph",
+        "Paragraphs are wrapped normally instead of being left as a single long line due to a bogus atomic inlineMath node"
+      ],
+      "source": "SUPPORTED_BY_CONTEXT",
+      "pointers": ["S2"],
+      "evidence_text": "The last two lines of the second paragraph get joined into one 181 character line\nand left there, well past the 100 I asked for.",
+      "confidence": 0.6
+    },
+    {
+      "field": "scope",
+      "value": {
+        "in_scope": ["markdown inline math ($...$) parsing precedence relative to backtick code spans"],
+        "out_of_scope": ["list-specific or proseWrap-specific handling (issue reporter notes it reproduces in plain paragraphs and regardless of proseWrap)"]
+      },
+      "source": "SUPPORTED_BY_CONTEXT",
+      "pointers": ["S2"],
+      "evidence_text": "Not specific to lists or to `proseWrap`, I hit it first in a numbered list and a plain paragraph behaves\nthe same.",
+      "confidence": 0.55
+    },
+    {
+      "field": "technical_areas",
+      "value": ["markdown", "inline math parsing", "micromark", "code spans"],
+      "source": "EXPLICIT",
+      "pointers": ["S2", "S3"],
+      "evidence_text": "I'm guessing this came along with the micromark upgrade in #18277",
+      "confidence": 0.6
+    },
+    {
+      "field": "dependencies",
+      "value": [
+        {"type": "relates_to", "ref": "#18277", "description": "Suspected source of the regression (micromark upgrade)"},
+        {"type": "relates_to", "ref": "#20140", "description": "PR that fixed this issue, released in v3.9.9"}
+      ],
+      "source": "EXPLICIT",
+      "pointers": ["S2", "S5"],
+      "evidence_text": "Fixed in #20140, released as v3.9.9",
+      "confidence": 0.85
+    }
+  ]
