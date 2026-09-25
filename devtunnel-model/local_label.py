@@ -142,9 +142,10 @@ discard it if it's wrong. Output the JSON array now."""
 # ------------------------------------------------------- Ollama API client
 
 def call_ollama(system: str, user: str, model: str, base_url: str,
-                 max_retries: int = 3) -> str:
+                 max_retries: int = 3, timeout: int = 180, num_predict: int = 900) -> str:
     url = base_url.rstrip("/") + "/api/chat"
     for attempt in range(max_retries):
+        started = time.time()
         try:
             resp = requests.post(
                 url,
@@ -156,10 +157,22 @@ def call_ollama(system: str, user: str, model: str, base_url: str,
                     ],
                     "stream": False,
                     "format": "json",   # constrains output to syntactically valid JSON
-                    "options": {"temperature": 0},
+                    # num_predict caps how many tokens the model can generate --
+                    # without this a slow/rambling model can run far past what
+                    # this task needs, which is the main thing that turns into
+                    # a timeout on weak CPUs. 900 is generous for one issue's
+                    # JSON array but bounds the worst case.
+                    "options": {"temperature": 0, "num_predict": num_predict},
                 },
-                timeout=180,
+                timeout=timeout,
             )
+        except requests.exceptions.ReadTimeout:
+            elapsed = time.time() - started
+            print(f"  timed out after {elapsed:.0f}s (limit {timeout}s) on attempt {attempt + 1}/{max_retries}",
+                  file=sys.stderr)
+            if attempt == max_retries - 1:
+                raise
+            continue
         except requests.ConnectionError:
             sys.exit(
                 f"Could not reach Ollama at {base_url}. Is it running? "
@@ -294,15 +307,20 @@ class OllamaEngine:
     """Satisfies the same engine.propose(segments) -> list[FieldProposal]
     contract as claude_label.py's ClaudeEngine, backed by a local model."""
 
-    def __init__(self, model: str, base_url: str):
+    def __init__(self, model: str, base_url: str, timeout: int = 180, num_predict: int = 900):
         self.model = model
         self.base_url = base_url
+        self.timeout = timeout
+        self.num_predict = num_predict
 
     def propose(self, segments: list["architecture.Segment"], weak: dict | None = None
                  ) -> list["architecture.FieldProposal"]:
         user = (f"TEXT SEGMENTS:\n{render_segments(segments)}\n\n"
                 f"PRE-FILL HINT (verify, do not trust blindly):\n{render_hint(weak)}")
-        raw = call_ollama(SYSTEM_PROMPT, user, self.model, self.base_url)
+        t0 = time.time()
+        raw = call_ollama(SYSTEM_PROMPT, user, self.model, self.base_url,
+                           timeout=self.timeout, num_predict=self.num_predict)
+        print(f"  ({time.time() - t0:.1f}s)", file=sys.stderr)
         items = parse_claude_response(raw)
         proposals = verify_grounding(items, segments)
         return default_fill_proposals(proposals)
@@ -443,6 +461,8 @@ def main():
     ap.add_argument("--spot-check-rate", type=float, default=0.175)
     ap.add_argument("--model", default="llama3.1:8b", help="Ollama model tag, e.g. llama3.1:8b, qwen2.5:7b-instruct")
     ap.add_argument("--ollama-url", default="http://localhost:11434")
+    ap.add_argument("--timeout", type=int, default=180, help="seconds to wait for one issue's response")
+    ap.add_argument("--num-predict", type=int, default=900, help="max tokens the model may generate per issue")
     ap.add_argument("--license", default="MIT", help="fallback if a record's own data_provenance.license is missing")
     ap.add_argument("--limit", type=int, default=None, help="label at most N issues (testing)")
     ap.add_argument("--seed", type=int, default=0)
@@ -465,7 +485,7 @@ def main():
         sys.exit(f"No READY_FOR_LABELING records in {collected_path}. Run collect_issues.py first.")
 
     weak = load_weak_labels(Path(args.weak_labels))
-    engine = OllamaEngine(args.model, args.ollama_url)
+    engine = OllamaEngine(args.model, args.ollama_url, timeout=args.timeout, num_predict=args.num_predict)
     rng = random.Random(args.seed)
     model_label = f"local:{args.model}"
 
