@@ -1,0 +1,35 @@
+{
+  "task_type": "Feature",
+  "role": "Backend",
+  "experience_level": "Advanced",
+  "complexity": "Medium",
+  "title": "Support directives in MDX parser",
+  "summary": "The issue is about adding support for directives in the MDX parser, which is required to upgrade MDX as per a GitHub pull request.",
+  "objective": "Add support for directives in the MDX parser to align with the required upgrade of MDX.",
+  "expected_outcome": "The MDX parser should support directives without breaking existing functionality.",
+  "acceptance_criteria": [
+    "The parser should not break existing functionality when directives are used.",
+    "The parser should support the required directives as per the GitHub issue and pull request."
+  ],
+  "scope": {
+    "in_scope": [
+      "Adding support for directives in the MDX parser",
+      "Backporting the change to the main branch"
+    ],
+    "out_of_scope": [
+      "Printing the parser output pretty",
+      "Changing the parser in the markdown parser first"
+    ]
+  },
+  "technologies": [
+    "MDX",
+    "Prettier"
+  ],
+  "systems": [
+    "GitHub"
+  ],
+  "affected_areas": [
+    "MDX parser",
+    "Markdown parser"
+  ]
+}

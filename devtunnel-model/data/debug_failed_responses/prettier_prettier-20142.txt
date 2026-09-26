@@ -1,0 +1,54 @@
+{
+  "task_type": "Bug",
+  "role": "Backend",
+  "experience_level": "Advanced",
+  "complexity": "High",
+  "title": "Markdown: Preserve newline around Chinese/Japanese characters not around Korean letters in all proseWrap settings",
+  "summary": "Prettier does not preserve newline around Chinese/Japanese characters as expected when proseWrap is set to 'preserve'. This issue affects the handling of line breaks between CJK characters and non-CJK characters, as well as between CJK punctuation and Korean letters.",
+  "objective": "Fix the issue in Prettier where newline around Chinese/Japanese characters is not preserved as expected when proseWrap is set to 'preserve'.",
+  "expected_outcome": "Prettier should preserve newline around Chinese/Japanese characters as expected when proseWrap is set to 'preserve'. Line breaks between CJK characters and non-CJK characters, as well as between CJK punctuation and Korean letters, should not be converted to spaces.",
+  "acceptance_criteria": [
+    "Prettier should preserve newline around Chinese/Japanese characters as expected when proseWrap is set to 'preserve'.",
+    "Line breaks between CJK characters and non-CJK characters, as well as between CJK punctuation and Korean letters, should not be converted to spaces.",
+    "The issue should be fixed in the latest Prettier version."
+  ],
+  "scope": {
+    "in_scope": [
+      "Markdown parsing",
+      "ProseWrap settings",
+      "CJK characters (Chinese, Japanese, Korean)",
+      "CJK punctuation"
+    ],
+    "out_of_scope": [
+      "HTML/CSS parsing",
+      "Non-CJK characters",
+      "Non-CJK punctuation"
+    ]
+  },
+  "technologies": [
+    "Prettier"
+  ],
+  "systems": [
+    "Web"
+  ],
+  "affected_areas": [
+    "Markdown files"
+  ],
+  "dependencies": [
+    {
+      "type": "blocks",
+      "ref": "https://github.com/prettier/prettier/issues/16710",
+      "description": "Prettier differs from CSS (and individual browsers) in how line breaks around CJK characters are recognized."
+    },
+    {
+      "type": "blocks",
+      "ref": "https://github.com/prettier/prettier/pull/16691",
+      "description": "Prettier should keep line breaks around CJK characters as they are, even if proseWrap is set to something other than preserve."
+    },
+    {
+      "type": "blocks",
+      "ref": "https://github.com/prettier/prettier/pull/16805",
+      "description": "Prettier will allow line breaks between CJK characters and non-CJK characters, as well as between CJK punctuation and Korean letters, to be converted to spaces when proseWrap is set to always or never."
+    }
+  ]
+}
