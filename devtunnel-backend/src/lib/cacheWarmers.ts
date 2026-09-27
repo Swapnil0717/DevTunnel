@@ -4,7 +4,7 @@ import { logger } from "./logger";
 import { getSupabase } from "./supabase";
 import { warmCacheSWR, getCachedSWR, getCached, setCached } from "./cache";
 import { warmCatalogRoute } from "./githubCatalog";
-import { scanProjectIssues } from "./issuesScan";
+import { scanProjectIssues, ISSUES_SCAN_BATCH_SIZE } from "./issuesScan";
 import { listActiveProjectsWithRepo, type ActiveProjectWithRepo } from "../db/adminNewIssues";
 import type { GithubScanCacheEntry } from "../routes/admin/newIssues";
 import {
@@ -90,9 +90,11 @@ export async function warmGithubCatalogs(env: ValidatedEnv, workerEnv: Env): Pro
  * cached for every other project, so the full set still cycles through
  * every `ceil(projectCount / ISSUES_SCAN_BATCH_SIZE)` ticks (well within
  * `ISSUES_SCAN_HARD_TTL_SECONDS`) without any single invocation scanning
- * more than a few repos.
+ * more than a few repos. `ISSUES_SCAN_BATCH_SIZE` itself now lives in
+ * `lib/issuesScan.ts` so `routes/issues.ts`'s live cache-miss fallback can
+ * share the exact same cap instead of redeclaring its own (see that
+ * route's `missingProjects` handling).
  */
-const ISSUES_SCAN_BATCH_SIZE = 4;
 const ISSUES_SCAN_CURSOR_KEY = "issues-scan-cursor";
 /** Generous relative to the batch cadence — if this expires, rotation just restarts at 0, which is harmless. */
 const ISSUES_SCAN_CURSOR_TTL_SECONDS = 60 * 60 * 24;

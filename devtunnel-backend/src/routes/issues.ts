@@ -8,7 +8,7 @@ import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
 import { logger } from "../lib/logger";
 import { withCacheSWR } from "../lib/cache";
-import { scanProjectIssues } from "../lib/issuesScan";
+import { scanProjectIssues, ISSUES_SCAN_BATCH_SIZE } from "../lib/issuesScan";
 import {
   getCoveredIssueNumbersByProject,
   getIgnoredIssueKeysByProject,
@@ -225,7 +225,21 @@ issues.get("/issues", requireAuth, async (c) => {
     // refresh. When it doesn't, fall back to scanning just the missing
     // projects live rather than discarding an otherwise-good cache entry.
     const cachedByProjectId = new Map((scan?.projects ?? []).map((p) => [p.projectId, p.issues]));
-    const missingProjects = projects.filter(({ project }) => !cachedByProjectId.has(project.id));
+    const allMissingProjects = projects.filter(({ project }) => !cachedByProjectId.has(project.id));
+
+    // Cap how many of the missing projects this request scans live, using
+    // the same bound the scheduled warmer (`lib/cacheWarmers.ts`) applies
+    // to its own batches. `scanProjectIssues` walks every page of each
+    // repo's open-issue backlog, so scanning every missing project in one
+    // request — as this used to — blows the Worker's per-invocation
+    // subrequest/CPU limits the moment the cache is fully cold (every
+    // active project "missing" at once): observed in production as
+    // `Too many subrequests by single Worker invocation` and a ~20s
+    // request. Any project left over here still gets covered — it just
+    // contributes nothing to *this* response and waits for the scheduled
+    // warmer's next tick(s), the same graceful-degradation the per-issue
+    // loop below already applies to an outright scan failure.
+    const missingProjects = allMissingProjects.slice(0, ISSUES_SCAN_BATCH_SIZE);
 
     let rawIssuesByProjectId = cachedByProjectId;
     if (missingProjects.length > 0) {

@@ -26,6 +26,22 @@ import { toScanIssue, type GithubScanCacheEntry, type NewIssueScanIssue } from "
  *    for its own server-initiated GitHub calls.
  * Both produce the same `GithubScanCacheEntry` shape either way.
  */
+/**
+ * Safe upper bound on how many projects any single Worker invocation may
+ * scan via `scanProjectIssues` at once — each project's scan walks every
+ * page of that repo's open-issue backlog (`fetchAllRepositoryIssues`), so
+ * scanning more than a handful concurrently risks blowing the Worker's
+ * per-invocation subrequest/CPU limits (`Too many subrequests by single
+ * Worker invocation` / `Exceeded CPU Limit`). Shared here — rather than
+ * being redeclared per call site — so both `lib/cacheWarmers.ts`'s
+ * scheduled batch and `routes/issues.ts`'s live cache-miss fallback stay
+ * bounded by the same number instead of drifting apart (see that route's
+ * `missingProjects` handling: without this, a cold cache — every active
+ * project "missing" at once — reproduced the exact subrequest-limit
+ * crash the scheduled warmer's own batching was already built to avoid).
+ */
+export const ISSUES_SCAN_BATCH_SIZE = 4;
+
 export async function scanProjectIssues(
   accessToken: string | null,
   projects: ActiveProjectWithRepo[],
