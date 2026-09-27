@@ -23,5 +23,28 @@
 		// Enable image optimization
 		// see https://opennext.js.org/cloudflare/howtos/image
 		"binding": "IMAGES"
+	},
+	// ---------------------------------------------------------------------
+	// Workers Logs + Traces — mirrors devtunnel-backend/wrangler.toml's
+	// [observability] block, added there specifically to debug the
+	// CPU/subrequest-limit errors that backend was hitting. The frontend
+	// Worker had no observability config at all, which is why the "This
+	// page hit a snag" crash on /admin/projects/:id has no captured
+	// message or stack trace anywhere to look at. 100% sampling + persist
+	// is fine at current traffic; revisit head_sampling_rate if volume
+	// grows enough that retention/cost matters.
+	// ---------------------------------------------------------------------
+	"observability": {
+		"logs": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+			"invocation_logs": true,
+			"persist": true
+		},
+		"traces": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+			"persist": true
+		}
 	}
 }

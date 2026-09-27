@@ -132,14 +132,14 @@ const listQuerySchema = z.object({
  * `GET /issues`). Error responses still use the standard
  * `{ error: { code, message, requestId } }` envelope.
  */
-tasks.get("/tasks", requireAuth, async (c) => {
+// Public catalog read (no `requireAuth`): this list has no per-viewer
+// field, and the frontend's server-rendered fetch for `/tasks`
+// deliberately doesn't forward the session cookie (`forwardCookies: false`
+// in devtunnel-frontend's `lib/tasks/api.ts`) so the page can be cached
+// instead of forced into per-request SSR — that only works if this route
+// doesn't require a session to answer.
+tasks.get("/tasks", async (c) => {
   const env = getEnv(c.env);
-  const user = c.get("user");
-  if (!user) {
-    // requireAuth already guarantees this — kept for type safety, same
-    // pattern used throughout this backend's protected routes.
-    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
-  }
 
   // Cheap indexed-table read on the fast path (no live external scan,
   // unlike GET /issues) — rate limited generously in its own bucket, same

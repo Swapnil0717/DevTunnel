@@ -81,9 +81,14 @@ export const CATALOG_CONFIG: CatalogRouteConfig = {
  * plugs straight into the frontend's existing `fetchAllAdminPages`
  * walker with zero frontend changes.
  */
-githubProjects.get("/github-projects", requireAuth, (c) =>
-  handleCatalogListRequest(c, CATALOG_CONFIG),
-);
+// Public catalog read (no `requireAuth`): this is a browsable list with
+// no per-viewer field, meant to be reachable by signed-out visitors too.
+// The frontend's server-rendered fetch for this route deliberately
+// doesn't forward the session cookie (see devtunnel-frontend's
+// `lib/github-projects/fetch-catalog-preview.ts` doc comment) so the
+// page can be cached/ISR'd instead of forced into per-request SSR — that
+// only works if this route doesn't require a session to answer.
+githubProjects.get("/github-projects", (c) => handleCatalogListRequest(c, CATALOG_CONFIG));
 
 /**
  * `POST /github-projects/refresh` — the "Refresh" button on

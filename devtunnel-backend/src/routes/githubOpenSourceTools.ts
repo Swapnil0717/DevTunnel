@@ -164,7 +164,11 @@ export const CATALOG_CONFIG: CatalogRouteConfig = {
  * other `?filter=` value 400s rather than silently returning the
  * unfiltered list.
  */
-githubOpenSourceTools.get("/github-open-source-tools", requireAuth, (c) =>
+// Public catalog read (no `requireAuth`) — same reasoning as the sibling
+// `GET /github-projects` route: no per-viewer field, and the frontend's
+// server-rendered fetch for this page doesn't forward the session cookie
+// (see devtunnel-frontend's `lib/github-projects/fetch-catalog-preview.ts`).
+githubOpenSourceTools.get("/github-open-source-tools", (c) =>
   handleCatalogListRequest(c, CATALOG_CONFIG),
 );
 
