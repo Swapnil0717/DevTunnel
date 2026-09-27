@@ -140,6 +140,36 @@ export async function getReadmeWithCache(
 }
 
 /**
+ * One real GitHub issue as fetched during this discovery run — captured
+ * verbatim from a `search_github_issues` / `get_github_repository_open_issues`
+ * tool result, keyed by issue number.
+ *
+ * This exists so the discovery model never has to retype an issue's raw
+ * title/body/labels/author back into its own JSON answer. Previously the
+ * final-answer schema required the model to echo those fields verbatim —
+ * and since issue bodies routinely contain quotes, backticks, and
+ * markdown, any small escaping mistake broke `JSON.parse` for the WHOLE
+ * candidate batch, silently wasting that project's entire Groq turn/token
+ * budget for zero saved tasks (this was the actual mechanism behind
+ * "keeps scanning, exhausts budget, adds nothing" — see
+ * aiDiscoveryAgent.ts `runTaskDiscovery`). Now the model only ever needs
+ * to reply with a bare issue number plus its own judgment fields (roles,
+ * difficulty, title, summary, reasoning); the real, verified issue data
+ * is looked up from this cache afterward, never retyped by the model.
+ */
+export interface CachedIssue {
+  number: number;
+  title: string;
+  url: string;
+  body: string | null;
+  labels: string[];
+  author: { username: string; avatarUrl: string | null; profileUrl: string } | null;
+}
+
+/** Issue number -> the real issue data fetched for it during this run. */
+export type IssueCache = Map<number, CachedIssue>;
+
+/**
  * Called with a short, human-readable description of one step of the
  * discovery process as it happens (e.g. "Searching GitHub for…", "Reading
  * README for owner/repo…"). Purely observational — never affects control
@@ -217,8 +247,20 @@ function capStrings<T>(value: T, maxChars: number = MAX_FIELD_CHARS): T {
  * Every case's return value passes through `capStrings` before it
  * reaches Groq — see that function's comment for why this exists
  * alongside the more targeted `truncateDescription`.
+ *
+ * When `issueCache` is supplied, every real `search_github_issues` /
+ * `get_github_repository_open_issues` result is also recorded into it
+ * (keyed by issue number) as a side effect — see `CachedIssue`'s comment
+ * above for why this exists. The model still SEES the full issue data in
+ * the tool result (it needs that to make a judgment call); it just never
+ * has to retype it afterward.
  */
-export function buildDiscoveryDispatcher(env: ValidatedEnv, readmeCache?: ReadmeCache, onStep?: StepReporter) {
+export function buildDiscoveryDispatcher(
+  env: ValidatedEnv,
+  readmeCache?: ReadmeCache,
+  onStep?: StepReporter,
+  issueCache?: IssueCache,
+) {
   return async (name: string, args: Record<string, unknown>): Promise<unknown> => {
     const result = await (async (): Promise<unknown> => {
       switch (name) {
@@ -293,7 +335,7 @@ export function buildDiscoveryDispatcher(env: ValidatedEnv, readmeCache?: Readme
           // Body truncation shrunk from 1500: at the old length, a full
           // page of results alone could exceed the entire Groq TPM budget
           // (see searchIssues' perPage comment in githubDiscovery.ts).
-          return items.map((i) => ({
+          const mapped = items.map((i) => ({
             number: i.number,
             title: i.title,
             url: i.html_url,
@@ -302,6 +344,19 @@ export function buildDiscoveryDispatcher(env: ValidatedEnv, readmeCache?: Readme
             author: i.user ? { username: i.user.login, avatarUrl: i.user.avatar_url, profileUrl: i.user.html_url } : null,
             repositoryUrl: i.repository_url,
           }));
+          if (issueCache) {
+            for (const issue of mapped) {
+              issueCache.set(issue.number, {
+                number: issue.number,
+                title: issue.title,
+                url: issue.url,
+                body: issue.body || null,
+                labels: issue.labels,
+                author: issue.author,
+              });
+            }
+          }
+          return mapped;
         }
         case "get_github_repository_open_issues": {
           const owner = String(args.owner);
@@ -309,7 +364,7 @@ export function buildDiscoveryDispatcher(env: ValidatedEnv, readmeCache?: Readme
           onStep?.(`Listing open issues for ${owner}/${repo}`);
           const items = await getRepositoryOpenIssues(env, owner, repo);
           onStep?.(`Found ${items.length} open issue${items.length === 1 ? "" : "s"} on ${owner}/${repo}`);
-          return items.map((i) => ({
+          const mapped = items.map((i) => ({
             number: i.number,
             title: i.title,
             url: i.html_url,
@@ -317,6 +372,19 @@ export function buildDiscoveryDispatcher(env: ValidatedEnv, readmeCache?: Readme
             labels: normalizeLabels(i.labels),
             author: i.user ? { username: i.user.login, avatarUrl: i.user.avatar_url, profileUrl: i.user.html_url } : null,
           }));
+          if (issueCache) {
+            for (const issue of mapped) {
+              issueCache.set(issue.number, {
+                number: issue.number,
+                title: issue.title,
+                url: issue.url,
+                body: issue.body || null,
+                labels: issue.labels,
+                author: issue.author,
+              });
+            }
+          }
+          return mapped;
         }
         default:
           return { error: `unknown_tool:${name}` };

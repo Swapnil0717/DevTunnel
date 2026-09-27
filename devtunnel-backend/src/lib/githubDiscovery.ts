@@ -151,19 +151,34 @@ export interface GithubRepoIssue {
 /**
  * Open issues for one repo, used by task discovery when a repo has few
  * issues to search-index. Same TPM-budget reasoning as searchIssues
- * above applies to `perPage` here.
+ * above applies to `perPage` here (the count of real ISSUES returned).
+ *
+ * GitHub's `/repos/{owner}/{repo}/issues` endpoint mixes pull requests
+ * into the same list (a PR is just an issue with a `pull_request` field
+ * attached), and this used to fetch exactly `perPage` raw items and THEN
+ * filter PRs out — on an active repo the most recent N items are
+ * frequently all PRs, so this legitimately returned 0 issues even though
+ * the repo had plenty open (observed live: appwrite/appwrite returning
+ * "Found 0 open issues" while `search_github_issues` on the same repo
+ * found 8 real ones moments later). Fixed by over-fetching a larger raw
+ * page (`RAW_FETCH_MULTIPLIER` x `perPage`, capped at 100 — GitHub's own
+ * per_page ceiling) before filtering, then trimming back down to
+ * `perPage` real issues so callers' token-budget assumptions still hold.
  */
+const RAW_FETCH_MULTIPLIER = 4;
+
 export async function getRepositoryOpenIssues(
   env: ValidatedEnv,
   owner: string,
   repo: string,
   perPage = 8,
 ): Promise<GithubRepoIssue[]> {
+  const rawPerPage = Math.min(100, perPage * RAW_FETCH_MULTIPLIER);
   const data = await githubGet<GithubRepoIssue[]>(
     env,
-    `/repos/${owner}/${repo}/issues?state=open&per_page=${perPage}&sort=created&direction=desc`,
+    `/repos/${owner}/${repo}/issues?state=open&per_page=${rawPerPage}&sort=created&direction=desc`,
   );
-  return (data ?? []).filter((i) => !i.pull_request);
+  return (data ?? []).filter((i) => !i.pull_request).slice(0, perPage);
 }
 
 export function normalizeLabels(labels: Array<{ name: string } | string>): string[] {

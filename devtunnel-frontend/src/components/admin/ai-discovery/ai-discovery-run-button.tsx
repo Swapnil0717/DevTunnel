@@ -48,8 +48,33 @@ const QUOTA_EXCEEDED_MESSAGE = "Today's Groq budget was hit partway through this
 /** Pause between loop iterations — long enough that the confirmation queue's refresh and the quota panel aren't hammered, short enough that the loop still feels continuous. */
 const LOOP_PAUSE_MS = 1500;
 
-/** Two runs in a row that found nothing new means the project catalog is exhausted for today — stop instead of looping forever on empty results. */
+/**
+ * Two runs in a row that proposed no new task mean the project catalog is
+ * exhausted (or exhausted for today) — stop instead of looping forever.
+ *
+ * Previously this only incremented when a run ALSO had zero dropped
+ * candidates and zero errors (`tasksProposed === 0 && candidatesDropped
+ * === 0 && errors.length === 0`). In practice almost every run drops at
+ * least one candidate or logs a per-project error (a model hiccup on one
+ * repo, a hallucinated issue number, a transient GitHub failure) even
+ * when it genuinely found nothing new to propose — so that extra
+ * condition reset the counter back to 0 on nearly every iteration, and
+ * the loop never actually reached its own stop condition. It just kept
+ * calling the backend run-by-run until the shared daily Groq budget was
+ * completely gone. The fix: a run only "makes progress" if it actually
+ * proposed a task — drops and errors no longer reset this counter.
+ */
 const LOOP_EMPTY_RUNS_BEFORE_STOP = 2;
+
+/**
+ * Hard ceiling on how many iterations this loop will ever run in one
+ * sitting, independent of the empty-runs counter above. This is a pure
+ * safety net (the empty-runs counter above is what normally stops the
+ * loop) in case some future run shape keeps reporting `tasksProposed > 0`
+ * indefinitely without ever actually exhausting the catalog or the
+ * budget — better to stop and let an admin look than loop unbounded.
+ */
+const MAX_LOOP_RUNS = 200;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -204,7 +229,14 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
         break;
       }
 
-      if (summary.tasksProposed === 0 && summary.candidatesDropped === 0 && summary.errors.length === 0) {
+      // A run "makes progress" only if it actually proposed a task.
+      // Dropped candidates and per-project errors are common on a
+      // perfectly healthy run (a hallucinated issue number here, a
+      // transient GitHub hiccup there) and must NOT reset this counter —
+      // see LOOP_EMPTY_RUNS_BEFORE_STOP's comment for why the old
+      // "only if drops AND errors are also zero" condition let this loop
+      // run forever, burning the whole day's budget without stopping.
+      if (summary.tasksProposed === 0) {
         consecutiveEmptyRuns += 1;
         if (consecutiveEmptyRuns >= LOOP_EMPTY_RUNS_BEFORE_STOP) {
           setLoopStopReason("Every onboarded project's open issues are already tracked or didn't qualify.");
@@ -213,6 +245,12 @@ export function AiDiscoveryRunButton({ kind }: AiDiscoveryRunButtonProps) {
         }
       } else {
         consecutiveEmptyRuns = 0;
+      }
+
+      if (runCount >= MAX_LOOP_RUNS) {
+        setLoopStopReason(`Reached the ${MAX_LOOP_RUNS}-run safety limit for one sitting — stopping here.`);
+        appendStep(`Hit the ${MAX_LOOP_RUNS}-run safety limit — loop stopped.`);
+        break;
       }
 
       if (stopLoopRef.current) break;

@@ -70,6 +70,23 @@ const STARS_FILTERS: { value: string; label: string }[] = [
 ];
 
 /**
+ * "Under 100 stars" style ceilings — a project matches when `stars <= value`.
+ * Pairs with `STARS_FILTERS` above so a contributor can go either
+ * direction: some people specifically want new or underrated projects
+ * (low star counts, less competition for issues, more room to make a
+ * visible impact) rather than only the most popular repos Minimum
+ * stars/Most-stars sorting already surfaces.
+ */
+const MAX_STARS_FILTERS: { value: string; label: string }[] = [
+  { value: ALL_STARS, label: "Any stars" },
+  { value: "10", label: "Under 10 stars" },
+  { value: "50", label: "Under 50 stars" },
+  { value: "100", label: "Under 100 stars" },
+  { value: "500", label: "Under 500 stars" },
+  { value: "1000", label: "Under 1,000 stars" },
+];
+
+/**
  * Contributor-facing page size — a 3-column grid at the `lg` breakpoint,
  * so 12 fills exactly 4 full rows. Deliberately smaller than
  * `ADMIN_PAGE_SIZE` (20), same reasoning `IssuesExplorer` documents for
@@ -133,13 +150,16 @@ function sortProjects(
  * the browser, after which every filter/sort below covers the complete
  * list. Until then the bar says the search only covers what's loaded.
  *
- * Three filters, matching what a contributor exploring GitHub
+ * Four filters, matching what a contributor exploring GitHub
  * repositories actually reaches for: **Tech stack** (built from the
  * tags the fetched projects actually carry — never a hardcoded catalog,
  * so the dropdown can't offer an option nothing here could match),
- * **Minimum stars** (a real threshold on the real `stars` field, not a
- * cosmetic label), and **Sort by** (Trending / Most stars / Newest /
- * Recently updated — see `sortProjects`'s doc comment on "Trending").
+ * **Minimum stars** and **Maximum stars** (real thresholds on the real
+ * `stars` field, not cosmetic labels — the ceiling exists so someone who
+ * wants to work on a new or underrated project, not just the most-popular
+ * ones, can filter for that too), and **Sort by** (Trending / Most stars /
+ * Newest / Recently updated — see `sortProjects`'s doc comment on
+ * "Trending").
  */
 export function GithubProjectsExplorer({
   projects: initialProjects,
@@ -190,6 +210,7 @@ export function GithubProjectsExplorer({
   const [query, setQuery] = useState("");
   const [techStack, setTechStack] = useState(ALL_TECH);
   const [minStars, setMinStars] = useState(ALL_STARS);
+  const [maxStars, setMaxStars] = useState(ALL_STARS);
   const [sortBy, setSortBy] = useState<SortOption>("TRENDING");
 
   const loader = useLoadFullCatalog({
@@ -223,10 +244,12 @@ export function GithubProjectsExplorer({
   const filteredProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     const minStarsThreshold = minStars === ALL_STARS ? 0 : Number(minStars);
+    const maxStarsThreshold = maxStars === ALL_STARS ? Infinity : Number(maxStars);
 
     const filtered = projects.filter((project) => {
       if (techStack !== ALL_TECH && !project.techStack.includes(techStack)) return false;
       if (project.stars < minStarsThreshold) return false;
+      if (project.stars > maxStarsThreshold) return false;
 
       if (!normalizedQuery) return true;
 
@@ -246,10 +269,13 @@ export function GithubProjectsExplorer({
     });
 
     return sortProjects(filtered, sortBy);
-  }, [projects, query, techStack, minStars, sortBy]);
+  }, [projects, query, techStack, minStars, maxStars, sortBy]);
 
   const hasActiveFilters =
-    query.trim().length > 0 || techStack !== ALL_TECH || minStars !== ALL_STARS;
+    query.trim().length > 0 ||
+    techStack !== ALL_TECH ||
+    minStars !== ALL_STARS ||
+    maxStars !== ALL_STARS;
 
   const paged = usePagePagination(filteredProjects, GITHUB_PROJECTS_PAGE_SIZE);
 
@@ -326,6 +352,21 @@ export function GithubProjectsExplorer({
               value={minStars}
               onChange={setMinStars}
               options={STARS_FILTERS}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="github-projects-max-stars"
+              className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
+            >
+              Maximum stars
+            </label>
+            <FilterSelect
+              id="github-projects-max-stars"
+              value={maxStars}
+              onChange={setMaxStars}
+              options={MAX_STARS_FILTERS}
             />
           </div>
 

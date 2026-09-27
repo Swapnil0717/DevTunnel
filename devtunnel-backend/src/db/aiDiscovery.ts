@@ -481,6 +481,8 @@ export interface NewDiscoveredTask {
   githubAuthor: OnboardingGithubIdentity | null;
   suggestedRoles: DeveloperRole[];
   suggestedDifficulty: ExperienceLevel | null;
+  /** Short, contributor-facing, AI-authored title — see AiDiscoveredTask.taskTitle. */
+  taskTitle: string;
   taskSummary: string;
   aiReasoning: string;
 }
@@ -497,6 +499,7 @@ export async function insertDiscoveredTask(supabase: SupabaseClient, t: NewDisco
     github_author: t.githubAuthor,
     suggested_roles: t.suggestedRoles,
     suggested_difficulty: t.suggestedDifficulty,
+    task_title: t.taskTitle,
     task_summary: t.taskSummary,
     ai_reasoning: t.aiReasoning,
   });
@@ -563,6 +566,10 @@ function toTask(row: any): AiDiscoveredTask {
     githubAuthor: row.github_author,
     suggestedRoles: Array.isArray(row.suggested_roles) ? row.suggested_roles : [],
     suggestedDifficulty: row.suggested_difficulty,
+    // Falls back to the raw issue title only for rows discovered before
+    // sql/037 added this column — every row inserted from now on always
+    // has a real AI-authored task_title (insertDiscoveredTask requires it).
+    taskTitle: row.task_title && row.task_title.length > 0 ? row.task_title : row.issue_title,
     taskSummary: row.task_summary ?? "",
     aiReasoning: row.ai_reasoning,
     status: row.status,

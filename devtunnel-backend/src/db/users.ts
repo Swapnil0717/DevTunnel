@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AuthUser, OnboardingData, ProfileUpdateData, UserRow } from "../types";
+import type { AuthUser, OnboardingData, ProfileUpdateData, SkillsUpdateData, UserRow } from "../types";
 import type { GitHubIdentity } from "../lib/github";
 import { randomToken } from "../lib/crypto";
 import { logger } from "../lib/logger";
@@ -175,6 +175,41 @@ export async function updateProfile(
 
   if (error || !row) {
     throw new Error(`Failed to update profile: ${error?.message ?? "no row returned"}`);
+  }
+
+  return row;
+}
+
+/**
+ * Updates the account-settings-page-editable "Skills and background"
+ * fields — the same columns `completeOnboarding` sets on first sign-up,
+ * now editable any time from `PATCH /settings/skills`
+ * (routes/settings.ts). Only ever called for the currently-authenticated
+ * user's own id, same posture as `updateProfile` above. Unlike
+ * `updateProfile`, empty arrays are stored as-is rather than normalized —
+ * a contributor clearing all their skills is a valid (if unhelpful) state,
+ * not the same as "never set", so there's nothing to collapse to `null`.
+ */
+export async function updateSkills(
+  supabase: SupabaseClient,
+  userId: string,
+  data: SkillsUpdateData,
+): Promise<UserRow> {
+  const { data: row, error } = await supabase
+    .from("users")
+    .update({
+      skills: data.skills,
+      technologies: data.technologies,
+      developer_roles: data.developerRoles,
+      experience_level: data.experienceLevel,
+      interests: data.interests,
+    })
+    .eq("id", userId)
+    .select()
+    .single<UserRow>();
+
+  if (error || !row) {
+    throw new Error(`Failed to update skills: ${error?.message ?? "no row returned"}`);
   }
 
   return row;

@@ -3,7 +3,7 @@ import type { ValidatedEnv } from "../config/env";
 import { getSupabase } from "./supabase";
 import { parseGroqJson, runGroqAgent } from "./groq";
 import { GroqQuotaExceededError } from "./groqQuota";
-import { REPO_DISCOVERY_TOOLS, ISSUE_DISCOVERY_TOOLS, buildDiscoveryDispatcher, getReadmeWithCache, type ReadmeCache, type StepReporter } from "./aiDiscoveryTools";
+import { REPO_DISCOVERY_TOOLS, ISSUE_DISCOVERY_TOOLS, buildDiscoveryDispatcher, getReadmeWithCache, type ReadmeCache, type StepReporter, type IssueCache } from "./aiDiscoveryTools";
 import {
   validateProjectCandidate,
   validateToolCandidate,
@@ -1142,6 +1142,23 @@ function shuffled<T>(items: readonly T[]): T[] {
   return copy;
 }
 
+/**
+ * Once this many onboarded projects in a row have finished (no error, no
+ * quota wall) without a single new task being proposed, the run stops
+ * itself rather than continuing to walk the rest of the catalog.
+ *
+ * Previously the ONLY things that stopped this loop early were exhausting
+ * `maxToPropose` or hitting a `GroqQuotaExceededError` — every other kind
+ * of "no progress" (a project with zero qualifying issues, every
+ * candidate getting dropped by validation, a transient failure) just
+ * logged and moved to the next project, still spending a full Groq turn
+ * each time. On a catalog of a few dozen onboarded projects that meant a
+ * single click could burn the ENTIRE day's Groq budget while saving
+ * nothing at all. This cap makes "not making progress" a real stop
+ * condition of its own, independent of the account-wide quota.
+ */
+const MAX_CONSECUTIVE_NO_PROGRESS_PROJECTS = 5;
+
 async function runTaskDiscovery(
   env: ValidatedEnv,
   kv: KVNamespace,
@@ -1154,6 +1171,7 @@ async function runTaskDiscovery(
   let dropped = 0;
   let quotaExceeded = false;
   let accountQuotaExceeded = false;
+  let consecutiveNoProgress = 0;
 
   onStep?.("Loading onboarded projects…");
   const projects = shuffled(await listOnboardedProjects(supabase));
@@ -1166,9 +1184,27 @@ async function runTaskDiscovery(
   // always draining the same project first.
   for (const project of projects) {
     if (maxToPropose !== undefined && proposed >= maxToPropose) break;
+    if (consecutiveNoProgress >= MAX_CONSECUTIVE_NO_PROGRESS_PROJECTS) {
+      onStep?.(
+        `Stopping after ${MAX_CONSECUTIVE_NO_PROGRESS_PROJECTS} projects in a row with no new tasks found, ` +
+          `to avoid spending the rest of today's budget walking the whole catalog for nothing.`,
+      );
+      break;
+    }
+
+    const proposedBeforeThisProject = proposed;
+
     try {
       onStep?.(`Checking ${project.githubFullName} for open issues…`);
       const alreadyKnown = await listExistingTaskIssueNumbers(supabase, project.id);
+
+      // Populated by the dispatcher as real issue data comes back from
+      // GitHub — the model's final answer only ever references an issue
+      // by number (see aiDiscoveryValidation.ts's TaskCandidateInput
+      // comment for why), and the real title/url/body/labels/author are
+      // read back out of here afterward, never trusted from the model's
+      // own retyping of them.
+      const issueCache: IssueCache = new Map();
 
       const prompt = `DevTunnel has already onboarded this GitHub repository as a project:
 ${project.githubFullName} (${project.name}).
@@ -1187,7 +1223,21 @@ ${JSON.stringify(Array.from(alreadyKnown))}
 Only include genuinely actionable issues. It is fine to return an empty list
 if none qualify.
 
-For each issue you include, every field is required:
+IMPORTANT — your final answer must reference each issue ONLY by its number.
+Do NOT retype the issue's title, url, body, labels, or author back into your
+answer — you already have that real data from the tool results above, and
+DevTunnel reads it directly from there once you name the issue number. Your
+job is only to add the judgment fields below for each issue you pick:
+
+- "issueNumber": the real number of an issue you actually saw in a tool
+  result above. Never invent or guess a number.
+- "taskTitle": a SHORT, CLEAR, MEANINGFUL title (about 5-10 words) written
+  FOR A CONTRIBUTOR so they instantly know what to do — e.g. "Fix broken
+  pagination on the search results page", not "Fix #482" or the raw GitHub
+  issue title verbatim (GitHub issue titles are often vague, jargon-heavy,
+  or just reference another issue/PR number, which tells a contributor
+  nothing). Write this yourself, in your own words, from the real issue
+  title/body.
 - "suggestedRoles": every role from FRONTEND, BACKEND, FULL_STACK,
   DOCUMENTATION, TESTING, DEVOPS that genuinely fits the work this issue
   needs — not just the single closest one. Most real issues touch more
@@ -1209,11 +1259,7 @@ Reply with ONLY this JSON and nothing else:
   "candidates": [
     {
       "issueNumber": 0,
-      "title": "string",
-      "url": "string",
-      "body": "string or null",
-      "labels": ["string"],
-      "author": { "username": "string", "avatarUrl": "string or null", "profileUrl": "string" } | null,
+      "taskTitle": "short, clear, meaningful title for a contributor",
       "suggestedRoles": ["FRONTEND" | "BACKEND" | "FULL_STACK" | "DOCUMENTATION" | "TESTING" | "DEVOPS"],
       "suggestedDifficulty": "BEGINNER" | "INTERMEDIATE" | "ADVANCED" | null,
       "summary": "short, simple description of the work",
@@ -1224,7 +1270,7 @@ Reply with ONLY this JSON and nothing else:
 Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
 
       onStep?.(`Asking the AI model to review issues on ${project.githubFullName}…`);
-      const dispatch = buildDiscoveryDispatcher(env, undefined, onStep);
+      const dispatch = buildDiscoveryDispatcher(env, undefined, onStep, issueCache);
       const raw = await runGroqAgent(env, kv, SYSTEM_PROMPT, prompt, ISSUE_DISCOVERY_TOOLS, dispatch, "tasks");
       const parsed = parseGroqJson<{ candidates: TaskCandidateInput[] }>(raw);
       const candidates = Array.isArray(parsed.candidates) ? parsed.candidates.slice(0, MAX_ISSUES_PER_PROJECT) : [];
@@ -1243,8 +1289,7 @@ Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
 
         const candidate = c as Required<TaskCandidateInput> & {
           issueNumber: number;
-          title: string;
-          url: string;
+          taskTitle: string;
           suggestedRoles: DeveloperRole[];
           suggestedDifficulty: ExperienceLevel | null;
           summary: string;
@@ -1257,19 +1302,36 @@ Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
           continue;
         }
 
+        // The model named a real issue number, but only a real issue this
+        // run actually fetched from GitHub counts — anything else is
+        // either a hallucinated number or one it never looked at, and
+        // there is no verified title/body/labels/author to attach to it.
+        const realIssue = issueCache.get(candidate.issueNumber);
+        if (!realIssue) {
+          dropped += 1;
+          onStep?.(`Dropped issue #${candidate.issueNumber} — not one of the issues actually fetched this run.`);
+          logger.warn("ai_task_candidate_dropped", {
+            project: project.githubFullName,
+            issueNumber: candidate.issueNumber,
+            problems: ["issueNumber:not_found_in_fetched_results"],
+          });
+          continue;
+        }
+
         try {
-          onStep?.(`Validated issue #${candidate.issueNumber}: ${candidate.title}`);
+          onStep?.(`Validated issue #${candidate.issueNumber}: ${candidate.taskTitle}`);
           onStep?.(`Saving task for issue #${candidate.issueNumber}…`);
           await insertDiscoveredTask(supabase, {
             projectId: project.id,
-            issueNumber: candidate.issueNumber,
-            issueTitle: candidate.title,
-            issueUrl: candidate.url,
-            issueBody: (candidate.body as string | null) ?? null,
-            issueLabels: (candidate.labels as string[]) ?? [],
-            githubAuthor: (candidate.author as any) ?? null,
+            issueNumber: realIssue.number,
+            issueTitle: realIssue.title,
+            issueUrl: realIssue.url,
+            issueBody: realIssue.body,
+            issueLabels: realIssue.labels,
+            githubAuthor: realIssue.author as any,
             suggestedRoles: candidate.suggestedRoles,
             suggestedDifficulty: candidate.suggestedDifficulty,
+            taskTitle: candidate.taskTitle.trim(),
             taskSummary: candidate.summary.trim(),
             aiReasoning: candidate.reasoning,
           });
@@ -1300,6 +1362,15 @@ Return at most ${MAX_ISSUES_PER_PROJECT} candidates.`;
       logger.error("ai_task_discovery_failed", { project: project.githubFullName, error: err instanceof Error ? err.message : String(err) });
       onStep?.(`Couldn't check ${project.githubFullName} this time.`);
       errors.push(`task_discovery_failed:${project.githubFullName}`);
+    }
+
+    // A project only counts as "progress" if it actually landed a new
+    // task — a project with zero qualifying issues, or one whose every
+    // candidate got dropped, resets nothing.
+    if (proposed > proposedBeforeThisProject) {
+      consecutiveNoProgress = 0;
+    } else {
+      consecutiveNoProgress += 1;
     }
   }
 

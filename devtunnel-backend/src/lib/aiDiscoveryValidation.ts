@@ -137,38 +137,47 @@ export function validateToolCandidate(c: ToolCandidateInput): string[] {
 // Tasks
 // ---------------------------------------------------------------------------
 
+/**
+ * Judgment-only shape the model actually has to author for a task
+ * candidate. Deliberately does NOT include `title`/`url`/`body`/`labels`/
+ * `author` — those are real, already-verified GitHub facts the model
+ * fetched via a tool call earlier in the same turn (see
+ * aiDiscoveryTools.ts `IssueCache`), and retyping them back into this
+ * JSON used to be exactly what broke: any escaping slip in a re-typed
+ * issue body corrupted the whole candidates array. Now the model only
+ * ever has to produce short strings it's actually authoring itself, and
+ * the caller (aiDiscoveryAgent.ts `runTaskDiscovery`) looks the real
+ * fields up from the IssueCache by `issueNumber` afterward — a number
+ * that doesn't match anything fetched this run is dropped as a validation
+ * failure below (`issueNumber:not_found`), not trusted at face value.
+ */
 export interface TaskCandidateInput {
   issueNumber?: unknown;
-  title?: unknown;
-  url?: unknown;
-  body?: unknown;
-  labels?: unknown;
-  author?: unknown;
+  /**
+   * Short (5-10 word), meaningful title written FOR THE CONTRIBUTOR — what
+   * approve_ai_discovered_task (sql/037) uses as the task's real title,
+   * instead of the raw GitHub issue title (which is often vague, jargon-y,
+   * or just references an issue/PR number and tells a contributor nothing
+   * about what to actually do).
+   */
+  taskTitle?: unknown;
   suggestedRoles?: unknown;
   suggestedDifficulty?: unknown;
   summary?: unknown;
   reasoning?: unknown;
 }
 
+const MAX_TASK_TITLE_CHARS = 120;
+
 export function validateTaskCandidate(c: TaskCandidateInput): string[] {
   const problems: string[] = [];
 
   if (!isNonNegativeInt(c.issueNumber) || (c.issueNumber as number) <= 0) problems.push("issueNumber");
-  if (!isNonEmptyString(c.title)) problems.push("title");
-  if (!isNonEmptyString(c.url) || !/^https:\/\/github\.com\//i.test(c.url)) problems.push("url");
-  if (c.body !== null && typeof c.body !== "string") problems.push("body");
-  if (!Array.isArray(c.labels) || c.labels.some((l) => typeof l !== "string")) problems.push("labels");
 
-  if (c.author !== null) {
-    const a = c.author as { username?: unknown; avatarUrl?: unknown; profileUrl?: unknown } | undefined;
-    if (
-      !a ||
-      !isNonEmptyString(a.username) ||
-      !isNonEmptyString(a.profileUrl) ||
-      !isNullableString(a.avatarUrl)
-    ) {
-      problems.push("author");
-    }
+  if (!isNonEmptyString(c.taskTitle)) {
+    problems.push("taskTitle");
+  } else if (c.taskTitle.trim().length > MAX_TASK_TITLE_CHARS) {
+    problems.push("taskTitle:too_long");
   }
 
   // At least one valid role is required — an empty/all-invalid roles list

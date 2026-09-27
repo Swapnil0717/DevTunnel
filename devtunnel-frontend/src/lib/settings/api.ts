@@ -1,7 +1,7 @@
 import { API_BASE_URL } from "@/lib/config";
 import { parseAuthMeResponse } from "@/lib/auth/api";
 import type { AuthUser } from "@/lib/auth/types";
-import type { NotificationPreferences, ProfileUpdateData } from "./types";
+import type { NotificationPreferences, ProfileUpdateData, SkillsUpdateData } from "./types";
 
 export class SettingsApiError extends Error {
   status: number;
@@ -29,6 +29,28 @@ export async function updateProfile(data: ProfileUpdateData): Promise<AuthUser |
 
   if (!res.ok) {
     throw new SettingsApiError(`Failed to save profile (${res.status})`, res.status);
+  }
+
+  return parseAuthMeResponse(await res.json());
+}
+
+/**
+ * `PATCH /settings/skills` — saves the "Skills and background" section
+ * (developer role(s), experience level, skills, technologies, interests —
+ * the same fields `submitOnboarding()` collects, editable after the fact).
+ * Same "return the updated AuthUser, push it into AuthProvider" shape as
+ * `updateProfile` above.
+ */
+export async function updateSkills(data: SkillsUpdateData): Promise<AuthUser | null> {
+  const res = await fetch(`${API_BASE_URL}/settings/skills`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    throw new SettingsApiError(`Failed to save skills and background (${res.status})`, res.status);
   }
 
   return parseAuthMeResponse(await res.json());

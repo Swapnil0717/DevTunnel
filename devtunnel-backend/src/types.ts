@@ -205,6 +205,22 @@ export interface ProfileUpdateData {
   bio: string | null;
 }
 
+/**
+ * Validated payload for `PATCH /settings/skills` — the account settings
+ * page's "Skills and background" section. Same shape as `OnboardingData`
+ * above minus `bio` (owned by `ProfileUpdateData`/`PATCH /settings/profile`
+ * instead) and `intent` (a one-time onboarding choice, not something the
+ * settings page re-asks). See routes/settings.ts `skillsUpdateSchema` for
+ * the actual validation limits, mirrored from `onboardingSchema`.
+ */
+export interface SkillsUpdateData {
+  skills: string[];
+  technologies: string[];
+  developerRoles: DeveloperRole[];
+  experienceLevel: ExperienceLevel;
+  interests: string[];
+}
+
 export interface SessionRow {
   id: string;
   user_id: string;
@@ -1353,6 +1369,15 @@ export interface AiDiscoveredTask {
   suggestedRoles: DeveloperRole[];
   /** Groq's pick — only from ExperienceLevel's existing values, or null. */
   suggestedDifficulty: ExperienceLevel | null;
+  /**
+   * Groq-authored, short (5-10 words), meaningful task title written for a
+   * contributor — e.g. "Fix broken pagination on the search results page"
+   * instead of the raw GitHub issue title it came from (which is often
+   * vague, jargon-y, or just an issue-number reference). This is what
+   * `approve_ai_discovered_task` (sql/037) now writes as `tasks.title`;
+   * `issueTitle` above is kept purely as the original GitHub reference.
+   */
+  taskTitle: string;
   /** Groq-authored, short — what a contributor would actually do. */
   taskSummary: string;
   /** Admin-facing only: why this issue was picked. Never shown as the task's public description. */

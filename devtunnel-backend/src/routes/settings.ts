@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Env, Variables } from "../types";
 import { getEnv } from "../config/env";
 import { getSupabase } from "../lib/supabase";
-import { updateProfile, deleteOwnAccount, DeleteAccountError, toAuthUser } from "../db/users";
+import { updateProfile, updateSkills, deleteOwnAccount, DeleteAccountError, toAuthUser } from "../db/users";
 import {
   getNotificationPreferences,
   upsertNotificationPreferences,
@@ -35,6 +35,26 @@ settings.use("*", requireAuth);
 const profileUpdateSchema = z.object({
   name: z.string().trim().max(80).nullable().optional().default(null),
   bio: z.string().trim().max(500).nullable().optional().default(null),
+});
+
+/**
+ * Validation schema for `PATCH /settings/skills` — the "Skills and
+ * background" section. Deliberately the same limits as `onboardingSchema`
+ * in routes/auth.ts for these exact fields (use the same vocabulary and
+ * constraints as the existing source, don't invent a second set of limits
+ * for the same columns). `bio` and `intent` aren't here — `bio` stays
+ * under `PATCH /settings/profile`, and `intent` is a one-time onboarding
+ * choice this page doesn't re-ask.
+ */
+const skillsUpdateSchema = z.object({
+  skills: z.array(z.string().trim().min(1).max(50)).max(20).optional().default([]),
+  technologies: z.array(z.string().trim().min(1).max(50)).max(20).optional().default([]),
+  developerRoles: z
+    .array(z.enum(["FRONTEND", "BACKEND", "FULL_STACK", "DOCUMENTATION", "TESTING", "DEVOPS"]))
+    .min(1, "Select at least one developer role")
+    .max(6),
+  experienceLevel: z.enum(["BEGINNER", "INTERMEDIATE", "ADVANCED"]),
+  interests: z.array(z.string().trim().min(1).max(50)).max(20).optional().default([]),
 });
 
 const notificationPreferencesSchema = z.object({
@@ -83,6 +103,58 @@ settings.patch("/settings/profile", async (c) => {
     return c.json({ user: toAuthUser(updatedRow, user.isMaintainer) }, 200);
   } catch (err) {
     logger.error("profile_update_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      requestId: c.get("requestId"),
+    });
+    return errorResponse(c, 500, "internal_error", "Something went wrong");
+  }
+});
+
+/**
+ * `PATCH /settings/skills` — the "Skills and background" section of the
+ * account settings page. Same fields onboarding's `ProfileStep` collects
+ * (developer role(s), experience level, skills, technologies, interests),
+ * now editable any time rather than only once during onboarding. Doesn't
+ * touch `onboarding_completed` — this route is only reachable by an
+ * already-onboarded user's own settings page, unlike `PATCH
+ * /auth/onboarding` which marks the wizard done.
+ */
+settings.patch("/settings/skills", async (c) => {
+  const env = getEnv(c.env);
+
+  const withinLimit = await checkRateLimit(c, { bucket: "settings-skills", limit: 20, windowSeconds: 60 });
+  if (!withinLimit) {
+    return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+  }
+
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return errorResponse(c, 400, "invalid_json", "Request body must be valid JSON");
+  }
+
+  const parsed = skillsUpdateSchema.safeParse(body);
+  if (!parsed.success) {
+    return errorResponse(
+      c,
+      422,
+      "validation_error",
+      parsed.error.issues[0]?.message ?? "Invalid skills and background data",
+    );
+  }
+
+  const user = c.get("user");
+  if (!user) {
+    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+  }
+
+  try {
+    const supabase = getSupabase(env);
+    const updatedRow = await updateSkills(supabase, user.id, parsed.data);
+    return c.json({ user: toAuthUser(updatedRow, user.isMaintainer) }, 200);
+  } catch (err) {
+    logger.error("skills_update_failed", {
       error: err instanceof Error ? err.message : String(err),
       requestId: c.get("requestId"),
     });
