@@ -4,6 +4,26 @@ compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
 # ---------------------------------------------------------------------------
+# Workers Logs + Traces, enabled from the dashboard (Settings > Observability)
+# on 2026-09-26 to debug the CPU/subrequest-limit errors on the */4 * * * *
+# issues-scan cron — see src/lib/cacheWarmers.ts. Mirrored here so
+# `wrangler deploy` doesn't silently revert the dashboard setting on the
+# next deploy. 100% sampling + persist is fine at current traffic; revisit
+# head_sampling_rate if volume grows enough that retention/cost matters.
+# ---------------------------------------------------------------------------
+[observability]
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+persist = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 1
+persist = true
+
+# ---------------------------------------------------------------------------
 # KV namespace used for fixed-window rate limiting on sensitive auth routes
 # (Backend_Development_Rules.txt rule 43). Create it once with:
 #
