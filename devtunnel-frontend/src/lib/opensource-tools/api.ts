@@ -1,4 +1,8 @@
-// Server Component only — reads request cookies, don't import from client code.
+// Server Component only. `getOpenSourceTools` (the list) no longer reads
+// request cookies — don't add them back without checking `OpenSourceToolSummary`
+// for a per-viewer field first (see `getOpenSourceToolBySlug` below, which
+// still forwards cookies because `OpenSourceToolDetail.viewerIsContributing`
+// genuinely needs the session).
 import { cookies } from "next/headers";
 import type { OpenSourceToolSummary, OpenSourceToolDetail } from "./types";
 
@@ -11,6 +15,7 @@ import type { OpenSourceToolSummary, OpenSourceToolDetail } from "./types";
  * module and this is a different catalog with its own doc trail.
  */
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+const LIST_REVALIDATE_SECONDS = 300;
 
 type FetchResult<T> =
   | { status: "ok"; data: T }
@@ -19,10 +24,8 @@ type FetchResult<T> =
 
 export async function getOpenSourceTools(): Promise<FetchResult<OpenSourceToolSummary[]>> {
   try {
-    const cookieStore = await cookies();
     const response = await fetch(`${API_BASE_URL}/opensource-tools/available`, {
-      headers: { Cookie: cookieStore.toString() },
-      cache: "no-store",
+      next: { revalidate: LIST_REVALIDATE_SECONDS },
     });
 
     if (!response.ok) {

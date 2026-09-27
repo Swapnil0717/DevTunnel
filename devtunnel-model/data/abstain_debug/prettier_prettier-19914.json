@@ -1,0 +1,10 @@
+{
+  "collection_id": "prettier_prettier-19914",
+  "response_shape": "list",
+  "n_proposal_items": 1,
+  "trace_repairs": [
+    "Level 4: abstained -- all classifications Unknown, review forced"
+  ],
+  "trace_downgrades": [],
+  "raw_model_response": "{\n  \"field\": \"task_type\",\n  \"value\": \"Bug\",\n  \"source\": \"EXPLICIT\",\n  \"pointers\": [\"S1\"],\n  \"evidence_text\": \"Prettier strips angle brackets from non-inline links, that is, `` [foo]: <https://bar.com> `` becomes `` [foo]: https://bar.com ``\",\n  \"confidence\": 1.0\n}"
+}

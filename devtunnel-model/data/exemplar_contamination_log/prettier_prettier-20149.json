@@ -1,0 +1,85 @@
+{
+  "collection_id": "prettier_prettier-20149",
+  "exemplar_task": {
+    "title": "Support directives in MDX parser",
+    "role": "Frontend",
+    "experience_level": "Intermediate",
+    "complexity": "Low",
+    "task_type": "Feature",
+    "summary": "Add support for directives in the MDX parser to allow for more dynamic and interactive content in MDX files.",
+    "objective": "Implement support for directives in the MDX parser to enhance the functionality of MDX files.",
+    "expected_outcome": "Users can use directives in MDX files to create more dynamic and interactive content.",
+    "acceptance_criteria": [
+      "Directives are supported in MDX files",
+      "No breaking changes in existing functionality"
+    ],
+    "scope": {
+      "in_scope": [
+        "MDX parser",
+        "Directives"
+      ],
+      "out_of_scope": [
+        "Backend changes",
+        "User interface changes"
+      ]
+    },
+    "technologies": [],
+    "languages": [],
+    "frameworks": [],
+    "technical_areas": [],
+    "components": [],
+    "systems": [],
+    "affected_areas": [],
+    "dependencies": []
+  },
+  "original_flat": {
+    "task_type": "Feature",
+    "role": "Fullstack",
+    "experience_level": "Unknown",
+    "complexity": "Unknown",
+    "title": "Support directives in MDX parser",
+    "summary": "Add support for directives in the MDX parser to allow for more dynamic and interactive content in MDX files.",
+    "objective": "Implement support for directives in the MDX parser.",
+    "expected_outcome": "Users can use directives in MDX files to create more dynamic and interactive content.",
+    "acceptance_criteria": [
+      "Directives work as expected in MDX files",
+      "No breaking changes in existing functionality"
+    ],
+    "scope": {
+      "in_scope": [
+        "MDX parser",
+        "directives"
+      ],
+      "out_of_scope": [
+        "no backend changes",
+        "no user-visible behavior change"
+      ]
+    }
+  },
+  "original_reasons": [
+    "summary_matches_exemplar",
+    "expected_outcome_matches_exemplar"
+  ],
+  "retry_flat": {
+    "task_type": "Feature",
+    "role": "Backend",
+    "experience_level": "Unknown",
+    "complexity": "Unknown",
+    "title": "Support directives in MDX parser",
+    "summary": "Add support for new directives in the MDX parser to allow users to use them in their code.",
+    "objective": "Implement support for new directives in the MDX parser.",
+    "expected_outcome": "Users can use new directives in their MDX code.",
+    "acceptance_criteria": [
+      "New directives are added to the parser",
+      "No breaking changes in existing functionality"
+    ],
+    "scope": {
+      "in_scope": [
+        "MDX parser",
+        "new directives"
+      ],
+      "out_of_scope": []
+    }
+  },
+  "retry_still_contaminated": []
+}

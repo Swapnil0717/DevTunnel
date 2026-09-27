@@ -66,12 +66,27 @@ export type FetchAllPagesResult<T> =
  * (`lib/githubCatalog.ts`'s `CatalogRouteConfig.filters` backend-side).
  * A plain object rather than a `URLSearchParams` so call sites don't
  * need to import that type just to pass one value through.
+ *
+ * `options.forwardCookies` (default `true`) exists for the one caller that
+ * isn't admin-authenticated: `lib/tasks/api.ts`'s public `getTasks` reuses
+ * this walk for the contributor-facing `/tasks` list, whose items
+ * (`Task`, not `TaskDetail`) carry no per-viewer field, so there's nothing
+ * session-dependent to forward — and forwarding cookies here forced that
+ * public, same-for-everyone page into fully dynamic, uncached SSR on every
+ * request. Every admin call site keeps the default (`true`) unchanged.
+ * `options.revalidateSeconds` only applies when `forwardCookies` is `false`
+ * (a route using `cookies()` can't be statically cached regardless of the
+ * fetch's own `cache`/`next` option, so there'd be no point setting it
+ * for the admin, cookie-forwarding path).
  */
 export async function fetchAllAdminPages<T>(
   path: string,
   pageLimit: number = MAX_PAGE_LIMIT,
   extraQuery?: Record<string, string>,
+  options?: { forwardCookies?: boolean; revalidateSeconds?: number },
 ): Promise<FetchAllPagesResult<T>> {
+  const forwardCookies = options?.forwardCookies ?? true;
+
   try {
     const items: T[] = [];
     let before: string | undefined;
@@ -86,10 +101,12 @@ export async function fetchAllAdminPages<T>(
         }
       }
 
-      const res = await fetch(`${API_BASE_URL}${path}?${query.toString()}`, {
-        headers: { cookie: (await cookies()).toString() },
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `${API_BASE_URL}${path}?${query.toString()}`,
+        forwardCookies
+          ? { headers: { cookie: (await cookies()).toString() }, cache: "no-store" }
+          : { next: { revalidate: options?.revalidateSeconds ?? 300 } },
+      );
 
       if (!res.ok) {
         return items.length > 0 ? { status: "ok", data: items } : { status: "error" };

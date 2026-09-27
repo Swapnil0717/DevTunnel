@@ -40,7 +40,15 @@ type TasksResult =
   | { status: "error" };
 
 export async function getTasks(): Promise<TasksResult> {
-  const result = await fetchAllAdminPages<Task>("/tasks");
+  // `Task` (unlike `TaskDetail`) has no per-viewer field, so this list is
+  // the same for every visitor — no reason to forward cookies and force
+  // uncached SSR on every request. `getTaskDetail` below is different: it
+  // returns `TaskDetail`, which embeds `TaskProgress.viewerIsAssignee` and
+  // the viewer's own branch, so it still needs the session and stays as-is.
+  const result = await fetchAllAdminPages<Task>("/tasks", undefined, undefined, {
+    forwardCookies: false,
+    revalidateSeconds: 60,
+  });
   if (result.status === "error") return { status: "error" };
   if (result.status === "empty") return { status: "empty" };
   return { status: "ok", data: result.data };

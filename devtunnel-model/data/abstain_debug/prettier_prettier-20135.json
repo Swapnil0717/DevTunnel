@@ -1,0 +1,12 @@
+{
+  "collection_id": "prettier_prettier-20135",
+  "response_shape": "sparse-kept",
+  "n_proposal_items": 1,
+  "trace_repairs": [
+    "Level 4: abstained -- all classifications Unknown, review forced"
+  ],
+  "trace_downgrades": [
+    "task_type: downgraded to UNKNOWN to satisfy structural validity"
+  ],
+  "raw_model_response": "{\n  \"field\": \"task_type\",\n  \"value\": \"Fix\",\n  \"source\": \"EXPLICIT\",\n  \"pointers\": [\"S4\"],\n  \"evidence_text\": \"Fixed in #20140, released as v3.9.9 https://github.com/prettier/prettier/releases/tag/3.9.9\",\n  \"confidence\": 0.9\n}"
+}

@@ -2,7 +2,7 @@ import type { Env } from "../types";
 import type { ValidatedEnv } from "../config/env";
 import { logger } from "./logger";
 import { getSupabase } from "./supabase";
-import { warmCacheSWR } from "./cache";
+import { warmCacheSWR, getCachedSWR, getCached, setCached } from "./cache";
 import { warmCatalogRoute } from "./githubCatalog";
 import { scanProjectIssues } from "./issuesScan";
 import { listActiveProjectsWithRepo, type ActiveProjectWithRepo } from "../db/adminNewIssues";
@@ -77,7 +77,26 @@ export async function warmGithubCatalogs(env: ValidatedEnv, workerEnv: Env): Pro
  * `lib/githubCatalog.ts` already uses for its own server-initiated GitHub
  * calls — rather than any individual contributor's OAuth token, since a
  * scheduled job has no signed-in user to borrow one from.
+ *
+ * Scans a rotating batch of `ISSUES_SCAN_BATCH_SIZE` projects per tick
+ * instead of every active project at once. `fetchAllRepositoryIssues`
+ * walks every page of a repo's open-issue backlog, so scanning every
+ * onboarded project in a single invocation could add up to well more than
+ * Workers Free's 50-external-subrequest-per-invocation cap (and blew the
+ * 10ms CPU cap alongside it) once there were more than a handful of
+ * projects — surfaced as `Too many subrequests by single Worker
+ * invocation` / `Exceeded CPU Limit` in `wrangler tail`. Each tick now
+ * merges its batch's fresh results into whatever the previous tick(s)
+ * cached for every other project, so the full set still cycles through
+ * every `ceil(projectCount / ISSUES_SCAN_BATCH_SIZE)` ticks (well within
+ * `ISSUES_SCAN_HARD_TTL_SECONDS`) without any single invocation scanning
+ * more than a few repos.
  */
+const ISSUES_SCAN_BATCH_SIZE = 4;
+const ISSUES_SCAN_CURSOR_KEY = "issues-scan-cursor";
+/** Generous relative to the batch cadence — if this expires, rotation just restarts at 0, which is harmless. */
+const ISSUES_SCAN_CURSOR_TTL_SECONDS = 60 * 60 * 24;
+
 export async function warmContributorIssuesScan(env: ValidatedEnv, workerEnv: Env): Promise<void> {
   const supabase = getSupabase(env);
 
@@ -97,12 +116,32 @@ export async function warmContributorIssuesScan(env: ValidatedEnv, workerEnv: En
     return;
   }
 
+  const cursor = (await getCached<number>(workerEnv, ISSUES_SCAN_CURSOR_KEY)) ?? 0;
+  const startIndex = cursor % projects.length;
+  const batchSize = Math.min(ISSUES_SCAN_BATCH_SIZE, projects.length);
+  const batch = Array.from(
+    { length: batchSize },
+    (_, i) => projects[(startIndex + i) % projects.length]!,
+  );
+  await setCached(workerEnv, ISSUES_SCAN_CURSOR_KEY, startIndex + batchSize, ISSUES_SCAN_CURSOR_TTL_SECONDS);
+
+  // Whatever's already cached for the projects *not* in this tick's batch —
+  // read regardless of freshness, since a stale-but-present entry for an
+  // untouched project is still far better than dropping it from the
+  // response until its next turn in the rotation.
+  const previous = await getCachedSWR<GithubScanCacheEntry>(
+    workerEnv,
+    ISSUES_SCAN_CACHE_KEY,
+    Number.MAX_SAFE_INTEGER,
+  );
+  const previousProjects = previous.status !== "miss" ? previous.value.projects : [];
+
   await warmCacheSWR<GithubScanCacheEntry>(
     workerEnv,
     ISSUES_SCAN_CACHE_KEY,
     ISSUES_SCAN_HARD_TTL_SECONDS,
     async () => {
-      const scanned = await scanProjectIssues(env.GITHUB_DISCOVERY_TOKEN, projects, (project, error) => {
+      const scanned = await scanProjectIssues(env.GITHUB_DISCOVERY_TOKEN, batch, (project, error) => {
         logger.error("issues_project_scan_failed", {
           projectId: project.id,
           repositoryFullName: project.repositoryFullName,
@@ -110,11 +149,18 @@ export async function warmContributorIssuesScan(env: ValidatedEnv, workerEnv: En
           source: "scheduled_warmer",
         });
       });
-      return scanned.length > 0
-        ? ({ scannedAt: new Date().toISOString(), projects: scanned } satisfies GithubScanCacheEntry)
+
+      const scannedIds = new Set(batch.map(({ project }) => project.id));
+      const merged = [
+        ...previousProjects.filter((entry) => !scannedIds.has(entry.projectId)),
+        ...scanned,
+      ];
+
+      return merged.length > 0
+        ? ({ scannedAt: new Date().toISOString(), projects: merged } satisfies GithubScanCacheEntry)
         : null;
     },
   );
 
-  logger.info("issues_warm_completed", { projectCount: projects.length });
+  logger.info("issues_warm_completed", { batchSize: batch.length, totalProjectCount: projects.length });
 }

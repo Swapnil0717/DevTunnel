@@ -1,6 +1,16 @@
-// Server Component only — reads request cookies, don't import from client code.
-import { cookies } from "next/headers";
+// Server Component only, but no longer reads request cookies: the catalog
+// preview (`GithubProjectSummary`/`GithubProjectDetail`'s base shape) has no
+// per-viewer field — that only appears on the `*Detail` types the single-item
+// routes return — so nothing here actually depends on who's asking. Cookies
+// used to be forwarded here unconditionally anyway, which forced this page
+// into fully dynamic, uncached SSR on every single request (see
+// `Frontend_Development_Rules.txt`/perf notes on Cloudflare Workers CPU).
+// Now cached with `revalidate` instead, matching the backend's own ~30-minute
+// catalog cache window, so Next can serve this statically/ISR.
 import { API_BASE_URL } from "@/lib/config";
+
+/** Matches the backend's own ~30-minute catalog cache window (see doc comment above). */
+const CATALOG_REVALIDATE_SECONDS = 1800;
 
 /**
  * How many rows the server-rendered first paint of a GitHub catalog page
@@ -44,8 +54,7 @@ export async function fetchCatalogPreview<T>(
     }
 
     const res = await fetch(`${API_BASE_URL}${path}?${query.toString()}`, {
-      headers: { cookie: (await cookies()).toString() },
-      cache: "no-store",
+      next: { revalidate: CATALOG_REVALIDATE_SECONDS },
     });
 
     if (!res.ok) return { status: "error" };
