@@ -3,8 +3,6 @@ import { redirect } from "next/navigation";
 import { AuthProvider } from "@/lib/auth/auth-provider";
 import { getServerUser } from "@/lib/auth/get-server-user";
 import { needsOnboarding } from "@/lib/onboarding/needs-onboarding";
-import { isAdmin } from "@/lib/auth/is-admin";
-import { getServerViewMode } from "@/lib/auth/view-mode.server";
 import { signInHref } from "@/lib/auth/sign-in-href";
 
 /**
@@ -26,15 +24,13 @@ import { signInHref } from "@/lib/auth/sign-in-href";
  * `GET /auth/me` and only renders the page if the backend confirms a valid
  * session. The flag cookie alone is never trusted (see lib/auth/session.ts).
  *
- * Admin redirect: an `ADMIN` user is bounced to the Admin Portal (`/admin`)
- * unless they've explicitly picked "Continue as User" / "Switch to User
- * view", which sets the `dt_view_mode` cookie to `"user"` (see
- * lib/auth/view-mode.ts and portal-switch-link.tsx). That covers a fresh
- * sign-in, a role that was just promoted to ADMIN mid-session, or a stale
- * bookmark to /home — all default to `/admin` — while still letting an
- * admin who deliberately switched into the contributor shell actually stay
- * there instead of being bounced straight back out. This check runs first,
- * before the onboarding check.
+ * No admin redirect: an `ADMIN` is NOT bounced to `/admin` from here. That
+ * check used to run on every render of this layout and depended on the
+ * `dt_view_mode` cookie being exactly "user", which made the contributor
+ * sidebar unreliable for admins (a cookie flipped by another tab, or one
+ * that didn't reach the request, sent them to the Admin Portal mid-click).
+ * The portal is chosen once at sign-in (`/login` chooser, OAuth callback)
+ * and switched deliberately via `PortalSwitchLink`.
  *
  * This is also the *one* place that enforces "signed in but hasn't
  * finished onboarding" for every route in this group — instead of each
@@ -74,10 +70,6 @@ export default async function ProtectedLayout({
     // comes from `middleware.ts`, which is why every route in this group
     // has to be in its matcher.
     redirect(signInHref(pathname));
-  }
-
-  if (isAdmin(user) && (await getServerViewMode()) !== "user") {
-    redirect("/admin");
   }
 
   if (pathname !== "/onboarding" && needsOnboarding(user)) {

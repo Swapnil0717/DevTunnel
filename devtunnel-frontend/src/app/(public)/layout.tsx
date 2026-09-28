@@ -4,8 +4,6 @@ import { AppShell } from "@/components/layout/app-shell";
 import { GuestNotice } from "@/components/layout/guest-notice";
 import { getServerUser } from "@/lib/auth/get-server-user";
 import { needsOnboarding } from "@/lib/onboarding/needs-onboarding";
-import { isAdmin } from "@/lib/auth/is-admin";
-import { getServerViewMode } from "@/lib/auth/view-mode.server";
 
 /**
  * Shell for the routes anyone can open without signing in: the DevTunnel
@@ -28,11 +26,17 @@ import { getServerViewMode } from "@/lib/auth/view-mode.server";
  *    `AppBottomNav` drop the account-only links and show "Sign in with
  *    GitHub"; `GuestNotice` explains what an account adds; action buttons
  *    become sign-in links).
- *  - somebody → keep every behaviour `(protected)/layout.tsx` had for these
- *    URLs before they moved: an `ADMIN` still lands in the Admin Portal
- *    unless they chose "Continue as User", and a half-finished signup still
- *    goes to `/onboarding`. Moving the routes must not change what a
- *    signed-in person experiences.
+ *  - somebody → a half-finished signup still goes to `/onboarding`.
+ *
+ * This layout deliberately does NOT bounce an `ADMIN` to `/admin`. It used
+ * to, whenever the `dt_view_mode` cookie wasn't exactly "user" — but that
+ * cookie is shared by every tab and is only a hint, so an admin browsing the
+ * contributor sidebar could be thrown into the Admin Portal by any click
+ * (another tab flipping the cookie, a cookie that didn't reach the request,
+ * a prefetched redirect). Which portal an admin lands in is decided once, at
+ * sign-in (`/login` chooser, OAuth callback); after that, navigating inside
+ * the user view never re-decides it. Admins reach `/admin` on purpose, via
+ * "Switch to Admin" in the sidebar.
  *
  * Pages that genuinely need an account — `/home`, `/profile`, `/settings`,
  * `/onboarding`, `/submissions/new`, `/submissions/:slug/edit` — stay in
@@ -47,10 +51,6 @@ export default async function PublicLayout({
   const user = await getServerUser();
 
   if (user) {
-    if (isAdmin(user) && (await getServerViewMode()) !== "user") {
-      redirect("/admin");
-    }
-
     if (needsOnboarding(user)) {
       redirect("/onboarding");
     }
