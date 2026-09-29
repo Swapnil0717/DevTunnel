@@ -1,5 +1,0 @@
-[reasoning_type_role]
-Title/body mention upgrading MDX parser, which is a new capability, so Feature not Bug or Improvement. The body mentions no user-visible behavior change, so it's not a Performance or Security issue. The issue is about adding support for a new directive in a parser, which is a new feature, so it's a Feature. The role is clearly about the parser, so it's a Backend issue.
-
-[reasoning_experience_complexity]
-No user-visible behavior change mentioned, so it's not a Beginner task. The issue is about adding a new feature to a parser, which is a non-trivial task, so it's not an Intermediate task. It's a new capability, so it's not an Advanced task.

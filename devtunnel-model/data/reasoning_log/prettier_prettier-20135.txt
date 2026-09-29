@@ -1,5 +1,0 @@
-[reasoning_type_role]
-The issue is about a regression in Prettier 3.9.8, which is a new capability that does not exist yet, so Feature not Improvement. The issue is about a new feature (a new Prettier version) and no backend changes are mentioned, so Role is Frontend.
-
-[reasoning_experience_complexity]
-The issue is about a new Prettier version, which is a new capability, so it's a Beginner task. There are no design decisions or user-visible behavior changes, so experience level is Unknown and complexity is Low.
