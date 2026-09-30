@@ -5,6 +5,10 @@ import {
   handleCatalogRefreshRequest,
   type CatalogRouteConfig,
 } from "../lib/githubCatalog";
+import {
+  handleCatalogAiSearchRequest,
+  type AiSearchRouteOptions,
+} from "../lib/githubCatalogAiSearch";
 import { getEnv } from "../config/env";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
@@ -181,6 +185,26 @@ githubOpenSourceTools.get("/github-open-source-tools", (c) =>
  */
 githubOpenSourceTools.post("/github-open-source-tools/refresh", requireAuth, (c) =>
   handleCatalogRefreshRequest(c, CATALOG_CONFIG),
+);
+
+/**
+ * Extra cached catalog slots the AI search also ranks (Part 2): the
+ * "Alternative to paid software" population is discovered by different
+ * queries than the base tools catalog, so a search like "open source
+ * alternative to Notion" would otherwise never see it. Read only when
+ * already cached (never scanned on the request path). Costs one extra KV
+ * read + catalog-sized JSON.parse; set to `[]` if CPU-limit errors appear.
+ */
+const AI_SEARCH_OPTIONS: AiSearchRouteOptions = { extraFilterKeys: ["alternative-to-paid"] };
+
+/**
+ * `POST /github-open-source-tools/ai-search` — sibling of
+ * `POST /github-projects/ai-search` (see that route's doc comment and
+ * `lib/githubCatalogAiSearch.ts`). Same body/response, same signed-in +
+ * rate-limit rules; only the catalog it ranks differs.
+ */
+githubOpenSourceTools.post("/github-open-source-tools/ai-search", requireAuth, (c) =>
+  handleCatalogAiSearchRequest(c, CATALOG_CONFIG, AI_SEARCH_OPTIONS),
 );
 
 /**

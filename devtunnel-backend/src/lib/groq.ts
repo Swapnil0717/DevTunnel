@@ -1,107 +1,37 @@
 import type { ValidatedEnv } from "../config/env";
-import { logger } from "./logger";
-import { reserveGroqRequest, estimateTokens, GROQ_TPM_LIMIT, type DiscoveryPhase } from "./groqQuota";
+import { AiExhaustedError, runAgent, type ToolDeclaration, type ToolDispatcher } from "./ai/client";
+import { extractJson } from "./ai/json";
+import { GroqQuotaExceededError, type DiscoveryPhase } from "./groqQuota";
 
 /**
- * Minimal Groq function-calling client (OpenAI-compatible
- * `/openai/v1/chat/completions` endpoint). Calls the REST API directly
- * (no SDK dependency — keeps the Workers bundle small, same reasoning
- * this codebase already applies to every other lib/ file). Groq
- * decides which tools to call and how many times; this file only
- * executes the loop and returns whatever final text Groq produces.
+ * Compatibility shim over the shared AI client (src/lib/ai/client.ts).
  *
- * Replaces the previous Gemini-based client (src/lib/gemini.ts). Gemini's
- * free tier (5 RPM / 20 RPD on the model this project used) could not
- * sustain a single discovery run — see geminiQuota.ts's git history for
- * the numbers. Groq's free tier on a tool-calling-capable model
- * (openai/gpt-oss-120b: 30 RPM / 1,000 RPD / 8,000 TPM / 200,000 TPD) is
- * comfortably enough on request count, but its TOKENS-per-minute cap is
- * tight relative to this agent's payloads (READMEs, issue bodies, growing
- * conversation history) — see groqQuota.ts for how that's rationed, and
- * the trims in aiDiscoveryTools.ts / githubDiscovery.ts that shrink those
- * payloads to fit.
+ * The Groq-only function-calling loop that used to live here — including
+ * the six-KV-counter quota reservation that caused Workers KV write
+ * blocking — has moved into `runAgent`, which is provider-agnostic: it
+ * tries Groq first for the "discovery" job and falls through to Cerebras
+ * and Gemini (when keys are configured) on quota/5xx/auth failures.
+ *
+ * The exports below keep their old names and signatures so
+ * aiDiscoveryAgent.ts and aiDiscoveryTools.ts keep working untouched. The
+ * `kv` parameter is retained only for source compatibility: it is no
+ * longer written to (zero KV writes), and is used read-only to honour an
+ * admin's old custom budget split until it is re-saved (groqQuota.ts).
  *
  * NOTE: groq/compound and groq/compound-mini are NOT usable here — Groq's
- * compound systems only support their own built-in tools (web search, code
- * execution) and explicitly do not support custom user-provided tools, so
- * GROQ_MODEL must stay pointed at a plain chat-completion model such as
+ * compound systems only support their own built-in tools, not custom ones,
+ * so GROQ_MODEL must stay a plain chat-completion model such as
  * openai/gpt-oss-120b.
  */
 
-export interface GroqFunctionDeclaration {
-  name: string;
-  description: string;
-  parameters: {
-    type: "object";
-    properties: Record<string, unknown>;
-    required?: string[];
-  };
-}
-
-export type GroqToolDispatcher = (name: string, args: Record<string, unknown>) => Promise<unknown>;
-
-interface GroqToolCall {
-  id: string;
-  type: "function";
-  function: { name: string; arguments: string };
-}
-
-interface GroqMessage {
-  role: "system" | "user" | "assistant" | "tool";
-  content: string | null;
-  tool_calls?: GroqToolCall[];
-  tool_call_id?: string;
-}
-
-const GROQ_API = "https://api.groq.com/openai/v1/chat/completions";
-// Raised from 6: with the 6,500 TPM budget (groqQuota.ts) now the binding
-// constraint post-Groq-migration, a turn whose payload doesn't fit the
-// current minute window has to wait out almost a full minute
-// (groq_quota_minute_wait) before it can proceed. At 6 turns that wait
-// alone ate most of a run's time budget and still weren't enough turns
-// to gather real data (search -> confirm -> readme, per candidate)
-// before hitting "Groq agent exceeded max turns without a final answer".
-// 12 gives the agent room to actually finish even when several turns
-// each cost a ~60s wait. Paired with the SYSTEM_PROMPT guidance below to
-// use turns more efficiently (batch tool calls, skip redundant confirms)
-// rather than just brute-forcing more turns at the same inefficiency.
-const MAX_TURNS = 12;
-const MAX_RATE_LIMIT_RETRIES = 3;
-
-/** Sleeps for `ms` milliseconds. */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+export type GroqFunctionDeclaration = ToolDeclaration;
+export type GroqToolDispatcher = ToolDispatcher;
 
 /**
- * Groq's 429 response carries a `Retry-After` header (unlike Gemini,
- * which embedded the hint inside the message body) — prefer that, fall
- * back to exponential backoff if it's missing.
- */
-function retryDelayMs(res: Response, attempt: number): number {
-  const header = res.headers.get("retry-after");
-  if (header) {
-    const seconds = Number.parseFloat(header);
-    if (!Number.isNaN(seconds)) return Math.ceil(seconds * 1000) + 250;
-  }
-  return 2 ** attempt * 1000;
-}
-
-function toGroqTools(tools: GroqFunctionDeclaration[]) {
-  return tools.map((t) => ({
-    type: "function" as const,
-    function: { name: t.name, description: t.description, parameters: t.parameters },
-  }));
-}
-
-/**
- * Runs an agentic loop: sends `systemPrompt` + `userPrompt`, lets Groq
- * call any of `tools` as many times as it wants (dispatched via
- * `dispatch`), and returns the model's final plain-text answer. The
- * caller is expected to instruct the model (in the prompt) to end with a
- * strict JSON payload and nothing else — this function does not parse
- * JSON itself, callers do, so a malformed response is a caller-level
- * concern (rule 37/38: never fabricate a parse result).
+ * Runs the discovery agent loop and returns the model's final text.
+ * Throws `GroqQuotaExceededError` when the phase's budget — or every
+ * configured provider — is out of quota, which discovery catches to stop
+ * early (unchanged contract).
  */
 export async function runGroqAgent(
   env: ValidatedEnv,
@@ -112,138 +42,24 @@ export async function runGroqAgent(
   dispatch: GroqToolDispatcher,
   phase: DiscoveryPhase,
 ): Promise<string> {
-  const messages: GroqMessage[] = [
-    { role: "system", content: systemPrompt },
-    { role: "user", content: userPrompt },
-  ];
-  const groqTools = toGroqTools(tools);
-
-  for (let turn = 0; turn < MAX_TURNS; turn++) {
-    let data:
-      | { choices?: Array<{ message: GroqMessage; finish_reason?: string }> }
-      | undefined;
-
-    const requestBody = JSON.stringify({
-      model: env.GROQ_MODEL,
-      messages,
-      tools: groqTools.length ? groqTools : undefined,
-      temperature: 0.4,
-    });
-    // Groq's TPM limit is the binding constraint (see groqQuota.ts) —
-    // estimate this request's token footprint so the reservation can wait
-    // out a tight minute window instead of firing straight into a 429.
-    const estimatedTokens = estimateTokens(requestBody);
-
-    // Diagnostic only — fires when a request is unexpectedly close to or
-    // over the entire TPM budget, so we can see WHICH part is oversized
-    // (system prompt vs. a specific message vs. the tools schema) instead
-    // of guessing from the total alone. Logs lengths only, never content.
-    if (estimatedTokens > GROQ_TPM_LIMIT * 0.5) {
-      // Logged as requestSizeEstimate, not estimatedTokens — logger.ts
-      // redacts any field name containing "token" (see groqQuota.ts for
-      // the same fix), so the earlier version of this log line silently
-      // hid the one number it existed to show.
-      logger.warn("groq_request_size_breakdown", {
-        turn,
-        requestSizeEstimate: estimatedTokens,
-        limit: GROQ_TPM_LIMIT,
-        toolsSchemaChars: JSON.stringify(groqTools).length,
-        messageCharsByIndex: messages.map((m, i) => ({
-          index: i,
-          role: m.role,
-          contentChars: typeof m.content === "string" ? m.content.length : 0,
-          toolCallsChars: m.tool_calls ? JSON.stringify(m.tool_calls).length : 0,
-        })),
-      });
+  try {
+    const result = await runAgent(
+      env,
+      "discovery",
+      { system: systemPrompt, user: userPrompt, tools, dispatch },
+      { phase, legacyKv: kv },
+    );
+    return result.content;
+  } catch (err) {
+    if (err instanceof AiExhaustedError) {
+      // Long waits mean a daily cap; short ones a per-minute window.
+      throw new GroqQuotaExceededError(err.retryAfterMs > 30 * 60_000 ? "rpd" : "rpm", err.retryAfterMs);
     }
-
-    for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
-      // Reserve budget for this exact physical call BEFORE making it.
-      // Throws GroqQuotaExceededError("rpd" | "tpd" | "rpd_phase" |
-      // "tpd_phase", ...) immediately (no retry) once today's budget —
-      // account-wide OR this phase's own 25/25/50 share — is gone.
-      // Callers (aiDiscoveryAgent.ts) catch that specifically and stop
-      // early instead of treating it as a generic failure to retry.
-      await reserveGroqRequest(kv, estimatedTokens, phase);
-
-      const res = await fetch(GROQ_API, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${env.GROQ_API_KEY}`,
-        },
-        body: requestBody,
-      });
-
-      if (res.ok) {
-        data = await res.json();
-        break;
-      }
-
-      const body = await res.text().catch(() => "");
-
-      if (res.status === 429 && attempt < MAX_RATE_LIMIT_RETRIES) {
-        const delayMs = retryDelayMs(res, attempt);
-        logger.warn("groq_rate_limited_retrying", { turn, attempt, delayMs });
-        await sleep(delayMs);
-        continue;
-      }
-
-      logger.error("groq_request_failed", { status: res.status, body: body.slice(0, 500), turn });
-      throw new Error(`Groq API ${res.status}`);
-    }
-
-    if (!data) {
-      throw new Error("Groq API request failed after retries");
-    }
-
-    const choice = data.choices?.[0];
-    if (!choice) {
-      throw new Error("Groq returned no choices");
-    }
-
-    const message = choice.message;
-    const toolCalls = message.tool_calls ?? [];
-
-    if (toolCalls.length === 0) {
-      return (message.content ?? "").trim();
-    }
-
-    messages.push({ role: "assistant", content: message.content ?? null, tool_calls: toolCalls });
-
-    for (const call of toolCalls) {
-      let result: unknown;
-      let args: Record<string, unknown> = {};
-      try {
-        args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
-        result = await dispatch(call.function.name, args);
-      } catch (err) {
-        result = { error: err instanceof Error ? err.message : String(err) };
-      }
-      const resultContent = JSON.stringify(result);
-      // Diagnostic only: none of the known dispatch cases (aiDiscoveryTools.ts)
-      // should legitimately produce a result anywhere near this size given
-      // their caps (4,000-char README, 8 items x 600-char issue bodies, 10
-      // repos). Two separate runs hit the exact same 132,702-char result on
-      // the very first tool call with no visibility into which tool or
-      // repo/query caused it — logging that here instead of guessing again.
-      if (resultContent.length > 20000) {
-        logger.warn("groq_tool_result_oversized", {
-          turn,
-          toolName: call.function.name,
-          toolArgs: args,
-          resultChars: resultContent.length,
-        });
-      }
-      messages.push({ role: "tool", tool_call_id: call.id, content: resultContent });
-    }
+    throw err;
   }
-
-  throw new Error("Groq agent exceeded max turns without a final answer");
 }
 
-/** Strips ``` json fences the model sometimes wraps its final answer in, then parses it. */
+/** Strips ``` json fences the model sometimes wraps its final answer in, then parses it (throws if it can't). */
 export function parseGroqJson<T>(raw: string): T {
-  const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
-  return JSON.parse(cleaned) as T;
+  return extractJson(raw) as T;
 }

@@ -14,8 +14,10 @@ import {
   getProjectById,
   startProject,
   submitProject,
+  contributorMatchProfileFor,
   type ContributorMatchProfile,
 } from "../db/projects";
+import { handleDevtunnelAiSearchRequest, projectsAiSearchSource } from "../lib/devtunnelAiSearch";
 import { getProjectTaskProgress, listTasks } from "../db/tasks";
 import { isProjectContributor, joinProject } from "../db/catalogMemberships";
 import { applyCatalogStar, readCatalogStarStatus } from "../lib/catalogStar";
@@ -117,13 +119,7 @@ projects.get("/projects/available", requireAuth, async (c) => {
     // empty arrays for all three fields, which `computeMatch` already
     // treats as "no signal" on its own, but skipping the object entirely
     // here keeps that behavior explicit at the call site too.
-    const profile: ContributorMatchProfile | null = user.onboardingCompleted
-      ? {
-          developerRoles: user.developerRoles,
-          skills: user.skills,
-          technologies: user.technologies,
-        }
-      : null;
+    const profile: ContributorMatchProfile | null = contributorMatchProfileFor(user);
 
     const list = await listAvailableProjects(supabase, profile);
     return c.json(list, 200);
@@ -135,6 +131,27 @@ projects.get("/projects/available", requireAuth, async (c) => {
     return errorResponse(c, 500, "internal_error", "Couldn't load projects right now");
   }
 });
+
+/**
+ * `POST /projects/ai-search` — "Ask AI" on `/projects` (Part 3 of the AI
+ * build plan). Body `{ prompt }` (2–300 chars); responds
+ * `{ results: ProjectSummary[], interpretation, aiUsed, fallbackReason?, scanned }`
+ * where each result is the same row `GET /projects/available` returns
+ * (including this viewer's `matchPercent`/`matchRole`), ranked best match
+ * first. Only active, onboarded DevTunnel projects are searched.
+ *
+ * Signed-in only (`requireAuth`) with a per-user rate limit — it spends a
+ * free AI budget. If no model can answer, plain keyword ranking runs
+ * instead and the response says `aiUsed: false`. Full behaviour and the
+ * KV-free caching rules: `lib/devtunnelAiSearch.ts`.
+ *
+ * Declared before `/projects/:slug` like `/projects/available`; it is a
+ * POST, and no other POST has a single segment after `/projects/`, so
+ * there is no clash either way.
+ */
+projects.post("/projects/ai-search", requireAuth, (c) =>
+  handleDevtunnelAiSearchRequest(c, projectsAiSearchSource),
+);
 
 /* ---------------------------------------------------------------------------
  * View Project — `/projects/:projectSlug` (devtunnel-frontend's

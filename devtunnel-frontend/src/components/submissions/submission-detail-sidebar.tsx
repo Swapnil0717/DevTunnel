@@ -1,3 +1,4 @@
+import { AiSummary } from "@/components/ai/ai-summary";
 import { CopyButton } from "@/components/github-projects/copy-button";
 import { GitBranchIcon, IssueIcon, StarIcon } from "@/components/layout/nav-icons";
 import { formatCompactNumber } from "@/lib/github-projects/format-compact-number";
@@ -40,6 +41,10 @@ const CARD_HEADING_CLASS =
  * rather than showing zeroes — a stars count of 0 would read as "nobody
  * has starred this", which nothing checked (rule 38, rule 58). Everything
  * else on the page is stored data and doesn't depend on it.
+ *
+ * The AI summary card sits under "Submitted by" so the person behind an entry
+ * stays the first thing a viewer sees; it is fetched from the browser after
+ * load and labelled as AI-generated.
  *
  * "Submitted by" is here on purpose, not just in the header: this list
  * isn't curated by DevTunnel, and the person behind an entry is the fact
@@ -107,6 +112,9 @@ export function SubmissionDetailSidebar({
           . Not reviewed or curated by DevTunnel.
         </p>
       </div>
+
+      {/* Client-side AI summary (Part 4): loads after the page, so this server component stays static. */}
+      <AiSummary kind="community_project" subjectKey={submission.slug} variant="card" />
 
       {submission.repositoryFullName ? (
         <div className={CARD_CLASS}>

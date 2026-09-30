@@ -59,6 +59,12 @@ interface ProjectsPageProps {
  * to "Recommended for you" on first render — read here, server-side,
  * rather than inside the client component, so no `useSearchParams` call
  * (and therefore no Suspense boundary) is needed just to support it.
+ *
+ * `aiSearch` turns on the "Ask AI" bar (Part 3): a signed-in contributor
+ * can describe what they want in plain English and the explorer swaps the
+ * list for `POST /projects/ai-search`'s ranked results. The server-rendered
+ * list fetched above is unchanged (`result.data` is still what renders
+ * until a search returns); the AI call happens in the browser, on demand.
  */
 export default async function ProjectsPage({ searchParams }: ProjectsPageProps) {
   const resolvedSearchParams = await searchParams;
@@ -81,7 +87,11 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
         ) : result.status === "empty" ? (
           <SectionMessage>No projects have been added yet — check back soon.</SectionMessage>
         ) : (
-          <DevtunnelProjectsExplorer projects={result.data} initialShowFilter={initialShowFilter} />
+          <DevtunnelProjectsExplorer
+            projects={result.data}
+            initialShowFilter={initialShowFilter}
+            aiSearch={{ path: "/projects" }}
+          />
         )}
       </main>
     </BlueprintReveal>

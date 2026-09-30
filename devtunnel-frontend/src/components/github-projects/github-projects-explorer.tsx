@@ -7,15 +7,17 @@ import { SectionMessage } from "@/components/home/section-message";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { PagePaginationControls } from "@/components/admin/page-pagination-controls";
 import { usePagePagination } from "@/lib/admin/use-page-pagination";
+import { AiSearchBar } from "@/components/ai/ai-search-bar";
 import { GithubProjectCard } from "./github-project-card";
 import { LoadCatalogBar } from "./load-catalog-bar";
 import { RefreshCatalogButton } from "./refresh-catalog-button";
 import { StarRangeBar } from "./star-range-bar";
 import { useLoadFullCatalog } from "@/lib/github-projects/use-load-full-catalog";
 import { useStarRangeCatalog } from "@/lib/github-projects/use-star-range-catalog";
+import { useAiSearch } from "@/lib/ai/use-ai-search";
 import type { GithubProjectSummary } from "@/lib/github-projects/types";
 
-type SortOption = "TRENDING" | "MOST_STARS" | "NEWEST" | "RECENTLY_UPDATED";
+type SortOption = "TRENDING" | "MOST_STARS" | "NEWEST" | "RECENTLY_UPDATED" | "RELEVANCE";
 
 const SORT_FILTERS: { value: SortOption; label: string }[] = [
   { value: "TRENDING", label: "Trending" },
@@ -23,6 +25,13 @@ const SORT_FILTERS: { value: SortOption; label: string }[] = [
   { value: "NEWEST", label: "Newest" },
   { value: "RECENTLY_UPDATED", label: "Recently updated" },
 ];
+
+/**
+ * Offered (and selected) only while an AI search is showing results: keeps
+ * the order the backend ranked them in. Not in `SORT_FILTERS` because
+ * "best match" means nothing for the plain catalog.
+ */
+const BEST_MATCH_SORT = { value: "RELEVANCE" as const, label: "Best match (AI)" };
 
 const ALL_TECH = "ALL";
 const ALL_STARS = "ALL";
@@ -141,6 +150,9 @@ function sortProjects(
     case "RECENTLY_UPDATED":
       sorted.sort((a, b) => new Date(b.pushedAt).getTime() - new Date(a.pushedAt).getTime());
       return sorted;
+    case "RELEVANCE":
+      // AI search results arrive already ranked best-match first.
+      return sorted;
   }
 }
 
@@ -176,6 +188,7 @@ export function GithubProjectsExplorer({
   catalogLoad,
   cardBasePath = "/github-projects",
   hideStarFilters = false,
+  aiSearch,
 }: {
   /**
    * The server-rendered first page of the catalog. When `catalogLoad` is
@@ -220,6 +233,16 @@ export function GithubProjectsExplorer({
    * The values stay at "Any stars", so nothing is filtered by stars.
    */
   hideStarFilters?: boolean;
+  /**
+   * Turns on the "Ask AI" search bar (Part 2). `path` is this catalog's
+   * backend list route (`"/github-projects"` or
+   * `"/github-open-source-tools"`); `/ai-search` is appended. While an AI
+   * search has results, they replace the catalog in the grid — Tech stack,
+   * the star filters and Sort by keep working on them (with an extra
+   * "Best match" sort) — and "Clear AI search" brings the catalog back.
+   * Omit it and the explorer behaves exactly as before.
+   */
+  aiSearch?: { path: string };
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -229,6 +252,9 @@ export function GithubProjectsExplorer({
   const [minStars, setMinStars] = useState(ALL_STARS);
   const [maxStars, setMaxStars] = useState(ALL_STARS);
   const [sortBy, setSortBy] = useState<SortOption>("TRENDING");
+
+  const ai = useAiSearch(aiSearch?.path ?? null);
+  const aiActive = ai.result !== null;
 
   const loader = useLoadFullCatalog({
     path: catalogLoad?.path ?? null,
@@ -241,16 +267,45 @@ export function GithubProjectsExplorer({
   const minStarsValue = minStars === ALL_STARS ? 0 : Number(minStars);
   const maxStarsValue = maxStars === ALL_STARS ? Number.POSITIVE_INFINITY : Number(maxStars) - 1;
   const starRange = useStarRangeCatalog({
-    path: catalogLoad?.starBuckets ? catalogLoad.path : null,
+    // Not while AI results are showing: they replace the catalog, so a
+    // star-range load would only fetch buckets nobody can see.
+    path: catalogLoad?.starBuckets && !aiActive ? catalogLoad.path : null,
     minStars: minStarsValue,
     maxStars: maxStarsValue,
   });
   // A selected star range is loaded server-side (the plain catalog only holds
   // the ~1,000 most-starred repos); otherwise use the ordinary catalog.
-  const projects = starRange.active ? starRange.projects : loader.projects;
+  const projects: GithubProjectSummary[] = ai.result
+    ? ai.result.results
+    : starRange.active
+      ? starRange.projects
+      : loader.projects;
+
+  // A "Best match" sort only exists while AI results do.
+  const effectiveSort: SortOption = sortBy === "RELEVANCE" && !aiActive ? "TRENDING" : sortBy;
+  const sortOptions = aiActive ? [BEST_MATCH_SORT, ...SORT_FILTERS] : SORT_FILTERS;
+
+  async function handleAiSearch(prompt: string) {
+    const result = await ai.search(prompt);
+    if (result) {
+      // The new result set has its own tech-stack options, so a previously
+      // chosen tag might not exist in it — start from "All".
+      setTechStack(ALL_TECH);
+      setSortBy("RELEVANCE");
+    }
+  }
+
+  function handleAiClear() {
+    ai.clear();
+    setTechStack(ALL_TECH);
+    setSortBy((current) => (current === "RELEVANCE" ? "TRENDING" : current));
+  }
 
   function handleCatalogFilterChange(nextValue: string) {
     if (!catalogFilter) return;
+    // A different "Show" population would leave the AI results untouched
+    // and look like the dropdown did nothing — drop them first.
+    if (aiActive) handleAiClear();
     const params = new URLSearchParams(searchParams.toString());
     if (nextValue === NO_CATALOG_FILTER) {
       params.delete(catalogFilter.paramName);
@@ -297,8 +352,8 @@ export function GithubProjectsExplorer({
       return haystack.includes(normalizedQuery);
     });
 
-    return sortProjects(filtered, sortBy);
-  }, [projects, query, techStack, minStars, maxStars, sortBy]);
+    return sortProjects(filtered, effectiveSort);
+  }, [projects, query, techStack, minStars, maxStars, effectiveSort]);
 
   const hasActiveFilters =
     query.trim().length > 0 ||
@@ -332,6 +387,15 @@ export function GithubProjectsExplorer({
 
           {catalogLoad ? <RefreshCatalogButton loader={loader} noun={catalogLoad.noun} /> : null}
         </div>
+
+        {aiSearch ? (
+          <AiSearchBar
+            state={ai}
+            onSearch={(prompt) => void handleAiSearch(prompt)}
+            onClear={handleAiClear}
+            noun={catalogLoad?.noun ?? "projects"}
+          />
+        ) : null}
 
         <div className="flex flex-wrap items-end gap-2">
           {catalogFilter ? (
@@ -412,15 +476,15 @@ export function GithubProjectsExplorer({
             </label>
             <FilterSelect
               id="github-projects-sort"
-              value={sortBy}
+              value={effectiveSort}
               onChange={(value) => setSortBy(value as SortOption)}
-              options={SORT_FILTERS}
+              options={sortOptions}
             />
           </div>
         </div>
       </div>
 
-      {catalogLoad ? (
+      {catalogLoad && !aiActive ? (
         starRange.active ? (
           <StarRangeBar range={starRange} noun={catalogLoad.noun} />
         ) : (
@@ -429,12 +493,15 @@ export function GithubProjectsExplorer({
       ) : null}
 
       {filteredProjects.length === 0 &&
+      !aiActive &&
       starRange.active &&
       (starRange.status === "loading" || starRange.status === "idle") ? null : filteredProjects.length === 0 ? (
         <SectionMessage>
           {hasActiveFilters
             ? "No GitHub projects match your search or the selected filters. Try different search terms or filters."
-            : "No GitHub projects have been added yet — check back soon."}
+            : aiActive
+              ? "Nothing in the catalog matched your AI search. Try describing it differently, or clear the AI search."
+              : "No GitHub projects have been added yet — check back soon."}
         </SectionMessage>
       ) : (
         <>

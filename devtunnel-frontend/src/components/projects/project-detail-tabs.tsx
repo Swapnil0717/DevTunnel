@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
+import { AiSummary } from "@/components/ai/ai-summary";
 import { GithubEmptyState } from "@/components/github-projects/github-empty-state";
 import { ProjectTasksPanel } from "@/components/projects/project-tasks-panel";
 import { ProjectIssuesPanel } from "@/components/projects/project-issues-panel";
@@ -123,6 +124,8 @@ export function ProjectDetailTabs({ project }: { project: DevtunnelProjectDetail
         aria-labelledby="project-tab-info"
         className="rounded-[10px] border border-border bg-surface p-5"
       >
+        <AiSummary kind="devtunnel_project" subjectKey={project.slug} />
+
         <div className="grid grid-cols-1 gap-x-6 gap-y-3 text-[12.5px] sm:grid-cols-[180px_1fr]">
           <span className="text-text-faint">Description</span>
           <span className="text-text-secondary">

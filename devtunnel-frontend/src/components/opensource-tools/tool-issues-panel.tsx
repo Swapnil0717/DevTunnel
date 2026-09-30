@@ -1,11 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { AiExplainButton } from "@/components/ai/ai-explain-button";
+import { IssueInsightBadges, IssueInsightsCard } from "@/components/ai/issue-insights-card";
 import { GithubEmptyState } from "@/components/github-projects/github-empty-state";
 import { LoadAllIssuesBar } from "@/components/issues/load-all-issues-bar";
 import { IssueIcon, SearchIcon } from "@/components/layout/nav-icons";
 import { PagePaginationControls } from "@/components/admin/page-pagination-controls";
 import { usePagePagination } from "@/lib/admin/use-page-pagination";
+import { parseGithubRepoFullName } from "@/lib/ai/explain-client";
+import { useIssueInsights } from "@/lib/ai/use-issue-insights";
 import { REPO_ISSUES_PAGE_SIZE, type LoadAllIssuesState } from "@/lib/issues/use-load-all-issues";
 import type { OpenSourceToolIssuePreview } from "@/lib/opensource-tools/types";
 
@@ -37,6 +41,16 @@ function formatDate(iso: string): string {
  * runs over all of it, which is where "does anyone else have my problem?"
  * actually needs it to. Results are paginated client-side, 10 per page
  * (`usePagePagination`, the same as `/issues`).
+ *
+ * Above the search box sits the AI issue insights card (Part 6,
+ * `IssueInsightsCard`): on request it labels the repository's open issues by
+ * role, level and technology. Its chips narrow the list AFTER the search and
+ * BEFORE the client-side pagination, and each row shows its own AI labels
+ * (or "Not analyzed") beside the Explain button.
+ *
+ * Each row also gets an "Explain" button (Part 5, `AiExplainButton`) beside —
+ * not inside — its link (a `<button>` nested in an `<a>` is invalid HTML). It
+ * only appears when the tool's repository URL is a github.com repository.
  */
 export function ToolIssuesPanel({
   loader,
@@ -60,7 +74,12 @@ export function ToolIssuesPanel({
     );
   }, [issues, query]);
 
-  const paged = usePagePagination(visibleIssues, REPO_ISSUES_PAGE_SIZE);
+  const repoFullName = parseGithubRepoFullName(repositoryUrl);
+  const insights = useIssueInsights(repoFullName);
+  const { filterIssues } = insights;
+  // The insight filters run after search and BEFORE pagination.
+  const filteredIssues = useMemo(() => filterIssues(visibleIssues), [filterIssues, visibleIssues]);
+  const paged = usePagePagination(filteredIssues, REPO_ISSUES_PAGE_SIZE);
 
   if (!repositoryUrl) {
     return (
@@ -101,6 +120,8 @@ export function ToolIssuesPanel({
 
   return (
     <div>
+      <IssueInsightsCard controller={insights} />
+
       <LoadAllIssuesBar loader={loader} repositoryUrl={repositoryUrl} />
 
       <div className="relative mb-3 max-w-[260px]">
@@ -115,9 +136,9 @@ export function ToolIssuesPanel({
         />
       </div>
 
-      {visibleIssues.length === 0 ? (
+      {filteredIssues.length === 0 ? (
         <p className="m-0 rounded-[8px] border border-dashed border-border-subtle px-4 py-6 text-center text-[12.5px] text-text-muted">
-          No issues match that search. Try a different term.
+          No issues match that search or those filters. Try a different term or clear a filter.
         </p>
       ) : (
         <>
@@ -161,6 +182,12 @@ export function ToolIssuesPanel({
                     ))}
                   </span>
                 </a>
+                {repoFullName ? (
+                  <div className="flex flex-col gap-1.5 pb-2.5 pl-[34px] pr-3">
+                    <IssueInsightBadges controller={insights} issueNumber={issue.number} />
+                    <AiExplainButton source="devtunnel" repo={repoFullName} issueNumber={issue.number} />
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>

@@ -20,8 +20,12 @@ import { settings } from "./routes/settings";
 import { userActivity } from "./routes/userActivity";
 import { profileActivity } from "./routes/profileActivity";
 import { githubCatalogContribute } from "./routes/githubCatalogContribute";
+import { aiSummary } from "./routes/aiSummary";
+import { aiIssueExplanation } from "./routes/aiIssueExplanation";
+import { aiIssueInsights } from "./routes/aiIssueInsights";
 import { admin } from "./routes/admin/index";
 import { runDailyDiscovery } from "./lib/aiDiscoveryAgent";
+import { flushAiUsage } from "./lib/ai/usage";
 import {
   warmGithubCatalogs,
   warmGithubStarBuckets,
@@ -61,6 +65,19 @@ app.route("/", userActivity);
 // src/routes/githubCatalogContribute.ts).
 app.route("/", profileActivity);
 app.route("/", githubCatalogContribute);
+// AI summary card on the five detail pages: `POST /ai/summary`
+// (src/routes/aiSummary.ts, Part 4). Signed-in only; stored-first, so a page
+// that already has a summary costs one Supabase read and no model call.
+app.route("/", aiSummary);
+// AI issue explanation ("Explain" on each issue row): `POST /ai/issue-explanation`
+// (src/routes/aiIssueExplanation.ts, Part 5). Signed-in only; stored-first, so
+// a second click on an unchanged issue costs one Supabase read and no model call.
+app.route("/", aiIssueExplanation);
+// AI issue insights (the card at the top of a repository's Issues tab):
+// `POST /ai/issue-insights` (src/routes/aiIssueInsights.ts, Part 6). Signed-in
+// only; stored-first, so a repository with fresh insights costs one Supabase
+// read and no GitHub or model call.
+app.route("/", aiIssueInsights);
 app.route("/admin", admin);
 
 app.onError(handleError);
@@ -131,7 +148,10 @@ async function handleScheduled(event: ScheduledEvent, env: Env, ctx: ExecutionCo
       // and defensively for any cron expression this handler doesn't
       // otherwise recognize (rather than silently doing nothing).
       ctx.waitUntil(
-        runDailyDiscovery(validatedEnv, env.RATE_LIMIT_KV).catch((err) => {
+        runDailyDiscovery(validatedEnv, env.RATE_LIMIT_KV)
+          // Push the batched AI usage counters to Supabase before the isolate ends (src/lib/ai/usage.ts).
+          .finally(() => flushAiUsage(validatedEnv))
+          .catch((err) => {
           logger.error("ai_discovery_scheduled_run_failed", {
             error: err instanceof Error ? err.message : String(err),
           });

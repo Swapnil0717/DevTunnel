@@ -25,6 +25,24 @@ export interface ContributorMatchProfile {
   technologies: string[];
 }
 
+/**
+ * The viewer's onboarding answers as a match profile, or `null` when they
+ * never finished onboarding (an account with no answers has nothing to
+ * score against, so `computeMatch` returns no `matchPercent`/`matchRole`).
+ * Shared by `GET /projects/available` and AI search so both rank and label
+ * projects for the viewer identically.
+ */
+export function contributorMatchProfileFor(user: {
+  onboardingCompleted: boolean;
+  developerRoles: DeveloperRole[];
+  skills: string[];
+  technologies: string[];
+}): ContributorMatchProfile | null {
+  return user.onboardingCompleted
+    ? { developerRoles: user.developerRoles, skills: user.skills, technologies: user.technologies }
+    : null;
+}
+
 interface AvailableProjectRow {
   slug: string;
   name: string;
@@ -94,10 +112,29 @@ function computeMatch(
   return matchRole ? { matchPercent, matchRole } : { matchPercent };
 }
 
-export async function listAvailableProjects(
-  supabase: SupabaseClient,
-  profile: ContributorMatchProfile | null,
-): Promise<ProjectSummary[]> {
+/**
+ * One active, onboarded project in the viewer-independent form AI search
+ * (lib/devtunnelAiSearch.ts) ranks and caches. Everything `computeMatch`
+ * needs (`techStack`, `primaryLanguage`) is kept RAW so the per-viewer
+ * `matchPercent` / `matchRole` can be layered on after ranking — the cached
+ * list itself never contains anything about the person searching.
+ */
+export interface SearchableProject {
+  slug: string;
+  name: string;
+  description: string;
+  primaryLanguage: string | null;
+  techStack: OnboardingTechStack | null;
+  repositoryFullName: string | null;
+}
+
+/**
+ * The single query behind both `GET /projects/available` and AI search, so
+ * "which projects are searchable" can never drift from "which projects are
+ * listed": ACTIVE, not a tool's shadow project, not soft-deleted, newest
+ * first, capped at `AVAILABLE_PROJECTS_LIMIT`.
+ */
+export async function listSearchableProjects(supabase: SupabaseClient): Promise<SearchableProject[]> {
   const { data, error } = await supabase
     .from("projects")
     .select(AVAILABLE_PROJECT_COLUMNS)
@@ -111,18 +148,42 @@ export async function listAvailableProjects(
 
   const rows = (data ?? []) as unknown as AvailableProjectRow[];
 
-  return rows.map((row) => {
-    const techStack = toOnboardingTechStackOrNull(row.tech_stack);
+  return rows.map((row) => ({
+    slug: row.slug,
+    name: row.name,
+    description: row.description ?? "",
+    primaryLanguage: row.primary_language,
+    techStack: toOnboardingTechStackOrNull(row.tech_stack),
+    repositoryFullName: row.github_full_name,
+  }));
+}
 
-    return {
-      slug: row.slug,
-      name: row.name,
-      description: row.description ?? "",
-      primaryTech: toPrimaryTech(row.primary_language, techStack),
-      ...computeMatch(techStack, row.primary_language, profile),
-      ...(row.github_full_name ? { repositoryFullName: row.github_full_name } : {}),
-    };
-  });
+/** The project's flat curated tech-stack tags. The primary language is scored separately (it is its own field on `SearchableProject`). */
+export function searchableProjectTags(project: SearchableProject): string[] {
+  return flattenTechStack(project.techStack);
+}
+
+/** Maps one project to the list-row shape, layering on this viewer's match (omitted when they have no profile). */
+export function toProjectSummary(
+  project: SearchableProject,
+  profile: ContributorMatchProfile | null,
+): ProjectSummary {
+  return {
+    slug: project.slug,
+    name: project.name,
+    description: project.description,
+    primaryTech: toPrimaryTech(project.primaryLanguage, project.techStack),
+    ...computeMatch(project.techStack, project.primaryLanguage, profile),
+    ...(project.repositoryFullName ? { repositoryFullName: project.repositoryFullName } : {}),
+  };
+}
+
+export async function listAvailableProjects(
+  supabase: SupabaseClient,
+  profile: ContributorMatchProfile | null,
+): Promise<ProjectSummary[]> {
+  const projects = await listSearchableProjects(supabase);
+  return projects.map((project) => toProjectSummary(project, profile));
 }
 
 /* ---------------------------------------------------------------------------

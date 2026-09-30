@@ -1,6 +1,6 @@
 // devtunnel-frontend/src/lib/admin/ai-discovery/client-api.ts
 import { API_BASE_URL } from "@/lib/config";
-import type { AiDiscoveryRunSummary, GroqQuotaSnapshot, PhaseBudgetShares } from "./types";
+import type { AiDiscoveryRunSummary, AiProvidersSnapshot, GroqQuotaSnapshot, PhaseBudgetShares } from "./types";
 
 export class AiDiscoveryApiError extends Error {
   status: number;
@@ -163,6 +163,20 @@ export async function getGroqQuota(): Promise<GroqQuotaSnapshot> {
     credentials: "include",
   });
   if (!res.ok) throw new AiDiscoveryApiError(`Failed to load Groq quota (${res.status})`, res.status);
+  return res.json();
+}
+
+/**
+ * `GET /admin/ai/providers` — every AI provider's usage today, status
+ * (available / exhausted until… / not configured) and last error class.
+ * Read-only: it never calls a model and never spends budget, so polling it is safe.
+ */
+export async function getAiProviders(): Promise<AiProvidersSnapshot> {
+  const res = await fetch(`${API_BASE_URL}/admin/ai/providers`, {
+    method: "GET",
+    credentials: "include",
+  });
+  if (!res.ok) throw new AiDiscoveryApiError(`Failed to load AI provider usage (${res.status})`, res.status);
   return res.json();
 }
 

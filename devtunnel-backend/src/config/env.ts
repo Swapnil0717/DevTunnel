@@ -52,6 +52,37 @@ const envSchema = z.object({
       return false;
     }
   }, "GITHUB_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key (generate with `openssl rand -base64 32`)"),
+
+  // --- AI foundation (src/lib/ai/*) — ALL OPTIONAL ---------------------
+  // A provider with no key (or no model) is silently skipped by
+  // src/lib/ai/chain.ts. Deliberately z.string() with no .min(1): an empty
+  // secret must mean "not configured", never crash every request.
+  // Secrets (wrangler secret put): keys below. Non-secret vars go in
+  // wrangler.toml. Get keys at console.groq.com/keys, cloud.cerebras.ai,
+  // aistudio.google.com/apikey, console.mistral.ai, openrouter.ai/keys,
+  // github.com/marketplace/models.
+  // Optional SECOND Groq account (a different account = its own Groq limits).
+  GROQ_API_KEY_2: z.string().optional(),
+  CEREBRAS_API_KEY: z.string().optional(),
+  GEMINI_API_KEY: z.string().optional(),
+  MISTRAL_API_KEY: z.string().optional(),
+  OPENROUTER_API_KEY: z.string().optional(),
+  GITHUB_MODELS_TOKEN: z.string().optional(),
+  // Model ids (free model lists change often — never hard-coded).
+  GROQ_SEARCH_MODEL: z.string().optional(),
+  GROQ_SECONDARY_MODEL: z.string().optional(),
+  CEREBRAS_MODEL: z.string().optional(),
+  GEMINI_MODEL: z.string().optional(),
+  MISTRAL_MODEL: z.string().optional(),
+  OPENROUTER_MODEL: z.string().optional(),
+  GITHUB_MODELS_MODEL: z.string().optional(),
+  CF_AI_MODEL: z.string().optional(),
+  // "false" switches every USER-facing AI endpoint off (the admin
+  // discovery agent is unaffected). Anything else / unset = on.
+  AI_FEATURES_ENABLED: z.string().optional(),
+  // Cloudflare Workers AI binding (wrangler.toml `[ai]`). Not a string, so
+  // it needs an explicit passthrough — zod would otherwise strip it.
+  AI: z.custom<Ai>().optional(),
 });
 
 export type ValidatedEnv = z.infer<typeof envSchema>;

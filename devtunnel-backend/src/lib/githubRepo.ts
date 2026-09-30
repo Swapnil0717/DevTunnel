@@ -859,6 +859,89 @@ export async function fetchRepositoryIssue(
   return toIssueSummary(parsed.data);
 }
 
+const issueCommentsSchema = z.array(
+  z.object({
+    body: z.string().nullable().optional(),
+    created_at: z.string(),
+    user: z.object({ login: z.string().min(1), type: z.string().optional() }).nullable().optional(),
+  }),
+);
+
+/** One issue comment, trimmed to what an AI explanation needs. */
+export interface GithubIssueCommentText {
+  /** GitHub login, or `ghost` for a deleted account. */
+  author: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface GithubIssueWithComments {
+  issue: GithubIssueSummary;
+  /** The FIRST `commentLimit` human comments, oldest first (bots and empty comments skipped). */
+  comments: GithubIssueCommentText[];
+}
+
+/**
+ * Single-issue fetch for AI issue explanations (Part 5): the issue itself
+ * (title, labels, full body) plus its first few comments.
+ *
+ * Costs at most TWO GitHub subrequests (issue, then comments — the second
+ * only when GitHub says the issue has any). Deliberately separate from
+ * `fetchRepositoryIssue` above, which Task Onboarding relies on and which
+ * must keep its one-call shape (Backend_Development_Rules.txt rule 4: don't
+ * rewrite working functionality unnecessarily).
+ *
+ * Returns `null` when the issue doesn't exist or is actually a pull request
+ * (same rule as `fetchRepositoryIssue`). A comments failure is NOT an error:
+ * the explanation is still useful from the issue body alone, so the list
+ * simply comes back empty (rule 51 — degrade gracefully). Everything returned
+ * is UNTRUSTED text; the prompt builder wraps and truncates it.
+ *
+ * Only the first `commentLimit` comments are read (`per_page`), oldest first:
+ * early comments are where clarifications and maintainer guidance usually
+ * live, and a hard bound keeps the prompt small (Part 1 rule 2).
+ */
+export async function fetchRepositoryIssueWithComments(
+  accessToken: string | null,
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  commentLimit = 5,
+): Promise<GithubIssueWithComments | null> {
+  const issue = await fetchRepositoryIssue(accessToken, owner, repo, issueNumber);
+  if (!issue) return null;
+  if (issue.commentCount === 0 || commentLimit <= 0) return { issue, comments: [] };
+
+  try {
+    // Over-fetch a little so skipped bot comments don't leave the list short.
+    const perPage = Math.min(100, commentLimit * 3);
+    const res = await fetchWithTimeout(
+      `${GITHUB_API_BASE}/repos/${owner}/${repo}/issues/${issueNumber}/comments?per_page=${perPage}`,
+      { headers: authHeaders(accessToken) },
+    );
+    if (!res.ok) {
+      logger.warn("github_issue_comments_unavailable", { status: res.status });
+      return { issue, comments: [] };
+    }
+    const parsed = issueCommentsSchema.safeParse(await res.json());
+    if (!parsed.success) return { issue, comments: [] };
+
+    const comments: GithubIssueCommentText[] = [];
+    for (const comment of parsed.data) {
+      const body = comment.body?.trim();
+      if (!body) continue;
+      const login = comment.user?.login ?? "ghost";
+      if (comment.user?.type === "Bot" || /\[bot\]$/i.test(login)) continue;
+      comments.push({ author: login, body, createdAt: comment.created_at });
+      if (comments.length >= commentLimit) break;
+    }
+    return { issue, comments };
+  } catch (err) {
+    logger.warn("github_issue_comments_failed", { error: err instanceof Error ? err.message : String(err) });
+    return { issue, comments: [] };
+  }
+}
+
 const languagesSchema = z.record(z.string(), z.number());
 
 /** "Fetch repository language" byte breakdown (Step 1 algorithm / Step 3 tech-stack detection input). */

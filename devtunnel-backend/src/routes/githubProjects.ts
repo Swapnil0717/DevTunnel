@@ -5,6 +5,10 @@ import {
   handleCatalogRefreshRequest,
   type CatalogRouteConfig,
 } from "../lib/githubCatalog";
+import {
+  handleCatalogAiSearchRequest,
+  type AiSearchRouteOptions,
+} from "../lib/githubCatalogAiSearch";
 import { getEnv } from "../config/env";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
@@ -154,6 +158,36 @@ githubProjects.get("/github-projects", (c) => handleCatalogListRequest(c, CATALO
  */
 githubProjects.post("/github-projects/refresh", requireAuth, (c) =>
   handleCatalogRefreshRequest(c, CATALOG_CONFIG),
+);
+
+/**
+ * Extra cached catalog slots the AI search also ranks (Part 2). The base
+ * catalog is the ~1,000 most-starred repos (`stars:>=50`); the 10-49 star
+ * bucket adds the smaller, newer repositories a search like "a small
+ * project to learn from" is often really after. It is only used when that
+ * bucket is already cached (the hourly rotation fills it) — the AI path
+ * never starts a GitHub scan. Each extra slot costs one more KV read and one
+ * more catalog-sized JSON.parse (the CPU-sensitive part on the Workers Free
+ * plan), so set this to `[]` if CPU-limit errors ever show up on
+ * `/github-projects/ai-search`.
+ */
+const AI_SEARCH_OPTIONS: AiSearchRouteOptions = { extraFilterKeys: ["stars-10-49"] };
+
+/**
+ * `POST /github-projects/ai-search` — the "Ask AI" search bar on
+ * `/github-projects` (devtunnel-frontend `components/ai/ai-search-bar.tsx`).
+ * Body `{ prompt }`; answers `{ results, interpretation, aiUsed, … }`. The
+ * whole flow (cache -> one small-model call -> our own ranking over the
+ * cached catalog -> honest keyword fallback) lives in
+ * `lib/githubCatalogAiSearch.ts`, shared with the tools catalog. Signed-in
+ * only: it spends a free-tier AI budget, so anonymous visitors can't reach it.
+ *
+ * Registered before the `/:slug/*` routes purely for readability — Hono
+ * would not confuse them (`ai-search` is a one-segment POST path, and
+ * `/:slug` here is GET-only).
+ */
+githubProjects.post("/github-projects/ai-search", requireAuth, (c) =>
+  handleCatalogAiSearchRequest(c, CATALOG_CONFIG, AI_SEARCH_OPTIONS),
 );
 
 /**

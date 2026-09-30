@@ -1,33 +1,42 @@
 import { logger } from "./logger";
+import type { ValidatedEnv } from "../config/env";
+import { getSupabase } from "./supabase";
 import type { GroqQuotaSnapshot } from "../types";
+import {
+  estimateTokens,
+  msUntilNextMinute,
+  msUntilUtcMidnight,
+  readMinute,
+  readUsage,
+  commitMinute,
+} from "./ai/usage";
 
 /**
- * Governs every outbound call to the Groq API against Groq's free-tier
- * caps for the model configured in GROQ_MODEL (wrangler.toml — currently
- * `openai/gpt-oss-120b`). Groq's own console (Settings -> Limits) shows
- * that model's free tier as 30 requests/minute, 1,000 requests/day,
- * 8,000 tokens/minute, and 200,000 tokens/day.
+ * Governs the AI Discovery agent's use of Groq's free-tier caps for the
+ * model configured in GROQ_MODEL (currently `openai/gpt-oss-120b`: 30
+ * requests/minute, 1,000 requests/day, 8,000 tokens/minute, 200,000
+ * tokens/day), including the admin-editable 25/25/50 projects/tools/tasks
+ * split of the daily budget.
  *
- * Request-count-wise this is vastly more headroom than the previous
- * Gemini setup (5 RPM / 20 RPD) ever gave this agent — but the
- * TOKENS-per-minute cap (8K) is genuinely tight for this workload: a
- * single turn's payload can include a 3-6KB README, several tool
- * results, and the full growing conversation history re-sent on every
- * turn. That's why this governor tracks tokens, not just requests —
- * unlike geminiQuota.ts (its predecessor), which never needed to because
- * Gemini's TPM ceiling was in the hundreds of thousands.
+ * REWRITTEN (AI foundation, Part 1): this file used to keep SIX Workers KV
+ * counters per Groq call (account rpd/tpd, phase rpd/tpd, rpm, tpm) — about
+ * 600 KV writes per discovery run against the Free plan's 1,000 writes/DAY.
+ * It now has ZERO KV writes:
+ *   - daily + per-phase totals come from Supabase `ai_usage_daily`
+ *     (batched by src/lib/ai/usage.ts, cached in memory);
+ *   - the per-minute request/token guard is in memory (one discovery run =
+ *     one isolate, so it sees all of its own calls);
+ *   - the admin split moved from KV to Supabase `ai_settings`.
+ * See src/lib/ai/usage.ts for the trade-offs this implies.
  *
- * `src/lib/groq.ts` reserves budget here BEFORE every physical fetch to
- * the Groq API — nothing in this codebase calls Groq without going
- * through `reserveGroqRequest` first. Uses the same KV namespace
- * `src/lib/rateLimit.ts` already uses for request rate limiting (no new
- * infrastructure), with its own key prefix (`groq:rpm:` / `groq:rpd:` /
- * `groq:tpm:` / `groq:tpd:`) so none of them collide.
+ * Every export other files import is preserved (same names, same error
+ * class and fields) except that functions needing storage now take `env`
+ * instead of a KV namespace. A READ-ONLY fallback to the old KV split
+ * (`groq:phase_budget_shares`) exists so an admin's custom split is not
+ * silently lost the first time this ships; reads don't count against KV's
+ * write cap, and the fallback disappears the moment the split is saved once.
  *
- * Deliberately conservative — real limits minus a safety margin — so a
- * concurrent request, a fixed-window boundary race, or an under-estimate
- * of a request's token count still lands under Groq's real caps instead
- * of tripping them.
+ * Deliberately conservative — real limits minus a safety margin.
  */
 
 /** Groq's real free-tier cap (openai/gpt-oss-120b) is 30/minute; reserve under it. */
@@ -39,29 +48,18 @@ export const GROQ_TPM_LIMIT = 6500;
 /** Groq's real free-tier cap is 200,000 tokens/day. */
 export const GROQ_TPD_LIMIT = 180000;
 
-const RPM_WINDOW_SECONDS = 60;
+export { estimateTokens };
 
 /**
- * Discovery is one shared Groq key split three ways — projects, tools,
- * and tasks (issues) — so that a chatty projects run can never crowd out
- * the day's tools or tasks entirely, and vice versa. Per product
- * direction: projects and tools each get a quarter of the daily
- * request/token budget, tasks/issues get the other half (there is
- * usually far more issue volume across every onboarded project than
- * there is "new project" or "new tool" volume). These are FRACTIONS of
- * GROQ_RPD_LIMIT/GROQ_TPD_LIMIT above, never a second, independent cap —
- * the global daily counters below still apply on top of these, so no
- * phase can ever push the account over Groq's real ceiling even if the
- * shares below were misconfigured to sum past 1.
+ * Discovery is one shared Groq key split three ways — projects, tools, and
+ * tasks (issues) — so a chatty projects run can never crowd out the day's
+ * tools or tasks, and vice versa. These are FRACTIONS of the daily limits
+ * above, never a second independent cap: the model-wide daily totals still
+ * apply on top, so no phase can push the account past Groq's ceiling.
  */
 export type DiscoveryPhase = "projects" | "tools" | "tasks";
 
-/**
- * Fallback split used until an admin sets a custom one via
- * `PUT /admin/ai/budget` (routes/admin/ai.ts), and whenever whatever's
- * stored in KV is missing or malformed. Matches the original hardcoded
- * 25/25/50 product direction.
- */
+/** Fallback split until an admin sets one via `PUT /admin/ai/budget`, and whenever the stored one is missing or malformed. */
 export const DEFAULT_PHASE_BUDGET_SHARE: Record<DiscoveryPhase, number> = {
   projects: 0.25,
   tools: 0.25,
@@ -69,25 +67,16 @@ export const DEFAULT_PHASE_BUDGET_SHARE: Record<DiscoveryPhase, number> = {
 };
 
 /**
- * Admins spend the projects+tools half of the budget FIRST, tasks second
- * — never the other way around. This is enforced by
- * `runDailyDiscovery`'s phase order (aiDiscoveryAgent.ts), not here; this
- * array exists so `getGroqQuotaSnapshot`'s phase breakdown is reported in
- * the same order the phases actually run in, for the admin quota panel.
+ * Phases run projects -> tools -> tasks (enforced by `runDailyDiscovery`);
+ * this array keeps the admin quota panel's breakdown in that same order.
  */
 export const PHASE_SPEND_ORDER: DiscoveryPhase[] = ["projects", "tools", "tasks"];
 
-/**
- * Persistent (no TTL — this is a setting, not a daily counter) KV key
- * holding the admin-configured projects/tools/tasks split, as fractions
- * that sum to 1. Separate key namespace from every `groq:rpd:*` /
- * `groq:tpd:*` counter above so it's never touched by the daily
- * expirationTtl those use.
- */
-const PHASE_BUDGET_SHARE_KV_KEY = "groq:phase_budget_shares";
-
-/** How far a stored/submitted share set's total may drift from exactly 1 (100%) before being rejected — accounts for float rounding, not sloppy input. */
+const SETTINGS_KEY = "phase_budget_shares";
+/** Legacy KV key — read-only fallback (see file comment). */
+const LEGACY_KV_KEY = "groq:phase_budget_shares";
 const SHARE_SUM_TOLERANCE = 0.005;
+const SHARES_CACHE_MS = 60_000;
 
 function isValidShareSet(value: unknown): value is Record<DiscoveryPhase, number> {
   if (!value || typeof value !== "object") return false;
@@ -101,7 +90,7 @@ function isValidShareSet(value: unknown): value is Record<DiscoveryPhase, number
   return Math.abs(sum - 1) <= SHARE_SUM_TOLERANCE;
 }
 
-/** Thrown by `setPhaseBudgetShares` when the submitted split isn't three 0-1 fractions summing to 1 (i.e. three 0-100 percentages summing to 100). */
+/** Thrown by `setPhaseBudgetShares` when the split isn't three 0-1 fractions summing to 1. */
 export class InvalidPhaseBudgetSharesError extends Error {
   constructor() {
     super("Budget percentages must each be between 0 and 100, and add up to exactly 100");
@@ -109,45 +98,57 @@ export class InvalidPhaseBudgetSharesError extends Error {
   }
 }
 
+let sharesCache: { value: Record<DiscoveryPhase, number>; at: number } | null = null;
+
 /**
- * Reads the admin-configured projects/tools/tasks Groq budget split.
- * Falls back to `DEFAULT_PHASE_BUDGET_SHARE` whenever nothing has been
- * set yet, or the stored value fails validation — `reserveGroqRequest`
- * and `getGroqQuotaSnapshot` must never operate on a split that could let
- * a phase (or all three combined) claim more than 100% of the daily
- * account-wide budget.
+ * Reads the admin-configured projects/tools/tasks split. Order: Supabase
+ * `ai_settings` -> legacy KV value (read-only) -> DEFAULT. Anything that
+ * fails validation falls back to the default so no phase (or all three
+ * combined) can claim more than 100% of the daily budget.
  */
-export async function getPhaseBudgetShares(kv: KVNamespace): Promise<Record<DiscoveryPhase, number>> {
+export async function getPhaseBudgetShares(
+  env: ValidatedEnv,
+  legacyKv?: KVNamespace,
+): Promise<Record<DiscoveryPhase, number>> {
+  if (sharesCache && Date.now() - sharesCache.at < SHARES_CACHE_MS) return sharesCache.value;
+  let value = DEFAULT_PHASE_BUDGET_SHARE;
   try {
-    const raw = await kv.get(PHASE_BUDGET_SHARE_KV_KEY);
-    if (!raw) return DEFAULT_PHASE_BUDGET_SHARE;
-    const parsed: unknown = JSON.parse(raw);
-    if (!isValidShareSet(parsed)) {
-      logger.warn("groq_phase_shares_invalid_stored_value", { raw });
-      return DEFAULT_PHASE_BUDGET_SHARE;
+    const { data, error } = await getSupabase(env).from("ai_settings").select("value").eq("key", SETTINGS_KEY).maybeSingle();
+    if (error) throw error;
+    if (data) {
+      if (isValidShareSet(data.value)) value = data.value;
+      else logger.warn("groq_phase_shares_invalid_stored_value", { stored: JSON.stringify(data.value).slice(0, 200) });
+    } else if (legacyKv) {
+      const raw = await legacyKv.get(LEGACY_KV_KEY); // read only — never a write
+      if (raw) {
+        const parsed: unknown = JSON.parse(raw);
+        if (isValidShareSet(parsed)) value = parsed;
+      }
     }
-    return parsed;
   } catch (err) {
-    logger.error("groq_phase_shares_read_failed", { error: String(err) });
+    logger.error("groq_phase_shares_read_failed", { error: err instanceof Error ? err.message : String(err) });
+    // Don't cache a failure result for a minute — but do return the safe default.
     return DEFAULT_PHASE_BUDGET_SHARE;
   }
+  sharesCache = { value, at: Date.now() };
+  return value;
 }
 
 /**
- * Persists a new projects/tools/tasks split (fractions 0-1, summing to 1
- * within `SHARE_SUM_TOLERANCE`) — called from the admin "custom budget"
- * setter (`PUT /admin/ai/budget`). Takes effect on the very next call to
- * `reserveGroqRequest` / `getGroqQuotaSnapshot`; doesn't touch or reset
- * any of today's already-spent counters, so changing the split partway
- * through the day re-slices whatever's LEFT, not what's already been
- * used.
+ * Persists a new split (fractions 0-1 summing to 1) to Supabase. Takes
+ * effect immediately in this isolate and within SHARES_CACHE_MS elsewhere;
+ * it re-slices whatever is LEFT today and never resets any counters.
  */
 export async function setPhaseBudgetShares(
-  kv: KVNamespace,
+  env: ValidatedEnv,
   shares: Record<DiscoveryPhase, number>,
 ): Promise<Record<DiscoveryPhase, number>> {
   if (!isValidShareSet(shares)) throw new InvalidPhaseBudgetSharesError();
-  await kv.put(PHASE_BUDGET_SHARE_KV_KEY, JSON.stringify(shares));
+  const { error } = await getSupabase(env)
+    .from("ai_settings")
+    .upsert({ key: SETTINGS_KEY, value: shares, updated_at: new Date().toISOString() }, { onConflict: "key" });
+  if (error) throw new Error(`ai_settings upsert failed: ${error.message}`);
+  sharesCache = { value: shares, at: Date.now() };
   logger.info("groq_phase_shares_updated", { shares });
   return shares;
 }
@@ -159,19 +160,11 @@ function phaseLimit(totalLimit: number, phase: DiscoveryPhase, shares: Record<Di
 export type GroqQuotaReason = "rpm" | "rpd" | "tpm" | "tpd" | "rpd_phase" | "tpd_phase";
 
 /**
- * Thrown by `reserveGroqRequest` when there is no budget left to wait
- * out. `reason: "rpd"` / `"tpd"` means today's ACCOUNT-WIDE daily budget
- * (requests or tokens) is fully spent — the caller must stop entirely,
- * not retry, since nothing frees up until UTC midnight. `reason:
- * "rpd_phase"` / `"tpd_phase"` means the account still has budget left
- * overall, but THIS phase (`phase` below — projects/tools/tasks) has
- * used up its own allocated share for today (see PHASE_BUDGET_SHARE) —
- * the caller stops that phase specifically; the other phases are
- * unaffected and still have their own budget. `reason: "rpm"` / `"tpm"`
- * means the per-minute window is exhausted even after this function's
- * own internal wait — rare in practice, since `reserveGroqRequest`
- * already waits out short per-minute windows itself before throwing for
- * either of these two reasons.
+ * Thrown by `reserveGroqRequest` (and, via groq.ts, when every AI provider
+ * is exhausted). `rpd`/`tpd` = today's model-wide budget is spent;
+ * `rpd_phase`/`tpd_phase` = this phase used up its own share; `rpm`/`tpm` =
+ * the per-minute window is full even after the internal wait. Discovery
+ * catches this specifically and stops early instead of retrying.
  */
 export class GroqQuotaExceededError extends Error {
   reason: GroqQuotaReason;
@@ -179,7 +172,8 @@ export class GroqQuotaExceededError extends Error {
   phase?: DiscoveryPhase;
 
   constructor(reason: GroqQuotaReason, retryAfterMs: number, phase?: DiscoveryPhase) {
-    const label = reason === "rpd" || reason === "tpd" ? "daily" : reason === "rpd_phase" || reason === "tpd_phase" ? `daily ${phase}` : "per-minute";
+    const label =
+      reason === "rpd" || reason === "tpd" ? "daily" : reason === "rpd_phase" || reason === "tpd_phase" ? `daily ${phase}` : "per-minute";
     const unit = reason === "rpm" || reason === "rpd" || reason === "rpd_phase" ? "request" : "token";
     super(`Groq ${label} ${unit} quota exhausted`);
     this.name = "GroqQuotaExceededError";
@@ -189,257 +183,126 @@ export class GroqQuotaExceededError extends Error {
   }
 }
 
-/**
- * Very rough token estimate (chars / 3.5) used purely to ration the
- * TPM/TPD budget before a call goes out — not meant to match Groq's own
- * tokenizer exactly. Errs conservative (slightly over-counts) since
- * under-estimating is what actually causes a 429.
- */
-export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 3.5);
-}
-
-function todayKey(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function minuteWindow(): number {
-  return Math.floor(Date.now() / 1000 / RPM_WINDOW_SECONDS);
-}
-
-function msUntilNextMinuteWindow(): number {
-  const windowMs = RPM_WINDOW_SECONDS * 1000;
-  return windowMs - (Date.now() % windowMs) + 50;
-}
-
-function msUntilNextUtcMidnight(): number {
-  const now = new Date();
-  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
-  return next.getTime() - now.getTime();
-}
-
-async function readCounter(kv: KVNamespace, key: string): Promise<number> {
-  try {
-    return Number((await kv.get(key)) ?? "0");
-  } catch (err) {
-    logger.error("groq_quota_read_failed", { key, error: String(err) });
-    return 0;
-  }
-}
-
-async function incrementCounter(kv: KVNamespace, key: string, amount: number, ttlSeconds: number): Promise<void> {
-  const current = await readCounter(kv, key);
-  await kv.put(key, String(current + amount), { expirationTtl: Math.max(Math.ceil(ttlSeconds), 60) });
-}
-
-function phaseRpdKey(phase: DiscoveryPhase): string {
-  return `groq:rpd:phase:${phase}:${todayKey()}`;
-}
-
-function phaseTpdKey(phase: DiscoveryPhase): string {
-  return `groq:tpd:phase:${phase}:${todayKey()}`;
-}
+/** Accounting scope for the discovery model's whole-day totals (see usage.ts). */
+const modelScope = (env: ValidatedEnv) => `model:${env.GROQ_MODEL}`;
+const minuteKey = (env: ValidatedEnv) => `groq:${env.GROQ_MODEL}`;
 
 /**
- * Reserves budget for exactly one outbound Groq request estimated to cost
- * `estimatedTokens` tokens, on behalf of the given discovery `phase`
- * (projects/tools/tasks). Call this immediately before every real fetch
- * to the Groq API — never after.
- *
- * Checks budget on SIX dimensions, not four: the account-wide RPM/RPD/
- * TPM/TPD counters (unchanged from before phases existed — these are the
- * real Groq caps and always apply regardless of phase), PLUS this
- * phase's own RPD/TPD share (see PHASE_BUDGET_SHARE) — a phase can never
- * spend past its allocated quarter/half of the day even while the
- * account overall still has room, which is exactly what keeps a chatty
- * projects run from eating into tasks' budget or vice versa.
- *
- * Resolves once budget exists on every dimension, waiting out a short
- * per-minute window itself (up to `maxWaitAttempts` times) when only RPM
- * or TPM is the blocker. Throws `GroqQuotaExceededError` immediately,
- * with no wait, the moment any daily counter (account-wide or
- * phase-specific) is gone for the day — the caller must stop (that
- * phase, or the whole run for an account-wide exhaustion) rather than
- * retry.
+ * Checks (and, in memory, reserves) budget for ONE outbound Groq discovery
+ * request estimated at `estimatedTokens`. Call immediately before the
+ * fetch. Checks the model-wide daily totals, this phase's own share, and the
+ * in-memory per-minute window. Waits out a short minute window itself (up
+ * to `maxWaitAttempts` times); throws `GroqQuotaExceededError` immediately
+ * once a daily budget is gone. Daily usage is RECORDED after the call
+ * succeeds (client.ts -> recordUsage), not here.
  */
 export async function reserveGroqRequest(
-  kv: KVNamespace,
+  env: ValidatedEnv,
   estimatedTokens: number,
   phase: DiscoveryPhase,
-  maxWaitAttempts = 2,
+  options: { maxWaitAttempts?: number; legacyKv?: KVNamespace } = {},
 ): Promise<void> {
-  // A request this large can never fit, even against a fully empty
-  // minute window — waiting out attempts below would just burn ~2
-  // minutes before failing anyway. This is what an over-sized
-  // conversation payload (e.g. an oversized tool result appended to
-  // history) looks like; fail immediately with a distinct log so it's
-  // obvious this is a payload-size problem, not ordinary rate limiting.
+  const maxWaitAttempts = options.maxWaitAttempts ?? 2;
+
+  // A request this large can never fit even an empty minute window. Logged
+  // as requestSizeEstimate (logger.ts redacts any field containing "token").
   if (estimatedTokens > GROQ_TPM_LIMIT) {
-    // Logged as requestSizeEstimate, not estimatedTokens — logger.ts
-    // redacts any field name containing "token" (to catch real secrets),
-    // which would otherwise hide this harmless number right when it's
-    // most useful for debugging an oversized-prompt failure like this one.
     logger.error("groq_request_exceeds_tpm_budget", { requestSizeEstimate: estimatedTokens, limit: GROQ_TPM_LIMIT });
-    throw new GroqQuotaExceededError("tpm", msUntilNextMinuteWindow());
+    throw new GroqQuotaExceededError("tpm", msUntilNextMinute());
   }
 
-  const shares = await getPhaseBudgetShares(kv);
-  const rpdKey = `groq:rpd:${todayKey()}`;
-  const tpdKey = `groq:tpd:${todayKey()}`;
-  const phaseRpd = phaseRpdKey(phase);
-  const phaseTpd = phaseTpdKey(phase);
+  const shares = await getPhaseBudgetShares(env, options.legacyKv);
   const phaseRpdLimit = phaseLimit(GROQ_RPD_LIMIT, phase, shares);
   const phaseTpdLimit = phaseLimit(GROQ_TPD_LIMIT, phase, shares);
 
   for (let attempt = 0; attempt <= maxWaitAttempts; attempt++) {
-    const usedToday = await readCounter(kv, rpdKey);
-    if (usedToday >= GROQ_RPD_LIMIT) {
-      throw new GroqQuotaExceededError("rpd", msUntilNextUtcMidnight());
-    }
+    const model = await readUsage(env, "groq", modelScope(env));
+    if (model.requests >= GROQ_RPD_LIMIT) throw new GroqQuotaExceededError("rpd", msUntilUtcMidnight());
+    if (model.tokens + estimatedTokens > GROQ_TPD_LIMIT) throw new GroqQuotaExceededError("tpd", msUntilUtcMidnight());
 
-    const tokensToday = await readCounter(kv, tpdKey);
-    if (tokensToday + estimatedTokens > GROQ_TPD_LIMIT) {
-      throw new GroqQuotaExceededError("tpd", msUntilNextUtcMidnight());
-    }
+    const phaseUsed = await readUsage(env, "groq", `phase:${phase}`);
+    if (phaseUsed.requests >= phaseRpdLimit) throw new GroqQuotaExceededError("rpd_phase", msUntilUtcMidnight(), phase);
+    if (phaseUsed.tokens + estimatedTokens > phaseTpdLimit) throw new GroqQuotaExceededError("tpd_phase", msUntilUtcMidnight(), phase);
 
-    // Phase-scoped checks — separate from, and in addition to, the
-    // account-wide ones above. This is the actual 25/25/50 split: even
-    // though the account still has requests/tokens left today, THIS
-    // phase stops once it's used its own share.
-    const phaseUsedToday = await readCounter(kv, phaseRpd);
-    if (phaseUsedToday >= phaseRpdLimit) {
-      throw new GroqQuotaExceededError("rpd_phase", msUntilNextUtcMidnight(), phase);
-    }
-
-    const phaseTokensToday = await readCounter(kv, phaseTpd);
-    if (phaseTokensToday + estimatedTokens > phaseTpdLimit) {
-      throw new GroqQuotaExceededError("tpd_phase", msUntilNextUtcMidnight(), phase);
-    }
-
-    const rpmKey = `groq:rpm:${minuteWindow()}`;
-    const tpmKey = `groq:tpm:${minuteWindow()}`;
-    const usedThisMinute = await readCounter(kv, rpmKey);
-    const tokensThisMinute = await readCounter(kv, tpmKey);
-
-    const rpmBlocked = usedThisMinute >= GROQ_RPM_LIMIT;
-    const tpmBlocked = tokensThisMinute + estimatedTokens > GROQ_TPM_LIMIT;
-
+    const minute = readMinute(minuteKey(env));
+    const rpmBlocked = minute.requests >= GROQ_RPM_LIMIT;
+    const tpmBlocked = minute.tokens + estimatedTokens > GROQ_TPM_LIMIT;
     if (rpmBlocked || tpmBlocked) {
-      if (attempt >= maxWaitAttempts) {
-        throw new GroqQuotaExceededError(tpmBlocked ? "tpm" : "rpm", msUntilNextMinuteWindow());
-      }
-      const waitMs = msUntilNextMinuteWindow();
+      if (attempt >= maxWaitAttempts) throw new GroqQuotaExceededError(tpmBlocked ? "tpm" : "rpm", msUntilNextMinute());
+      const waitMs = msUntilNextMinute();
       logger.warn("groq_quota_minute_wait", { waitMs, attempt, rpmBlocked, tpmBlocked, phase });
       await new Promise((resolve) => setTimeout(resolve, waitMs));
       continue;
     }
 
-    await incrementCounter(kv, rpdKey, 1, msUntilNextUtcMidnight() / 1000);
-    await incrementCounter(kv, tpdKey, estimatedTokens, msUntilNextUtcMidnight() / 1000);
-    await incrementCounter(kv, phaseRpd, 1, msUntilNextUtcMidnight() / 1000);
-    await incrementCounter(kv, phaseTpd, estimatedTokens, msUntilNextUtcMidnight() / 1000);
-    await incrementCounter(kv, rpmKey, 1, RPM_WINDOW_SECONDS + 5);
-    await incrementCounter(kv, tpmKey, estimatedTokens, RPM_WINDOW_SECONDS + 5);
+    commitMinute(minuteKey(env), estimatedTokens);
     return;
   }
 }
 
-/** Read-only snapshot for the admin frontend's quota panel — never reserves anything. */
-export async function getGroqQuotaSnapshot(kv: KVNamespace): Promise<GroqQuotaSnapshot> {
-  const usedToday = await readCounter(kv, `groq:rpd:${todayKey()}`);
-  const usedThisMinute = await readCounter(kv, `groq:rpm:${minuteWindow()}`);
-  const tokensToday = await readCounter(kv, `groq:tpd:${todayKey()}`);
-  const tokensThisMinute = await readCounter(kv, `groq:tpm:${minuteWindow()}`);
-  const shares = await getPhaseBudgetShares(kv);
+/**
+ * Read-only snapshot for the admin quota panel — same shape as before.
+ * Daily numbers come from Supabase (fresh read); "this minute" numbers come
+ * from this isolate's memory (see usage.ts for why they are usually 0 here).
+ */
+export async function getGroqQuotaSnapshot(env: ValidatedEnv, legacyKv?: KVNamespace): Promise<GroqQuotaSnapshot> {
+  const model = await readUsage(env, "groq", modelScope(env), { fresh: true });
+  const minute = readMinute(minuteKey(env));
+  const shares = await getPhaseBudgetShares(env, legacyKv);
 
-  // The account-wide ceiling for the REST of today — this is the hard
-  // cap `reserveGroqRequest` actually enforces before it ever looks at a
-  // phase's own counter (see its rpdKey/tpdKey checks, which run before
-  // the phase-scoped ones). No phase can ever really spend past this,
-  // no matter what its own share-derived limit below says.
-  const accountRpdRemaining = Math.max(GROQ_RPD_LIMIT - usedToday, 0);
-  const accountTpdRemaining = Math.max(GROQ_TPD_LIMIT - tokensToday, 0);
+  // Account-wide ceiling for the rest of today — the hard cap reserveGroqRequest
+  // enforces before any phase counter. A phase can never display more remaining
+  // than the account it draws from actually has left.
+  const accountRpdRemaining = Math.max(GROQ_RPD_LIMIT - model.requests, 0);
+  const accountTpdRemaining = Math.max(GROQ_TPD_LIMIT - model.tokens, 0);
 
   const phases = await Promise.all(
     PHASE_SPEND_ORDER.map(async (phase) => {
-      // `phaseLimit` is share × the FULL fixed daily cap — a fresh
-      // full-day allotment. That's correct as the phase's own ceiling,
-      // but it says nothing about whether the ACCOUNT still has that
-      // much left today. If an admin raises a phase's share intraday
-      // (e.g. bumps Tools to 100%) after other phases already spent
-      // part of today's shared pool, this limit alone makes the phase
-      // look like it has a full fresh 900/180,000 to spend — when in
-      // reality only whatever's left account-wide is actually spendable,
-      // and that can be — and typically is — smaller. Below, `remainingToday`
-      // and `tokensRemainingToday` are the two numbers this snapshot
-      // reports as "what THIS phase can still spend today"; clamping them
-      // to the account-wide remaining keeps that promise honest, and
-      // guarantees a phase can never display more remaining than the
-      // account it draws from actually has left (previously it could,
-      // and did — see the incident this comment was added for).
       const rpdLimit = phaseLimit(GROQ_RPD_LIMIT, phase, shares);
       const tpdLimit = phaseLimit(GROQ_TPD_LIMIT, phase, shares);
-      const rpdUsed = await readCounter(kv, phaseRpdKey(phase));
-      const tpdUsed = await readCounter(kv, phaseTpdKey(phase));
+      const used = await readUsage(env, "groq", `phase:${phase}`);
       return {
         phase,
         sharePct: Math.round(shares[phase] * 100),
         limitPerDay: rpdLimit,
-        usedToday: rpdUsed,
-        remainingToday: Math.min(Math.max(rpdLimit - rpdUsed, 0), accountRpdRemaining),
+        usedToday: used.requests,
+        remainingToday: Math.min(Math.max(rpdLimit - used.requests, 0), accountRpdRemaining),
         tokenLimitPerDay: tpdLimit,
-        tokensUsedToday: tpdUsed,
-        tokensRemainingToday: Math.min(Math.max(tpdLimit - tpdUsed, 0), accountTpdRemaining),
+        tokensUsedToday: used.tokens,
+        tokensRemainingToday: Math.min(Math.max(tpdLimit - used.tokens, 0), accountTpdRemaining),
       };
     }),
   );
 
   return {
     limitPerMinute: GROQ_RPM_LIMIT,
-    usedThisMinute,
-    remainingThisMinute: Math.max(GROQ_RPM_LIMIT - usedThisMinute, 0),
+    usedThisMinute: minute.requests,
+    remainingThisMinute: Math.max(GROQ_RPM_LIMIT - minute.requests, 0),
     limitPerDay: GROQ_RPD_LIMIT,
-    usedToday,
-    remainingToday: Math.max(GROQ_RPD_LIMIT - usedToday, 0),
+    usedToday: model.requests,
+    remainingToday: accountRpdRemaining,
     tokenLimitPerMinute: GROQ_TPM_LIMIT,
-    tokensUsedThisMinute: tokensThisMinute,
-    tokensRemainingThisMinute: Math.max(GROQ_TPM_LIMIT - tokensThisMinute, 0),
+    tokensUsedThisMinute: minute.tokens,
+    tokensRemainingThisMinute: Math.max(GROQ_TPM_LIMIT - minute.tokens, 0),
     tokenLimitPerDay: GROQ_TPD_LIMIT,
-    tokensUsedToday: tokensToday,
-    tokensRemainingToday: Math.max(GROQ_TPD_LIMIT - tokensToday, 0),
-    dailyResetsAt: new Date(Date.now() + msUntilNextUtcMidnight()).toISOString(),
+    tokensUsedToday: model.tokens,
+    tokensRemainingToday: accountTpdRemaining,
+    dailyResetsAt: new Date(Date.now() + msUntilUtcMidnight()).toISOString(),
     phases,
   };
 }
 
 /**
- * True once a phase can no longer make any more Groq calls today — its
- * own daily request share OR its own daily token share (whichever binds
- * first) has hit zero. Mirrors the "exhausted" definition the admin quota
- * panel already uses (`budgetColors` in `groq-quota-panel.tsx`): either
- * dimension reaching zero means `reserveGroqRequest` will throw
- * `GroqQuotaExceededError` for this phase on its very next call, so the
- * phase is effectively done for the day even if the other dimension has
- * room left.
- *
- * Used by `aiDiscoveryAgent.ts` to gate task/issue discovery: per product
- * direction, tasks should only start once BOTH the projects and tools
- * phases have completely used up their own daily share — so pass each
- * phase's `getGroqQuotaSnapshot(...).phases` entry through this and
- * require both to be true before running task discovery.
+ * True once a phase can make no more Groq calls today — its own daily
+ * request share OR token share (whichever binds first) has hit zero.
  */
+export function isPhaseBudgetExhausted(phase: { remainingToday: number; tokensRemainingToday: number }): boolean {
+  return phase.remainingToday <= 0 || phase.tokensRemainingToday <= 0;
+}
+
 /**
- * True once a phase has spent at least `thresholdPct` of its own daily
- * budget share — a looser trigger than `isPhaseBudgetExhausted`'s "hit
- * zero". Same "either dimension" reasoning as that function: requests or
- * tokens, whichever has burned through more of its share, decides how
- * spent the phase counts as.
- *
- * Used by `aiDiscoveryAgent.ts` to gate task/issue discovery at 75%
- * spent rather than 100% — per product direction, tasks shouldn't have
- * to wait for projects/tools to fully exhaust their share (which, once
- * their much smaller daily quota is met, may never happen — see
- * `isTasksBudgetUnlocked`'s comment) before picking up whatever's left.
+ * True once a phase has spent at least `thresholdPct` (0-1) of its own daily
+ * share — a looser trigger than `isPhaseBudgetExhausted`'s "hit zero".
  */
 export function isPhaseBudgetMostlySpent(
   phase: { limitPerDay: number; usedToday: number; tokenLimitPerDay: number; tokensUsedToday: number },
@@ -448,8 +311,4 @@ export function isPhaseBudgetMostlySpent(
   const requestsSpentPct = phase.limitPerDay > 0 ? phase.usedToday / phase.limitPerDay : 1;
   const tokensSpentPct = phase.tokenLimitPerDay > 0 ? phase.tokensUsedToday / phase.tokenLimitPerDay : 1;
   return requestsSpentPct >= thresholdPct || tokensSpentPct >= thresholdPct;
-}
-
-export function isPhaseBudgetExhausted(phase: { remainingToday: number; tokensRemainingToday: number }): boolean {
-  return phase.remainingToday <= 0 || phase.tokensRemainingToday <= 0;
 }

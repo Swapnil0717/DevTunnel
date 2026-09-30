@@ -136,3 +136,53 @@ export interface GroqQuotaSnapshot {
     tokensRemainingToday: number;
   }>;
 }
+
+// ---------------------------------------------------------------------------
+// Multi-provider usage (Part 7) — `GET /admin/ai/providers`
+// (devtunnel-backend `src/lib/ai/adminProviders.ts`). Backs `ProviderUsageTable`.
+// ---------------------------------------------------------------------------
+
+export type AiProviderId = "groq" | "groq_b" | "cerebras" | "gemini" | "mistral" | "openrouter" | "github_models" | "workers_ai";
+
+/** `not_configured` = a key/binding or model variable is missing, so the provider is skipped entirely. */
+export type AiProviderStatusKind = "available" | "exhausted" | "not_configured";
+
+/** What kind of failure a provider last had (set by the backend AI client, one per failed attempt). */
+export type AiProviderErrorClass = "quota" | "too_large" | "auth" | "server" | "timeout" | "network" | "bad_request";
+
+export interface AiProviderModelUsage {
+  model: string;
+  /** Which job the model serves when a provider runs several (Groq only), e.g. "discovery", "search". */
+  role: string | null;
+  requestsToday: number;
+  /** The provider's reported total when it sent one, otherwise a chars/3.5 estimate. */
+  tokensEstToday: number;
+  status: "available" | "exhausted";
+  exhaustedUntil: string | null;
+  exhaustedReason: string | null;
+}
+
+export interface AiProviderUsage {
+  id: AiProviderId;
+  label: string;
+  configured: boolean;
+  /** What to set to enable it, e.g. `API key (MISTRAL_API_KEY)` — names a variable, never a value. */
+  missing: string[];
+  status: AiProviderStatusKind;
+  /** Soonest time a fully exhausted provider is usable again. */
+  exhaustedUntil: string | null;
+  requestsToday: number;
+  tokensEstToday: number;
+  dailyResetsAt: string;
+  lastError: { errorClass: AiProviderErrorClass | string; at: string; model: string } | null;
+  /** Today's failure counts by class, e.g. `{ quota: 2 }`. */
+  errorsToday: Record<string, number>;
+  models: AiProviderModelUsage[];
+}
+
+export interface AiProvidersSnapshot {
+  generatedAt: string;
+  /** Mirrors AI_FEATURES_ENABLED. When false, user-facing AI is switched off (discovery is unaffected). */
+  featuresEnabled: boolean;
+  providers: AiProviderUsage[];
+}

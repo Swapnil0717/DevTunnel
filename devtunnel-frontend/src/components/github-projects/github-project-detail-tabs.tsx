@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
+import { AiSummary } from "@/components/ai/ai-summary";
 import { GithubEmptyState } from "@/components/github-projects/github-empty-state";
 import { GithubIssuesPanel } from "@/components/github-projects/github-issues-panel";
 import { GridIcon, FileIcon, ChecklistIcon, IssueIcon } from "@/components/layout/nav-icons";
@@ -29,6 +30,9 @@ const TABS = [
  *   otherwise have to piece together from the header and footer of the
  *   repo itself: license, primary language, full tech-stack list, and
  *   the raw star/fork/contributor counts side by side.
+ *   The panel opens with the AI summary card (`AiSummary`, Part 4), which
+ *   loads from the browser after the page is up — the page itself stays
+ *   server-rendered and never waits on a model.
  * - **README** — the repository's own README, rendered exactly the way
  *   `MarkdownReadme` already renders it on the onboarding flow and the
  *   Admin Project Detail page, so a contributor never has to leave this
@@ -138,6 +142,11 @@ export function GithubProjectDetailTabs({
         aria-labelledby="project-tab-info"
         className="rounded-[10px] border border-border bg-surface p-5"
       >
+        <AiSummary
+          kind={issuesBasePath === "/github-projects" ? "github_project" : "github_tool"}
+          subjectKey={project.slug}
+        />
+
         <div className="grid grid-cols-1 gap-x-6 gap-y-3 text-[12.5px] sm:grid-cols-[140px_1fr]">
           <span className="text-text-faint">Description</span>
           <span className="text-text-secondary">

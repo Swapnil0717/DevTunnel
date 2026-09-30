@@ -6,15 +6,24 @@ import { SectionMessage } from "@/components/home/section-message";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { PagePaginationControls } from "@/components/admin/page-pagination-controls";
 import { usePagePagination } from "@/lib/admin/use-page-pagination";
+import { AiSearchBar } from "@/components/ai/ai-search-bar";
+import { useAiSearch } from "@/lib/ai/use-ai-search";
 import { DevtunnelOpenSourceToolCard } from "./devtunnel-opensource-tool-card";
 import type { OpenSourceToolSummary } from "@/lib/opensource-tools/types";
 
-type SortOption = "NEWEST" | "NAME_ASC";
+type SortOption = "NEWEST" | "NAME_ASC" | "AI_RANK";
 
 const SORT_FILTERS: { value: SortOption; label: string }[] = [
   { value: "NEWEST", label: "Newest" },
   { value: "NAME_ASC", label: "Name (A–Z)" },
 ];
+
+/**
+ * Offered (and selected) only while an AI search is showing results: keeps
+ * the order the backend ranked them in. Not in `SORT_FILTERS` because
+ * "best match" means nothing for the plain list.
+ */
+const AI_RANK_SORT = { value: "AI_RANK" as const, label: "Best match (AI)" };
 
 const ALL_LANGUAGES = "ALL";
 const ALL_LABELS = "ALL";
@@ -41,6 +50,9 @@ function sortTools(
     case "NAME_ASC":
       sorted.sort((a, b) => a.name.localeCompare(b.name));
       return sorted;
+    case "AI_RANK":
+      // Already in the backend's ranked order; `sorted` is a copy of the input.
+      return sorted;
   }
 }
 
@@ -62,16 +74,52 @@ function sortTools(
  * offers Newest / Name A–Z rather than Trending / Most stars / Recently
  * updated, since `OpenSourceToolSummary` has no star count and only one
  * real timestamp (`createdAt`) to sort by.
+ *
+ * With `aiSearch` set (Part 3) it also shows the same "Ask AI" bar the
+ * GitHub pages have: while an AI search has results they replace the list,
+ * Language / Label / the text search / Sort by keep working on them (plus a
+ * "Best match (AI)" sort), and "Clear AI search" brings the full list back.
  */
 export function DevtunnelOpenSourceToolsExplorer({
-  tools,
+  tools: listedTools,
+  aiSearch,
 }: {
   tools: OpenSourceToolSummary[];
+  /** Turns on the "Ask AI" bar. `path` is the backend list route (`"/opensource-tools"`); `/ai-search` is appended. */
+  aiSearch?: { path: string };
 }) {
   const [query, setQuery] = useState("");
   const [language, setLanguage] = useState(ALL_LANGUAGES);
   const [label, setLabel] = useState(ALL_LABELS);
   const [sortBy, setSortBy] = useState<SortOption>("NEWEST");
+
+  const ai = useAiSearch<OpenSourceToolSummary>(aiSearch?.path ?? null);
+  const aiActive = ai.result !== null;
+
+  // While an AI search is active its (already ranked) results replace the list.
+  const tools: OpenSourceToolSummary[] = ai.result ? ai.result.results : listedTools;
+
+  // An "AI rank" sort only exists while AI results do.
+  const effectiveSort: SortOption = sortBy === "AI_RANK" && !aiActive ? "NEWEST" : sortBy;
+  const sortOptions = aiActive ? [AI_RANK_SORT, ...SORT_FILTERS] : SORT_FILTERS;
+
+  async function handleAiSearch(prompt: string) {
+    const result = await ai.search(prompt);
+    if (result) {
+      // The new result set has its own Language / Label options, so a
+      // previously chosen value might not exist in it — start from "All".
+      setLanguage(ALL_LANGUAGES);
+      setLabel(ALL_LABELS);
+      setSortBy("AI_RANK");
+    }
+  }
+
+  function handleAiClear() {
+    ai.clear();
+    setLanguage(ALL_LANGUAGES);
+    setLabel(ALL_LABELS);
+    setSortBy((current) => (current === "AI_RANK" ? "NEWEST" : current));
+  }
 
   const languageOptions = useMemo(() => {
     const values = new Set<string>();
@@ -111,8 +159,8 @@ export function DevtunnelOpenSourceToolsExplorer({
       return haystack.includes(normalizedQuery);
     });
 
-    return sortTools(filtered, sortBy);
-  }, [tools, query, language, label, sortBy]);
+    return sortTools(filtered, effectiveSort);
+  }, [tools, query, language, label, effectiveSort]);
 
   const hasActiveFilters =
     query.trim().length > 0 || language !== ALL_LANGUAGES || label !== ALL_LABELS;
@@ -139,6 +187,15 @@ export function DevtunnelOpenSourceToolsExplorer({
             className="w-full rounded-[8px] border border-border bg-surface py-2 pl-8 pr-3 text-[12.5px] text-text placeholder:text-text-faint focus:outline-none focus:ring-2 focus:ring-accent/40"
           />
         </div>
+
+        {aiSearch ? (
+          <AiSearchBar
+            state={ai}
+            onSearch={(prompt) => void handleAiSearch(prompt)}
+            onClear={handleAiClear}
+            noun="tools"
+          />
+        ) : null}
 
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex flex-col gap-1">
@@ -186,9 +243,9 @@ export function DevtunnelOpenSourceToolsExplorer({
             </label>
             <FilterSelect
               id="devtunnel-opensource-tools-sort"
-              value={sortBy}
+              value={effectiveSort}
               onChange={(value) => setSortBy(value as SortOption)}
-              options={SORT_FILTERS}
+              options={sortOptions}
             />
           </div>
         </div>
@@ -198,7 +255,9 @@ export function DevtunnelOpenSourceToolsExplorer({
         <SectionMessage>
           {hasActiveFilters
             ? "No tools match your search or the selected filters. Try different search terms or filters."
-            : "No open source tools have been added yet — check back soon."}
+            : aiActive
+              ? "None of the tools on DevTunnel matched your AI search. Try describing it differently, or clear the AI search."
+              : "No open source tools have been added yet — check back soon."}
         </SectionMessage>
       ) : (
         <>

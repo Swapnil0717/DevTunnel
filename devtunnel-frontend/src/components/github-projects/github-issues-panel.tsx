@@ -1,9 +1,14 @@
 "use client";
 
+import { useMemo } from "react";
+import { AiExplainButton } from "@/components/ai/ai-explain-button";
+import { IssueInsightBadges, IssueInsightsCard } from "@/components/ai/issue-insights-card";
 import { GithubEmptyState } from "@/components/github-projects/github-empty-state";
 import { LoadAllIssuesBar } from "@/components/issues/load-all-issues-bar";
 import { PagePaginationControls } from "@/components/admin/page-pagination-controls";
 import { usePagePagination } from "@/lib/admin/use-page-pagination";
+import { parseGithubRepoFullName } from "@/lib/ai/explain-client";
+import { useIssueInsights } from "@/lib/ai/use-issue-insights";
 import { REPO_ISSUES_PAGE_SIZE, type LoadAllIssuesState } from "@/lib/issues/use-load-all-issues";
 import type { GithubProjectIssuePreview } from "@/lib/github-projects/types";
 
@@ -25,6 +30,19 @@ import type { GithubProjectIssuePreview } from "@/lib/github-projects/types";
  * contributor list here uses — so loading a few hundred issues never
  * means rendering a few hundred rows at once.
  *
+ * Each row also gets an "Explain" button (Part 5, `AiExplainButton`): a
+ * signed-in visitor can expand an AI-written, plain-language explanation of
+ * the issue inline. The button sits BESIDE the row's link rather than inside
+ * it — a `<button>` nested in an `<a>` is invalid HTML — so the row's own
+ * hover highlight now covers the link only.
+ *
+ * Above the list sits the AI issue insights card (Part 6,
+ * `IssueInsightsCard`): on request it labels the repository's open issues by
+ * role, level and technology. Its filter chips narrow `issues` BEFORE the
+ * client-side pagination below (so "page 1 of 2" always describes the
+ * filtered list), each row shows its own AI labels next to the Explain
+ * button, and an issue the AI didn't analyze says so rather than guessing.
+ *
  * A repository with zero open issues gets the "issues-clear" variant,
  * framed as a good result (a checkmark, not a "nothing here" box) —
  * but only when that's actually known: a repository GitHub says has open
@@ -39,7 +57,13 @@ export function GithubIssuesPanel({
   repositoryUrl: string;
 }) {
   const { issues, canLoadMore } = loader;
-  const paged = usePagePagination(issues, REPO_ISSUES_PAGE_SIZE);
+  // `null` (no Explain button, no insights card) if the URL isn't a github.com repository.
+  const repoFullName = parseGithubRepoFullName(repositoryUrl);
+  const insights = useIssueInsights(repoFullName);
+  const { filterIssues } = insights;
+  // The insight filters run BEFORE pagination; with no filter active this is `issues` itself.
+  const visibleIssues = useMemo(() => filterIssues(issues), [filterIssues, issues]);
+  const paged = usePagePagination(visibleIssues, REPO_ISSUES_PAGE_SIZE);
 
   if (issues.length === 0 && !canLoadMore) {
     return (
@@ -59,9 +83,15 @@ export function GithubIssuesPanel({
 
   return (
     <div>
+      <IssueInsightsCard controller={insights} />
+
       <LoadAllIssuesBar loader={loader} repositoryUrl={repositoryUrl} />
 
-      {issues.length === 0 ? null : (
+      {issues.length === 0 ? null : visibleIssues.length === 0 ? (
+        <p className="m-0 rounded-[8px] border border-dashed border-border-subtle px-4 py-6 text-center text-[12.5px] text-text-muted">
+          No analyzed issues match those filters. Clear a filter to see more.
+        </p>
+      ) : (
         <>
           <ul className="m-0 flex list-none flex-col divide-y divide-border-subtle p-0">
             {paged.pageItems.map((issue) => (
@@ -99,6 +129,12 @@ export function GithubIssuesPanel({
                     ))}
                   </span>
                 </a>
+                {repoFullName ? (
+                  <div className="flex flex-col gap-1.5 px-3 pb-2.5">
+                    <IssueInsightBadges controller={insights} issueNumber={issue.number} />
+                    <AiExplainButton source="github" repo={repoFullName} issueNumber={issue.number} />
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>

@@ -83,6 +83,9 @@ export default async function GithubProjectsPage() {
                 hasMore: result.hasMore,
                 starBuckets: true,
               }}
+              // "Ask AI" search bar — signed-in users only (the bar shows a
+              // sign-in prompt to everyone else); see `components/ai/ai-search-bar.tsx`.
+              aiSearch={{ path: "/github-projects" }}
             />
           </Suspense>
         )}

@@ -47,6 +47,10 @@ export async function generateMetadata(): Promise<Metadata> {
  * differ — `OpenSourceToolSummary` (`lib/opensource-tools/types.ts`) has
  * no star/fork/trending data to offer, so Language/Label/Sort stand in
  * for that page's Tech stack/Minimum stars/Sort by.
+ *
+ * `aiSearch` turns on the "Ask AI" bar (Part 3), same as `/projects`: the
+ * list is still fetched once, server-side and cacheable; an AI search runs
+ * in the browser, on demand, for signed-in contributors only.
  */
 export default async function OpenSourceToolsPage() {
   const result = await getOpenSourceTools();
@@ -69,7 +73,10 @@ export default async function OpenSourceToolsPage() {
         ) : result.status === "empty" ? (
           <SectionMessage>No open source tools have been added yet — check back soon.</SectionMessage>
         ) : (
-          <DevtunnelOpenSourceToolsExplorer tools={result.data} />
+          <DevtunnelOpenSourceToolsExplorer
+            tools={result.data}
+            aiSearch={{ path: "/opensource-tools" }}
+          />
         )}
       </main>
     </BlueprintReveal>

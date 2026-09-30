@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
+import { AiSummary } from "@/components/ai/ai-summary";
 import { GithubEmptyState } from "@/components/github-projects/github-empty-state";
 import { ProjectTasksPanel } from "@/components/projects/project-tasks-panel";
 import { ToolIssuesPanel } from "@/components/opensource-tools/tool-issues-panel";
@@ -134,6 +135,8 @@ export function ToolDetailTabs({ tool }: { tool: OpenSourceToolDetail }) {
         aria-labelledby="tool-tab-info"
         className="rounded-[10px] border border-border bg-surface p-5"
       >
+        <AiSummary kind="devtunnel_tool" subjectKey={tool.slug} />
+
         <div className="grid grid-cols-1 gap-x-6 gap-y-3 text-[12.5px] sm:grid-cols-[180px_1fr]">
           <span className="text-text-faint">Description</span>
           <span className="text-text-secondary">

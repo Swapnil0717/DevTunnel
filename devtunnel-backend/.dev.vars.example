@@ -11,3 +11,17 @@ SESSION_HMAC_SECRET=a_long_random_string_used_to_sign_the_oauth_state_cookie
 # controls, not a GitHub credential. Generate with:
 #   openssl rand -base64 32
 GITHUB_TOKEN_ENCRYPTION_KEY=a_base64_encoded_32_byte_key
+
+# New AI providers. All optional. A provider is skipped if its key or its model var is missing.
+CEREBRAS_API_KEY=your_cerebras_key
+GEMINI_API_KEY=your_gemini_key
+MISTRAL_API_KEY=your_mistral_key
+OPENROUTER_API_KEY=your_openrouter_key
+GITHUB_MODELS_TOKEN=your_github_models_token
+
+# Model ids: needed locally only if they're still blank in wrangler.toml
+# GROQ_SEARCH_MODEL=
+# GROQ_SECONDARY_MODEL=
+# CEREBRAS_MODEL=
+# GEMINI_MODEL=
+# MISTRAL_MODEL=

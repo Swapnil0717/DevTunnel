@@ -45,6 +45,29 @@
   // OAuth token), used only by src/lib/githubDiscovery.ts to search
   // GitHub server-side at the AI Discovery agent's own initiative.
   GITHUB_DISCOVERY_TOKEN: string;
+
+  // --- AI foundation (src/lib/ai/*) — all optional; see src/config/env.ts ---
+  // Secrets: a provider with no key is skipped.
+  /** Optional second Groq account key — its own Groq limits (provider id `groq_b`). */
+  GROQ_API_KEY_2?: string;
+  CEREBRAS_API_KEY?: string;
+  GEMINI_API_KEY?: string;
+  MISTRAL_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
+  GITHUB_MODELS_TOKEN?: string;
+  // Non-secret model ids (wrangler.toml [vars]).
+  GROQ_SEARCH_MODEL?: string;
+  GROQ_SECONDARY_MODEL?: string;
+  CEREBRAS_MODEL?: string;
+  GEMINI_MODEL?: string;
+  MISTRAL_MODEL?: string;
+  OPENROUTER_MODEL?: string;
+  GITHUB_MODELS_MODEL?: string;
+  CF_AI_MODEL?: string;
+  /** "false" disables user-facing AI endpoints. */
+  AI_FEATURES_ENABLED?: string;
+  /** Cloudflare Workers AI binding (wrangler.toml `[ai]`). */
+  AI?: Ai;
 }
 
 /** Values attached to the Hono context by middleware. */

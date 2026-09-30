@@ -20,6 +20,7 @@ import {
   fetchRepositoryIssues,
 } from "../lib/githubRepo";
 import { handleRepositoryIssuesRequest, type ListedIssue } from "../lib/repoIssuesList";
+import { handleDevtunnelAiSearchRequest, toolsAiSearchSource } from "../lib/devtunnelAiSearch";
 
 /**
  * Contributor — Open Source Tools on DevTunnel (`/opensource-tools` —
@@ -93,6 +94,23 @@ openSourceTools.get("/opensource-tools/available", async (c) => {
     return errorResponse(c, 500, "internal_error", "Couldn't load open source tools right now");
   }
 });
+
+/**
+ * `POST /opensource-tools/ai-search` — "Ask AI" on `/opensource-tools`
+ * (Part 3 of the AI build plan). Body `{ prompt }` (2–300 chars); responds
+ * `{ results: OpenSourceToolSummary[], interpretation, aiUsed, fallbackReason?, scanned }`
+ * where each result is the same row `GET /opensource-tools/available`
+ * returns, ranked best match first. Only tools published through the
+ * onboarding wizard are searched.
+ *
+ * Unlike `/opensource-tools/available` (public — the page is cacheable),
+ * this route requires a session: it spends a free AI budget. Same
+ * behaviour, fallback and KV-free caching rules as `POST /projects/ai-search`
+ * — see `lib/devtunnelAiSearch.ts`.
+ */
+openSourceTools.post("/opensource-tools/ai-search", requireAuth, (c) =>
+  handleDevtunnelAiSearchRequest(c, toolsAiSearchSource),
+);
 
 /* ---------------------------------------------------------------------------
  * Tool Detail — `/opensource-tools/:toolSlug`

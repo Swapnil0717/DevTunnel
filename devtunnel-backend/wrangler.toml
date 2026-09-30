@@ -90,6 +90,34 @@ SESSION_TTL_DAYS = "30"
 GROQ_MODEL = "openai/gpt-oss-120b"
 
 # ---------------------------------------------------------------------------
+# AI foundation (src/lib/ai/*). All OPTIONAL. Provider API KEYS are secrets
+# and never go in this file — set each once per environment with
+#   npx wrangler secret put GROQ_API_KEY_2        (OPTIONAL: a Groq key from a DIFFERENT account)
+#   npx wrangler secret put CEREBRAS_API_KEY      (cloud.cerebras.ai)
+#   npx wrangler secret put GEMINI_API_KEY        (aistudio.google.com/apikey)
+#   npx wrangler secret put MISTRAL_API_KEY       (console.mistral.ai)
+#   npx wrangler secret put OPENROUTER_API_KEY    (openrouter.ai/keys)
+#   npx wrangler secret put GITHUB_MODELS_TOKEN   (github.com/marketplace/models)
+# A provider is used only when BOTH its key and its model var below are set.
+# Model ids are intentionally left blank: free model lists change often —
+# fill each in from that provider's dashboard when you add its key.
+# ---------------------------------------------------------------------------
+AI_FEATURES_ENABLED = "true"
+GROQ_SEARCH_MODEL = "llama-3.1-8b-instant"     # a small fast Groq model (its own per-model budget)
+GROQ_SECONDARY_MODEL = "openai/gpt-oss-20b"  # second Groq model, used as a backup for explain/insights
+CEREBRAS_MODEL = ""
+GEMINI_MODEL = "gemini-3.5-flash-lite"          # e.g. a Flash-Lite model, from aistudio.google.com
+MISTRAL_MODEL = ""
+OPENROUTER_MODEL = "openai/gpt-oss-20b:free"
+GITHUB_MODELS_MODEL = ""
+CF_AI_MODEL = "@cf/openai/gpt-oss-20b"           # Workers AI model id (needs the [ai] binding below)
+
+# Cloudflare Workers AI binding — last-resort provider. Uncomment to enable;
+# it needs no secret. (Add the same block under [env.staging] if you want it there.)
+# [ai]
+# binding = "AI"
+
+# ---------------------------------------------------------------------------
 # Cron triggers. `src/index.ts`'s `scheduled` handler tells these apart by
 # the exact cron expression that fired (`event.cron`) — see that file's own
 # doc comment on the `scheduled` export for the full mapping.
@@ -142,6 +170,15 @@ SUPABASE_DB_SCHEMA = "devtunnel"
 GITHUB_CLIENT_ID = "Iv23liqdlxwKp3dunpZN" # same GitHub App as production for now; split later if needed
 SESSION_TTL_DAYS = "30"
 GROQ_MODEL = "openai/gpt-oss-120b"
+AI_FEATURES_ENABLED = "true"
+GROQ_SEARCH_MODEL = "llama-3.1-8b-instant"
+GROQ_SECONDARY_MODEL = "openai/gpt-oss-20b"
+CEREBRAS_MODEL = ""
+GEMINI_MODEL = "gemini-3.5-flash-lite"
+MISTRAL_MODEL = ""
+OPENROUTER_MODEL = "openai/gpt-oss-20b:free"
+GITHUB_MODELS_MODEL = ""
+CF_AI_MODEL = "@cf/openai/gpt-oss-20b"
 
 [[env.staging.kv_namespaces]]
 binding = "RATE_LIMIT_KV"

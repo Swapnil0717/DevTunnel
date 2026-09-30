@@ -145,6 +145,10 @@ export default async function GithubOpenSourceToolsPage({
                 hasMore: result.hasMore,
               }}
               cardBasePath="/github-open-source-tools"
+              // "Ask AI" search bar — signed-in users only (the bar shows a
+              // sign-in prompt to everyone else). It searches the whole tools
+              // catalog, not just the currently selected "Show" filter.
+              aiSearch={{ path: "/github-open-source-tools" }}
             />
           </Suspense>
         )}

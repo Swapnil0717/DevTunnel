@@ -25,6 +25,8 @@ import {
   InvalidPhaseBudgetSharesError,
   type DiscoveryPhase,
 } from "../../lib/groqQuota";
+import { flushAiUsage } from "../../lib/ai/usage";
+import { getProvidersSnapshot } from "../../lib/ai/adminProviders";
 import {
   approveDiscoveredProject,
   approveDiscoveredTask,
@@ -101,8 +103,26 @@ adminAi.get("/confirmation", requireAuth, requireAdminRole, requirePermission("a
  * budget — safe to poll freely.
  */
 adminAi.get("/groq-quota", requireAuth, requireAdminRole, requirePermission("admin:ai:read"), async (c) => {
-  const snapshot = await getGroqQuotaSnapshot(c.env.RATE_LIMIT_KV);
+  const snapshot = await getGroqQuotaSnapshot(getEnv(c.env), c.env.RATE_LIMIT_KV);
   return c.json(snapshot);
+});
+
+/**
+ * Multi-provider usage + status (Part 7): for every AI provider — today's
+ * requests and estimated tokens, available / exhausted (until when), the last
+ * error class and today's error counts. Read-only: it never calls a model,
+ * never spends budget, and writes nothing to Workers KV (data comes from the
+ * Supabase tables `ai_usage_daily` and `ai_provider_status`), so it is safe to
+ * poll. `featuresEnabled` mirrors AI_FEATURES_ENABLED. See
+ * src/lib/ai/adminProviders.ts for exactly what each number means.
+ */
+adminAi.get("/providers", requireAuth, requireAdminRole, requirePermission("admin:ai:read"), async (c) => {
+  try {
+    return c.json(await getProvidersSnapshot(getEnv(c.env)));
+  } catch (err) {
+    logger.error("ai_providers_snapshot_failed", { error: extractErrorMessage(err) });
+    return errorResponse(c, 500, "internal_error", "Failed to load AI provider usage");
+  }
 });
 
 /**
@@ -129,7 +149,7 @@ function sharesToPercentages(shares: Record<DiscoveryPhase, number>): { projects
 }
 
 adminAi.get("/budget", requireAuth, requireAdminRole, requirePermission("admin:ai:read"), async (c) => {
-  const shares = await getPhaseBudgetShares(c.env.RATE_LIMIT_KV);
+  const shares = await getPhaseBudgetShares(getEnv(c.env), c.env.RATE_LIMIT_KV);
   return c.json(sharesToPercentages(shares));
 });
 
@@ -145,7 +165,7 @@ adminAi.put("/budget", requireAuth, requireAdminRole, requirePermission("admin:a
   const requested = parsed.data;
 
   try {
-    const saved = await setPhaseBudgetShares(c.env.RATE_LIMIT_KV, {
+    const saved = await setPhaseBudgetShares(env, {
       projects: requested.projects / 100,
       tools: requested.tools / 100,
       tasks: requested.tasks / 100,
@@ -250,7 +270,7 @@ adminAi.post("/run", requireAuth, requireAdminRole, requirePermission("admin:ai:
   const env = getEnv(c.env);
   const user = c.get("user");
   try {
-    const summary = await runDailyDiscovery(env, c.env.RATE_LIMIT_KV);
+    const summary = await runDailyDiscovery(env, c.env.RATE_LIMIT_KV).finally(() => flushAiUsage(env));
     await recordAdminAudit(getSupabase(env), {
       adminId: user.id,
       action: "AI_DISCOVERY_MANUAL_RUN",
@@ -298,7 +318,7 @@ function streamDiscoveryRun(
     };
 
     try {
-      const summary = await runOne(env, c.env.RATE_LIMIT_KV, onStep);
+      const summary = await runOne(env, c.env.RATE_LIMIT_KV, onStep).finally(() => flushAiUsage(env));
       await recordAdminAudit(getSupabase(env), {
         adminId: user.id,
         action: auditAction,

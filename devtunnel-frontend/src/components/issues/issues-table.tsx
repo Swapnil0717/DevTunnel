@@ -1,3 +1,7 @@
+"use client";
+
+import { Fragment, useState } from "react";
+import { AiExplainToggle, AiExplanationPanel } from "@/components/ai/ai-explain-button";
 import { AdminTableRow } from "@/components/admin/admin-table-row";
 import { RepoLogo } from "@/components/admin/repo-logo";
 import { IssueIcon } from "@/components/layout/nav-icons";
@@ -32,6 +36,13 @@ function formatDate(iso: string): string {
  * (Frontend_Development_Rules.txt rule 51 — keep this kind of logic
  * centralized).
  *
+ * Open issues also get an "Explain" toggle in the Actions column (Part 5).
+ * Opening it adds a full-width row under the issue holding the AI explanation
+ * (`AiExplanationPanel`, which only asks the backend once it is on screen).
+ * That per-row open state is why this file is now a client component; the
+ * toggle is a `<button>`, so `AdminTableRow` leaves its click alone instead
+ * of opening the GitHub issue.
+ *
  * Dates are shown as readable text plus a machine-readable `<time
  * datetime>` (rule 46), and the state badge is always paired with the
  * word "Open"/"Closed" — never color alone (rule 43). The whole row also
@@ -39,6 +50,17 @@ function formatDate(iso: string): string {
  * destination as the "View on GitHub" link.
  */
 export function IssuesTable({ issues }: { issues: Issue[] }) {
+  const [openKeys, setOpenKeys] = useState<ReadonlySet<string>>(new Set());
+
+  function toggle(key: string) {
+    setOpenKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   return (
     <div className="overflow-x-auto rounded-[10px] border border-border">
       <table className="w-full min-w-[960px] border-collapse text-left text-[12.5px]">
@@ -62,12 +84,16 @@ export function IssuesTable({ issues }: { issues: Issue[] }) {
           {issues.map((issue) => {
             const visibleLabels = issue.labels.slice(0, MAX_VISIBLE_LABELS);
             const hiddenLabelCount = issue.labels.length - visibleLabels.length;
+            const rowKey = `${issue.project.slug}-${issue.number}`;
+            const panelId = `ai-explain-${rowKey}`;
+            const canExplain = issue.state === "OPEN" && /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(issue.project.repositoryFullName);
+            const isOpen = canExplain && openKeys.has(rowKey);
 
             return (
+              <Fragment key={rowKey}>
               <AdminTableRow
-                key={`${issue.project.slug}-${issue.number}`}
                 externalHref={issue.url}
-                className="border-b border-border-subtle last:border-b-0 hover:bg-surface/60"
+                className={`${isOpen ? "" : "border-b border-border-subtle last:border-b-0"} hover:bg-surface/60`}
               >
                 {/* Issue # + title + open/closed state */}
                 <th scope="row" className="px-4 py-3 align-top font-medium text-text">
@@ -139,18 +165,43 @@ export function IssuesTable({ issues }: { issues: Issue[] }) {
                   <time dateTime={issue.updatedAt}>{formatDate(issue.updatedAt)}</time>
                 </td>
 
-                {/* Actions — View only; task creation/curation is an Admin action */}
+                {/* Actions — View on GitHub, plus the AI "Explain" toggle for open issues.
+                    Task creation/curation stays an Admin action. */}
                 <td className="whitespace-nowrap px-4 py-3 align-top">
-                  <a
-                    href={issue.url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="inline-block rounded-md px-2 py-1 text-[11.5px] font-medium text-text-secondary hover:text-accent"
-                  >
-                    View on GitHub
-                  </a>
+                  <div className="flex items-center gap-1">
+                    <a
+                      href={issue.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-block rounded-md px-2 py-1 text-[11.5px] font-medium text-text-secondary hover:text-accent"
+                    >
+                      View on GitHub
+                    </a>
+                    {canExplain ? (
+                      <AiExplainToggle
+                        open={isOpen}
+                        onToggle={() => toggle(rowKey)}
+                        controlsId={panelId}
+                        issueNumber={issue.number}
+                      />
+                    ) : null}
+                  </div>
                 </td>
               </AdminTableRow>
+
+              {isOpen ? (
+                <tr className="border-b border-border-subtle last:border-b-0">
+                  <td colSpan={7} className="px-4 pb-4 pt-0">
+                    <AiExplanationPanel
+                      id={panelId}
+                      source="devtunnel"
+                      repo={issue.project.repositoryFullName}
+                      issueNumber={issue.number}
+                    />
+                  </td>
+                </tr>
+              ) : null}
+              </Fragment>
             );
           })}
         </tbody>

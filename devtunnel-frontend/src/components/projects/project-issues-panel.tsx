@@ -1,11 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { AiExplainButton } from "@/components/ai/ai-explain-button";
+import { IssueInsightBadges, IssueInsightsCard } from "@/components/ai/issue-insights-card";
 import { GithubEmptyState } from "@/components/github-projects/github-empty-state";
 import { LoadAllIssuesBar } from "@/components/issues/load-all-issues-bar";
 import { IssueIcon, SearchIcon } from "@/components/layout/nav-icons";
 import { PagePaginationControls } from "@/components/admin/page-pagination-controls";
 import { usePagePagination } from "@/lib/admin/use-page-pagination";
+import { parseGithubRepoFullName } from "@/lib/ai/explain-client";
+import { useIssueInsights } from "@/lib/ai/use-issue-insights";
 import { REPO_ISSUES_PAGE_SIZE, type LoadAllIssuesState } from "@/lib/issues/use-load-all-issues";
 import type { Issue, IssueState } from "@/lib/issues/types";
 
@@ -58,6 +62,18 @@ function formatDate(iso: string): string {
  * page (`usePagePagination`, the same as `/issues`), so a few hundred
  * loaded issues never means a few hundred rows on screen.
  *
+ * Each open row also gets an "Explain" button (Part 5, `AiExplainButton`)
+ * beside — not inside — its link (a `<button>` nested in an `<a>` is invalid
+ * HTML). Closed rows don't: the backend refuses to spend a model call on an
+ * issue that is no longer actionable.
+ *
+ * Above the filters sits the AI issue insights card (Part 6,
+ * `IssueInsightsCard`): on request it labels the repository's open issues by
+ * role, level and technology. Its chips narrow the list AFTER the search and
+ * state filter and BEFORE the client-side pagination, each open row shows its
+ * own AI labels beside the Explain button, and an issue the AI didn't analyze
+ * says so. Closed rows get no AI labels — insights only cover open issues.
+ *
  * Note the backend only ever returns *open* issues here, so the Closed
  * filter's count is always 0 — see `GET /projects/:slug` — which is
  * unchanged by loading them all.
@@ -92,7 +108,13 @@ export function ProjectIssuesPanel({
     });
   }, [issues, stateFilter, query]);
 
-  const paged = usePagePagination(visibleIssues, REPO_ISSUES_PAGE_SIZE);
+  // `null` (no Explain button, no insights card) if the URL isn't a github.com repository.
+  const repoFullName = parseGithubRepoFullName(repositoryUrl);
+  const insights = useIssueInsights(repoFullName);
+  const { filterIssues } = insights;
+  // The insight filters run after search + state filter and BEFORE pagination.
+  const filteredIssues = useMemo(() => filterIssues(visibleIssues), [filterIssues, visibleIssues]);
+  const paged = usePagePagination(filteredIssues, REPO_ISSUES_PAGE_SIZE);
 
   // Only "all caught up" when that's actually known — a repository GitHub
   // says still has open items, whose preview came back empty (GitHub was
@@ -122,6 +144,8 @@ export function ProjectIssuesPanel({
 
   return (
     <div>
+      <IssueInsightsCard controller={insights} />
+
       <LoadAllIssuesBar loader={loader} repositoryUrl={repositoryUrl} />
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -160,9 +184,9 @@ export function ProjectIssuesPanel({
         </div>
       </div>
 
-      {visibleIssues.length === 0 ? (
+      {filteredIssues.length === 0 ? (
         <p className="m-0 rounded-[8px] border border-dashed border-border-subtle px-4 py-6 text-center text-[12.5px] text-text-muted">
-          No issues match that search. Try a different term or filter.
+          No issues match that search or those filters. Try a different term or clear a filter.
         </p>
       ) : (
         <>
@@ -210,6 +234,12 @@ export function ProjectIssuesPanel({
                       {hiddenLabelCount > 0 ? <span>+{hiddenLabelCount}</span> : null}
                     </span>
                   </a>
+                  {repoFullName && issue.state === "OPEN" ? (
+                    <div className="flex flex-col gap-1.5 pb-2.5 pl-[34px] pr-3">
+                      <IssueInsightBadges controller={insights} issueNumber={issue.number} />
+                      <AiExplainButton source="devtunnel" repo={repoFullName} issueNumber={issue.number} />
+                    </div>
+                  ) : null}
                 </li>
               );
             })}
