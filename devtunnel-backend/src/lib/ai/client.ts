@@ -300,6 +300,21 @@ async function attemptTarget(
       recordAiError(target.provider, target.model, res.timedOut ? "timeout" : status === 0 ? "network" : "server");
       return null;
     }
+    // A model id the provider doesn't know (404, or a 400/422 that names the
+    // model) is a CONFIGURATION fault of this one target, not of the request:
+    // cool that target down and let the next provider answer. Logged loudly so
+    // the bad id gets fixed.
+    if (status === 404 || ((status === 400 || status === 422) && /model/i.test(res.errorText ?? ""))) {
+      logger.error("ai_model_rejected", {
+        provider: target.provider,
+        model: target.model,
+        status,
+        detail: (res.errorText ?? "").slice(0, 300),
+      });
+      markExhausted(target.key, 10 * 60_000, `http:${status}`);
+      recordAiError(target.provider, target.model, "bad_request");
+      return null;
+    }
     // Any other 4xx: our request is wrong. Falling back would hide the bug.
     logger.error("ai_request_rejected", {
       provider: target.provider,

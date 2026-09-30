@@ -20,6 +20,9 @@ const STOPWORDS = new Set([
   "a", "an", "and", "the", "for", "with", "to", "of", "in", "on", "my", "me", "i", "want", "need",
   "find", "show", "some", "any", "project", "projects", "tool", "tools", "using", "that", "is", "are",
   "something", "looking", "good", "best", "new", "open", "source", "app", "apps", "application", "repo", "repos",
+  "will", "would", "can", "could", "should", "help", "helps", "helping", "please", "how", "what", "which", "who",
+  "do", "does", "get", "make", "use", "it", "this", "these", "those", "about", "from", "at", "by", "as", "be",
+  "we", "you", "your", "our", "us", "im", "ive", "like", "something", "anything", "thing", "things",
 ]);
 
 const MAX_TERMS = 12;
@@ -34,6 +37,17 @@ export function tokenizeQuery(query: string): string[] {
     if (terms.length === MAX_TERMS) break;
   }
   return terms;
+}
+
+/**
+ * Does `text` contain `term`? Terms of 3 characters or fewer ("ui", "ux",
+ * "go", "c#") must match a WHOLE word: as substrings they hit unrelated
+ * text ("ux" is inside "linux", "ui" inside "build"), which is how a
+ * search for UI/UX design once returned Linux kernel exploits.
+ */
+function containsTerm(text: string, term: string): boolean {
+  if (term.length > 3) return text.includes(term);
+  return text.split(/[^a-z0-9+#]+/).includes(term);
 }
 
 /** Canonical tech-stack names (per techTopics.ts) mentioned by the query's terms. */
@@ -56,15 +70,15 @@ export function scoreItem(item: ScorableItem, terms: string[]): number {
   let matched = 0;
   for (const term of terms) {
     let hit = false;
-    if (name.includes(term)) {
+    if (containsTerm(name, term)) {
       score += 5;
       hit = true;
     }
-    if (tags.some((tag) => tag === term || tag.includes(term))) {
+    if (tags.some((tag) => tag === term || containsTerm(tag, term))) {
       score += 3;
       hit = true;
     }
-    if (description.includes(term)) {
+    if (containsTerm(description, term)) {
       score += 1;
       hit = true;
     }

@@ -183,8 +183,20 @@ export function parseGithubRepoUrl(input: string): { owner: string; repo: string
 
   let ownerRepo: string | null = null;
 
-  const sshMatch = trimmed.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?\/?$/i);
-  if (sshMatch) {
+  // Bare `owner/repo` first. `new URL("https://owner/repo")` does NOT throw
+  // (it parses "owner" as a hostname), so without this branch the check
+  // below rejects the shorthand and never reaches the catch. GitHub owner
+  // names cannot contain a dot, which is what tells `owner/repo` apart from
+  // a scheme-less `github.com/owner` URL.
+  const bareMatch = trimmed.match(/^([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+?)(?:\.git)?$/);
+  if (bareMatch) {
+    ownerRepo = `${bareMatch[1]}/${bareMatch[2]}`;
+  }
+
+  const sshMatch = ownerRepo ? null : trimmed.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?\/?$/i);
+  if (ownerRepo) {
+    // already resolved from the bare shorthand
+  } else if (sshMatch) {
     ownerRepo = `${sshMatch[1]}/${sshMatch[2]}`;
   } else {
     try {
