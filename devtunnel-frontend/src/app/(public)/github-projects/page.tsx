@@ -81,6 +81,7 @@ export default async function GithubProjectsPage() {
                 path: "/github-projects",
                 noun: "projects",
                 hasMore: result.hasMore,
+                starBuckets: true,
               }}
             />
           </Suspense>

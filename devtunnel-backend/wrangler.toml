@@ -5,7 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 # ---------------------------------------------------------------------------
 # Workers Logs + Traces, enabled from the dashboard (Settings > Observability)
-# on 2026-09-26 to debug the CPU/subrequest-limit errors on the */4 * * * *
+# on 2026-09-26 to debug the CPU/subrequest-limit errors on the former */4 * * * *
 # issues-scan cron — see src/lib/cacheWarmers.ts. Mirrored here so
 # `wrangler deploy` doesn't silently revert the dashboard setting on the
 # next deploy. 100% sampling + persist is fine at current traffic; revisit
@@ -101,14 +101,14 @@ GROQ_MODEL = "openai/gpt-oss-120b"
 #                    manual POST /admin/ai/run the same day just tops up
 #                    whatever quota is left instead of double-running.
 #
-#   "*/4 * * * *"  — every 4 minutes: re-warms the contributor-facing
+#   "*/15 * * * *" — every 15 minutes: re-warms the contributor-facing
 #                    `/issues` GitHub scan cache (src/routes/issues.ts,
 #                    src/lib/cacheWarmers.ts `warmContributorIssuesScan`).
-#                    Kept comfortably under that cache's 4-minute soft TTL
-#                    so a real contributor's page load essentially never
-#                    has to wait on a live cross-project GitHub scan itself
-#                    — see src/lib/cache.ts's stale-while-revalidate doc
-#                    comment for why this matters.
+#                    Kept under that cache's 20-minute soft TTL so a real
+#                    contributor's page load essentially never has to wait
+#                    on a live cross-project GitHub scan itself. (Was every
+#                    4 minutes; slowed to stay inside Workers KV's Free-plan
+#                    1,000 writes/day.)
 #
 #   "*/25 * * * *" — every 25 minutes: re-warms both GitHub-wide catalogs,
 #                    `/github-projects` and `/github-open-source-tools`
@@ -116,11 +116,16 @@ GROQ_MODEL = "openai/gpt-oss-120b"
 #                    catalog plus every named filter. Kept comfortably
 #                    under their 30-minute soft TTL for the same reason.
 #
-# All three are independent, best-effort background jobs — one failing
+#   "12 * * * *"   — hourly: re-warms ONE `/github-projects` star-range
+#                    bucket per run (src/lib/githubCatalog.ts
+#                    `warmRotatingCatalogFilter`); all 8 buckets cycle every
+#                    8 hours.
+#
+# All four are independent, best-effort background jobs — one failing
 # never blocks or delays another (see src/lib/cacheWarmers.ts).
 # ---------------------------------------------------------------------------
 [triggers]
-crons = ["0 3 * * *", "*/4 * * * *", "*/25 * * * *"]
+crons = ["0 3 * * *", "*/15 * * * *", "*/25 * * * *", "12 * * * *"]
 
 # ---------------------------------------------------------------------------
 # Per-environment overrides. Deploy with `wrangler deploy --env staging`.
@@ -147,4 +152,4 @@ id = "REPLACE_WITH_STAGING_KV_NAMESPACE_ID"
 # cache warmers (and the AI Discovery agent) also run against staging;
 # drop this block if staging shouldn't run scheduled jobs at all.
 [env.staging.triggers]
-crons = ["0 3 * * *", "*/4 * * * *", "*/25 * * * *"]
+crons = ["0 3 * * *", "*/15 * * * *", "*/25 * * * *", "12 * * * *"]

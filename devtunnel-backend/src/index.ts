@@ -22,7 +22,11 @@ import { profileActivity } from "./routes/profileActivity";
 import { githubCatalogContribute } from "./routes/githubCatalogContribute";
 import { admin } from "./routes/admin/index";
 import { runDailyDiscovery } from "./lib/aiDiscoveryAgent";
-import { warmGithubCatalogs, warmContributorIssuesScan } from "./lib/cacheWarmers";
+import {
+  warmGithubCatalogs,
+  warmGithubStarBuckets,
+  warmContributorIssuesScan,
+} from "./lib/cacheWarmers";
 import { getEnv } from "./config/env";
 import { logger } from "./lib/logger";
 
@@ -63,14 +67,16 @@ app.onError(handleError);
 
 /**
  * Cloudflare Cron Triggers (wrangler.toml `[triggers].crons`) — this Worker
- * has three schedules, and `event.cron` (the exact cron expression that
+ * has four schedules (the fourth, `"12 * * * *"`, warms one
+ * `/github-projects` star-range bucket per run — see
+ * `warmRotatingCatalogFilter` in lib/githubCatalog.ts), and `event.cron` (the exact cron expression that
  * fired) is how one `scheduled` handler tells them apart:
  *
  *  - `"0 3 * * *"` — once daily at 03:00 UTC: the AI Discovery agent
  *    (unchanged from before this change).
- *  - `"*//**4 * * * *"` — every 4 minutes: re-scans and re-caches the
+ *  - `"*//**15 * * * *"` — every 15 minutes: re-scans and re-caches the
  *    contributor-facing `/issues` GitHub scan (`ISSUES_SCAN_CACHE_KEY`,
- *    src/routes/issues.ts), comfortably under that cache's 4-minute soft
+ *    src/routes/issues.ts), under that cache's 20-minute soft
  *    TTL so real contributor requests essentially always see a fresh
  *    entry rather than triggering a scan themselves.
  *  - `"*//**25 * * * *"` — every 25 minutes: re-scans and re-caches both
@@ -89,10 +95,20 @@ async function handleScheduled(event: ScheduledEvent, env: Env, ctx: ExecutionCo
   const validatedEnv = getEnv(env);
 
   switch (event.cron) {
-    case "*/4 * * * *":
+    case "*/15 * * * *":
       ctx.waitUntil(
         warmContributorIssuesScan(validatedEnv, env).catch((err) => {
           logger.error("issues_warm_scheduled_run_failed", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }),
+      );
+      return;
+
+    case "12 * * * *":
+      ctx.waitUntil(
+        warmGithubStarBuckets(validatedEnv, env).catch((err) => {
+          logger.error("catalog_star_bucket_scheduled_run_failed", {
             error: err instanceof Error ? err.message : String(err),
           });
         }),

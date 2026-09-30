@@ -10,7 +10,9 @@ import { usePagePagination } from "@/lib/admin/use-page-pagination";
 import { GithubProjectCard } from "./github-project-card";
 import { LoadCatalogBar } from "./load-catalog-bar";
 import { RefreshCatalogButton } from "./refresh-catalog-button";
+import { StarRangeBar } from "./star-range-bar";
 import { useLoadFullCatalog } from "@/lib/github-projects/use-load-full-catalog";
+import { useStarRangeCatalog } from "@/lib/github-projects/use-star-range-catalog";
 import type { GithubProjectSummary } from "@/lib/github-projects/types";
 
 type SortOption = "TRENDING" | "MOST_STARS" | "NEWEST" | "RECENTLY_UPDATED";
@@ -56,6 +58,13 @@ export interface CatalogLoadConfig {
   filter?: string;
   /** Whether rows exist past the preview (the backend's `X-Next-Cursor`, read server-side). `false` hides the button. */
   hasMore: boolean;
+  /**
+   * `true` when this catalog's backend route serves star-range buckets
+   * (`?filter=stars-…`, see `lib/github-projects/star-buckets.ts`) — only
+   * `/github-projects` does. Turns Minimum/Maximum stars into server-side
+   * loads instead of in-browser filters over the top-1,000 rows.
+   */
+  starBuckets?: boolean;
 }
 
 /** "500+ stars" style thresholds — a project matches when `stars >= value`. */
@@ -166,6 +175,7 @@ export function GithubProjectsExplorer({
   catalogFilter,
   catalogLoad,
   cardBasePath = "/github-projects",
+  hideStarFilters = false,
 }: {
   /**
    * The server-rendered first page of the catalog. When `catalogLoad` is
@@ -203,6 +213,13 @@ export function GithubProjectsExplorer({
    * `/github-projects/:slug`.
    */
   cardBasePath?: string;
+  /**
+   * Hides the Minimum stars / Maximum stars dropdowns. Used by
+   * `/github-open-source-tools`, whose catalog has no star-range buckets
+   * (so those two filters would only ever cover the top-ranked rows).
+   * The values stay at "Any stars", so nothing is filtered by stars.
+   */
+  hideStarFilters?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -219,7 +236,18 @@ export function GithubProjectsExplorer({
     initialProjects,
     hasMore: catalogLoad?.hasMore ?? false,
   });
-  const projects = loader.projects;
+
+  // Minimum/Maximum stars as an inclusive range. "Under N" = at most N - 1.
+  const minStarsValue = minStars === ALL_STARS ? 0 : Number(minStars);
+  const maxStarsValue = maxStars === ALL_STARS ? Number.POSITIVE_INFINITY : Number(maxStars) - 1;
+  const starRange = useStarRangeCatalog({
+    path: catalogLoad?.starBuckets ? catalogLoad.path : null,
+    minStars: minStarsValue,
+    maxStars: maxStarsValue,
+  });
+  // A selected star range is loaded server-side (the plain catalog only holds
+  // the ~1,000 most-starred repos); otherwise use the ordinary catalog.
+  const projects = starRange.active ? starRange.projects : loader.projects;
 
   function handleCatalogFilterChange(nextValue: string) {
     if (!catalogFilter) return;
@@ -249,7 +277,8 @@ export function GithubProjectsExplorer({
     const filtered = projects.filter((project) => {
       if (techStack !== ALL_TECH && !project.techStack.includes(techStack)) return false;
       if (project.stars < minStarsThreshold) return false;
-      if (project.stars > maxStarsThreshold) return false;
+      // "Under N stars" is strictly less than N (a repo with exactly N stars is not "under" N).
+      if (project.stars >= maxStarsThreshold) return false;
 
       if (!normalizedQuery) return true;
 
@@ -340,35 +369,39 @@ export function GithubProjectsExplorer({
             />
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label
-              htmlFor="github-projects-stars"
-              className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
-            >
-              Minimum stars
-            </label>
-            <FilterSelect
-              id="github-projects-stars"
-              value={minStars}
-              onChange={setMinStars}
-              options={STARS_FILTERS}
-            />
-          </div>
+          {hideStarFilters ? null : (
+            <>
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="github-projects-stars"
+                  className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
+                >
+                  Minimum stars
+                </label>
+                <FilterSelect
+                  id="github-projects-stars"
+                  value={minStars}
+                  onChange={setMinStars}
+                  options={STARS_FILTERS}
+                />
+              </div>
 
-          <div className="flex flex-col gap-1">
-            <label
-              htmlFor="github-projects-max-stars"
-              className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
-            >
-              Maximum stars
-            </label>
-            <FilterSelect
-              id="github-projects-max-stars"
-              value={maxStars}
-              onChange={setMaxStars}
-              options={MAX_STARS_FILTERS}
-            />
-          </div>
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="github-projects-max-stars"
+                  className="text-[11px] font-normal uppercase tracking-wide text-text-faint"
+                >
+                  Maximum stars
+                </label>
+                <FilterSelect
+                  id="github-projects-max-stars"
+                  value={maxStars}
+                  onChange={setMaxStars}
+                  options={MAX_STARS_FILTERS}
+                />
+              </div>
+            </>
+          )}
 
           <div className="flex flex-col gap-1">
             <label
@@ -387,9 +420,17 @@ export function GithubProjectsExplorer({
         </div>
       </div>
 
-      {catalogLoad ? <LoadCatalogBar loader={loader} noun={catalogLoad.noun} /> : null}
+      {catalogLoad ? (
+        starRange.active ? (
+          <StarRangeBar range={starRange} noun={catalogLoad.noun} />
+        ) : (
+          <LoadCatalogBar loader={loader} noun={catalogLoad.noun} />
+        )
+      ) : null}
 
-      {filteredProjects.length === 0 ? (
+      {filteredProjects.length === 0 &&
+      starRange.active &&
+      (starRange.status === "loading" || starRange.status === "idle") ? null : filteredProjects.length === 0 ? (
         <SectionMessage>
           {hasActiveFilters
             ? "No GitHub projects match your search or the selected filters. Try different search terms or filters."

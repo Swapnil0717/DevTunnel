@@ -61,8 +61,60 @@ export const githubProjects = new Hono<{ Bindings: Env; Variables: Variables }>(
  * re-scan this exact catalog on a cron, without duplicating its
  * discovery query/cache key here a second time.
  */
+/**
+ * Star-range buckets — the reason "Maximum stars" (and low "Minimum
+ * stars") work at all. The base catalog below is ONE GitHub search
+ * (`stars:>=50`, sorted by stars) and GitHub returns at most 1,000 results
+ * per query, so it only ever holds the ~1,000 most-starred repos. Anything
+ * lower on the star scale simply isn't in it; filtering in the browser can't
+ * conjure rows that were never fetched.
+ *
+ * Instead each bucket is its own GitHub query (`stars:10..49` ...) with its
+ * own cache slot, so each gets its own top-1,000. `key` is the value the
+ * frontend sends as `?filter=` (keep in sync with devtunnel-frontend
+ * `lib/github-projects/star-buckets.ts`); bucket edges deliberately line up
+ * with the frontend's dropdown values (Min: 10/100/500/1000/5000/10000,
+ * Max "Under": 10/50/100/500/1000) so every choice maps to whole buckets.
+ *
+ * `rotating: true` + long TTLs = KV-limit friendly: one bucket is warmed
+ * per hour (`warmRotatingCatalogFilter`), so the full set of 8
+ * refreshes every 8h at a cost of ~72 KV writes/day. Soft TTL 10h / hard TTL
+ * 36h means a missed tick degrades to "a bit older", never to a cold miss.
+ */
+const STAR_BUCKET_SOFT_TTL_SECONDS = 10 * 60 * 60;
+const STAR_BUCKET_HARD_TTL_SECONDS = 36 * 60 * 60;
+const BASE_QUALIFIERS = "is:public archived:false fork:false";
+
+const STAR_BUCKETS: { key: string; stars: string }[] = [
+  { key: "stars-0-9", stars: "0..9" },
+  { key: "stars-10-49", stars: "10..49" },
+  { key: "stars-50-99", stars: "50..99" },
+  { key: "stars-100-499", stars: "100..499" },
+  { key: "stars-500-999", stars: "500..999" },
+  { key: "stars-1000-4999", stars: "1000..4999" },
+  { key: "stars-5000-9999", stars: "5000..9999" },
+  { key: "stars-10000-plus", stars: ">=10000" },
+];
+
+const STAR_BUCKET_FILTERS: NonNullable<CatalogRouteConfig["filters"]> = Object.fromEntries(
+  STAR_BUCKETS.map(({ key, stars }) => [
+    key,
+    {
+      discoveryQueries: [`${BASE_QUALIFIERS} stars:${stars}`],
+      cacheKey: `github-projects:catalog:${key}:v1`,
+      softTtlSeconds: STAR_BUCKET_SOFT_TTL_SECONDS,
+      hardTtlSeconds: STAR_BUCKET_HARD_TTL_SECONDS,
+      rotating: true,
+      // A first visitor to a cold bucket gets 3 pages (~300 rows, ~6s)
+      // instead of 1 — the rotation replaces it with the full 1,000.
+      coldStartPages: 3,
+    },
+  ]),
+);
+
 export const CATALOG_CONFIG: CatalogRouteConfig = {
   name: "github-projects",
+  filters: STAR_BUCKET_FILTERS,
   // A single query, so no OR-across-qualifiers concern here — see
   // `lib/githubCatalog.ts`'s `CatalogRouteConfig.discoveryQueries` doc
   // comment for why this is an array at all.

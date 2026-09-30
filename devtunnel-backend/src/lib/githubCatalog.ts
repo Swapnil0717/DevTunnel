@@ -253,6 +253,25 @@ export interface CatalogFilterConfig {
   discoveryQueries: string[];
   /** KV cache key this filter's scan is stored under. Must be unique across the whole app. */
   cacheKey: string;
+  /**
+   * Overrides `CATALOG_CACHE_SOFT_TTL_SECONDS` for this filter only. Used by
+   * the star-range buckets (`routes/githubProjects.ts`): each bucket is
+   * refreshed only once per rotation (see `warmRotatingCatalogFilter`), so
+   * it needs a longer "still fresh" window than the always-on catalogs.
+   */
+  softTtlSeconds?: number;
+  /** Overrides `CATALOG_CACHE_HARD_TTL_SECONDS` for this filter only (see `softTtlSeconds`). */
+  hardTtlSeconds?: number;
+  /**
+   * `true` = NOT warmed by `warmCatalogRoute` on every `*\/25` tick. Rotating
+   * filters are warmed one per tick by `warmRotatingCatalogFilter` on their
+   * own cron instead, which spreads GitHub Search calls, Worker subrequests
+   * and — most importantly on the Free plan — daily KV writes (1,000/day)
+   * across the day rather than re-writing every filter every 25 minutes.
+   */
+  rotating?: boolean;
+  /** Cold-start pages per query for this filter (default `COLD_START_MAX_PAGES_PER_QUERY`). */
+  coldStartPages?: number;
 }
 
 export interface CatalogRouteConfig {
@@ -283,6 +302,42 @@ export interface CatalogRouteConfig {
    * the unfiltered catalog.
    */
   filters?: Record<string, CatalogFilterConfig>;
+}
+
+interface ResolvedCatalogSlot {
+  discoveryQueries: string[];
+  cacheSlot: string;
+  softTtlSeconds: number;
+  hardTtlSeconds: number;
+  coldStartPages: number;
+}
+
+/**
+ * Resolves which queries / cache slot / TTLs a request uses: the route's
+ * base catalog, or one of its named `filters`. `null` = unknown filter.
+ */
+function resolveCatalogSlot(
+  config: CatalogRouteConfig,
+  filter: string | undefined,
+): ResolvedCatalogSlot | null {
+  if (filter === undefined) {
+    return {
+      discoveryQueries: config.discoveryQueries,
+      cacheSlot: config.cacheKey,
+      softTtlSeconds: CATALOG_CACHE_SOFT_TTL_SECONDS,
+      hardTtlSeconds: CATALOG_CACHE_HARD_TTL_SECONDS,
+      coldStartPages: COLD_START_MAX_PAGES_PER_QUERY,
+    };
+  }
+  const filterConfig = config.filters?.[filter];
+  if (!filterConfig) return null;
+  return {
+    discoveryQueries: filterConfig.discoveryQueries,
+    cacheSlot: filterConfig.cacheKey,
+    softTtlSeconds: filterConfig.softTtlSeconds ?? CATALOG_CACHE_SOFT_TTL_SECONDS,
+    hardTtlSeconds: filterConfig.hardTtlSeconds ?? CATALOG_CACHE_HARD_TTL_SECONDS,
+    coldStartPages: filterConfig.coldStartPages ?? COLD_START_MAX_PAGES_PER_QUERY,
+  };
 }
 
 export interface ScanCatalogOptions {
@@ -395,22 +450,22 @@ export async function scanCatalog(
 async function buildCatalogOnColdStart(
   env: ValidatedEnv,
   workerEnv: Env,
-  slot: string,
-  queries: string[],
+  resolved: ResolvedCatalogSlot,
 ): Promise<CatalogSummary[] | "busy"> {
+  const { cacheSlot: slot, discoveryQueries: queries } = resolved;
   const locked = await tryAcquireLock(workerEnv, SCAN_LOCK_NAME, SCAN_LOCK_TTL_SECONDS);
 
   if (!locked) {
-    const again = await getCachedSWR<CatalogSummary[]>(workerEnv, slot, CATALOG_CACHE_SOFT_TTL_SECONDS);
+    const again = await getCachedSWR<CatalogSummary[]>(workerEnv, slot, resolved.softTtlSeconds);
     return again.status === "miss" ? "busy" : again.value;
   }
 
   try {
     const scan = await scanCatalog(env, queries, {
-      maxPagesPerQuery: COLD_START_MAX_PAGES_PER_QUERY,
+      maxPagesPerQuery: resolved.coldStartPages,
     });
     if (scan.items.length > 0) {
-      await setCachedSWR(workerEnv, slot, scan.items, CATALOG_CACHE_HARD_TTL_SECONDS);
+      await setCachedSWR(workerEnv, slot, scan.items, resolved.hardTtlSeconds);
     }
     return scan.items;
   } finally {
@@ -465,24 +520,24 @@ export async function handleCatalogRefreshRequest(
     );
   }
 
-  let discoveryQueries = config.discoveryQueries;
-  let cacheSlot = config.cacheKey;
-  if (parsed.data.filter !== undefined) {
-    const filterConfig = config.filters?.[parsed.data.filter];
-    if (!filterConfig) {
-      return errorResponse(
-        c,
-        400,
-        "invalid_filter",
-        `Unknown filter "${parsed.data.filter}" for this catalog`,
-      );
-    }
-    discoveryQueries = filterConfig.discoveryQueries;
-    cacheSlot = filterConfig.cacheKey;
+  const resolved = resolveCatalogSlot(config, parsed.data.filter);
+  if (!resolved) {
+    return errorResponse(
+      c,
+      400,
+      "invalid_filter",
+      `Unknown filter "${parsed.data.filter}" for this catalog`,
+    );
   }
 
   try {
-    const result = await forceRefreshCatalog(env, c.env, cacheSlot, discoveryQueries);
+    const result = await forceRefreshCatalog(
+      env,
+      c.env,
+      resolved.cacheSlot,
+      resolved.discoveryQueries,
+      resolved.hardTtlSeconds,
+    );
 
     if (result.status === "busy") {
       c.header("Retry-After", "15");
@@ -579,27 +634,22 @@ export async function handleCatalogListRequest(
   // route that declares none) is a 400, not a silent fallback to the
   // unfiltered catalog, so a frontend bug surfaces immediately instead
   // of quietly serving the wrong list.
-  let discoveryQueries = config.discoveryQueries;
-  let cacheSlot = config.cacheKey;
-  if (parsed.data.filter !== undefined) {
-    const filterConfig = config.filters?.[parsed.data.filter];
-    if (!filterConfig) {
-      return errorResponse(
-        c,
-        400,
-        "invalid_filter",
-        `Unknown filter "${parsed.data.filter}" for this catalog`,
-      );
-    }
-    discoveryQueries = filterConfig.discoveryQueries;
-    cacheSlot = filterConfig.cacheKey;
+  const resolved = resolveCatalogSlot(config, parsed.data.filter);
+  if (!resolved) {
+    return errorResponse(
+      c,
+      400,
+      "invalid_filter",
+      `Unknown filter "${parsed.data.filter}" for this catalog`,
+    );
   }
+  const cacheSlot = resolved.cacheSlot;
 
   try {
     const cached = await getCachedSWR<CatalogSummary[]>(
       c.env,
       cacheSlot,
-      CATALOG_CACHE_SOFT_TTL_SECONDS,
+      resolved.softTtlSeconds,
     );
 
     let catalog: CatalogSummary[];
@@ -614,7 +664,7 @@ export async function handleCatalogListRequest(
         });
       }
     } else {
-      const built = await buildCatalogOnColdStart(env, c.env, cacheSlot, discoveryQueries);
+      const built = await buildCatalogOnColdStart(env, c.env, resolved);
       if (built === "busy") {
         c.header("Retry-After", "15");
         return errorResponse(
@@ -668,6 +718,7 @@ export async function warmCatalogCacheKey(
   cacheKey: string,
   discoveryQueries: string[],
   maxPagesPerQuery: number = DEFAULT_MAX_PAGES_PER_QUERY,
+  hardTtlSeconds: number = CATALOG_CACHE_HARD_TTL_SECONDS,
 ): Promise<void> {
   const locked = await tryAcquireLock(workerEnv, SCAN_LOCK_NAME, SCAN_LOCK_TTL_SECONDS);
   if (!locked) {
@@ -702,7 +753,7 @@ export async function warmCatalogCacheKey(
       }
     }
 
-    await setCachedSWR(workerEnv, cacheKey, scan.items, CATALOG_CACHE_HARD_TTL_SECONDS);
+    await setCachedSWR(workerEnv, cacheKey, scan.items, hardTtlSeconds);
     logger.info("catalog_warm_stored", {
       slot: cacheKey,
       repositories: scan.items.length,
@@ -735,14 +786,54 @@ export async function warmCatalogRoute(
   await warmCatalogCacheKey(env, workerEnv, config.cacheKey, config.discoveryQueries, maxPages);
 
   for (const filterConfig of Object.values(config.filters ?? {})) {
+    // Rotating filters (star buckets) have their own cron — see below.
+    if (filterConfig.rotating) continue;
     await warmCatalogCacheKey(
       env,
       workerEnv,
       filterConfig.cacheKey,
       filterConfig.discoveryQueries,
       maxPages,
+      filterConfig.hardTtlSeconds ?? CATALOG_CACHE_HARD_TTL_SECONDS,
     );
   }
+}
+
+/**
+ * Warms exactly ONE of a route's `rotating` filters per call, chosen by
+ * `tickIndex % rotatingFilterCount`. Called from its own cron
+ * (`"12 * * * *"`, src/index.ts) with `tickIndex = floor(now / 1h)`,
+ * so no KV cursor (= no extra KV write) is needed to remember where the
+ * rotation is — the clock is the cursor.
+ *
+ * Why one per tick: on the Workers Free plan one invocation may make only
+ * 50 subrequests, and a full bucket scan is ~10 GitHub calls + a few KV
+ * operations. Warming all 8 star buckets together (~80+ calls) would blow
+ * that cap and the 30/min GitHub Search budget. One bucket per tick costs
+ * ~15 subrequests and 3 KV write-type operations (lock put, cache put,
+ * lock delete — deletes count toward the same daily cap), i.e. ~72/day
+ * at one run an hour — a small slice of the Free plan's 1,000/day cap.
+ */
+export async function warmRotatingCatalogFilter(
+  env: ValidatedEnv,
+  workerEnv: Env,
+  config: CatalogRouteConfig,
+  tickIndex: number,
+): Promise<void> {
+  const rotating = Object.entries(config.filters ?? {}).filter(([, f]) => f.rotating);
+  if (rotating.length === 0) return;
+
+  const [key, filterConfig] = rotating[tickIndex % rotating.length]!;
+  logger.info("catalog_rotating_warm_start", { catalog: config.name, filter: key });
+
+  await warmCatalogCacheKey(
+    env,
+    workerEnv,
+    filterConfig.cacheKey,
+    filterConfig.discoveryQueries,
+    config.maxPagesPerQuery ?? DEFAULT_MAX_PAGES_PER_QUERY,
+    filterConfig.hardTtlSeconds ?? CATALOG_CACHE_HARD_TTL_SECONDS,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -801,6 +892,7 @@ export async function forceRefreshCatalog(
   workerEnv: Env,
   cacheSlot: string,
   discoveryQueries: string[],
+  hardTtlSeconds: number = CATALOG_CACHE_HARD_TTL_SECONDS,
 ): Promise<ForceRefreshCatalogResult> {
   const recent = await getCachedSWR<CatalogSummary[]>(
     workerEnv,
@@ -826,7 +918,7 @@ export async function forceRefreshCatalog(
       return { status: "no-data" };
     }
 
-    await setCachedSWR(workerEnv, cacheSlot, scan.items, CATALOG_CACHE_HARD_TTL_SECONDS);
+    await setCachedSWR(workerEnv, cacheSlot, scan.items, hardTtlSeconds);
     logger.info("catalog_manual_refresh_stored", {
       slot: cacheSlot,
       repositories: scan.items.length,

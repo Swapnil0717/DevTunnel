@@ -2,8 +2,8 @@ import type { Env } from "../types";
 import type { ValidatedEnv } from "../config/env";
 import { logger } from "./logger";
 import { getSupabase } from "./supabase";
-import { warmCacheSWR, getCachedSWR, getCached, setCached } from "./cache";
-import { warmCatalogRoute } from "./githubCatalog";
+import { warmCacheSWR, getCachedSWR } from "./cache";
+import { warmCatalogRoute, warmRotatingCatalogFilter } from "./githubCatalog";
 import { scanProjectIssues, ISSUES_SCAN_BATCH_SIZE } from "./issuesScan";
 import { listActiveProjectsWithRepo, type ActiveProjectWithRepo } from "../db/adminNewIssues";
 import type { GithubScanCacheEntry } from "../routes/admin/newIssues";
@@ -70,6 +70,29 @@ export async function warmGithubCatalogs(env: ValidatedEnv, workerEnv: Env): Pro
 }
 
 /**
+ * One star-range bucket of `/github-projects` per call (see
+ * `warmRotatingCatalogFilter`). Own cron, so it gets its own 50-subrequest
+ * budget instead of competing with `warmGithubCatalogs`.
+ */
+/** One rotation step per hourly run — must equal the cron interval (`"12 * * * *"`) or buckets get skipped. */
+const STAR_BUCKET_TICK_MS = 60 * 60 * 1000;
+
+export async function warmGithubStarBuckets(env: ValidatedEnv, workerEnv: Env): Promise<void> {
+  try {
+    await warmRotatingCatalogFilter(
+      env,
+      workerEnv,
+      GITHUB_PROJECTS_CATALOG,
+      Math.floor(Date.now() / STAR_BUCKET_TICK_MS),
+    );
+  } catch (err) {
+    logger.error("catalog_star_bucket_warm_failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+/**
  * Re-scans and re-caches the contributor-facing `/issues` scan
  * (`ISSUES_SCAN_CACHE_KEY`, distinct from `GET /admin/new-issues`'s own
  * cache entry — see routes/issues.ts's doc comment). Uses
@@ -95,9 +118,18 @@ export async function warmGithubCatalogs(env: ValidatedEnv, workerEnv: Env): Pro
  * share the exact same cap instead of redeclaring its own (see that
  * route's `missingProjects` handling).
  */
-const ISSUES_SCAN_CURSOR_KEY = "issues-scan-cursor";
-/** Generous relative to the batch cadence — if this expires, rotation just restarts at 0, which is harmless. */
-const ISSUES_SCAN_CURSOR_TTL_SECONDS = 60 * 60 * 24;
+/**
+ * Rotation position comes from the clock, not from KV: `tick = floor(now /
+ * ISSUES_SCAN_TICK_MS)`, and this run's batch starts at `tick * batchSize`.
+ * The old version kept a cursor in KV (`issues-scan-cursor`), which cost one
+ * KV write on every run (~360/day at a 4-minute cadence) just to remember
+ * where it was. Consecutive runs still get consecutive batches, so every
+ * project is still visited every `ceil(projectCount / ISSUES_SCAN_BATCH_SIZE)`
+ * runs; if the project count changes the rotation just shifts, which is
+ * harmless.
+ */
+// Must equal the every-15-minutes cron interval in wrangler.toml so each run advances exactly one batch.
+const ISSUES_SCAN_TICK_MS = 15 * 60 * 1000;
 
 export async function warmContributorIssuesScan(env: ValidatedEnv, workerEnv: Env): Promise<void> {
   const supabase = getSupabase(env);
@@ -118,14 +150,13 @@ export async function warmContributorIssuesScan(env: ValidatedEnv, workerEnv: En
     return;
   }
 
-  const cursor = (await getCached<number>(workerEnv, ISSUES_SCAN_CURSOR_KEY)) ?? 0;
-  const startIndex = cursor % projects.length;
   const batchSize = Math.min(ISSUES_SCAN_BATCH_SIZE, projects.length);
+  const tick = Math.floor(Date.now() / ISSUES_SCAN_TICK_MS);
+  const startIndex = (tick * batchSize) % projects.length;
   const batch = Array.from(
     { length: batchSize },
     (_, i) => projects[(startIndex + i) % projects.length]!,
   );
-  await setCached(workerEnv, ISSUES_SCAN_CURSOR_KEY, startIndex + batchSize, ISSUES_SCAN_CURSOR_TTL_SECONDS);
 
   // Whatever's already cached for the projects *not* in this tick's batch —
   // read regardless of freshness, since a stale-but-present entry for an

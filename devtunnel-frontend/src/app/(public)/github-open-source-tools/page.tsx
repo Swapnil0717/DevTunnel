@@ -125,7 +125,7 @@ export default async function GithubOpenSourceToolsPage({
           <Suspense
             fallback={
               <>
-                <SkeletonFilterBar filters={4} />
+                <SkeletonFilterBar filters={3} />
                 <SkeletonGithubProjectCardGrid />
               </>
             }
@@ -133,6 +133,7 @@ export default async function GithubOpenSourceToolsPage({
             <GithubProjectsExplorer
               projects={result.data}
               catalogFilter={catalogFilter}
+              hideStarFilters
               // The server renders only the first page; "Load all tools"
               // fetches the rest — for the same `?filter=` population the
               // preview came from, so a filtered view never fills up with

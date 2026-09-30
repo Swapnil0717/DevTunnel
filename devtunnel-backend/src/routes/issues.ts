@@ -84,21 +84,23 @@ export const issues = new Hono<{ Bindings: Env; Variables: Variables }>();
 export const ISSUES_SCAN_CACHE_KEY = "issues:github-scan:v2";
 
 /**
- * 4 minutes: short enough that "All Issues" still feels current on any
- * normal contributor visit, comfortably under the ~4-5 minute cadence the
- * scheduled warmer (`lib/cacheWarmers.ts`) re-scans this key on, so in
- * steady state a contributor's request finds a *fresh* entry from the
- * warmer, not a stale one it has to wait out a background refresh for.
+ * 20 minutes: just above the 15-minute cadence the scheduled warmer
+ * (`lib/cacheWarmers.ts`) re-scans this key on, so in steady state a
+ * contributor's request finds a *fresh* entry from the warmer. It must stay
+ * above the cadence: a shorter soft TTL makes every request in the gap
+ * start its own background scan AND write the cache (`withCacheSWR`),
+ * which costs far more KV writes than the warmer itself. (It was 4 minutes
+ * when the warmer ran every 4 minutes.)
  */
-export const ISSUES_SCAN_SOFT_TTL_SECONDS = 4 * 60;
+export const ISSUES_SCAN_SOFT_TTL_SECONDS = 20 * 60;
 
 /**
  * How long a scan result survives in KV as a stale-but-usable fallback —
- * comfortably longer than the soft TTL so a warmer outage of up to half an
- * hour still serves instantly (if slightly old) instead of falling through
- * to a synchronous live scan on some unlucky contributor's request.
+ * comfortably longer than the soft TTL so a warmer outage of up to a couple
+ * of hours still serves instantly (if slightly old) instead of falling
+ * through to a synchronous live scan on some unlucky contributor's request.
  */
-export const ISSUES_SCAN_HARD_TTL_SECONDS = 30 * 60;
+export const ISSUES_SCAN_HARD_TTL_SECONDS = 2 * 60 * 60;
 
 /**
  * Query validation for `GET /issues` — same shape, bounds, and reasoning
