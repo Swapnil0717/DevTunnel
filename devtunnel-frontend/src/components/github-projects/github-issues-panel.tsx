@@ -59,7 +59,10 @@ export function GithubIssuesPanel({
   const { issues, canLoadMore } = loader;
   // `null` (no Explain button, no insights card) if the URL isn't a github.com repository.
   const repoFullName = parseGithubRepoFullName(repositoryUrl);
-  const insights = useIssueInsights(repoFullName);
+  // The catalog endpoint only returns open issues. After "Load all issues" the ones without an AI insight yet
+  // are analysed (only once the visitor has pressed "Analyze issues").
+  const openIssueNumbers = useMemo(() => issues.map((issue) => issue.number), [issues]);
+  const insights = useIssueInsights(repoFullName, openIssueNumbers);
   const { filterIssues } = insights;
   // The insight filters run BEFORE pagination; with no filter active this is `issues` itself.
   const visibleIssues = useMemo(() => filterIssues(issues), [filterIssues, issues]);

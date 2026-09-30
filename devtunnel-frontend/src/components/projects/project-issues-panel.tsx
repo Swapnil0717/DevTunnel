@@ -73,6 +73,9 @@ function formatDate(iso: string): string {
  * state filter and BEFORE the client-side pagination, each open row shows its
  * own AI labels beside the Explain button, and an issue the AI didn't analyze
  * says so. Closed rows get no AI labels — insights only cover open issues.
+ * After "Load all issues" the newly loaded open issues are analyzed too — only
+ * those that have no insight yet, and only if the visitor already pressed
+ * "Analyze issues" — and their labels appear batch by batch.
  *
  * Note the backend only ever returns *open* issues here, so the Closed
  * filter's count is always 0 — see `GET /projects/:slug` — which is
@@ -110,7 +113,10 @@ export function ProjectIssuesPanel({
 
   // `null` (no Explain button, no insights card) if the URL isn't a github.com repository.
   const repoFullName = parseGithubRepoFullName(repositoryUrl);
-  const insights = useIssueInsights(repoFullName);
+  // Every OPEN issue the panel holds — after "Load all issues" that is the complete list, and the ones
+  // without an AI insight yet are analysed (only once the visitor has pressed "Analyze issues").
+  const openIssueNumbers = useMemo(() => issues.filter((issue) => issue.state === "OPEN").map((issue) => issue.number), [issues]);
+  const insights = useIssueInsights(repoFullName, openIssueNumbers);
   const { filterIssues } = insights;
   // The insight filters run after search + state filter and BEFORE pagination.
   const filteredIssues = useMemo(() => filterIssues(visibleIssues), [filterIssues, visibleIssues]);

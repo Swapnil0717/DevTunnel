@@ -54,6 +54,8 @@ export const INSIGHTS_PROMPT_VERSION = "v1";
 export const INSIGHTS_FETCH_LIMIT = 50;
 /** Part 1 rule 2: cap input size. At most this many issues are analysed per repository. */
 export const INSIGHTS_MAX_ISSUES = 40;
+/** Hard ceiling on how many analysed issues one repository's stored row may hold (extended analysis adds batches of `INSIGHTS_MAX_ISSUES`). */
+export const INSIGHTS_MAX_STORED_ISSUES = 1_000;
 export const INSIGHTS_BODY_MAX_CHARS = 400;
 const TITLE_MAX_CHARS = 200;
 const MAX_LABELS_PER_ISSUE = 8;
@@ -256,6 +258,61 @@ function orderedKeys<K extends string>(counts: Partial<Record<K, number>>, order
   return order.filter((key) => (counts[key] ?? 0) > 0).sort((a, b) => (counts[b] ?? 0) - (counts[a] ?? 0) || order.indexOf(a) - order.indexOf(b));
 }
 
+/** Per-role / per-level counts and the top technologies, computed from validated entries (the model is never asked to count). */
+export function computeCounts(issues: AiInsightIssue[]): Pick<AiIssueInsights, "byRole" | "byLevel" | "topTechStack"> {
+  const byRole: Partial<Record<DeveloperRole, number>> = {};
+  const byLevel: Partial<Record<ExperienceLevel, number>> = {};
+  const techCounts = new Map<string, { name: string; count: number }>();
+  for (const issue of issues) {
+    bumpCount(byRole, issue.role);
+    bumpCount(byLevel, issue.level);
+    for (const name of issue.techStack) {
+      const key = name.toLowerCase();
+      const existing = techCounts.get(key);
+      if (existing) existing.count += 1;
+      else techCounts.set(key, { name, count: 1 });
+    }
+  }
+  const topTechStack = [...techCounts.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)).slice(0, 8);
+  return { byRole, byLevel, topTechStack };
+}
+
+/**
+ * Adds a freshly analysed batch to what is already stored for the repository.
+ *
+ * - An entry in `fresh` replaces a stored entry with the same issue number.
+ * - When `openNumbers` is given (the complete open-issue list was just read
+ *   from GitHub), stored entries for issues that are no longer open are
+ *   dropped, so closed issues don't keep inflating the counts.
+ * - The counts, top technologies and "best for" lists are RECOMPUTED from the
+ *   merged entries, so the numbers on the card always add up to the rows.
+ * - The stored overview is kept (it was written for the same repository);
+ *   the batch's overview is only used when there was none.
+ * - At most `INSIGHTS_MAX_STORED_ISSUES` entries are kept (highest numbers,
+ *   i.e. the newest issues, win).
+ */
+export function mergeInsights(existing: AiIssueInsights | null, fresh: AiIssueInsights, openNumbers?: ReadonlySet<number>): AiIssueInsights {
+  if (!existing) return fresh;
+  const freshNumbers = new Set(fresh.issues.map((issue) => issue.number));
+  const kept = existing.issues.filter((issue) => !freshNumbers.has(issue.number) && (!openNumbers || openNumbers.has(issue.number)));
+  const merged = [...kept, ...fresh.issues].sort((a, b) => a.number - b.number);
+  const issues = merged.length > INSIGHTS_MAX_STORED_ISSUES ? merged.slice(merged.length - INSIGHTS_MAX_STORED_ISSUES) : merged;
+
+  const counts = computeCounts(issues);
+  const roleOrder = orderedKeys(counts.byRole, DEVELOPER_ROLES);
+  const levelOrder = orderedKeys(counts.byLevel, EXPERIENCE_LEVELS);
+  return {
+    overview: existing.overview || fresh.overview,
+    ...counts,
+    bestFor: {
+      roles: roleOrder.slice(0, 2),
+      levels: levelOrder.slice(0, 2),
+      techStack: counts.topTechStack.slice(0, 3).map((tech) => tech.name),
+    },
+    issues,
+  };
+}
+
 /**
  * Turns the model's raw (already zod-valid) answer into the stored shape, or
  * `null` when not a single issue entry survived (the caller then answers
@@ -301,20 +358,7 @@ export function sanitizeInsights(raw: RawInsights, input: InsightsPromptInput, p
   issues.sort((a, b) => a.number - b.number);
 
   // 2. Counts — computed, never taken from the model.
-  const byRole: Partial<Record<DeveloperRole, number>> = {};
-  const byLevel: Partial<Record<ExperienceLevel, number>> = {};
-  const techCounts = new Map<string, { name: string; count: number }>();
-  for (const issue of issues) {
-    bumpCount(byRole, issue.role);
-    bumpCount(byLevel, issue.level);
-    for (const name of issue.techStack) {
-      const key = name.toLowerCase();
-      const existing = techCounts.get(key);
-      if (existing) existing.count += 1;
-      else techCounts.set(key, { name, count: 1 });
-    }
-  }
-  const topTechStack = [...techCounts.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)).slice(0, 8);
+  const { byRole, byLevel, topTechStack } = computeCounts(issues);
 
   // 3. bestFor: the model's picks, limited to what the computed lists contain; derived when nothing is left.
   const roleOrder = orderedKeys(byRole, DEVELOPER_ROLES);

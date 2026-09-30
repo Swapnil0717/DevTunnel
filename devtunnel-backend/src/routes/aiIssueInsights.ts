@@ -14,6 +14,7 @@ import {
   aiFeaturesEnabled,
 } from "../lib/ai/client";
 import { AiJsonError } from "../lib/ai/json";
+import { INSIGHTS_MAX_ISSUES } from "../lib/ai/prompts/insights";
 import {
   InsightsNoIssuesError,
   InsightsRateLimitedError,
@@ -27,7 +28,12 @@ import type { Env, Variables } from "../types";
 /**
  * `POST /ai/issue-insights` — the "AI issue insights" card at the top of a
  * repository's Issues tab (Part 6 of the AI build plan; devtunnel-frontend
- * `components/ai/issue-insights-card.tsx`). Body `{ repo: "owner/repo" }`.
+ * `components/ai/issue-insights-card.tsx`). Body `{ repo: "owner/repo" }`,
+ * plus optionally `issueNumbers` (at most `INSIGHTS_MAX_ISSUES`): the open
+ * issues that have no insight yet, used after "Load all issues" and on the
+ * All Issues page. Only the numbers are accepted — the issue text is always
+ * read from GitHub by the Worker — and only issues without a stored insight
+ * cost a model call (see "Filling the gaps" in `lib/ai/issueInsights.ts`).
  *
  * The flow (stored insights first, model only when needed) lives in
  * `lib/ai/issueInsights.ts`; this file is only the HTTP edge: sign-in, the
@@ -59,6 +65,11 @@ const requestBodySchema = z.object({
     .min(3, "A repository is required")
     .max(200, "That repository name is too long")
     .regex(/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/, "Repository must look like owner/repo"),
+  issueNumbers: z
+    .array(z.number().int().positive().max(999_999_999))
+    .min(1, "issueNumbers can't be empty")
+    .max(INSIGHTS_MAX_ISSUES, `At most ${INSIGHTS_MAX_ISSUES} issues can be analyzed per request`)
+    .optional(),
 });
 
 export const aiIssueInsights = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -87,6 +98,7 @@ aiIssueInsights.post("/ai/issue-insights", requireAuth, async (c) => {
       ctx: c.executionCtx,
       owner: ref.owner,
       repo: ref.repo,
+      requestedNumbers: parsed.data.issueNumbers,
       allowGeneration: () =>
         checkRateLimit(c, {
           bucket: "ai-issue-insights-generate",

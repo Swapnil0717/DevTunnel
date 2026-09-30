@@ -1,13 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SearchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { PagePaginationControls } from "@/components/admin/page-pagination-controls";
 import { usePagePagination } from "@/lib/admin/use-page-pagination";
 import { useAuth } from "@/lib/auth/use-auth";
+import { useIssuesPageInsights } from "@/lib/ai/use-issues-page-insights";
 import { useLoadIssueList } from "@/lib/issues/use-load-issue-list";
+import { IssuesInsightsCard } from "./issues-insights-card";
 import { IssuesTable } from "./issues-table";
 import { LoadIssueListBar } from "./load-issue-list-bar";
 import type { Issue, IssueState } from "@/lib/issues/types";
@@ -45,6 +47,16 @@ const ISSUES_PAGE_SIZE = 10;
  * (`useLoadIssueList`), and the explorer's search, filters and pagination
  * then run over the complete list. Until then the bar says outright that
  * they only cover what's loaded.
+ *
+ * Above the filters sits the AI issue insights card (Part 6,
+ * `IssuesInsightsCard`): on request it labels the open issues by role, level
+ * and technology, one page at a time (`useIssuesPageInsights`) — "Analyze all"
+ * widens it to the whole list — and each open row shows its labels. Only
+ * issues without an insight are ever sent to the AI, so issues that arrive
+ * with "Load all issues" (or on the next page) are analysed and the rest
+ * aren't paid for twice. The role / level / tech chips narrow the list AFTER
+ * the search and filters above and BEFORE the pagination, and — because they
+ * can only match analyzed issues — show just the analyzed ones that match.
  *
  * `usePagePagination` and `PagePaginationControls` are reused from the
  * Admin Portal rather than duplicated: both are generic, role-agnostic
@@ -155,10 +167,22 @@ export function IssuesExplorer({
     techStack !== "ALL" ||
     projectSlug !== "ALL";
 
-  const paged = usePagePagination(filteredIssues, ISSUES_PAGE_SIZE);
+  // AI insights: the chips run after the filters above and BEFORE pagination (returns `filteredIssues` itself when no chip is on).
+  const insights = useIssuesPageInsights();
+  const { filterIssues, setTargets } = insights;
+  const visibleIssues = useMemo(() => filterIssues(filteredIssues), [filterIssues, filteredIssues]);
+
+  const paged = usePagePagination(visibleIssues, ISSUES_PAGE_SIZE);
+
+  // The AI looks at the page being shown (and, on request, the whole filtered list).
+  useEffect(() => {
+    setTargets(paged.pageItems, filteredIssues);
+  }, [setTargets, paged.pageItems, filteredIssues]);
 
   return (
     <div>
+      <IssuesInsightsCard insights={insights} />
+
       <div className="mb-3 flex flex-col gap-3">
         <div className="relative w-full sm:max-w-xs">
           <label htmlFor="issues-search" className="sr-only">
@@ -295,15 +319,15 @@ export function IssuesExplorer({
 
       <LoadIssueListBar loader={issueList} />
 
-      {filteredIssues.length === 0 ? (
+      {visibleIssues.length === 0 ? (
         <SectionMessage>
-          {hasActiveFilters
+          {hasActiveFilters || insights.activeFilterCount > 0
             ? "No issues match your search or the selected filters. Try different search terms or filters."
             : "No open GitHub issues right now — check back soon."}
         </SectionMessage>
       ) : (
         <>
-          <IssuesTable issues={paged.pageItems} />
+          <IssuesTable issues={paged.pageItems} insights={insights} />
           <PagePaginationControls
             page={paged.page}
             totalPages={paged.totalPages}

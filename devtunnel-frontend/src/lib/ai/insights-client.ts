@@ -3,7 +3,8 @@
 // `./summary-client.ts` and `lib/github-projects/catalog-client.ts`. Kept out
 // of any server-only `api.ts` (those read request cookies via
 // `next/headers`) so the issue lists stay as they were and insights are only
-// ever asked for when someone presses "Analyze issues".
+// ever asked for when someone presses "Analyze issues" — or, once they have,
+// for the issues that still have no insight (`fillInsightGaps`).
 import { API_BASE_URL } from "@/lib/config";
 import type { DeveloperRole, ExperienceLevel } from "@/lib/onboarding/types";
 
@@ -36,6 +37,15 @@ export interface AiIssueInsightsResponse {
   /** `true` when the backend made no model call for this request. */
   cached: boolean;
 }
+
+/** Why an insights request failed, in words that are safe to show. */
+export interface InsightsFailure {
+  message: string;
+  code?: string;
+}
+
+/** How many issues one "fill the gaps" request may name — the backend's `INSIGHTS_MAX_ISSUES`. */
+export const AI_INSIGHTS_BATCH_SIZE = 40;
 
 export class AiInsightsError extends Error {
   status: number;
@@ -125,19 +135,23 @@ export function getCachedAiInsights(repo: string): AiIssueInsightsResponse | nul
  * there are any and only calls a model when there aren't (or the issue list
  * changed and the stored ones are old), so this is cheap to call again.
  *
+ * With `issueNumbers` (at most `AI_INSIGHTS_BATCH_SIZE`) it analyses exactly
+ * those open issues if they have no stored insight yet, adds them to the
+ * stored ones, and returns the complete, merged result.
+ *
  * Rejects with `AiInsightsError` on any failure — its `message` is the
  * backend's own safe-to-show text where there is one — and rethrows the
  * browser's `AbortError` untouched so callers can tell "cancelled" from
  * "failed".
  */
-export async function fetchAiIssueInsights(repo: string, signal?: AbortSignal): Promise<AiIssueInsightsResponse> {
+export async function fetchAiIssueInsights(repo: string, signal?: AbortSignal, issueNumbers?: readonly number[]): Promise<AiIssueInsightsResponse> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE_URL}/ai/issue-insights`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ repo }),
+      body: JSON.stringify(issueNumbers && issueNumbers.length > 0 ? { repo, issueNumbers } : { repo }),
       signal,
     });
   } catch (err) {
@@ -162,4 +176,46 @@ export async function fetchAiIssueInsights(repo: string, signal?: AbortSignal): 
 
   sessionCache.set(cacheKey(repo), body);
   return body;
+}
+
+
+/** A request's failure as the UI shows it. */
+export function toInsightsFailure(err: unknown): InsightsFailure {
+  if (err instanceof AiInsightsError) {
+    return err.status === 401 || err.code === "unauthenticated"
+      ? { message: "Sign in to use AI.", code: "unauthenticated" }
+      : { message: err.message, code: err.code };
+  }
+  return { message: "The AI analysis couldn't be loaded. Try again." };
+}
+
+/** `true` when the browser cancelled the request itself (navigation, unmount, a new request replacing it). */
+export function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError";
+}
+
+/**
+ * Fills in the issues that have no insight yet: asks for `numbers` in batches
+ * of `AI_INSIGHTS_BATCH_SIZE`, one batch after the next (never in parallel —
+ * the backend limits how many analyses one person may start a minute, and a
+ * list must not turn into a burst of model calls).
+ *
+ * `onBatch` is called after every batch with the merged result and the
+ * numbers that batch asked for, so the UI shows labels as they arrive rather
+ * than after the last batch. Stops at the first failure and rethrows it (the
+ * batches before it have already been reported and stay on screen).
+ */
+export async function fillInsightGaps(
+  repo: string,
+  numbers: readonly number[],
+  signal: AbortSignal,
+  onBatch: (data: AiIssueInsightsResponse, batch: number[]) => void,
+): Promise<void> {
+  for (let start = 0; start < numbers.length; start += AI_INSIGHTS_BATCH_SIZE) {
+    if (signal.aborted) return;
+    const batch = numbers.slice(start, start + AI_INSIGHTS_BATCH_SIZE);
+    const data = await fetchAiIssueInsights(repo, signal, batch);
+    if (signal.aborted) return;
+    onBatch(data, batch);
+  }
 }

@@ -4,8 +4,8 @@ import { SparkleIcon } from "@/components/layout/nav-icons";
 import { AI_SECONDARY_BUTTON_CLASS, AiCardHeader, AiError, AiLoading, AiNotice, AiSignInPrompt } from "@/components/ai/ai-states";
 import { formatRelativeTime } from "@/lib/home/format-relative-time";
 import { DEVELOPER_ROLE_LABEL, EXPERIENCE_LEVEL_LABEL, type DeveloperRole, type ExperienceLevel } from "@/lib/onboarding/types";
-import type { AiIssueInsightsResponse } from "@/lib/ai/insights-client";
-import type { IssueInsightsController } from "@/lib/ai/use-issue-insights";
+import type { AiInsightIssue, AiIssueInsightsResponse } from "@/lib/ai/insights-client";
+import type { InsightFillState, InsightsStatus, IssueInsightsController } from "@/lib/ai/use-issue-insights";
 
 const TAG_CLASS = "inline-block rounded-[5px] border border-border-subtle px-[7px] py-[2px] text-[10.5px] text-text-secondary";
 
@@ -14,7 +14,7 @@ const ROLE_ORDER: DeveloperRole[] = ["FRONTEND", "BACKEND", "FULL_STACK", "DOCUM
 const LEVEL_ORDER: ExperienceLevel[] = ["BEGINNER", "INTERMEDIATE", "ADVANCED"];
 
 /** Codes where asking again can't help. */
-function isPermanentFailure(code: string | undefined): boolean {
+export function isPermanentFailure(code: string | undefined): boolean {
   return code === "ai_disabled" || code === "no_issues" || code === "not_found" || code === "unauthenticated";
 }
 
@@ -22,7 +22,7 @@ function isPermanentFailure(code: string | undefined): boolean {
 // Filter groups (simple CSS count bars — no chart library)
 // ---------------------------------------------------------------------------
 
-interface FilterRow {
+export interface FilterRow {
   key: string;
   label: string;
   count: number;
@@ -36,7 +36,7 @@ interface FilterRow {
  * width is the count relative to the group's largest — the bar is decoration
  * only (`aria-hidden`), so nothing depends on colour or length alone.
  */
-function FilterGroup({ title, rows }: { title: string; rows: FilterRow[] }) {
+export function FilterGroup({ title, rows }: { title: string; rows: FilterRow[] }) {
   if (rows.length === 0) return null;
   const max = Math.max(...rows.map((row) => row.count), 1);
   return (
@@ -72,6 +72,42 @@ function FilterGroup({ title, rows }: { title: string; rows: FilterRow[] }) {
       </ul>
     </div>
   );
+}
+
+/**
+ * The line under the insights that follows the issues loaded AFTER the first
+ * analysis (or that it didn't reach): "Analyzing N more…" while batches are
+ * running, the failure with a retry when one stopped the run, and — once the
+ * run is over — how many issues the AI gave no usable answer for.
+ * Renders nothing when every loaded open issue has its labels.
+ */
+export function InsightFillStatus({ fill, onRetry }: { fill: InsightFillState; onRetry: () => void }) {
+  if (fill.running) {
+    const count = fill.pending > 0 ? fill.pending : fill.notAnalyzed;
+    return <AiLoading className="mt-3" message={`Analyzing ${count} more issue${count === 1 ? "" : "s"}…`} />;
+  }
+  if (fill.error) {
+    return (
+      <AiError
+        className="mt-3"
+        message={`${fill.notAnalyzed} issue${fill.notAnalyzed === 1 ? " isn't" : "s aren't"} analyzed yet. ${fill.error.message}`}
+        onRetry={isPermanentFailure(fill.error.code) ? undefined : onRetry}
+      />
+    );
+  }
+  if (fill.notAnalyzed > 0) {
+    return (
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <p role="status" className="m-0 text-[12px] text-text-muted">
+          {fill.notAnalyzed} issue{fill.notAnalyzed === 1 ? " has" : "s have"} no AI labels yet.
+        </p>
+        <button type="button" onClick={onRetry} className={AI_SECONDARY_BUTTON_CLASS}>
+          Analyze {fill.notAnalyzed === 1 ? "it" : "them"}
+        </button>
+      </div>
+    );
+  }
+  return null;
 }
 
 function InsightsBody({ controller, data }: { controller: IssueInsightsController; data: AiIssueInsightsResponse }) {
@@ -138,6 +174,8 @@ function InsightsBody({ controller, data }: { controller: IssueInsightsControlle
         <FilterGroup title="Tech" rows={techRows} />
       </div>
 
+      <InsightFillStatus fill={controller.fill} onRetry={controller.retryFill} />
+
       {controller.activeFilterCount > 0 ? (
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
           <p role="status" className="m-0 text-[12px] text-text-muted">
@@ -150,8 +188,8 @@ function InsightsBody({ controller, data }: { controller: IssueInsightsControlle
       ) : null}
 
       <p className="m-0 mt-3 text-[11px] leading-relaxed text-text-faint">
-        Written by AI from issue titles, labels and short excerpts, so it can be wrong — open the issue before you start. Covers the{" "}
-        {data.analyzedIssueCount} most recently updated open issues; any other issue shows &ldquo;Not analyzed&rdquo;. Generated{" "}
+        Written by AI from issue titles, labels and short excerpts, so it can be wrong — open the issue before you start. Covers{" "}
+        {data.analyzedIssueCount} open issues; an issue the AI hasn&apos;t reached shows &ldquo;Not analyzed&rdquo;. Last updated{" "}
         <time dateTime={data.generatedAt}>{formatRelativeTime(data.generatedAt)}</time>.
       </p>
     </div>
@@ -225,26 +263,43 @@ export function IssueInsightsCard({ controller }: { controller: IssueInsightsCon
   );
 }
 
+/** What a row's AI labels need. `IssueInsightsController` satisfies it; the All Issues page hands each row one per repository. */
+export interface InsightBadgeSource {
+  status: InsightsStatus;
+  insightFor: (issueNumber: number) => AiInsightIssue | undefined;
+  isWaiting: (issueNumber: number) => boolean;
+  matchesViewerRole: (issue: AiInsightIssue) => boolean;
+  fitsViewerLevel: (issue: AiInsightIssue) => boolean;
+}
+
 /**
  * The AI labels for ONE issue row: role, level, up to 3 technologies, the
  * one-line description, and — for a signed-in viewer who has answered
  * onboarding — "Matches your role" / "Fits your level" (worked out in the
  * browser from `developerRoles` / `experienceLevel`; no extra AI call).
  *
- * Renders nothing until the insights are loaded. An issue outside the
- * analysed set (or one the AI's answer for was dropped as invalid) says "Not
- * analyzed" instead of showing a guess. Every label is text, and the row's
+ * Renders nothing until the insights are loaded. An issue that is still
+ * waiting for its batch says "Analyzing…"; one the analysis didn't reach (or
+ * whose answer was dropped as invalid) says "Not analyzed" instead of showing
+ * a guess. Every label is text, and the row's
  * AI origin is stated ("AI estimate") — Part 1 rule 9.
  *
  * Place it BESIDE the row's link, not inside it (nothing here is a link, but
  * keeping the row's `<a>` as one plain target keeps it keyboard-friendly).
  */
-export function IssueInsightBadges({ controller, issueNumber }: { controller: IssueInsightsController; issueNumber: number }) {
+export function IssueInsightBadges({ controller, issueNumber }: { controller: InsightBadgeSource; issueNumber: number }) {
   if (controller.status !== "done") return null;
   const entry = controller.insightFor(issueNumber);
 
   if (!entry) {
-    return <p className="m-0 text-[10.5px] text-text-faint">Not analyzed</p>;
+    return controller.isWaiting(issueNumber) ? (
+      <p role="status" className="m-0 inline-flex items-center gap-1 text-[10.5px] text-text-faint">
+        <SparkleIcon className="h-3 w-3" />
+        Analyzing…
+      </p>
+    ) : (
+      <p className="m-0 text-[10.5px] text-text-faint">Not analyzed</p>
+    );
   }
 
   const matchesRole = controller.matchesViewerRole(entry);

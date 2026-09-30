@@ -75,7 +75,10 @@ export function ToolIssuesPanel({
   }, [issues, query]);
 
   const repoFullName = parseGithubRepoFullName(repositoryUrl);
-  const insights = useIssueInsights(repoFullName);
+  // The tool endpoint only returns open issues. After "Load all issues" the ones without an AI insight yet
+  // are analysed (only once the visitor has pressed "Analyze issues").
+  const openIssueNumbers = useMemo(() => issues.map((issue) => issue.number), [issues]);
+  const insights = useIssueInsights(repoFullName, openIssueNumbers);
   const { filterIssues } = insights;
   // The insight filters run after search and BEFORE pagination.
   const filteredIssues = useMemo(() => filterIssues(visibleIssues), [filterIssues, visibleIssues]);

@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { ValidatedEnv } from "../../config/env";
 import { getSupabase } from "../supabase";
 import { logger } from "../logger";
-import { GitHubRepoError, fetchRepositoryCatalogSummary, fetchRepositoryIssues } from "../githubRepo";
+import { GitHubRepoError, fetchRepositoryCatalogSummary, fetchRepositoryIssueListing, fetchRepositoryIssues } from "../githubRepo";
 import { runJson } from "./json";
 import {
   INSIGHTS_FETCH_LIMIT,
@@ -12,6 +12,7 @@ import {
   INSIGHTS_PROMPT_VERSION,
   buildInsightsMessages,
   insightsSchema,
+  mergeInsights,
   sanitizeInsights,
   type AiIssueInsights,
   type InsightsIssueInput,
@@ -68,6 +69,27 @@ import {
  *    that can't be stored would spend a free-tier call on every visit.
  *  - If GitHub fails while a stored result exists, the stored result is
  *    returned rather than an error.
+ *
+ * ---------------------------------------------------------------------
+ * Filling the gaps ("extended" requests)
+ * ---------------------------------------------------------------------
+ * The default request above only ever covers the newest `INSIGHTS_MAX_ISSUES`
+ * open issues. When a visitor loads the repository's complete issue list, the
+ * browser asks for the issues that have no insight yet by number
+ * (`requestedNumbers`, at most `INSIGHTS_MAX_ISSUES` per request):
+ *   1. Numbers that are already stored are skipped. If nothing is missing the
+ *      stored result is returned with no GitHub call and no model call.
+ *   2. The open-issue list is read from GitHub by the SERVER (the browser only
+ *      sends numbers, never text, so nobody can feed the model or the stored
+ *      row their own "issue" content) and the missing issues are taken from it.
+ *      Numbers that aren't open issues (closed, pull requests) are ignored.
+ *   3. ONE model call classifies just those issues; the result is merged into
+ *      the stored row (`mergeInsights`), and the stored row is re-read right
+ *      before the write so two batches finishing together don't erase each
+ *      other. The stored fingerprint and `checked_at` are left alone, so the
+ *      normal "did the newest issues change?" flow keeps working.
+ * A default request that regenerates the newest issues also MERGES into the
+ * stored row instead of replacing it, so extended entries aren't thrown away.
  *
  * The insights describe a repository, not a page: GitHub-catalog pages and
  * DevTunnel project / tool pages share one row. Only PUBLIC repositories are
@@ -209,21 +231,33 @@ export interface GetInsightsParams {
   repo: string;
   /** Called only right before a model call; return false when the caller is over its generation limit. */
   allowGeneration: () => Promise<boolean>;
+  /**
+   * Fill-the-gaps mode: analyse these open issues (those not stored yet) and
+   * add them to the stored insights. Omit for the default "newest issues" flow.
+   */
+  requestedNumbers?: number[];
 }
 
-export async function getOrCreateIssueInsights(params: GetInsightsParams): Promise<InsightsResult> {
-  const { env, owner, repo } = params;
-  const key = insightsRepoKey(owner, repo);
-
+async function readStored(env: ValidatedEnv, key: string): Promise<{ stored: StoredRow | null; storedResult: InsightsResult | null }> {
   const { data, error } = await getSupabase(env)
     .from("ai_issue_insights")
     .select(STORED_COLUMNS)
     .eq("repo_full_name", key)
     .maybeSingle<StoredRow>();
   if (error) throw new Error(`Failed to read stored AI issue insights: ${error.message}`);
-
   const stored = data ?? null;
-  const storedResult = stored ? rowToResult(stored) : null;
+  return { stored, storedResult: stored ? rowToResult(stored) : null };
+}
+
+export async function getOrCreateIssueInsights(params: GetInsightsParams): Promise<InsightsResult> {
+  const { env, owner, repo } = params;
+  const key = insightsRepoKey(owner, repo);
+
+  const { stored, storedResult } = await readStored(env, key);
+
+  if (params.requestedNumbers && params.requestedNumbers.length > 0) {
+    return extendInsights(params, key, stored, storedResult);
+  }
 
   // Step 2: recently verified — the common case, and the only one that is free.
   if (stored && storedResult && ageMs(stored.checked_at) < CHECK_INTERVAL_MS) return storedResult;
@@ -318,12 +352,15 @@ async function refreshInsights(params: GetInsightsParams, stored: StoredRow | nu
     throw new InsightsUnusableError();
   }
 
+  // Keep what earlier "fill the gaps" requests added; the newest issues' entries are replaced by the fresh ones.
+  const merged = mergeInsights(storedResult?.insights ?? null, insights);
+
   const nowIso = new Date().toISOString();
   const { error } = await getSupabase(env).from("ai_issue_insights").upsert(
     {
       repo_full_name: key,
       issues_fingerprint: fingerprint,
-      insights,
+      insights: merged,
       provider: answer.provider,
       model: answer.model,
       generated_at: nowIso,
@@ -344,5 +381,133 @@ async function refreshInsights(params: GetInsightsParams, stored: StoredRow | nu
     requestSizeEstimate: promptText.length,
   });
 
-  return { insights, analyzedIssueCount: insights.issues.length, provider: answer.provider, model: answer.model, generatedAt: nowIso, cached: false };
+  return { insights: merged, analyzedIssueCount: merged.issues.length, provider: answer.provider, model: answer.model, generatedAt: nowIso, cached: false };
+}
+
+/**
+ * "Fill the gaps": analyse the requested issues that have no stored insight
+ * and merge them into the stored row. See the section in the file header.
+ */
+async function extendInsights(params: GetInsightsParams, key: string, stored: StoredRow | null, storedResult: InsightsResult | null): Promise<InsightsResult> {
+  const wanted = [...new Set(params.requestedNumbers ?? [])].slice(0, INSIGHTS_MAX_ISSUES);
+  const have = new Set(storedResult?.insights.issues.map((issue) => issue.number) ?? []);
+  const missing = wanted.filter((number) => !have.has(number));
+
+  // Nothing new to analyse: free.
+  if (storedResult && missing.length === 0) return storedResult;
+
+  const flightKey = `${key}|extend|${missing.join(",")}`;
+  const running = inFlight.get(flightKey);
+  if (running) return running;
+
+  const work = performExtend(params, key, missing, stored, storedResult).finally(() => {
+    inFlight.delete(flightKey);
+  });
+  inFlight.set(flightKey, work);
+  return work;
+}
+
+async function performExtend(
+  params: GetInsightsParams,
+  key: string,
+  missing: number[],
+  stored: StoredRow | null,
+  storedResult: InsightsResult | null,
+): Promise<InsightsResult> {
+  const { env, ctx, owner, repo, allowGeneration } = params;
+
+  // The open-issue list, read server-side. One request per 100 issues (capped inside githubRepo.ts).
+  let listing;
+  try {
+    listing = await fetchRepositoryIssueListing(env.GITHUB_DISCOVERY_TOKEN, owner, repo);
+  } catch (err) {
+    if (storedResult) {
+      logger.warn("ai_issue_insights_extend_github_failed_serving_stored", { reason: err instanceof GitHubRepoError ? err.reason : "unknown" });
+      return storedResult;
+    }
+    if (err instanceof GitHubRepoError && err.reason === "not_found") throw new InsightsRepoNotFoundError();
+    throw err;
+  }
+
+  const openByNumber = new Map(listing.issues.map((issue) => [issue.number, issue] as const));
+  const issues: InsightsIssueInput[] = [];
+  for (const number of missing) {
+    const issue = openByNumber.get(number);
+    if (!issue) continue; // closed, a pull request, or not an issue of this repository
+    issues.push({ number: issue.number, title: issue.title, labels: issue.labels, body: issue.body, updatedAt: issue.updatedAt });
+    if (issues.length >= INSIGHTS_MAX_ISSUES) break;
+  }
+  if (issues.length === 0) {
+    if (storedResult) return storedResult;
+    throw new InsightsNoIssuesError();
+  }
+
+  // From here on a model call is certain — apply the per-user limit first.
+  if (!(await allowGeneration())) throw new InsightsRateLimitedError();
+
+  let repoSummary;
+  try {
+    repoSummary = await fetchRepositoryCatalogSummary(env.GITHUB_DISCOVERY_TOKEN, owner, repo);
+  } catch (err) {
+    if (err instanceof GitHubRepoError && err.reason === "not_found") throw new InsightsRepoNotFoundError();
+    throw err;
+  }
+  if (repoSummary.isPrivate) throw new InsightsRepoNotFoundError();
+
+  const input: InsightsPromptInput = {
+    repoFullName: repoSummary.fullName,
+    repoDescription: repoSummary.description,
+    primaryLanguage: repoSummary.primaryLanguage,
+    issues,
+  };
+  const messages = buildInsightsMessages(input);
+  const promptText = messages[1]?.content ?? "";
+
+  const answer = await runJson(env, "insights", messages, insightsSchema, {
+    ctx,
+    maxTokens: INSIGHTS_MAX_OUTPUT_TOKENS,
+    temperature: 0.2,
+    timeoutMs: INSIGHTS_TIMEOUT_MS,
+  });
+  const fresh = sanitizeInsights(answer.data, input, promptText);
+  if (!fresh) {
+    logger.warn("ai_issue_insights_extend_unusable_after_sanitising", { provider: answer.provider });
+    throw new InsightsUnusableError();
+  }
+
+  // Re-read right before writing so a batch that finished meanwhile isn't overwritten.
+  const latest = await readStored(env, key);
+  const openNumbers = listing.truncated ? undefined : new Set(openByNumber.keys());
+  const merged = mergeInsights(latest.storedResult?.insights ?? null, fresh, openNumbers);
+
+  const nowIso = new Date().toISOString();
+  const { error } = await getSupabase(env).from("ai_issue_insights").upsert(
+    {
+      repo_full_name: key,
+      // A row created by this path has no "newest issues" fingerprint yet; the default flow refreshes it later.
+      issues_fingerprint: latest.stored?.issues_fingerprint ?? stored?.issues_fingerprint ?? `extended:${INSIGHTS_PROMPT_VERSION}`,
+      insights: merged,
+      provider: answer.provider,
+      model: answer.model,
+      generated_at: nowIso,
+      checked_at: latest.stored?.checked_at ?? nowIso,
+    },
+    { onConflict: "repo_full_name" },
+  );
+  if (error) {
+    // The visitor still gets their insights; the next request will analyse them again.
+    logger.error("ai_issue_insights_extend_store_failed", { error: error.message });
+  }
+
+  logger.info("ai_issue_insights_extended", {
+    provider: answer.provider,
+    model: answer.model,
+    repaired: answer.repaired,
+    requestedIssues: missing.length,
+    analyzedIssues: fresh.issues.length,
+    storedIssues: merged.issues.length,
+    requestSizeEstimate: promptText.length,
+  });
+
+  return { insights: merged, analyzedIssueCount: merged.issues.length, provider: answer.provider, model: answer.model, generatedAt: nowIso, cached: false };
 }

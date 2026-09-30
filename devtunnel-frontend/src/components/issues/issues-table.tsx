@@ -2,9 +2,11 @@
 
 import { Fragment, useState } from "react";
 import { AiExplainToggle, AiExplanationPanel } from "@/components/ai/ai-explain-button";
+import { IssueInsightBadges } from "@/components/ai/issue-insights-card";
 import { AdminTableRow } from "@/components/admin/admin-table-row";
 import { RepoLogo } from "@/components/admin/repo-logo";
 import { IssueIcon } from "@/components/layout/nav-icons";
+import type { IssuesPageInsights } from "@/lib/ai/use-issues-page-insights";
 import type { Issue } from "@/lib/issues/types";
 
 /** How many labels to show inline before collapsing into "+N". */
@@ -43,13 +45,18 @@ function formatDate(iso: string): string {
  * toggle is a `<button>`, so `AdminTableRow` leaves its click alone instead
  * of opening the GitHub issue.
  *
+ * When `insights` is given (Part 6 on this page, `useIssuesPageInsights`), each
+ * open issue shows its AI labels — role, level, technologies — under its title,
+ * once the visitor has asked for the analysis. They sit beside the title link,
+ * not inside it, and an issue the AI hasn't reached says so.
+ *
  * Dates are shown as readable text plus a machine-readable `<time
  * datetime>` (rule 46), and the state badge is always paired with the
  * word "Open"/"Closed" — never color alone (rule 43). The whole row also
  * opens the GitHub issue in a new tab on click (`AdminTableRow`), same
  * destination as the "View on GitHub" link.
  */
-export function IssuesTable({ issues }: { issues: Issue[] }) {
+export function IssuesTable({ issues, insights }: { issues: Issue[]; insights?: IssuesPageInsights }) {
   const [openKeys, setOpenKeys] = useState<ReadonlySet<string>>(new Set());
 
   function toggle(key: string) {
@@ -111,6 +118,11 @@ export function IssuesTable({ issues }: { issues: Issue[] }) {
                       </span>
                     </span>
                   </a>
+                  {insights && canExplain ? (
+                    <div className="mt-2 pl-5 font-normal">
+                      <IssueInsightBadges controller={insights.sourceFor(issue.project.repositoryFullName)} issueNumber={issue.number} />
+                    </div>
+                  ) : null}
                 </th>
 
                 {/* Project (+ repository) */}
