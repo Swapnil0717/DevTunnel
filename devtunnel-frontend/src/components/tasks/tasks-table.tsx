@@ -1,8 +1,13 @@
+"use client";
+
+import { Fragment, useState } from "react";
 import Link from "next/link";
 import { AdminTableRow } from "@/components/admin/admin-table-row";
 import { AdminTaskStatusBadge } from "@/components/admin/tasks/admin-task-status-badge";
 import { RepoLogo } from "@/components/admin/repo-logo";
 import { IssueIcon } from "@/components/layout/nav-icons";
+import { AiExplainButton, AiExplainToggle, AiExplanationPanel } from "@/components/ai/ai-explain-button";
+import { getTaskExplainTarget } from "@/lib/ai/task-explain";
 import { TechIcon } from "@/components/onboarding/tech-icon";
 import { DEVELOPER_ROLE_LABEL, EXPERIENCE_LEVEL_LABEL } from "@/lib/onboarding/types";
 import type { Task } from "@/lib/tasks/types";
@@ -48,6 +53,12 @@ const MAX_VISIBLE_TECH = 3;
  * raw issue. Important facts (role, difficulty, status) are always
  * shown as text next to any icon, never color/icon alone (rule 43).
  *
+ * Tasks that come from an open GitHub issue also get an \"Explain\" toggle
+ * (AI, `AiExplainToggle`): it expands a plain-language explanation of the
+ * issue under the row (`AiExplanationPanel`, which only asks the backend
+ * once it is on screen, so a task nobody clicks costs nothing). The toggle
+ * is a real `<button>` beside the row's links, never inside one.
+ *
  * Two renderings of the same `tasks` list, swapped by breakpoint rather
  * than one squeezed to fit both: below `md` a 9-column table forced the
  * whole page into a sideways-scrolling strip that only ever showed a
@@ -58,6 +69,17 @@ const MAX_VISIBLE_TECH = 3;
  * opens the task" behavior either way — nothing is dropped on mobile.
  */
 export function TasksTable({ tasks }: { tasks: Task[] }) {
+  const [openIds, setOpenIds] = useState<ReadonlySet<string>>(new Set());
+
+  function toggle(id: string) {
+    setOpenIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   return (
     <>
       <TaskCardList tasks={tasks} className="md:hidden" />
@@ -92,12 +114,15 @@ export function TasksTable({ tasks }: { tasks: Task[] }) {
             {tasks.map((task) => {
               const visibleTech = task.techStack.slice(0, MAX_VISIBLE_TECH);
               const hiddenTechCount = task.techStack.length - visibleTech.length;
+              const explainTarget = getTaskExplainTarget(task);
+              const panelId = `ai-explain-task-${task.id}`;
+              const isOpen = explainTarget !== null && openIds.has(task.id);
 
               return (
+                <Fragment key={task.id}>
                 <AdminTableRow
-                  key={task.id}
                   href={taskHref(task)}
-                  className="border-b border-border-subtle last:border-b-0 hover:bg-surface/60"
+                  className={`${isOpen ? "" : "border-b border-border-subtle last:border-b-0"} hover:bg-surface/60`}
                 >
                   {/* Task */}
                   <th scope="row" className="px-4 py-3 align-top font-medium text-text">
@@ -175,16 +200,40 @@ export function TasksTable({ tasks }: { tasks: Task[] }) {
                     <AdminTaskStatusBadge status={task.status} />
                   </td>
 
-                  {/* Actions — View only; editing/deleting a task is an Admin action */}
+                  {/* Actions — View, plus the AI "Explain" toggle; editing/deleting a task is an Admin action */}
                   <td className="whitespace-nowrap px-4 py-3 align-top">
-                    <Link
-                      href={taskHref(task)}
-                      className="inline-block rounded-md px-2 py-1 text-[11.5px] font-medium text-text-secondary hover:text-accent"
-                    >
-                      View Task
-                    </Link>
+                    <div className="flex items-center gap-1">
+                      <Link
+                        href={taskHref(task)}
+                        className="inline-block rounded-md px-2 py-1 text-[11.5px] font-medium text-text-secondary hover:text-accent"
+                      >
+                        View Task
+                      </Link>
+                      {explainTarget ? (
+                        <AiExplainToggle
+                          open={isOpen}
+                          onToggle={() => toggle(task.id)}
+                          controlsId={panelId}
+                          issueNumber={explainTarget.issueNumber}
+                        />
+                      ) : null}
+                    </div>
                   </td>
                 </AdminTableRow>
+
+                {isOpen && explainTarget ? (
+                  <tr className="border-b border-border-subtle last:border-b-0">
+                    <td colSpan={9} className="px-4 pb-4 pt-0">
+                      <AiExplanationPanel
+                        id={panelId}
+                        source="devtunnel"
+                        repo={explainTarget.repo}
+                        issueNumber={explainTarget.issueNumber}
+                      />
+                    </td>
+                  </tr>
+                ) : null}
+                </Fragment>
               );
             })}
           </tbody>
@@ -209,6 +258,7 @@ function TaskCardList({ tasks, className = "" }: { tasks: Task[]; className?: st
       {tasks.map((task) => {
         const visibleTech = task.techStack.slice(0, MAX_VISIBLE_TECH);
         const hiddenTechCount = task.techStack.length - visibleTech.length;
+        const explainTarget = getTaskExplainTarget(task);
 
         return (
           <li
@@ -293,6 +343,12 @@ function TaskCardList({ tasks, className = "" }: { tasks: Task[]; className?: st
                 View Task →
               </Link>
             </div>
+
+            {explainTarget ? (
+              <div className="mt-3 border-t border-border-subtle pt-3">
+                <AiExplainButton source="devtunnel" repo={explainTarget.repo} issueNumber={explainTarget.issueNumber} />
+              </div>
+            ) : null}
           </li>
         );
       })}

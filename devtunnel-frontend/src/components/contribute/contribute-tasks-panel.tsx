@@ -3,9 +3,11 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { AdminTaskStatusBadge } from "@/components/admin/tasks/admin-task-status-badge";
+import { AiExplainButton } from "@/components/ai/ai-explain-button";
 import { GithubEmptyState } from "@/components/github-projects/github-empty-state";
 import { IssueIcon, ChevronRightIcon, SearchIcon } from "@/components/layout/nav-icons";
 import { getTechTagClasses } from "@/lib/home/tag-style";
+import { getTaskExplainTarget } from "@/lib/ai/task-explain";
 import {
   DEVELOPER_ROLE_LABEL,
   EXPERIENCE_LEVEL_LABEL,
@@ -49,6 +51,10 @@ const MAX_VISIBLE_TECH = 3;
  * Rows link to the task's own page, the same destination `TaskRow`,
  * `TasksTable` and `ProjectTasksPanel` already use, with the underlying
  * GitHub issue reachable separately.
+ *
+ * Each task that comes from an open GitHub issue also has an AI \"Explain\"
+ * button (`AiExplainButton`): a plain-language explanation of what the task
+ * needs, the skills involved and first steps, loaded only when it is clicked.
  *
  * For a tool, `tasks` is only empty when the tool has no linked shadow
  * project yet (sql/034 — a tool onboarded before that migration). Once
@@ -240,6 +246,7 @@ export function ContributeTasksPanel({
           {visibleTasks.map((task) => {
             const visibleTech = task.techStack.slice(0, MAX_VISIBLE_TECH);
             const hiddenTechCount = task.techStack.length - visibleTech.length;
+            const explainTarget = getTaskExplainTarget(task);
 
             return (
               <li
@@ -314,6 +321,16 @@ export function ContributeTasksPanel({
                     <ChevronRightIcon className="h-3 w-3" />
                   </Link>
                 </div>
+
+                {explainTarget ? (
+                  <div className="mt-2.5 border-t border-border-subtle pt-2.5">
+                    <AiExplainButton
+                      source="devtunnel"
+                      repo={explainTarget.repo}
+                      issueNumber={explainTarget.issueNumber}
+                    />
+                  </div>
+                ) : null}
               </li>
             );
           })}

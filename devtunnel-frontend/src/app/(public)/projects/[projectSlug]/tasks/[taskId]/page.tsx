@@ -11,6 +11,7 @@ import { AdminTaskStatusBadge } from "@/components/admin/tasks/admin-task-status
 import { ChevronLeftIcon, IssueIcon, GitBranchIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
 import { TaskContributeButton } from "@/components/tasks/task-contribute-button";
+import { TaskAiExplainCard } from "@/components/tasks/task-ai-explain-card";
 import { TaskProgressTracker } from "@/components/tasks/task-progress-tracker";
 import { TaskViewTracker } from "@/components/tasks/task-view-tracker";
 import { getTaskClaim } from "@/lib/tasks/progress";
@@ -74,6 +75,11 @@ export async function generateMetadata({
  * in the header, which leads to `/projects/:projectSlug/tasks/:taskId/
  * contribute` — the task-scoped Contribute page with the exact
  * `dev start <task-id>` commands and the manual fork-to-PR flow.
+ *
+ * Between the brief and the original issue sits an **AI explanation** card
+ * (`TaskAiExplainCard`): one click and AI explains the GitHub issue in plain
+ * language — what needs doing, skills, difficulty, first steps. It is only
+ * requested on that click, and only shown when the task has an open issue.
  *
  * Above all three sits the **progress tracker** (`TaskProgressTracker`):
  * Open → Started → PR submitted → Done, plus what that means for the
@@ -235,6 +241,7 @@ export default async function TaskDetailPage({ params }: TaskDetailPageProps) {
               customDescription={task.customDescription}
               hasIssue={task.githubIssue !== null}
             />
+            <TaskAiExplainCard task={task} variant="view" />
             <TaskIssueSection issue={task.githubIssue} body={task.githubIssueBody} />
           </div>
           <TaskDetailSidebar task={task} />

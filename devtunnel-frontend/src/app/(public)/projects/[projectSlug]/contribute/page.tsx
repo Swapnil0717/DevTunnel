@@ -8,6 +8,7 @@ import { ChevronLeftIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
 import { ContributePageHeader } from "@/components/contribute/contribute-page-header";
 import { ContributeTabs } from "@/components/contribute/contribute-tabs";
+import { AiSummary } from "@/components/ai/ai-summary";
 import { ContributeSidebar } from "@/components/contribute/contribute-sidebar";
 import type { ContributeTarget } from "@/lib/contribute/types";
 import RouteLoading from "./loading";
@@ -130,6 +131,7 @@ export default async function ProjectContributePage({ params }: ContributePagePr
 
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
           <div className="min-w-0 flex-1">
+            <AiSummary kind="devtunnel_project" subjectKey={project.slug} />
             <ContributeTabs target={target} />
           </div>
           <ContributeSidebar target={target} />

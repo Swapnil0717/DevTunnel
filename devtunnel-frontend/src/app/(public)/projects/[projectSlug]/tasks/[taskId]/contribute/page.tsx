@@ -13,6 +13,7 @@ import { ContributeSidebar } from "@/components/contribute/contribute-sidebar";
 import { ContributeWorkflowPanel } from "@/components/contribute/contribute-workflow-panel";
 import { TaskContributeCliPanel } from "@/components/tasks/task-contribute-cli-panel";
 import { TaskProgressTracker } from "@/components/tasks/task-progress-tracker";
+import { TaskAiExplainCard } from "@/components/tasks/task-ai-explain-card";
 import { getTaskClaim } from "@/lib/tasks/progress";
 import { buildTaskWorkflowSteps } from "@/lib/contribute/task-workflow";
 import { DEVELOPER_ROLE_LABEL, EXPERIENCE_LEVEL_LABEL } from "@/lib/onboarding/types";
@@ -77,6 +78,11 @@ export async function generateMetadata({ params }: TaskContributePageProps): Pro
  * task happens server-side inside `dev start` (`POST /tasks/:id/start`),
  * which forks and claims in one step, so there's nothing to gate on and
  * the information is most useful to someone still deciding.
+ *
+ * When the task is still workable, an AI card (`TaskAiExplainCard`) sits
+ * between the task summary and the commands: one click for AI-written first
+ * steps, skills and pitfalls from the GitHub issue. Hidden for a task that is
+ * done or taken, where there is nothing to start.
  *
  * Claim-aware (`getTaskClaim`), because the steps mean different things
  * depending on whose task it is — and the task's progress data now says
@@ -292,6 +298,8 @@ export default async function TaskContributePage({ params }: TaskContributePageP
                 before you start.
               </p>
             </section>
+
+            {claim === "done" || claim === "other" ? null : <TaskAiExplainCard task={task} variant="contribute" />}
 
             {claim === "done" || claim === "other" ? (
               <section className="rounded-[10px] border border-border bg-surface p-5">

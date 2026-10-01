@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { RepoLogo } from "@/components/admin/repo-logo";
-import { DeleteSubmissionButton } from "@/components/submissions/delete-submission-button";
 import {
   EditIcon,
   GitBranchIcon,
@@ -47,19 +46,11 @@ import type { Submission } from "@/lib/submissions/types";
  * goes straight to GitHub. Clicking anywhere else — logo, name,
  * description, tags — opens the view page.
  *
- * "Edit" and "Delete" appear only on the viewer's own submissions
- * (`ownedByViewer`): Edit links to the edit page, Delete removes the
- * submission after a confirmation. The backend enforces ownership
- * independently on both, so this is a convenience, not the guard.
+ * "Edit" appears only on the viewer's own submissions
+ * (`ownedByViewer`) and links to the edit page; the backend enforces
+ * ownership independently, so this is a convenience, not the guard.
  */
-export function SubmissionCard({
-  submission,
-  onDeleted,
-}: {
-  submission: Submission;
-  /** Lets the list drop this row as soon as the owner deletes it, without a reload. */
-  onDeleted?: (slug: string) => void;
-}) {
+export function SubmissionCard({ submission }: { submission: Submission }) {
   const { upvoted, count, isSaving, error, toggle: toggleUpvote } = useSubmissionUpvote(
     submission.slug,
     submission.upvotedByViewer,
@@ -119,22 +110,14 @@ export function SubmissionCard({
           ) : null}
 
           {submission.ownedByViewer ? (
-            <div className="ml-auto flex items-start gap-1.5">
-              <Link
-                href={`${viewHref}/edit`}
-                aria-label={`Edit ${submission.name}`}
-                className="relative z-10 inline-flex items-center gap-1 rounded-[6px] border border-border-subtle px-2 py-1 text-[11.5px] text-text-dim transition-colors hover:border-border hover:text-text"
-              >
-                <EditIcon className="h-3 w-3 shrink-0" />
-                Edit
-              </Link>
-              <DeleteSubmissionButton
-                slug={submission.slug}
-                name={submission.name}
-                variant="card"
-                onDeleted={onDeleted}
-              />
-            </div>
+            <Link
+              href={`${viewHref}/edit`}
+              aria-label={`Edit ${submission.name}`}
+              className="relative z-10 ml-auto inline-flex items-center gap-1 rounded-[6px] border border-border-subtle px-2 py-1 text-[11.5px] text-text-dim transition-colors hover:border-border hover:text-text"
+            >
+              <EditIcon className="h-3 w-3 shrink-0" />
+              Edit
+            </Link>
           ) : null}
         </div>
 

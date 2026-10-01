@@ -16,7 +16,6 @@ import {
   ToolIcon,
 } from "@/components/layout/nav-icons";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
-import { DeleteSubmissionButton } from "@/components/submissions/delete-submission-button";
 import { SubmissionDetailSidebar } from "@/components/submissions/submission-detail-sidebar";
 import { SubmissionUpvoteButton } from "@/components/submissions/submission-upvote-button";
 import { getTechTagClasses } from "@/lib/home/tag-style";
@@ -207,13 +206,6 @@ export default async function SubmissionDetailPage({ params }: SubmissionDetailP
                 <EditIcon className="h-3.5 w-3.5 shrink-0" />
                 Edit details
               </Link>
-            ) : null}
-            {submission.ownedByViewer ? (
-              <DeleteSubmissionButton
-                slug={submission.slug}
-                name={submission.name}
-                redirectTo="/submissions"
-              />
             ) : null}
           </div>
         </div>

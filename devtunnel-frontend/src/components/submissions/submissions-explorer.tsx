@@ -261,13 +261,7 @@ export function SubmissionsExplorer({
           </p>
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {submissions.map((submission) => (
-              <SubmissionCard
-                key={submission.id}
-                submission={submission}
-                onDeleted={(slug) =>
-                  setSubmissions((current) => current.filter((item) => item.slug !== slug))
-                }
-              />
+              <SubmissionCard key={submission.id} submission={submission} />
             ))}
           </ul>
         </>
