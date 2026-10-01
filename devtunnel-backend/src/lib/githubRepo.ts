@@ -971,6 +971,45 @@ export async function fetchRepositoryLanguages(
 }
 
 /**
+ * `assertOk` for the star/unstar endpoints.
+ *
+ * `assertOk` files every `403` under `rate_limited`, which is right for
+ * public reads but wrong here: a `403` from `/user/starred/...` is far more
+ * often "this user's token doesn't carry the GitHub App's Starring
+ * permission" ("Resource not accessible by integration") — e.g. the App's
+ * permission was just turned on and this user hasn't approved it yet. That
+ * was surfacing as a `429 rate_limited` and a generic "Couldn't star" with
+ * no way forward.
+ *
+ * A `403` is treated as a real rate limit only when GitHub says so
+ * (`X-RateLimit-Remaining: 0`, a `Retry-After` header, or "rate limit" in
+ * the body). Any other `403` becomes `unauthorized`, which the star routes
+ * already turn into `403 github_reauth_required` — the frontend's
+ * "Reconnect GitHub" prompt, where signing in again asks the user to
+ * approve the permission.
+ */
+async function assertStarOk(res: Response, context: string): Promise<void> {
+  if (res.status !== 403) return assertOk(res, context);
+
+  const bodyText = await res.clone().text().catch(() => "");
+  const looksRateLimited =
+    res.headers.get("X-RateLimit-Remaining") === "0" ||
+    res.headers.has("Retry-After") ||
+    /rate limit/i.test(bodyText);
+  if (looksRateLimited) return assertOk(res, context);
+
+  logger.error("github_star_permission_denied", {
+    context,
+    status: res.status,
+    body: bodyText.slice(0, 300),
+  });
+  throw new GitHubRepoError(
+    "unauthorized",
+    "GitHub didn't allow this action — reconnect GitHub and approve the Starring permission",
+  );
+}
+
+/**
  * Stars/unstars a repository **on GitHub itself**, on behalf of the
  * signed-in contributor — backs the "Star" action on both the Project
  * Detail and Open Source Tools Detail pages (routes/githubProjects.ts,
@@ -999,9 +1038,9 @@ export async function fetchRepositoryLanguages(
  * Requires this backend's GitHub App to have the "Starring" user
  * permission granted (GitHub App → Permissions & events → Account
  * permissions → Starring: Read and write) — without it, GitHub
- * responds `403`, which surfaces here as `GitHubRepoError` with
- * reason `"unauthorized"` via `assertOk`, same as any other
- * insufficient-permission response.
+ * responds `403`, which `assertStarOk` below surfaces as a
+ * `GitHubRepoError` with reason `"unauthorized"` (a genuine rate-limit
+ * `403` stays `rate_limited`).
  */
 export async function starRepositoryForUser(
   accessToken: string,
@@ -1012,7 +1051,7 @@ export async function starRepositoryForUser(
     method: "PUT",
     headers: { ...authHeaders(accessToken), "Content-Length": "0" },
   });
-  await assertOk(res, "star repository");
+  await assertStarOk(res, "star repository");
 }
 
 /** See `starRepositoryForUser` above — same contract, in reverse. */
@@ -1025,5 +1064,5 @@ export async function unstarRepositoryForUser(
     method: "DELETE",
     headers: authHeaders(accessToken),
   });
-  await assertOk(res, "unstar repository");
+  await assertStarOk(res, "unstar repository");
 }
