@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Env, Variables } from "../types";
 import { getEnv } from "../config/env";
 import { getSupabase } from "../lib/supabase";
-import { requireAuth } from "../middleware/auth";
+import { optionalAuth, requireAuth } from "../middleware/auth";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
 import { logger } from "../lib/logger";
@@ -135,12 +135,10 @@ const importSchema = z.object({
  * Response body is the raw array — the same envelope exception every
  * other contributor list route here documents.
  */
-submissions.get("/submissions", requireAuth, async (c) => {
+submissions.get("/submissions", optionalAuth, async (c) => {
   const env = getEnv(c.env);
+  // Public page: `user` is null for a signed-out visitor.
   const user = c.get("user");
-  if (!user) {
-    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
-  }
 
   const withinLimit = await checkRateLimit(c, {
     bucket: "submissions-list",
@@ -173,7 +171,7 @@ submissions.get("/submissions", requireAuth, async (c) => {
       query: c.req.query("q") ?? "",
     });
 
-    return c.json(await markViewerUpvotes(supabase, list, user.id), 200);
+    return c.json(await markViewerUpvotes(supabase, list, user?.id ?? null), 200);
   } catch (err) {
     logger.error("submissions_list_failed", {
       error: err instanceof Error ? err.message : String(err),
@@ -562,12 +560,10 @@ async function loadGithubStats(
  * path segment, so it can't swallow those anyway, but keeping the order
  * consistent means a future one-segment `draft` route can't be shadowed.
  */
-submissions.get("/submissions/:slug", requireAuth, async (c) => {
+submissions.get("/submissions/:slug", optionalAuth, async (c) => {
   const env = getEnv(c.env);
+  // Public page: `user` is null for a signed-out visitor.
   const user = c.get("user");
-  if (!user) {
-    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
-  }
 
   const withinLimit = await checkRateLimit(c, {
     bucket: "submissions-detail",
@@ -585,7 +581,7 @@ submissions.get("/submissions/:slug", requireAuth, async (c) => {
       return errorResponse(c, 404, "not_found", "This submission isn't on DevTunnel");
     }
 
-    const [withViewer] = await markViewerUpvotes(supabase, [detail], user.id);
+    const [withViewer] = await markViewerUpvotes(supabase, [detail], user?.id ?? null);
     const github = await loadGithubStats(c, detail.repositoryFullName);
 
     return c.json({ ...withViewer, github }, 200);

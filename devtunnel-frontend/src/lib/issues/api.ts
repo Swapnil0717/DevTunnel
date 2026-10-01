@@ -11,7 +11,7 @@ import type { Issue } from "./types";
  * ("All Issues" in `AppSidebar` / `AppBottomNav`).
  *
  * Confirmed against the backend (devtunnel-backend `src/routes/issues.ts`):
- * signed-in only, sorted newest-updated-first, keyset-paginated
+ * public (signed-out visitors included), sorted newest-updated-first, keyset-paginated
  * (`limit` / `before` query params, `X-Next-Cursor` response header),
  * and served from a KV-cached cross-project GitHub scan.
  *

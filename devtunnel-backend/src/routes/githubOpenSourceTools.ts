@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { requireAuth } from "../middleware/auth";
+import { optionalAuth, requireAuth } from "../middleware/auth";
 import {
   handleCatalogListRequest,
   handleCatalogRefreshRequest,
@@ -337,12 +337,10 @@ const DETAIL_ISSUES_LIMIT = 30;
  * (`lib/github-open-source-tools/api.ts`) treats both the same way
  * (`notFound()`), so there's no need to distinguish them on the wire.
  */
-githubOpenSourceTools.get("/github-open-source-tools/:slug", requireAuth, async (c) => {
+githubOpenSourceTools.get("/github-open-source-tools/:slug", optionalAuth, async (c) => {
   const env = getEnv(c.env);
+  // Public page: `user` is null for a signed-out visitor.
   const user = c.get("user");
-  if (!user) {
-    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
-  }
   const slug = c.req.param("slug");
 
   const withinLimit = await checkRateLimit(c, {
@@ -407,7 +405,7 @@ githubOpenSourceTools.get("/github-open-source-tools/:slug", requireAuth, async 
     // Per-viewer, never cached alongside the payload above — see
     // `GithubToolStarViewerFields`'s doc comment.
     const supabase = getSupabase(env);
-    const starStatus = await getGithubStarStatus(supabase, payload.repositoryFullName, user.id);
+    const starStatus = await getGithubStarStatus(supabase, payload.repositoryFullName, user?.id ?? null);
     const response: GithubToolDetailPayload & GithubToolStarViewerFields = {
       ...payload,
       isStarredByViewer: starStatus.starredByViewer,
@@ -449,7 +447,7 @@ githubOpenSourceTools.get("/github-open-source-tools/:slug", requireAuth, async 
  * `GithubToolIssuePreview` rows the detail route above returns its first
  * `DETAIL_ISSUES_LIMIT` of. Shared flow lives in `lib/repoIssuesList.ts`.
  */
-githubOpenSourceTools.get("/github-open-source-tools/:slug/issues", requireAuth, (c) =>
+githubOpenSourceTools.get("/github-open-source-tools/:slug/issues", optionalAuth, (c) =>
   handleRepositoryIssuesRequest(c, c.req.param("slug"), {
     name: "github-open-source-tools",
     notFoundMessage: "This tool isn't in the GitHub catalog",

@@ -187,10 +187,11 @@ async function listLatestPullRequestsByTask(
 
 function toTaskDetail(
   row: AdminTaskListRow,
-  viewerId: string,
+  viewerId: string | null,
   pullRequest: TaskPullRequestRef | null,
 ): TaskDetail {
-  const viewerIsAssignee = row.assignee_id !== null && row.assignee_id === viewerId;
+  const viewerIsAssignee =
+    viewerId !== null && row.assignee_id !== null && row.assignee_id === viewerId;
 
   return {
     ...toTaskSummary(row),
@@ -477,9 +478,10 @@ export async function getTaskDetailByProjectAndId(
   /**
    * The signed-in contributor — what `progress.viewerIsAssignee` is
    * computed against. Passed in by the route from `c.get("user")` rather
-   * than re-queried, same as `ContributorProfile` above.
+   * than re-queried, same as `ContributorProfile` above. `null` for a
+   * signed-out visitor, who is never the assignee.
    */
-  viewerId: string,
+  viewerId: string | null,
 ): Promise<TaskDetail | null> {
   const { data, error } = await supabase
     .from("admin_task_list")

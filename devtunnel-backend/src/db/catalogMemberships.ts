@@ -84,8 +84,9 @@ async function join(
 export function isProjectContributor(
   supabase: SupabaseClient,
   projectId: string,
-  userId: string,
+  userId: string | null,
 ): Promise<boolean> {
+  if (userId === null) return Promise.resolve(false);
   return isMember(supabase, PROJECT_MEMBERSHIP, projectId, userId);
 }
 
@@ -102,8 +103,9 @@ export function joinProject(
 export function isOpenSourceToolContributor(
   supabase: SupabaseClient,
   toolId: string,
-  userId: string,
+  userId: string | null,
 ): Promise<boolean> {
+  if (userId === null) return Promise.resolve(false);
   return isMember(supabase, TOOL_MEMBERSHIP, toolId, userId);
 }
 

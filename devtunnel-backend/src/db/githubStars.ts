@@ -68,14 +68,17 @@ export interface GithubStarStatus {
 export async function getGithubStarStatus(
   supabase: SupabaseClient,
   repositoryFullName: string,
-  viewerId: string,
+  /** `null` for a signed-out visitor: only the public count is read. */
+  viewerId: string | null,
 ): Promise<GithubStarStatus> {
   const [viewerResult, countResult] = await Promise.all([
-    supabase
-      .from("github_stars")
-      .select("id", { count: "exact", head: true })
-      .eq("repository_full_name", repositoryFullName)
-      .eq("starred_by", viewerId),
+    viewerId === null
+      ? Promise.resolve({ count: 0, error: null })
+      : supabase
+          .from("github_stars")
+          .select("id", { count: "exact", head: true })
+          .eq("repository_full_name", repositoryFullName)
+          .eq("starred_by", viewerId),
     supabase
       .from("github_stars")
       .select("id", { count: "exact", head: true })

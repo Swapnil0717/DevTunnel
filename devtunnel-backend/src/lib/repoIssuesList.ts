@@ -135,18 +135,19 @@ export async function handleRepositoryIssuesRequest<Ctx, Row>(
   config: RepositoryIssuesRouteConfig<Ctx, Row>,
 ) {
   const env = getEnv(c.env);
+  // Public read: signed-out visitors get the same list. The data comes
+  // from the shared cache / `GITHUB_DISCOVERY_TOKEN`, never the viewer's
+  // own GitHub token, so a guest costs nothing a member doesn't.
   const user = c.get("user");
-  if (!user) {
-    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
-  }
 
   // Counted per signed-in user rather than per IP — same reasoning
-  // `handleCatalogListRequest` documents for its own bucket.
+  // `handleCatalogListRequest` documents for its own bucket. A guest
+  // falls back to the connecting IP (the limiter's default identity).
   const withinLimit = await checkRateLimit(c, {
     bucket: `${config.name}-issues`,
     limit: ISSUES_RATE_LIMIT_PER_MINUTE,
     windowSeconds: 60,
-    identity: `user:${user.id}`,
+    ...(user ? { identity: `user:${user.id}` } : {}),
   });
   if (!withinLimit) {
     return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");

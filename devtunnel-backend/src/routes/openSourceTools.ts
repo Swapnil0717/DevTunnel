@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { Env, Variables, GithubIssueSummary, OnboardingGithubIdentity } from "../types";
 import { getEnv } from "../config/env";
 import { getSupabase } from "../lib/supabase";
-import { requireAuth } from "../middleware/auth";
+import { optionalAuth, requireAuth } from "../middleware/auth";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
 import { logger } from "../lib/logger";
@@ -178,12 +178,10 @@ const DETAIL_TASKS_LIMIT = 200;
  * inventing a "GitHub is temporarily down" state the frontend would have
  * to render differently buys nothing a retry doesn't already fix.
  */
-openSourceTools.get("/opensource-tools/:slug", requireAuth, async (c) => {
+openSourceTools.get("/opensource-tools/:slug", optionalAuth, async (c) => {
   const env = getEnv(c.env);
+  // Public page: `user` is null for a signed-out visitor.
   const user = c.get("user");
-  if (!user) {
-    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
-  }
   const slug = c.req.param("slug");
 
   const withinLimit = await checkRateLimit(c, {
@@ -261,9 +259,9 @@ openSourceTools.get("/opensource-tools/:slug", requireAuth, async (c) => {
         ? listTasks(supabase, { limit: DETAIL_TASKS_LIMIT, before: null, projectSlug: tool.projectSlug })
         : Promise.resolve({ tasks: [], nextCursor: null }),
       repositoryFullName
-        ? readCatalogStarStatus(env, repositoryFullName, user.id)
+        ? readCatalogStarStatus(env, repositoryFullName, user?.id ?? null)
         : Promise.resolve({ starredByViewer: false, localStarCount: 0 }),
-      isOpenSourceToolContributor(supabase, tool.id, user.id),
+      isOpenSourceToolContributor(supabase, tool.id, user?.id ?? null),
     ]);
 
     const response = {
@@ -354,7 +352,7 @@ function toToolIssuePreview(issue: ListedIssue) {
  * hand-made request, same as the star routes. Shared fetch/cache/error-
  * mapping flow: `lib/repoIssuesList.ts`.
  */
-openSourceTools.get("/opensource-tools/:slug/issues", requireAuth, (c) =>
+openSourceTools.get("/opensource-tools/:slug/issues", optionalAuth, (c) =>
   handleRepositoryIssuesRequest(c, c.req.param("slug"), {
     name: "opensource-tools",
     notFoundMessage: "This tool isn't on DevTunnel",

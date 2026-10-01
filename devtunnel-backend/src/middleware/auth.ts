@@ -69,3 +69,49 @@ export const requireAuth: MiddlewareHandler<{ Bindings: Env }> = async (c, next)
     return errorResponse(c, 500, "internal_error", "Something went wrong");
   }
 };
+
+/**
+ * Like `requireAuth`, but never rejects. Mount on read routes behind the
+ * public pages (catalog lists, detail pages, issues, community
+ * submissions) so a signed-out visitor gets the same shared content a
+ * signed-in one does.
+ *
+ * Resolves the same two credential forms (session cookie, then CLI bearer
+ * token). If there is no credential, the credential is invalid/expired, or
+ * the lookup itself fails, `user` is simply left unset and the request
+ * continues as a guest — the handler must treat `c.get("user")` as
+ * possibly `undefined` and omit anything per-viewer (stars, upvotes,
+ * progress, match percentages).
+ *
+ * This is a read-side convenience only: every write route stays on
+ * `requireAuth`, which remains the real authority on who may change
+ * anything.
+ */
+export const optionalAuth: MiddlewareHandler<{ Bindings: Env }> = async (c, next) => {
+  c.set("user", null);
+  const sessionToken = getCookie(c, SESSION_COOKIE);
+  const authHeader = c.req.header("Authorization");
+  const bearerToken = !sessionToken && authHeader?.startsWith("Bearer ")
+    ? authHeader.slice("Bearer ".length).trim()
+    : null;
+
+  if (sessionToken || bearerToken) {
+    try {
+      const supabase = getSupabase(getEnv(c.env));
+      const result = sessionToken
+        ? await getUserForSessionTokenWithMaintainerStatus(supabase, sessionToken)
+        : await getUserForCliTokenWithMaintainerStatus(supabase, bearerToken!);
+      if (result) {
+        c.set("user", toAuthUser(result.user, result.isMaintainer));
+      }
+    } catch (err) {
+      // Public content must not depend on the session store being healthy.
+      logger.error("optional_auth_lookup_failed", {
+        error: String(err),
+        requestId: c.get("requestId"),
+      });
+    }
+  }
+
+  await next();
+};

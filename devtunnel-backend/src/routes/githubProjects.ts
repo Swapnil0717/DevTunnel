@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { requireAuth } from "../middleware/auth";
+import { optionalAuth, requireAuth } from "../middleware/auth";
 import {
   handleCatalogListRequest,
   handleCatalogRefreshRequest,
@@ -319,12 +319,10 @@ const DETAIL_ISSUES_LIMIT = 30;
  * treats both the same way (`notFound()`), so there's no need to
  * distinguish them on the wire.
  */
-githubProjects.get("/github-projects/:slug", requireAuth, async (c) => {
+githubProjects.get("/github-projects/:slug", optionalAuth, async (c) => {
   const env = getEnv(c.env);
+  // Public page: `user` is null for a signed-out visitor.
   const user = c.get("user");
-  if (!user) {
-    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
-  }
   const slug = c.req.param("slug");
 
   const withinLimit = await checkRateLimit(c, {
@@ -389,7 +387,7 @@ githubProjects.get("/github-projects/:slug", requireAuth, async (c) => {
     // Per-viewer, never cached alongside the payload above — see
     // `GithubStarViewerFields`'s doc comment.
     const supabase = getSupabase(env);
-    const starStatus = await getGithubStarStatus(supabase, payload.repositoryFullName, user.id);
+    const starStatus = await getGithubStarStatus(supabase, payload.repositoryFullName, user?.id ?? null);
     const response: GithubProjectDetailPayload & GithubStarViewerFields = {
       ...payload,
       isStarredByViewer: starStatus.starredByViewer,
@@ -432,7 +430,7 @@ githubProjects.get("/github-projects/:slug", requireAuth, async (c) => {
  * fetch/cache/error-mapping flow is shared with the other three detail
  * pages' issue routes — see `lib/repoIssuesList.ts`.
  */
-githubProjects.get("/github-projects/:slug/issues", requireAuth, (c) =>
+githubProjects.get("/github-projects/:slug/issues", optionalAuth, (c) =>
   handleRepositoryIssuesRequest(c, c.req.param("slug"), {
     name: "github-projects",
     notFoundMessage: "This project isn't in the GitHub catalog",

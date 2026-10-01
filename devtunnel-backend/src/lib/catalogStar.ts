@@ -103,7 +103,7 @@ export async function applyCatalogStar(
 export async function readCatalogStarStatus(
   env: ReturnType<typeof getEnv>,
   repositoryFullName: string,
-  viewerId: string,
+  viewerId: string | null,
 ): Promise<GithubStarStatus> {
   return getGithubStarStatus(getSupabase(env), repositoryFullName, viewerId);
 }

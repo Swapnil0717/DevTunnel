@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Env, Variables, GithubIssueSummary } from "../types";
 import { getEnv } from "../config/env";
 import { getSupabase } from "../lib/supabase";
-import { requireAuth } from "../middleware/auth";
+import { optionalAuth, requireAuth } from "../middleware/auth";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
 import { logger } from "../lib/logger";
@@ -91,14 +91,11 @@ export const projects = new Hono<{ Bindings: Env; Variables: Variables }>();
  * no onboarding profile to score against (see `computeMatch` in
  * src/db/projects.ts).
  */
-projects.get("/projects/available", requireAuth, async (c) => {
+projects.get("/projects/available", optionalAuth, async (c) => {
   const env = getEnv(c.env);
+  // Public catalog read: a signed-out visitor gets the same list, just
+  // without the per-viewer match fields.
   const user = c.get("user");
-  if (!user) {
-    // requireAuth already guarantees this — kept for type safety, same
-    // pattern used throughout this backend's protected routes.
-    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
-  }
 
   // Cheap indexed-table read, same generous per-minute budget
   // `GET /tasks` (src/routes/tasks.ts) applies to its own list read.
@@ -119,7 +116,7 @@ projects.get("/projects/available", requireAuth, async (c) => {
     // empty arrays for all three fields, which `computeMatch` already
     // treats as "no signal" on its own, but skipping the object entirely
     // here keeps that behavior explicit at the call site too.
-    const profile: ContributorMatchProfile | null = contributorMatchProfileFor(user);
+    const profile: ContributorMatchProfile | null = user ? contributorMatchProfileFor(user) : null;
 
     const list = await listAvailableProjects(supabase, profile);
     return c.json(list, 200);
@@ -242,12 +239,11 @@ const DETAIL_TASKS_LIMIT = 200;
  * as `DevtunnelProjectDetail`) — the same envelope exception every other
  * contributor route here documents.
  */
-projects.get("/projects/:slug", requireAuth, async (c) => {
+projects.get("/projects/:slug", optionalAuth, async (c) => {
   const env = getEnv(c.env);
+  // Public page: `user` is null for a signed-out visitor, who gets the
+  // shared detail without the per-viewer fields (match, star, joined).
   const user = c.get("user");
-  if (!user) {
-    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
-  }
   const slug = c.req.param("slug");
 
   const withinLimit = await checkRateLimit(c, {
@@ -262,7 +258,7 @@ projects.get("/projects/:slug", requireAuth, async (c) => {
   try {
     const supabase = getSupabase(env);
 
-    const profile: ContributorMatchProfile | null = user.onboardingCompleted
+    const profile: ContributorMatchProfile | null = user?.onboardingCompleted
       ? {
           developerRoles: user.developerRoles,
           skills: user.skills,
@@ -344,9 +340,9 @@ projects.get("/projects/:slug", requireAuth, async (c) => {
         return null;
       }),
       project.repositoryFullName
-        ? readCatalogStarStatus(env, project.repositoryFullName, user.id)
+        ? readCatalogStarStatus(env, project.repositoryFullName, user?.id ?? null)
         : Promise.resolve({ starredByViewer: false, localStarCount: 0 }),
-      isProjectContributor(supabase, project.id, user.id),
+      isProjectContributor(supabase, project.id, user?.id ?? null),
     ]);
 
     const response = {
@@ -472,7 +468,7 @@ function toProjectIssueRow(issue: ListedIssue, project: IssueRowProject) {
  * soft-deleted, or archived project is one indistinguishable "not found".
  * Shared fetch/cache/error-mapping flow: `lib/repoIssuesList.ts`.
  */
-projects.get("/projects/:slug/issues", requireAuth, (c) =>
+projects.get("/projects/:slug/issues", optionalAuth, (c) =>
   handleRepositoryIssuesRequest(c, c.req.param("slug"), {
     name: "projects",
     notFoundMessage: "This project isn't on DevTunnel",

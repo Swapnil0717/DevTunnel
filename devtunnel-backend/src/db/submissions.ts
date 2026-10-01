@@ -228,9 +228,17 @@ export async function listSubmissions(
 export async function markViewerUpvotes<T extends SubmissionSummary>(
   supabase: SupabaseClient,
   submissions: T[],
-  userId: string,
+  /** `null` for a signed-out visitor: nothing is upvoted or owned by them. */
+  userId: string | null,
 ): Promise<T[]> {
   if (submissions.length === 0) return submissions;
+  if (userId === null) {
+    return submissions.map((submission) => ({
+      ...submission,
+      upvotedByViewer: false,
+      ownedByViewer: false,
+    }));
+  }
 
   const { data, error } = await supabase
     .from("user_submission_upvotes")

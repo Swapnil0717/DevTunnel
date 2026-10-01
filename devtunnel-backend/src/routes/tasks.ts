@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Env, Variables } from "../types";
 import { getEnv } from "../config/env";
 import { getSupabase } from "../lib/supabase";
-import { requireAuth } from "../middleware/auth";
+import { optionalAuth, requireAuth } from "../middleware/auth";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
 import { logger } from "../lib/logger";
@@ -138,8 +138,10 @@ const listQuerySchema = z.object({
 // in devtunnel-frontend's `lib/tasks/api.ts`) so the page can be cached
 // instead of forced into per-request SSR — that only works if this route
 // doesn't require a session to answer.
-tasks.get("/tasks", async (c) => {
+tasks.get("/tasks", optionalAuth, async (c) => {
   const env = getEnv(c.env);
+  // Only `recommended=true` needs the viewer; everything else is the same for everyone.
+  const user = c.get("user");
 
   // Cheap indexed-table read on the fast path (no live external scan,
   // unlike GET /issues) — rate limited generously in its own bucket, same
@@ -182,8 +184,12 @@ tasks.get("/tasks", async (c) => {
   // "recommended" can't mean anything, so this is rejected explicitly
   // rather than silently degrading to "every task" or "no tasks" (rule
   // 17: don't paper over a caller's request as something it isn't).
+  if (recommended && !user) {
+    return errorResponse(c, 401, "unauthenticated", "Sign in to see recommended tasks");
+  }
   if (
     recommended &&
+    user &&
     (!user.onboardingCompleted ||
       (user.developerRoles.length === 0 &&
         user.experienceLevel === null &&
@@ -209,7 +215,7 @@ tasks.get("/tasks", async (c) => {
       projectSlug,
       techStack,
       q,
-      matchProfile: recommended
+      matchProfile: recommended && user
         ? {
             developerRoles: user.developerRoles,
             experienceLevel: user.experienceLevel,
@@ -255,12 +261,10 @@ tasks.get("/tasks", async (c) => {
  * user's id is passed down for exactly that — and must not be cached
  * across viewers.
  */
-tasks.get("/projects/:projectSlug/tasks/:taskId", requireAuth, async (c) => {
+tasks.get("/projects/:projectSlug/tasks/:taskId", optionalAuth, async (c) => {
   const env = getEnv(c.env);
+  // Public page: `user` is null for a signed-out visitor.
   const user = c.get("user");
-  if (!user) {
-    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
-  }
 
   const projectSlug = c.req.param("projectSlug")?.trim();
   const taskIdResult = taskIdSchema.safeParse(c.req.param("taskId"));
@@ -283,7 +287,7 @@ tasks.get("/projects/:projectSlug/tasks/:taskId", requireAuth, async (c) => {
 
   try {
     const supabase = getSupabase(env);
-    const task = await getTaskDetailByProjectAndId(supabase, projectSlug, taskIdResult.data, user.id);
+    const task = await getTaskDetailByProjectAndId(supabase, projectSlug, taskIdResult.data, user?.id ?? null);
     if (!task) {
       return errorResponse(c, 404, "task_not_found", "Task not found");
     }

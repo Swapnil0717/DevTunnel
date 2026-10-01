@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Env, Variables } from "../types";
 import { getEnv } from "../config/env";
 import { getSupabase } from "../lib/supabase";
-import { requireAuth } from "../middleware/auth";
+import { optionalAuth } from "../middleware/auth";
 import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
 import { logger } from "../lib/logger";
@@ -51,7 +51,8 @@ import type { GithubScanCacheEntry, NewIssueScanIssue } from "./admin/newIssues"
  *    true miss.
  *
  * Two differences from the admin route, both deliberate:
- *  - `requireAuth` only — no `requireAdminRole` / `requirePermission`.
+ *  - `optionalAuth` only (public read — a signed-out visitor gets the same
+ *    list) — no `requireAdminRole` / `requirePermission`.
  *    Browsing open issues to find something to work on is not an admin
  *    action; only *curating* DevTunnel's task list (creating a task from
  *    an issue, ignoring one) is, and neither of those actions exists on
@@ -128,14 +129,14 @@ const listQuerySchema = z.object({
  * reasoning on caching, scope, and why this differs from that admin
  * route.
  */
-issues.get("/issues", requireAuth, async (c) => {
+issues.get("/issues", optionalAuth, async (c) => {
   const env = getEnv(c.env);
+  // Public page: a signed-out visitor sees the same issue list. A scan
+  // that has to run live (cache miss) uses the viewer's own GitHub token
+  // when there is one and `GITHUB_DISCOVERY_TOKEN` otherwise.
   const user = c.get("user");
-  if (!user) {
-    // requireAuth already guarantees this — kept for type safety, same
-    // pattern used throughout this backend's protected routes.
-    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
-  }
+  const resolveScanToken = (supabase: ReturnType<typeof getSupabase>) =>
+    user ? getValidGithubAccessToken(supabase, env, user.id) : Promise.resolve(env.GITHUB_DISCOVERY_TOKEN);
 
   // Rate limited the same way `GET /admin/new-issues` is (rule 42: protect
   // expensive endpoints) — in its own bucket so contributor traffic here
@@ -156,7 +157,7 @@ issues.get("/issues", requireAuth, async (c) => {
     bucket: "issues-list",
     limit: 20,
     windowSeconds: 60,
-    identity: `user:${user.id}`,
+    ...(user ? { identity: `user:${user.id}` } : {}),
   });
   if (!withinLimit) {
     return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
@@ -204,7 +205,7 @@ issues.get("/issues", requireAuth, async (c) => {
       ISSUES_SCAN_CACHE_KEY,
       { softTtlSeconds: ISSUES_SCAN_SOFT_TTL_SECONDS, hardTtlSeconds: ISSUES_SCAN_HARD_TTL_SECONDS },
       async () => {
-        const accessToken = await getValidGithubAccessToken(supabase, env, user.id);
+        const accessToken = await resolveScanToken(supabase);
         const scanned = await scanProjectIssues(accessToken, projects, (project, error) => {
           logger.error("issues_project_scan_failed", {
             projectId: project.id,
@@ -245,7 +246,7 @@ issues.get("/issues", requireAuth, async (c) => {
 
     let rawIssuesByProjectId = cachedByProjectId;
     if (missingProjects.length > 0) {
-      const accessToken = await getValidGithubAccessToken(supabase, env, user.id);
+      const accessToken = await resolveScanToken(supabase);
       const freshlyScanned = await scanProjectIssues(accessToken, missingProjects, (project, error) => {
         logger.error("issues_project_scan_failed", {
           projectId: project.id,
