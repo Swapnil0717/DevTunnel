@@ -36,7 +36,7 @@ export function AppShell({
         <AppSidebar />
         <div className="flex min-h-screen min-w-0 flex-col pb-16 sm:ml-[240px] sm:pb-0">
           {banner}
-          <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+          <div className="flex min-w-0 flex-1 flex-col [&>main]:w-full">{children}</div>
           <TrainFooter />
         </div>
       </div>

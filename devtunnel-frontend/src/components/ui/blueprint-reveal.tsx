@@ -144,7 +144,7 @@ export function BlueprintReveal({
   children,
   skeleton,
   inline = false,
-  className = "relative isolate flex min-h-screen w-full flex-col",
+  className = "relative isolate flex min-h-screen w-full flex-col [&>main]:w-full",
 }: {
   children: ReactNode;
   /** The route's own loading sheet, e.g. `<Loading />` from `./loading`. */
