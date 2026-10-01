@@ -130,6 +130,11 @@ export function SubmissionsExplorer({
   const hasActiveFilters =
     filters.category !== "ALL" || filters.techStack.length > 0 || filters.query.trim() !== "";
 
+  /** The owner deleted one of their submissions — drop its row now instead of waiting for a re-query. */
+  function handleDeleted(slug: string) {
+    setSubmissions((current) => current.filter((submission) => submission.slug !== slug));
+  }
+
   function clearFilters() {
     setSearchInput("");
     setFilters((current) => ({ ...DEFAULT_SUBMISSION_FILTERS, sort: current.sort }));
@@ -261,7 +266,7 @@ export function SubmissionsExplorer({
           </p>
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {submissions.map((submission) => (
-              <SubmissionCard key={submission.id} submission={submission} />
+              <SubmissionCard key={submission.id} submission={submission} onDeleted={handleDeleted} />
             ))}
           </ul>
         </>

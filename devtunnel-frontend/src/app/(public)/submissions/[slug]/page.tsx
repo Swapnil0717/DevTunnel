@@ -16,6 +16,7 @@ import {
   ToolIcon,
 } from "@/components/layout/nav-icons";
 import { MarkdownReadme } from "@/components/ui/markdown-readme";
+import { DeleteSubmissionButton } from "@/components/submissions/delete-submission-button";
 import { SubmissionDetailSidebar } from "@/components/submissions/submission-detail-sidebar";
 import { SubmissionUpvoteButton } from "@/components/submissions/submission-upvote-button";
 import { getTechTagClasses } from "@/lib/home/tag-style";
@@ -81,9 +82,11 @@ function BackLink() {
  * rewrites the fetched one (`DetailsStep`), so hiding it behind the
  * custom one here would throw away the part a viewer can check.
  *
- * "Edit details" only renders for the person who submitted it
- * (`ownedByViewer`); `/submissions/:slug/edit` and the backend both
- * re-check, so the button is a convenience, not the protection.
+ * "Edit details" and "Delete" only render for the person who submitted
+ * it (`ownedByViewer`); `/submissions/:slug/edit`, `DELETE
+ * /submissions/:slug` and the backend all re-check, so the buttons are a
+ * convenience, not the protection. Deleting sends the owner back to the
+ * Community list.
  *
  * Same three outcomes every detail page here has: an unknown slug is
  * Next's real 404 via `notFound()` (rule 25), and a failed fetch says so
@@ -206,6 +209,14 @@ export default async function SubmissionDetailPage({ params }: SubmissionDetailP
                 <EditIcon className="h-3.5 w-3.5 shrink-0" />
                 Edit details
               </Link>
+            ) : null}
+            {submission.ownedByViewer ? (
+              <DeleteSubmissionButton
+                slug={submission.slug}
+                name={submission.name}
+                variant="button"
+                redirectTo="/submissions"
+              />
             ) : null}
           </div>
         </div>
