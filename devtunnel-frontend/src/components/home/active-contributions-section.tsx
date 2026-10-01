@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { RecentActivityList } from "./recent-activity-list";
 import { HomeListSkeleton } from "./home-list-skeleton";
 import { SectionHeading } from "./section-heading";
+import { HOME_RECENT_ACTIVITY_LIMIT } from "@/lib/home/limits";
 
 /**
  * "Recently active" — the contributor's own recent DevTunnel activity. "See
@@ -17,7 +18,9 @@ export function ActiveContributionsSection() {
         href="/profile"
         linkLabel="See all recent activity"
       />
-      <Suspense fallback={<HomeListSkeleton rows={4} />}>
+      <Suspense
+        fallback={<HomeListSkeleton rows={HOME_RECENT_ACTIVITY_LIMIT} variant="activity" />}
+      >
         <RecentActivityList />
       </Suspense>
     </section>

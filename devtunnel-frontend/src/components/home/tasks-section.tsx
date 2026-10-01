@@ -3,19 +3,23 @@ import { RecommendedTasksList } from "./recommended-tasks-list";
 import { MyTasksList } from "./my-tasks-list";
 import { HomeListSkeleton } from "./home-list-skeleton";
 import { SectionHeading } from "./section-heading";
+import { HOME_TASKS_GRID } from "./styles";
+import { HOME_MY_TASKS_LIMIT, HOME_RECOMMENDED_TASKS_LIMIT } from "@/lib/home/limits";
 
 /**
- * Recommended tasks and Your tasks, side by side. `auto-fit` with a 340px
- * minimum, as in the design — two columns when there's room, one otherwise.
- * The `min(340px, 100%)` keeps the single column from overflowing a phone
- * narrower than 340px.
+ * Recommended tasks and Your tasks, side by side — `HOME_TASKS_GRID` (two
+ * columns when there's room, one otherwise; shared with the loading skeleton).
  */
 export function TasksSection() {
   return (
-    <div className="mb-9 grid grid-cols-[repeat(auto-fit,minmax(min(340px,100%),1fr))] gap-x-5 gap-y-7">
+    <div className={`mb-9 ${HOME_TASKS_GRID}`}>
       <section aria-labelledby="recommended-tasks-heading">
         <SectionHeading id="recommended-tasks-heading" title="Recommended tasks" />
-        <Suspense fallback={<HomeListSkeleton rows={3} />}>
+        <Suspense
+          fallback={
+            <HomeListSkeleton rows={HOME_RECOMMENDED_TASKS_LIMIT} variant="recommended" />
+          }
+        >
           <RecommendedTasksList />
         </Suspense>
       </section>
@@ -27,7 +31,7 @@ export function TasksSection() {
           href="/tasks?filter=mine"
           linkLabel="See all your tasks"
         />
-        <Suspense fallback={<HomeListSkeleton rows={3} />}>
+        <Suspense fallback={<HomeListSkeleton rows={HOME_MY_TASKS_LIMIT} variant="mine" />}>
           <MyTasksList />
         </Suspense>
       </section>

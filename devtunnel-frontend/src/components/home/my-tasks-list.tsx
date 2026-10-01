@@ -2,15 +2,7 @@ import { TaskRow } from "./task-row";
 import { HomeMessage } from "./home-message";
 import { HOME_LIST } from "./styles";
 import { getMyTasks } from "@/lib/home/api";
-
-/**
- * How many of the contributor's tasks Home lists. `GET /users/me/tasks`
- * returns every task they've ever claimed; Home is a preview with a "See all"
- * link, so it shows the first few — and the backend already orders tasks
- * still being worked on ahead of finished ones, so those are the ones that
- * make the cut.
- */
-const HOME_MY_TASKS_LIMIT = 5;
+import { HOME_MY_TASKS_LIMIT } from "@/lib/home/limits";
 
 /**
  * "Your tasks" on Home — tasks the signed-in contributor has claimed with
@@ -62,6 +54,9 @@ export async function MyTasksList() {
         </p>
       ) : null}
       <ul className={`${HOME_LIST} m-0 list-none p-0`}>
+        {/* `GET /users/me/tasks` returns every task ever claimed; Home previews the first
+            few (`HOME_MY_TASKS_LIMIT`) — the backend orders tasks still being worked on
+            ahead of finished ones, so those make the cut. */}
         {result.data.slice(0, HOME_MY_TASKS_LIMIT).map((task) => (
           <li key={task.taskId}>
             <TaskRow

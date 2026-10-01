@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { HomeMessage } from "./home-message";
+import { HOME_ACTIVITY_ROW_LAYOUT } from "./styles";
 import { getRecentActivity } from "@/lib/home/api";
 import { formatCompactRelativeTime } from "@/lib/home/format-compact-time";
 import { stageFor } from "@/lib/tasks/progress";
@@ -88,7 +89,7 @@ export async function RecentActivityList() {
           />
           <Link
             href={activityHref(item)}
-            className="flex items-center justify-between gap-3 py-2.5 pl-11 pr-4 transition-colors hover:bg-surface focus-visible:bg-surface focus-visible:outline-offset-[-2px]"
+            className={`${HOME_ACTIVITY_ROW_LAYOUT} transition-colors hover:bg-surface focus-visible:bg-surface focus-visible:outline-offset-[-2px]`}
           >
             <span className="min-w-0">
               <span className="block truncate text-[13px] text-text">{item.title}</span>

@@ -6,6 +6,7 @@ import type {
   RecommendedTask,
   MyTask,
 } from "./types";
+import { HOME_RECENT_ACTIVITY_LIMIT } from "./limits";
 
 /**
  * Every Home section reads from a real devtunnel-backend route:
@@ -69,7 +70,7 @@ export function getRecommendedTasks() {
 
 /** The signed-in contributor's own recent activity, newest first. */
 export function getRecentActivity() {
-  return fetchFromApi<RecentActivity[]>("/users/me/activity?limit=5");
+  return fetchFromApi<RecentActivity[]>(`/users/me/activity?limit=${HOME_RECENT_ACTIVITY_LIMIT}`);
 }
 
 export function getMyTasks() {

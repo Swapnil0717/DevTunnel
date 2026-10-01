@@ -30,9 +30,30 @@ export const HOME_LIST = `${HOME_PANEL} overflow-hidden divide-y divide-[#1A1A1A
  * single row from `sm` up. The focus outline is drawn *inside* the row
  * (`-2px` offset) because the list is `overflow-hidden` and would clip an
  * outward ring.
+ *
+ * `HOME_ROW_LAYOUT` is just the box (so the loading skeleton can reuse it
+ * without hover/focus styling); `HOME_ROW` adds the interactive states.
  */
-export const HOME_ROW =
-  "flex flex-col gap-1 px-4 py-3 transition-colors hover:bg-surface focus-visible:bg-surface focus-visible:outline-offset-[-2px] sm:flex-row sm:items-center sm:justify-between sm:gap-3";
+export const HOME_ROW_LAYOUT =
+  "flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3";
+
+export const HOME_ROW = `${HOME_ROW_LAYOUT} transition-colors hover:bg-surface focus-visible:bg-surface focus-visible:outline-offset-[-2px]`;
+
+/**
+ * The box of a "Recently active" row (padding leaves room for the timeline
+ * on the left). Shared with the loading skeleton so the two can't drift.
+ */
+export const HOME_ACTIVITY_ROW_LAYOUT =
+  "flex items-center justify-between gap-3 py-2.5 pl-11 pr-4";
+
+/**
+ * Recommended tasks + Your tasks, side by side: `auto-fit` with a 340px
+ * minimum, two columns when there's room, one otherwise. The
+ * `min(340px,100%)` keeps the single column from overflowing a phone
+ * narrower than 340px.
+ */
+export const HOME_TASKS_GRID =
+  "grid grid-cols-[repeat(auto-fit,minmax(min(340px,100%),1fr))] gap-x-5 gap-y-7";
 
 /**
  * Recommended-project card grid — `auto-fit` at a 190px minimum, as in the
