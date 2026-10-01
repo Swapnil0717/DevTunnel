@@ -1,0 +1,13 @@
+{
+  "name": "devtunnel-layout-audit",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "npm install && npx playwright install chromium",
+    "login": "node save-auth.mjs",
+    "audit": "node audit.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.48.0"
+  }
+}
