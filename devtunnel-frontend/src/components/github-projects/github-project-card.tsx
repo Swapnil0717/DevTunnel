@@ -59,7 +59,7 @@ export function GithubProjectCard({
   const hiddenTagCount = project.techStack.length - visibleTags.length;
 
   return (
-    <article className="relative flex flex-col rounded-[10px] border border-border bg-surface p-4 transition-colors hover:border-border-subtle">
+    <article className="relative flex min-w-0 flex-col rounded-[10px] border border-border bg-surface p-4 transition-colors hover:border-border-subtle">
       <Link
         href={`${basePath}/${project.slug}`}
         className="absolute inset-0 z-0 rounded-[10px] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
@@ -112,7 +112,7 @@ export function GithubProjectCard({
         ) : null}
       </div>
 
-      <div className="mt-auto flex items-center justify-between gap-2 border-t border-border-subtle pt-2.5">
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-border-subtle pt-2.5">
         <div className="flex items-center gap-3">
           <span
             className="inline-flex items-center gap-1 text-[11px] text-text-muted"

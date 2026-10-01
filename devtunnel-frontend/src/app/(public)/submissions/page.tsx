@@ -63,7 +63,7 @@ export default async function SubmissionsPage() {
 
   return (
     <BlueprintReveal skeleton={<RouteLoading />}>
-      <main className="w-full px-6 py-10 lg:px-10">
+      <main className="mx-auto max-w-6xl px-6 py-10">
         <div className="mb-6">
           <h1 className="m-0 mb-1 text-xl font-medium text-text">Community</h1>
           <p className="m-0 max-w-[70ch] text-[13px] leading-relaxed text-text-muted">

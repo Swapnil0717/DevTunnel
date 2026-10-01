@@ -15,7 +15,7 @@ export default function SubmissionsLoading() {
     <BlueprintSheet
       sheetLabel="Sheet 11 — Community"
       revLabel="Rev — loading submissions"
-      contentClassName="w-full px-6 py-10 lg:px-10"
+      contentClassName="w-full mx-auto max-w-6xl px-6 py-10"
     >
       <BlueprintFill className="mb-2 h-5 w-40" />
       <BlueprintFill className="mb-6 h-3 w-[420px] max-w-full" />

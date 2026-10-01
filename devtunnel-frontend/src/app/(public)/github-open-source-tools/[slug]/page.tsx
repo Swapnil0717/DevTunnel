@@ -109,7 +109,7 @@ export default async function GithubToolDetailPage({ params }: GithubToolDetailP
   if (result.status === "error") {
     return (
       <BlueprintReveal skeleton={<RouteLoading />}>
-        <main className="mx-auto max-w-5xl px-6 py-10">
+        <main className="mx-auto max-w-6xl px-6 py-10">
           <Link
             href="/github-open-source-tools"
             className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
@@ -141,7 +141,7 @@ export default async function GithubToolDetailPage({ params }: GithubToolDetailP
 
   return (
     <BlueprintReveal skeleton={<RouteLoading />}>
-      <main className="mx-auto max-w-5xl px-6 py-10">
+      <main className="mx-auto max-w-6xl px-6 py-10">
         <Link
           href="/github-open-source-tools"
           className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium text-text-muted transition-colors hover:text-accent"
