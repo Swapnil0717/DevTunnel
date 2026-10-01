@@ -8,34 +8,121 @@ compatibility_flags = ["nodejs_compat"]
 # on 2026-09-26 to debug the CPU/subrequest-limit errors on the former */4 * * * *
 # issues-scan cron — see src/lib/cacheWarmers.ts. Mirrored here so
 # `wrangler deploy` doesn't silently revert the dashboard setting on the
-# next deploy. 100% sampling + persist is fine at current traffic; revisit
-# head_sampling_rate if volume grows enough that retention/cost matters.
+# next deploy.
+#
+# Sampling lowered from 1 (100%) to keep the Free plan's 200,000
+# observability events/day comfortably free of the limit: logs 25%, traces
+# 10%. Set head_sampling_rate back to 1 while actively debugging an incident.
 # ---------------------------------------------------------------------------
 [observability]
 [observability.logs]
 enabled = true
-head_sampling_rate = 1
+head_sampling_rate = 0.25
 invocation_logs = true
 persist = true
 
 [observability.traces]
 enabled = true
-head_sampling_rate = 1
+head_sampling_rate = 0.1
 persist = true
 
 # ---------------------------------------------------------------------------
-# KV namespace used for fixed-window rate limiting on sensitive auth routes
-# (Backend_Development_Rules.txt rule 43). Create it once with:
+# KV namespace — LEGACY, READ-ONLY.
 #
-#   npx wrangler kv namespace create RATE_LIMIT_KV
-#   npx wrangler kv namespace create RATE_LIMIT_KV --preview
-#
-# then paste the returned ids below.
+# This Worker no longer WRITES to Workers KV (Free plan: 1,000 writes/day for
+# the whole account, shared with any other project on it). What replaced it:
+#   - rate limiting      -> the Rate Limiting bindings below
+#   - catalog/issues caches, scan lock -> Supabase + Cache API (src/lib/cache.ts)
+#   - `dev login` codes  -> Supabase `cli_auth_codes` (src/lib/cliLoopback.ts)
+# The binding stays so first-deploy cache seeding (KV_READ_FALLBACK), the old
+# Groq budget-split read (src/lib/groqQuota.ts) and the USE_SUPABASE_CLI_CODES
+# rollback keep working. It can be removed once those are no longer wanted.
 # ---------------------------------------------------------------------------
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
 id = "4e64447403314490b7a19642fd54d2ac"
 preview_id = "e51efed129714857aa3ca01040f56314"
+
+# ---------------------------------------------------------------------------
+# Cloudflare Rate Limiting bindings (src/lib/rateLimit.ts). Free, no KV writes.
+#
+# A binding's limit/period are fixed here, so there is one binding per
+# per-minute limit the code uses (RL_<limit>, all 60 s periods). The call
+# sites keep their `{ bucket, limit, windowSeconds }` arguments and
+# rateLimit.ts picks the matching binding.
+#
+# `namespace_id` must be an integer that is UNIQUE ACROSS YOUR WHOLE
+# CLOUDFLARE ACCOUNT. 7004-7120 are used here (staging 7204-7320 below); if
+# your wishlist project already uses ids in that range, change these.
+#
+# Wrangler 3.x (what package-lock.json pins) declares these through
+# `unsafe.bindings`. Wrangler 4.36+ would call the same thing `[[ratelimits]]`.
+# ---------------------------------------------------------------------------
+[[unsafe.bindings]]
+name = "RL_4"
+type = "ratelimit"
+namespace_id = "7004"
+simple = { limit = 4, period = 60 }
+
+[[unsafe.bindings]]
+name = "RL_5"
+type = "ratelimit"
+namespace_id = "7005"
+simple = { limit = 5, period = 60 }
+
+[[unsafe.bindings]]
+name = "RL_6"
+type = "ratelimit"
+namespace_id = "7006"
+simple = { limit = 6, period = 60 }
+
+[[unsafe.bindings]]
+name = "RL_8"
+type = "ratelimit"
+namespace_id = "7008"
+simple = { limit = 8, period = 60 }
+
+[[unsafe.bindings]]
+name = "RL_10"
+type = "ratelimit"
+namespace_id = "7010"
+simple = { limit = 10, period = 60 }
+
+[[unsafe.bindings]]
+name = "RL_15"
+type = "ratelimit"
+namespace_id = "7015"
+simple = { limit = 15, period = 60 }
+
+[[unsafe.bindings]]
+name = "RL_20"
+type = "ratelimit"
+namespace_id = "7020"
+simple = { limit = 20, period = 60 }
+
+[[unsafe.bindings]]
+name = "RL_30"
+type = "ratelimit"
+namespace_id = "7030"
+simple = { limit = 30, period = 60 }
+
+[[unsafe.bindings]]
+name = "RL_40"
+type = "ratelimit"
+namespace_id = "7040"
+simple = { limit = 40, period = 60 }
+
+[[unsafe.bindings]]
+name = "RL_60"
+type = "ratelimit"
+namespace_id = "7060"
+simple = { limit = 60, period = 60 }
+
+[[unsafe.bindings]]
+name = "RL_120"
+type = "ratelimit"
+namespace_id = "7120"
+simple = { limit = 120, period = 60 }
 
 # ---------------------------------------------------------------------------
 # Non-secret configuration. Safe to commit — none of these values are
@@ -84,6 +171,24 @@ GITHUB_CLIENT_ID = "Iv23liqdlxwKp3dunpZN"
 
 # How long a session stays valid before the user must sign in again.
 SESSION_TTL_DAYS = "30"
+
+# ---------------------------------------------------------------------------
+# KV-migration feature flags (src/types.ts). Anything except "false" means ON.
+# Each one is an instant rollback for its own part — change the value (here
+# and redeploy, or in the dashboard under Settings > Variables) without
+# touching code:
+#   USE_SUPABASE_CACHE      "false" -> cache lives in isolate memory + Cache API only
+#   USE_SUPABASE_LOCKS      "false" -> scan lock is per-isolate only
+#   USE_SUPABASE_CLI_CODES  "false" -> `dev login` codes go back to KV (1 write/login)
+#   USE_RATE_LIMIT_BINDING  "false" -> per-isolate in-memory limiter only
+#   KV_READ_FALLBACK        "false" -> don't seed a cold cache from old KV entries
+# None of them ever falls back to a KV write on a hot path.
+# ---------------------------------------------------------------------------
+USE_SUPABASE_CACHE = "true"
+USE_SUPABASE_LOCKS = "true"
+USE_SUPABASE_CLI_CODES = "true"
+USE_RATE_LIMIT_BINDING = "true"
+KV_READ_FALLBACK = "true"
 
 # Groq model used by the AI Discovery agent (src/lib/groq.ts). Not a
 # secret — the key that authenticates against it is (GROQ_API_KEY).
@@ -179,10 +284,86 @@ MISTRAL_MODEL = ""
 OPENROUTER_MODEL = "openai/gpt-oss-20b:free"
 GITHUB_MODELS_MODEL = ""
 CF_AI_MODEL = "@cf/openai/gpt-oss-20b"
+# KV-migration flags (see the production [vars] block for what each does).
+USE_SUPABASE_CACHE = "true"
+USE_SUPABASE_LOCKS = "true"
+USE_SUPABASE_CLI_CODES = "true"
+USE_RATE_LIMIT_BINDING = "true"
+KV_READ_FALLBACK = "true"
 
 [[env.staging.kv_namespaces]]
 binding = "RATE_LIMIT_KV"
 id = "REPLACE_WITH_STAGING_KV_NAMESPACE_ID"
+
+# Rate Limiting bindings are NOT inherited by [env.staging], so they are
+# declared again, with their own namespace ids so staging traffic never
+# shares counters with production.
+
+[[env.staging.unsafe.bindings]]
+name = "RL_4"
+type = "ratelimit"
+namespace_id = "7204"
+simple = { limit = 4, period = 60 }
+
+[[env.staging.unsafe.bindings]]
+name = "RL_5"
+type = "ratelimit"
+namespace_id = "7205"
+simple = { limit = 5, period = 60 }
+
+[[env.staging.unsafe.bindings]]
+name = "RL_6"
+type = "ratelimit"
+namespace_id = "7206"
+simple = { limit = 6, period = 60 }
+
+[[env.staging.unsafe.bindings]]
+name = "RL_8"
+type = "ratelimit"
+namespace_id = "7208"
+simple = { limit = 8, period = 60 }
+
+[[env.staging.unsafe.bindings]]
+name = "RL_10"
+type = "ratelimit"
+namespace_id = "7210"
+simple = { limit = 10, period = 60 }
+
+[[env.staging.unsafe.bindings]]
+name = "RL_15"
+type = "ratelimit"
+namespace_id = "7215"
+simple = { limit = 15, period = 60 }
+
+[[env.staging.unsafe.bindings]]
+name = "RL_20"
+type = "ratelimit"
+namespace_id = "7220"
+simple = { limit = 20, period = 60 }
+
+[[env.staging.unsafe.bindings]]
+name = "RL_30"
+type = "ratelimit"
+namespace_id = "7230"
+simple = { limit = 30, period = 60 }
+
+[[env.staging.unsafe.bindings]]
+name = "RL_40"
+type = "ratelimit"
+namespace_id = "7240"
+simple = { limit = 40, period = 60 }
+
+[[env.staging.unsafe.bindings]]
+name = "RL_60"
+type = "ratelimit"
+namespace_id = "7260"
+simple = { limit = 60, period = 60 }
+
+[[env.staging.unsafe.bindings]]
+name = "RL_120"
+type = "ratelimit"
+namespace_id = "7320"
+simple = { limit = 120, period = 60 }
 
 # Cloudflare cron triggers are per-environment — the top-level [triggers]
 # above only applies when deploying without --env. Mirrored here so the

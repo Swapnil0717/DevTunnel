@@ -3,61 +3,47 @@ import type { Env } from "../types";
 import { logger } from "./logger";
 
 /**
- * Simple fixed-window counter in KV: key = `rl:{bucket}:{identity}:{window}`.
- * Not perfectly precise at window boundaries (a fixed-window limiter never
- * is), but it is cheap, requires no extra infrastructure beyond the KV
- * namespace already declared in wrangler.toml, and satisfies
- * Backend_Development_Rules.txt rule 43 (rate limiting is mandatory for
- * sensitive public endpoints) without pretending to replace authorization
- * (rule 44 — this only protects availability/abuse, never decides access).
+ * Abuse/availability rate limiting with ZERO Workers KV writes.
  *
- * Write batching: the naive version of this wrote to KV on every single
- * allowed request. With this function called from nearly every route in
- * the app, that meant "one API request in, one KV put out" — which blows
- * through Workers KV's free-tier 1,000 puts/day limit almost immediately
- * under completely normal traffic (see the Cloudflare "KV daily operation
- * limit exceeded" emails this was chasing). `localCounters` below keeps a
- * best-known count per key *in the current Worker isolate's memory* and
- * only flushes to KV every `WRITE_BATCH_SIZE` increments (or immediately
- * once the caller is about to be rejected, so a block always sticks).
- * This is a pure write-reduction optimization, not a new source of truth:
- * KV remains authoritative, isolates are ephemeral and can be evicted at
- * any time, and a fresh isolate just re-seeds its local count from KV on
- * its first check for a key. Worst case if an isolate is recycled mid
- * window is under-counting by up to `WRITE_BATCH_SIZE - 1` requests,
- * which is an acceptable trade for a control that only ever protects
- * availability/abuse and never gates authorization.
+ * WHY THIS CHANGED: the previous limiter kept a fixed-window counter in KV
+ * (`rl:{bucket}:{identity}:{window}`) and, even after batching, still spent
+ * hundreds of the Free plan's 1,000 KV writes/day on normal traffic.
+ *
+ * HOW IT WORKS NOW: Cloudflare's built-in Rate Limiting binding
+ * (`env.RL_<n>.limit({ key })`, declared in wrangler.toml). It is a local call
+ * — no KV, no Supabase round trip, no subrequest, no cost. The one catch is
+ * that a binding's limit and period are fixed in wrangler.toml, not passed per
+ * call. So wrangler.toml declares one binding per limit value used in this
+ * codebase (all with a 60 s period, see `LIMIT_TIERS`), and every call site
+ * keeps its existing `{ bucket, limit, windowSeconds }` signature: this file
+ * picks the binding whose limit matches, and the per-call `key` is
+ * `{bucket}:{identity}` so each bucket/identity pair gets its own counter.
+ *
+ * WINDOWS LONGER THAN 60 s: bindings only support 10 s or 60 s periods, and a
+ * few admin-onboarding buckets and the catalog "refresh" button use 300 s
+ * windows. Those are mapped to the tier at or above their per-minute rate
+ * (e.g. 10 per 300 s -> 4 per 60 s). That is slightly looser per 5-minute
+ * window than before; it is still abuse protection only, and every one of
+ * those routes is also behind authentication.
+ *
+ * ACCURACY: counts are approximate and local to the Cloudflare data centre
+ * serving the request. That is fine for what this protects (availability and
+ * abuse — never authorization). `identity` handling is unchanged: it defaults
+ * to the connecting IP, and authenticated routes pass `user:${id}`.
+ *
+ * FALLBACK: if a tier's binding isn't configured (misconfigured deploy, local
+ * `wrangler dev` without bindings) or `USE_RATE_LIMIT_BINDING = "false"`, a
+ * per-isolate in-memory fixed window is used. Still no KV writes. It is weaker
+ * (each isolate counts alone) and logs once per bucket so it can't silently
+ * stay that way.
+ *
+ * FAIL OPEN: any error from the limiter allows the request and logs
+ * `rate_limit_check_failed` — availability of the app shouldn't depend on an
+ * ancillary control.
  */
 
-interface LocalCounter {
-  /** Best-known total for this key, seeded from KV then incremented locally. */
-  count: number;
-  /** Increments made locally since the last KV write. */
-  unflushed: number;
-  /** Wall-clock time after which this entry is safe to garbage-collect. */
-  expiresAt: number;
-}
-
-const localCounters = new Map<string, LocalCounter>();
-
-/** Only write to KV every this many local increments (except when a
- * request is about to be rejected, which always flushes immediately so
- * the block is visible to every isolate right away). Chosen so that even
- * the tightest buckets in this codebase (limit 5) still write on
- * essentially every request, while the common 20-120/window buckets see
- * roughly a 5x cut in KV puts. */
-const WRITE_BATCH_SIZE = 5;
-
-/** Occasionally sweep expired entries so a long-lived isolate serving many
- * distinct identities/buckets doesn't grow this map without bound. Runs
- * probabilistically rather than on every call to keep the common path cheap. */
-function maybeSweep() {
-  if (Math.random() >= 0.01) return;
-  const now = Date.now();
-  for (const [k, v] of localCounters) {
-    if (v.expiresAt < now) localCounters.delete(k);
-  }
-}
+/** Every distinct per-minute limit used by a `checkRateLimit` call site. Each has a binding `RL_<n>` in wrangler.toml. */
+export const LIMIT_TIERS = [4, 5, 6, 8, 10, 15, 20, 30, 40, 60, 120] as const;
 
 export interface RateLimitOptions {
   /** Logical bucket name, e.g. "auth-github", "auth-me". */
@@ -84,54 +70,85 @@ function clientIdentity(c: Context): string {
   return c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for") ?? "unknown";
 }
 
+/** Smallest tier whose per-minute limit is >= the requested rate. */
+function pickTier(limit: number, windowSeconds: number): number {
+  const perMinute = (limit * 60) / windowSeconds;
+  return LIMIT_TIERS.find((tier) => tier >= perMinute) ?? LIMIT_TIERS[LIMIT_TIERS.length - 1]!;
+}
+
+type LimiterBinding = { limit(options: { key: string }): Promise<{ success: boolean }> };
+
+function bindingFor(env: Env, tier: number): LimiterBinding | null {
+  if (env.USE_RATE_LIMIT_BINDING === "false") return null;
+  const candidate = (env as unknown as Record<string, unknown>)[`RL_${tier}`];
+  return candidate && typeof (candidate as LimiterBinding).limit === "function"
+    ? (candidate as LimiterBinding)
+    : null;
+}
+
+// ---------------------------------------------------------------------------
+// In-memory fallback (per isolate, no KV)
+// ---------------------------------------------------------------------------
+interface LocalWindow {
+  count: number;
+  resetAt: number;
+}
+
+const localWindows = new Map<string, LocalWindow>();
+const warnedBuckets = new Set<string>();
+
+function maybeSweep(now: number): void {
+  if (Math.random() >= 0.01) return;
+  for (const [key, window] of localWindows) {
+    if (window.resetAt < now) localWindows.delete(key);
+  }
+}
+
+function checkLocal(key: string, limit: number, windowSeconds: number): boolean {
+  const now = Date.now();
+  maybeSweep(now);
+
+  const existing = localWindows.get(key);
+  if (!existing || existing.resetAt <= now) {
+    localWindows.set(key, { count: 1, resetAt: now + windowSeconds * 1000 });
+    return true;
+  }
+  if (existing.count >= limit) return false;
+  existing.count += 1;
+  return true;
+}
+
 /** Returns true when the request is within limits; false when it should be rejected. */
 export async function checkRateLimit(
-  c: Context<{ Bindings: Env }>,
+  // `Context<any>`: routes use differing Variables shapes (with/without the
+  // authenticated user), and a narrower type here made every call from a route
+  // with Variables fail to typecheck. Only `c.env` and `c.req.header` are used.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  c: Context<any>,
   options: RateLimitOptions,
 ): Promise<boolean> {
   const { bucket, limit, windowSeconds } = options;
-  const window = Math.floor(Date.now() / 1000 / windowSeconds);
-  const identity = options.identity ?? clientIdentity(c);
-  const key = `rl:${bucket}:${identity}:${window}`;
-  const ttlSeconds = windowSeconds + 5;
-
-  maybeSweep();
+  const env = c.env as Env;
+  const identity = (options.identity ?? clientIdentity(c)).slice(0, 200);
+  const key = `${bucket}:${identity}`;
 
   try {
-    let local = localCounters.get(key);
-    if (!local) {
-      const stored = Number((await c.env.RATE_LIMIT_KV.get(key)) ?? "0");
-      local = { count: stored, unflushed: 0, expiresAt: Date.now() + ttlSeconds * 1000 };
-      localCounters.set(key, local);
+    const tier = pickTier(limit, windowSeconds);
+    const binding = bindingFor(env, tier);
+
+    if (binding) {
+      const { success } = await binding.limit({ key });
+      return success;
     }
 
-    if (local.count >= limit) return false;
-
-    local.count += 1;
-    local.unflushed += 1;
-    local.expiresAt = Date.now() + ttlSeconds * 1000;
-
-    // Flush every WRITE_BATCH_SIZE increments, and always flush the
-    // request that hits the limit so the block is immediately visible to
-    // every isolate rather than lingering as "unflushed" in this one.
-    if (local.unflushed >= WRITE_BATCH_SIZE || local.count >= limit) {
-      const toWrite = local.count;
-      local.unflushed = 0;
-      const writePromise = c.env.RATE_LIMIT_KV.put(key, String(toWrite), {
-        expirationTtl: ttlSeconds,
-      }).catch((err) => {
-        logger.error("rate_limit_write_failed", { bucket, error: String(err) });
-      });
-      // Don't make the caller wait on the KV write — the local count
-      // already reflects it for this isolate's own purposes.
-      c.executionCtx.waitUntil(writePromise);
+    if (env.USE_RATE_LIMIT_BINDING !== "false" && !warnedBuckets.has(bucket)) {
+      warnedBuckets.add(bucket);
+      logger.warn("rate_limit_binding_missing_using_memory", { bucket, tier });
     }
-
-    return true;
+    return checkLocal(key, limit, windowSeconds);
   } catch (err) {
-    // Fail open on KV outages — availability of auth shouldn't depend on
-    // an ancillary store, but we log loudly since this is a security
-    // control silently degrading (rule 21: never swallow errors).
+    // Fail open — but log loudly, since this is a security control silently
+    // degrading (rule 21: never swallow errors).
     logger.error("rate_limit_check_failed", { bucket, error: String(err) });
     return true;
   }

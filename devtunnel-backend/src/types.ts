@@ -9,11 +9,45 @@
  * (Backend_Development_Rules.txt rules 6–7).
  */
  export interface Env {
-  // --- KV ---
-  // Also doubles as a lightweight JSON response cache (see src/lib/cache.ts)
-  // for the GitHub contribution-calendar endpoints — see that file for why
-  // a second KV namespace wasn't introduced for that.
+  // --- KV (legacy, READ-ONLY) ---
+  // This backend no longer WRITES to Workers KV (Free plan: 1,000 writes/day
+  // account-wide). Rate limiting uses the Rate Limiting bindings below, and
+  // caches / scan locks / CLI login codes live in Supabase (sql/043).
+  // The namespace is kept only so (a) a cold cache can be seeded from the old
+  // `cache:swr:*` entries on first deploy (src/lib/cache.ts, KV_READ_FALLBACK),
+  // (b) the old Groq admin budget split can still be read (groqQuota.ts), and
+  // (c) USE_SUPABASE_CLI_CODES="false" can roll the CLI login back to KV.
   RATE_LIMIT_KV: KVNamespace;
+
+  // --- Cloudflare Rate Limiting bindings (wrangler.toml [[unsafe.bindings]]) ---
+  // One per per-minute limit used in the codebase — see LIMIT_TIERS in
+  // src/lib/rateLimit.ts. Optional so a missing binding degrades to the
+  // in-memory limiter instead of crashing.
+  RL_4?: RateLimit;
+  RL_5?: RateLimit;
+  RL_6?: RateLimit;
+  RL_8?: RateLimit;
+  RL_10?: RateLimit;
+  RL_15?: RateLimit;
+  RL_20?: RateLimit;
+  RL_30?: RateLimit;
+  RL_40?: RateLimit;
+  RL_60?: RateLimit;
+  RL_120?: RateLimit;
+
+  // --- Migration feature flags (wrangler.toml [vars]; anything but "false" = on) ---
+  // Flip one to "false" and redeploy (or edit the var in the dashboard) to
+  // roll that part back without touching code.
+  /** Cache L3 (Supabase `cache_entries`). "false" = cache lives in isolate memory + Cache API only. */
+  USE_SUPABASE_CACHE?: string;
+  /** Scan lock in Supabase. "false" = per-isolate in-memory lock only. */
+  USE_SUPABASE_LOCKS?: string;
+  /** CLI login codes in Supabase. "false" = the previous KV implementation. */
+  USE_SUPABASE_CLI_CODES?: string;
+  /** Rate Limiting bindings. "false" = per-isolate in-memory limiter only. */
+  USE_RATE_LIMIT_BINDING?: string;
+  /** Read-only recovery of old KV cache entries on a total miss. "false" disables it. */
+  KV_READ_FALLBACK?: string;
 
   // --- Non-secret config (wrangler.toml [vars]) ---
   ENVIRONMENT: "production" | "staging" | "development";

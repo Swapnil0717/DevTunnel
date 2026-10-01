@@ -31,6 +31,7 @@ import {
   warmGithubStarBuckets,
   warmContributorIssuesScan,
 } from "./lib/cacheWarmers";
+import { purgeExpiredCacheRows } from "./lib/cache";
 import { getEnv } from "./config/env";
 import { logger } from "./lib/logger";
 
@@ -106,7 +107,8 @@ app.onError(handleError);
  * errors rather than throwing (see lib/cacheWarmers.ts), so one warmer
  * failing never affects another, and a failed run just means the next
  * scheduled run tries again while `withCacheSWR` readers keep serving
- * whatever's still in KV in the meantime.
+ * whatever's still cached (isolate memory / Cache API / Supabase
+ * `cache_entries` — no longer Workers KV) in the meantime.
  */
 async function handleScheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
   const validatedEnv = getEnv(env);
@@ -147,6 +149,10 @@ async function handleScheduled(event: ScheduledEvent, env: Env, ctx: ExecutionCo
       // Falls through to the daily AI Discovery run for its own schedule,
       // and defensively for any cron expression this handler doesn't
       // otherwise recognize (rather than silently doing nothing).
+      // Daily housekeeping for the Supabase replacements of the old KV state
+      // (expired cache rows, used/expired CLI login codes, stale scan locks —
+      // sql/043). Separate waitUntil so it can't be blocked by, or block, discovery.
+      ctx.waitUntil(purgeExpiredCacheRows(env));
       ctx.waitUntil(
         runDailyDiscovery(validatedEnv, env.RATE_LIMIT_KV)
           // Push the batched AI usage counters to Supabase before the isolate ends (src/lib/ai/usage.ts).

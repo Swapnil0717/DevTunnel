@@ -361,6 +361,53 @@ export async function updateSubmissionDetails(
 }
 
 /** One published submission by slug, or `null` — which the routes turn into a 404. */
+export type DeleteSubmissionResult = "ok" | "not_found" | "forbidden";
+
+/**
+ * Removes a published submission on behalf of the person who submitted it.
+ *
+ * SOFT delete: sets `removed_at` (the moderation soft-delete sql/028 already
+ * defines) rather than deleting the row. Every read in this file —
+ * `user_submission_list`, `getSubmissionDetail`, `getSubmissionBySlug`,
+ * `updateSubmissionDetails` — already excludes rows with `removed_at` set, so
+ * the submission disappears from the Community list, its view page 404s, and
+ * it can no longer be edited or upvoted, with no other change needed. The
+ * partial unique index on `lower(source_url) where removed_at is null` means
+ * the same repository can be submitted again afterwards.
+ *
+ * Ownership is enforced IN the UPDATE (`submitted_by = userId`), so the check
+ * and the write are one atomic statement — there is no window between "is this
+ * mine?" and "delete it". A follow-up read only runs when nothing was updated,
+ * purely to tell "not there" (404) from "not yours" (403). Idempotent: deleting
+ * an already-removed submission is `not_found`, never an error.
+ */
+export async function deleteSubmission(
+  supabase: SupabaseClient,
+  slug: string,
+  userId: string,
+): Promise<DeleteSubmissionResult> {
+  const { data: removed, error: updateError } = await supabase
+    .from("user_submissions")
+    .update({ removed_at: new Date().toISOString() })
+    .eq("slug", slug)
+    .eq("submitted_by", userId)
+    .is("removed_at", null)
+    .select("id");
+
+  if (updateError) throw new Error(`Failed to delete submission: ${updateError.message}`);
+  if (removed && removed.length > 0) return "ok";
+
+  const { data: existing, error: readError } = await supabase
+    .from("user_submissions")
+    .select("id")
+    .eq("slug", slug)
+    .is("removed_at", null)
+    .maybeSingle();
+
+  if (readError) throw new Error(`Failed to read submission: ${readError.message}`);
+  return existing ? "forbidden" : "not_found";
+}
+
 export async function getSubmissionBySlug(
   supabase: SupabaseClient,
   slug: string,

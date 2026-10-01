@@ -9,6 +9,7 @@ import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
 import { logger } from "../lib/logger";
 import {
+  deleteSubmission,
   getSubmissionBySlug,
   getSubmissionDetail,
   listSubmissions,
@@ -678,6 +679,69 @@ submissions.put("/submissions/:slug", requireAuth, async (c) => {
       requestId: c.get("requestId"),
     });
     return errorResponse(c, 500, "internal_error", "Couldn't save your changes right now");
+  }
+});
+
+/**
+ * `DELETE /submissions/:slug` — the person who submitted a project or tool
+ * removes it from Community.
+ *
+ * Owner only: anyone else gets a 403 (and an unknown or already-removed slug
+ * a 404), so `ownedByViewer` hiding the button in the UI is a courtesy, never
+ * the protection. The row is soft-deleted (see `deleteSubmission`), which
+ * takes it off the list and the view page immediately and frees its source
+ * URL for a fresh submission. The GitHub repository itself is never touched.
+ *
+ * Declared before `/submissions/:slug/upvote`'s own `DELETE`; the two differ
+ * by path depth, so neither can shadow the other.
+ */
+submissions.delete("/submissions/:slug", requireAuth, async (c) => {
+  const env = getEnv(c.env);
+  const user = c.get("user");
+  if (!user) {
+    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+  }
+  const slug = c.req.param("slug");
+
+  const withinLimit = await checkRateLimit(c, {
+    bucket: "submissions-delete",
+    limit: 10,
+    windowSeconds: 60,
+    identity: `user:${user.id}`,
+  });
+  if (!withinLimit) {
+    return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+  }
+
+  try {
+    const supabase = getSupabase(env);
+    const outcome = await deleteSubmission(supabase, slug, user.id);
+
+    if (outcome === "not_found") {
+      return errorResponse(c, 404, "not_found", "This submission isn't on DevTunnel");
+    }
+    if (outcome === "forbidden") {
+      return errorResponse(
+        c,
+        403,
+        "forbidden",
+        "Only the person who submitted this can delete it",
+      );
+    }
+
+    logger.info("submission_deleted", {
+      slug,
+      userId: user.id,
+      requestId: c.get("requestId"),
+    });
+    return c.json({ deleted: true, slug }, 200);
+  } catch (err) {
+    logger.error("submission_delete_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      slug,
+      requestId: c.get("requestId"),
+    });
+    return errorResponse(c, 500, "internal_error", "Couldn't delete this submission right now");
   }
 });
 

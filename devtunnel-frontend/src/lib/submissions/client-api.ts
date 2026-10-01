@@ -112,6 +112,24 @@ export async function updateSubmissionDetails(
   return (await res.json()) as SubmissionDetail;
 }
 
+/**
+ * `DELETE /submissions/:slug` — removes the viewer's own submission from
+ * Community.
+ *
+ * Owner-only on the backend: anyone else gets `SubmissionsApiError` status
+ * `403` (code `forbidden`), so hiding the Delete button is a courtesy and
+ * never the protection. A `404` means it's already gone (deleted in another
+ * tab, say); callers treat that as success because the end state is the one
+ * the person asked for. The GitHub repository is never touched.
+ */
+export async function deleteSubmission(slug: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/submissions/${encodeURIComponent(slug)}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) throw await parseError(res);
+}
+
 /* -------------------------------------------------------------------------
  * The submit wizard.
  * ---------------------------------------------------------------------- */
