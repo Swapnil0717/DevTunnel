@@ -205,11 +205,22 @@ async function assertOk(res: Response, context: string): Promise<void> {
     logger.warn("github_pr_not_found", { context, body: bodySnippet });
     throw new GitHubPullRequestError("not_found", "Repository not found, or not accessible");
   }
-  if (res.status === 401 || res.status === 403) {
+  if (res.status === 403 && (res.headers.get("x-ratelimit-remaining") === "0" || res.headers.has("retry-after"))) {
+    logger.warn("github_pr_rate_limited", { context, status: res.status, body: bodySnippet });
+    throw new GitHubPullRequestError("rate_limited", "GitHub rate limit reached — try again shortly");
+  }
+  if (res.status === 401) {
     logger.error("github_pr_unauthorized", { context, status: res.status, body: bodySnippet });
     throw new GitHubPullRequestError(
       "unauthorized",
       "Your GitHub connection is no longer valid — reconnect GitHub and try again",
+    );
+  }
+  if (res.status === 403) {
+    logger.error("github_pr_forbidden", { context, status: res.status, body: bodySnippet });
+    throw new GitHubPullRequestError(
+      "unauthorized",
+      "GitHub didn't allow DevTunnel to open this pull request — sign out and sign back in to grant repository access, then try again",
     );
   }
   if (res.status === 429) {

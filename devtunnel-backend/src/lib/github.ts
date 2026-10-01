@@ -31,46 +31,52 @@ async function fetchWithTimeout(input: string, init: RequestInit): Promise<Respo
 }
 
 /**
- * DevTunnel.tech is registered as a **GitHub App** (not an OAuth App) —
- * confirmed via Settings > Developer settings > GitHub Apps > DevTunnel.tech,
- * App ID 4767532. The user-identity ("Sign in with GitHub") flow for a
- * GitHub App reuses the same `/login/oauth/authorize` and
- * `/login/oauth/access_token` endpoints as a classic OAuth App, but:
+ * Scopes requested at sign-in. DevTunnel must be able to fork and open pull
+ * requests against ANY public open-source repository on the contributor's
+ * behalf (`dev start` forks, `dev submit` opens the PR), without the repo's
+ * owner ever installing DevTunnel.
  *
- *  - No `scope` parameter — a GitHub App's access is entirely defined by
- *    the permissions configured on the app itself (Settings > Permissions
- *    & events), not a scope string.
- *  - Verified email access requires the app to have **Account
- *    permissions > Email addresses: Read-only** granted — set that in the
- *    GitHub App settings, not in this code.
- *  - The resulting user access token is a GitHub-App **user-to-server**
- *    token. If the App has "Expire user authorization tokens" enabled,
- *    it expires (commonly ~8h) and GitHub also issues a longer-lived
- *    refresh token; if that setting is off, the access token doesn't
- *    expire and no refresh token is issued. Both shapes are handled
- *    below (`expires_in`/`refresh_token`/`refresh_token_expires_in` are
- *    all optional in the response schema) — this backend doesn't assume
- *    which mode is configured.
+ * That is only possible with a classic **OAuth App**:
  *
- * Unlike the original version of this file, the token is no longer used
- * once and discarded: src/db/githubTokens.ts persists it (encrypted)
- * per-user, so devtunnel-backend can later call the GitHub GraphQL API
- * (contribution calendar, src/routes/contributions.ts) using each user's
- * own authorization rather than a separate server-wide credential.
+ *  - `public_repo` — fork any public repo into the user's account, push to
+ *    that fork, and open a PR from it to the upstream repo.
+ *  - `read:user` / `user:email` — profile + verified email at sign-in, and
+ *    the contribution calendar (src/routes/contributions.ts).
+ *
+ * A **GitHub App** user-to-server token can NOT do this: it is limited to
+ * repositories where the App is installed, so forking a repo that hasn't
+ * installed it fails with 403/404 — that is why DevTunnel used to need to be
+ * installed on every repo a contributor wanted to work on. The authorize and
+ * token endpoints are identical for both kinds of app, so only the app
+ * registration (GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET) and this scope
+ * string change.
+ *
+ * OAuth App tokens don't expire and come without a refresh token. The
+ * token bundle below already treats `expires_in` / `refresh_token` as
+ * optional, so nothing else needs to change — a revoked token simply makes
+ * GitHub answer 401, which every caller already turns into "reconnect
+ * GitHub".
+ *
+ * A classic OAuth App has ONE "Authorization callback URL", but GitHub
+ * accepts any `redirect_uri` whose path is under it. Register
+ * `https://api.devtunnel.tech/auth/` and both `/auth/callback` (web) and
+ * `/auth/cli/callback` (`dev login`) are accepted.
  *
  * `redirectUri` defaults to the web app's `GITHUB_CALLBACK_URL` — every
  * existing caller (src/routes/auth.ts) keeps working unchanged. The
  * `dev login` CLI flow (src/routes/authCli.ts) is the one caller that
- * passes `env.GITHUB_CLI_CALLBACK_URL` instead, since it authorizes
- * against a different registered callback URL (a GitHub App can have more
- * than one). GitHub requires whatever `redirect_uri` was used to start
- * the authorize step to also be echoed back on the token-exchange step —
- * see the same parameter on `exchangeCodeForToken` below.
+ * passes `env.GITHUB_CLI_CALLBACK_URL` instead. GitHub requires whatever
+ * `redirect_uri` was used to start the authorize step to also be echoed
+ * back on the token-exchange step — see the same parameter on
+ * `exchangeCodeForToken` below.
  */
+const GITHUB_OAUTH_SCOPES = "public_repo read:user user:email";
+
 export function buildAuthorizeUrl(env: ValidatedEnv, state: string, redirectUri?: string): string {
   const url = new URL(GITHUB_AUTHORIZE_URL);
   url.searchParams.set("client_id", env.GITHUB_CLIENT_ID);
   url.searchParams.set("redirect_uri", redirectUri ?? env.GITHUB_CALLBACK_URL);
+  url.searchParams.set("scope", GITHUB_OAUTH_SCOPES);
   url.searchParams.set("state", state);
   return url.toString();
 }

@@ -167,7 +167,7 @@ SUPABASE_URL = "https://bdxnvouuyfjryuncxkfx.supabase.co"
 SUPABASE_DB_SCHEMA = "devtunnel"
 
 # GitHub App client id (public, not secret) — DevTunnel.tech, App ID 4767532.
-GITHUB_CLIENT_ID = "Iv23liqdlxwKp3dunpZN"
+GITHUB_CLIENT_ID = "NEW_CLIENT_ID"
 
 # How long a session stays valid before the user must sign in again.
 SESSION_TTL_DAYS = "30"
@@ -272,7 +272,7 @@ ALLOWED_ORIGINS = "https://staging.devtunnel.tech"
 COOKIE_DOMAIN = "devtunnel.tech"
 SUPABASE_URL = "https://bdxnvouuyfjryuncxkfx.supabase.co"
 SUPABASE_DB_SCHEMA = "devtunnel"
-GITHUB_CLIENT_ID = "Iv23liqdlxwKp3dunpZN" # same GitHub App as production for now; split later if needed
+GITHUB_CLIENT_ID = "NEW_CLIENT_ID" # same GitHub App as production for now; split later if needed
 SESSION_TTL_DAYS = "30"
 GROQ_MODEL = "openai/gpt-oss-120b"
 AI_FEATURES_ENABLED = "true"

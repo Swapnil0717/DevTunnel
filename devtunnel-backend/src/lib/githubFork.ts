@@ -181,11 +181,27 @@ async function assertOk(res: Response, context: string): Promise<void> {
     logger.warn("github_fork_not_found", { context, body: bodySnippet });
     throw new GitHubForkError("not_found", "Repository not found, or not accessible");
   }
-  if (res.status === 401 || res.status === 403) {
+  if (res.status === 403 && (res.headers.get("x-ratelimit-remaining") === "0" || res.headers.has("retry-after"))) {
+    // GitHub answers primary/secondary rate limits with 403 as well as
+    // 429 — don't tell the contributor to reconnect for those.
+    logger.warn("github_fork_rate_limited", { context, status: res.status, body: bodySnippet });
+    throw new GitHubForkError("rate_limited", "GitHub rate limit reached — try again shortly");
+  }
+  if (res.status === 401) {
     logger.error("github_fork_unauthorized", { context, status: res.status, body: bodySnippet });
     throw new GitHubForkError(
       "unauthorized",
       "Your GitHub connection is no longer valid — reconnect GitHub and try again",
+    );
+  }
+  if (res.status === 403) {
+    // Token is valid but GitHub refused the action: typically a sign-in
+    // made before DevTunnel asked for the `public_repo` permission, or an
+    // organisation that restricts third-party apps.
+    logger.error("github_fork_forbidden", { context, status: res.status, body: bodySnippet });
+    throw new GitHubForkError(
+      "unauthorized",
+      "GitHub didn't allow DevTunnel to fork this repository — sign out and sign back in to grant repository access, then try again",
     );
   }
   if (res.status === 429) {
