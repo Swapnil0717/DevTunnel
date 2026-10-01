@@ -27,6 +27,13 @@ import {
  * Drawn for a task that can still be started; for a finished or
  * claimed-by-someone-else task the real page swaps the AI card and the
  * two step cards for one short message.
+ *
+ * The tracker's stages, the CLI steps and the eight manual Git steps are
+ * not retyped here: the kit builds them from `TASK_STAGES`,
+ * `buildCliCommands` / `TASK_CLI_STEP_TITLES` and `buildTaskWorkflowSteps`
+ * — the same data the real components render — so each card's detail
+ * text and command lines wrap onto the same number of lines as the page
+ * that replaces this sheet.
  */
 export default function TaskContributeLoading() {
   return (

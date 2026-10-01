@@ -36,6 +36,7 @@ export default function GithubProjectContributeLoading() {
       <BlueprintBreadcrumb text="GitHub Projects / Project name / Contribute" />
 
       <BlueprintPublicHeader
+        circularLogo
         title="Contribute to Project name"
         description
         meta={

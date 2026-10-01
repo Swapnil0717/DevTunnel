@@ -140,3 +140,23 @@ export function buildCliCommands({ projectId, tasks }: CliCommandsInput): CliCom
 
   return commands;
 }
+
+/**
+ * Step titles for the task-scoped CLI card on
+ * `/projects/:projectSlug/tasks/:taskId/contribute`
+ * (`TaskContributeCliPanel`), keyed by `CliCommand.id`.
+ *
+ * Lives here — not inside the panel — so the route's blueprint loading
+ * sheet (`BlueprintContributeCliSection`) can build its step cards from
+ * the same titles, descriptions and command lines the real panel renders
+ * instead of a hand-copied, shortened version that wraps differently. A
+ * row whose id is not a key here is not a step on that page (`logout`,
+ * and the project-scoped rows).
+ */
+export const TASK_CLI_STEP_TITLES: Record<string, string> = {
+  install: "Install the CLI",
+  login: "Sign in with GitHub",
+  "start-task": "Start this task",
+  test: "Run the tests",
+  "submit-task": "Submit your work",
+};

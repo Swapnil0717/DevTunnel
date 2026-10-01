@@ -36,6 +36,7 @@ export default function GithubToolContributeLoading() {
       <BlueprintBreadcrumb text="Github Open Source Tools / Tool name / Contribute" />
 
       <BlueprintPublicHeader
+        circularLogo
         title="Contribute to Tool name"
         description
         meta={

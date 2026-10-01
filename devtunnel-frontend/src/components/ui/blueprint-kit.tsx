@@ -18,6 +18,15 @@
  */
 
 import type { ReactNode } from "react";
+import {
+  CONTRIBUTION_CATEGORIES,
+  CONTRIBUTION_MOTIVATIONS,
+  CONTRIBUTION_WAYS,
+} from "@/lib/contribute/contribution-ways";
+import { TASK_CLI_STEP_TITLES, buildCliCommands } from "@/lib/contribute/cli-commands";
+import { buildTaskWorkflowSteps } from "@/lib/contribute/task-workflow";
+import { TASK_STAGES } from "@/lib/tasks/progress";
+import { DEVELOPER_ROLE_LABEL, EXPERIENCE_LEVEL_LABEL } from "@/lib/onboarding/types";
 
 /**
  * One hatched placeholder bar — the `SkeletonBlock` drop-in. Size and
@@ -355,6 +364,7 @@ export function BlueprintPublicFilterBar({
   labels,
   withMatchProfile = false,
   withAiSearch = false,
+  withRefresh = false,
   bottomMarginClassName = "mb-4",
 }: {
   filters?: number;
@@ -363,11 +373,30 @@ export function BlueprintPublicFilterBar({
   withMatchProfile?: boolean;
   /** `/projects` and `/opensource-tools` (and both GitHub catalogs) render the "Ask AI" panel. */
   withAiSearch?: boolean;
+  /**
+   * Both GitHub catalogs put `RefreshCatalogButton` on the search row,
+   * pushed to the right from `sm` (`flex-col` below it, `sm:flex-row
+   * sm:items-start sm:justify-between`). 32px tall: `py-1.5` + 12px text
+   * (18px line) + border, with a 14px icon in front of the label.
+   */
+  withRefresh?: boolean;
   bottomMarginClassName?: string;
 }) {
   return (
     <div className={`${bottomMarginClassName} flex flex-col gap-3`} aria-hidden="true">
-      <BlueprintFill className="h-[36.75px] w-full sm:max-w-xs" />
+      {withRefresh ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <BlueprintFill className="h-[36.75px] w-full sm:max-w-xs" />
+          <div className="flex flex-col items-start sm:items-end">
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-[8px] border border-blueprint/25 bg-blueprint/[0.05] px-3 py-1.5 text-[12px] font-medium">
+              <BlueprintFill className="h-3.5 w-3.5 shrink-0 rounded-[3px]" />
+              <BlueprintGhostText text="Refresh" />
+            </span>
+          </div>
+        </div>
+      ) : (
+        <BlueprintFill className="h-[36.75px] w-full sm:max-w-xs" />
+      )}
       {withMatchProfile ? <BlueprintFill className="h-[31.25px] w-[118px]" /> : null}
       {withAiSearch ? <BlueprintAiSearchBar /> : null}
       <div className="flex flex-wrap items-end gap-2">
@@ -394,18 +423,30 @@ export function BlueprintPublicFilterBar({
  * The "Showing the top N … by stars / Load all" row (`LoadCatalogBar`,
  * `components/github-projects/load-catalog-bar.tsx`) that sits above the
  * grid on the two GitHub catalog pages (`/github-projects`,
- * `/github-open-source-tools`) — previously missing from both
- * `loading.tsx` files entirely, so the grid shifted up the moment that
- * row mounted with real data.
+ * `/github-open-source-tools`).
+ *
+ * Sized from the real row: `mb-4 flex flex-wrap items-center
+ * justify-between gap-x-3 gap-y-2`, the 12px status line (18px, ghosted
+ * from the real wording so it wraps where the real one does) beside the
+ * "Load all {noun}" button (`py-1.5` + 12px text + border = 32px, so the
+ * row is 32px tall, not the 28px a bare bar would give).
+ *
+ * `noun` is the plural the page uses for its rows — "projects" or
+ * "tools" — and sets the width of both the line and the button label.
  */
-export function BlueprintLoadCatalogBar() {
+export function BlueprintLoadCatalogBar({ noun = "projects" }: { noun?: string }) {
   return (
     <div
       className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2"
       aria-hidden="true"
     >
-      <BlueprintFill className="h-2.5 w-72" />
-      <BlueprintFill className="h-7 w-28" />
+      <BlueprintGhostParagraph
+        text={`Showing the top 1,000 ${noun} by stars — search and filters only cover what's loaded.`}
+        className="text-[12px]"
+      />
+      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-[8px] border border-blueprint/25 bg-blueprint/[0.05] px-3 py-1.5 text-[12px] font-medium">
+        <BlueprintGhostText text={`Load all ${noun}`} />
+      </span>
     </div>
   );
 }
@@ -503,38 +544,71 @@ export function BlueprintToolCardGrid({ count = 6 }: { count?: number }) {
   );
 }
 /**
- * N `GithubProjectCard`-shaped placeholders for `/github-projects`'s
- * card grid: a left-aligned repo-logo + name/`owner-repo` row, a
- * two-line description, a row of language/tag chips, then a bordered
- * stars/forks/issues + "updated" footer row — sized for
- * `GithubProjectCard` specifically (left-aligned repo row) rather than
- * `BlueprintToolCardGrid`'s centered-square-logo layout, same "match the
- * real card's own internal shape" approach as that helper.
+ * N `GithubProjectCard`-shaped placeholders for `/github-projects` and
+ * `/github-open-source-tools` (same card, `GithubProjectsExplorer`),
+ * sized line for line to the real card (`p-4`, 1px border, 1.5 line
+ * height) so a row of placeholders is as tall as a row of real cards and
+ * the page doesn't jump when data lands:
+ *
+ *  - header: 32px circular `RepoLogo` beside a name line (13px
+ *    `leading-tight` = 16.25px) and a mono `owner/repo` line (11px =
+ *    16.5px) 2px under it;
+ *  - description: `line-clamp-2` at 11.5px `leading-snug` = two
+ *    15.8125px lines;
+ *  - tag row: primary-language chip, up to three tech-stack chips and a
+ *    license chip (10px text + `py-[2px]` + border = 21px), `gap-1.5`;
+ *  - footer: stars / forks / open-issues, each a 14px icon + 11px
+ *    figure (16.5px) with `gap-3` between them, and the 10.5px "Updated …"
+ *    link on the right, under a `pt-2.5` hairline.
  */
- export function BlueprintGithubProjectCardGrid({ count = 12 }: { count?: number }) {
+export function BlueprintGithubProjectCardGrid({ count = 12 }: { count?: number }) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-hidden="true">
       {Array.from({ length: count }).map((_, index) => (
         <div
           key={index}
-          className="flex flex-col rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-4"
+          className="flex min-w-0 flex-col rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-4"
         >
           <div className="mb-2.5 flex items-start gap-2.5">
             <BlueprintFill className="h-8 w-8 shrink-0 rounded-full" />
-            <div className="flex-1">
-              <BlueprintFill className="h-3 w-28" />
-              <BlueprintFill className="mt-1.5 h-2.5 w-20" />
+            <div className="min-w-0 flex-1">
+              <div className="flex h-[16.25px] items-center">
+                <BlueprintFill className="h-3 w-28" />
+              </div>
+              <div className="mt-0.5 flex h-[16.5px] items-center">
+                <BlueprintFill className="h-2.5 w-32" />
+              </div>
             </div>
           </div>
-          <BlueprintFill className="mb-1.5 h-2.5 w-full" />
-          <BlueprintFill className="mb-3 h-2.5 w-3/5" />
-          <div className="mb-3 flex gap-1.5">
-            <BlueprintFill className="h-4 w-14 rounded-full" />
-            <BlueprintFill className="h-4 w-12 rounded-full" />
+          <div className="mb-3 min-h-[2.6em]">
+            <div className="flex h-[15.8125px] items-center">
+              <BlueprintFill className="h-2.5 w-full" />
+            </div>
+            <div className="flex h-[15.8125px] items-center">
+              <BlueprintFill className="h-2.5 w-3/5" />
+            </div>
           </div>
-          <div className="mt-auto flex items-center justify-between gap-2 border-t border-blueprint/15 pt-2.5">
-            <BlueprintFill className="h-3 w-24" />
-            <BlueprintFill className="h-3 w-16" />
+          <div className="mb-3 flex flex-wrap items-center gap-1.5">
+            <BlueprintFill className="h-[21px] w-[64px] rounded-[5px]" />
+            <BlueprintFill className="h-[21px] w-[52px] rounded-[5px]" />
+            <BlueprintFill className="h-[21px] w-[58px] rounded-[5px]" />
+            <BlueprintFill className="h-[21px] w-[46px] rounded-[5px]" />
+          </div>
+          <div className="mt-auto flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-blueprint/15 pt-2.5">
+            <div className="flex items-center gap-3">
+              {["1.2k", "340", "56"].map((figure) => (
+                <span
+                  key={figure}
+                  className="inline-flex items-center gap-1 text-[11px]"
+                >
+                  <BlueprintFill className="h-3.5 w-3.5 shrink-0 rounded-[3px]" />
+                  <BlueprintGhostText text={figure} />
+                </span>
+              ))}
+            </div>
+            <div className="text-[10.5px]">
+              <BlueprintGhostText text="Updated 2 days ago" />
+            </div>
           </div>
         </div>
       ))}
@@ -825,7 +899,7 @@ export function BlueprintGhostLines({
  */
 export function BlueprintBackLink({ text }: { text: string }) {
   return (
-    <span className="mb-4 inline-flex items-center gap-1 text-[12.5px]" aria-hidden="true">
+    <span className="mb-4 inline-flex items-center gap-1 text-[12.5px] font-medium" aria-hidden="true">
       <BlueprintFill className="h-3.5 w-3.5 rounded-[3px]" />
       <BlueprintGhostText text={text} />
     </span>
@@ -890,18 +964,26 @@ export function BlueprintPublicHeader({
   meta,
   buttons,
   description = false,
+  circularLogo = false,
 }: {
   title: string;
   meta: ReactNode;
   buttons: ReactNode;
   description?: boolean;
+  /**
+   * `true` for the GitHub catalog pages, whose 56px logo is `RepoLogo` (a
+   * circle) rather than the rounded square of a DevTunnel project / tool.
+   */
+  circularLogo?: boolean;
 }) {
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4" aria-hidden="true">
       <div className="flex items-start gap-4">
-        <BlueprintFill className="h-14 w-14 shrink-0 rounded-[10px]" />
+        <BlueprintFill
+          className={`h-14 w-14 shrink-0 ${circularLogo ? "rounded-full" : "rounded-[10px]"}`}
+        />
         <div className="flex min-w-0 flex-col gap-1.5">
-          <div className="text-xl">
+          <div className="text-xl font-medium">
             <BlueprintGhostText text={title} />
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px]">{meta}</div>
@@ -1026,7 +1108,7 @@ function BlueprintStatRow({ label, value = "1,234" }: { label: string; value?: s
         <BlueprintFill className="h-3.5 w-3.5 shrink-0 rounded-[3px]" />
         <BlueprintGhostText text={label} />
       </span>
-      <BlueprintGhostText text={value} />
+      <BlueprintGhostText text={value} className="font-medium" />
     </div>
   );
 }
@@ -1198,21 +1280,41 @@ export function BlueprintToolSidebar() {
 export function BlueprintInfoPanel({
   rows,
   tagHeading,
+  labelColumn = "180px",
+  rowLabels,
 }: {
   rows: number;
   tagHeading: string;
+  /**
+   * Width of the label column. DevTunnel projects / tools use 180px; the
+   * GitHub catalog's Project Info panel uses 140px. A literal class per
+   * value so Tailwind's scanner sees it.
+   */
+  labelColumn?: "140px" | "180px";
+  /**
+   * The real label / value pairs, in order. When given they set the row
+   * count and are ghosted at their real width, so the value column
+   * starts where the real one does.
+   */
+  rowLabels?: { label: string; value: string }[];
 }) {
+  const rowCount = rowLabels ? rowLabels.length : rows;
+  const gridColsClass =
+    labelColumn === "140px" ? "sm:grid-cols-[140px_1fr]" : "sm:grid-cols-[180px_1fr]";
   return (
     <div
       className="rounded-[10px] border border-blueprint/25 bg-blueprint/[0.05] p-5"
       aria-hidden="true"
     >
       <BlueprintAiSummary />
-      <div className="grid grid-cols-1 gap-x-6 gap-y-3 text-[12.5px] sm:grid-cols-[180px_1fr]">
-        {Array.from({ length: rows }).map((_, index) => (
+      <div className={`grid grid-cols-1 gap-x-6 gap-y-3 text-[12.5px] ${gridColsClass}`}>
+        {Array.from({ length: rowCount }).map((_, index) => (
           <div key={index} className="contents">
-            <BlueprintGhostText text="Label" className="w-fit" />
-            <BlueprintGhostText text="Value goes here" className="w-fit" />
+            <BlueprintGhostText text={rowLabels?.[index]?.label ?? "Label"} className="w-fit" />
+            <BlueprintGhostText
+              text={rowLabels?.[index]?.value ?? "Value goes here"}
+              className="w-fit"
+            />
           </div>
         ))}
       </div>
@@ -1256,6 +1358,14 @@ function BlueprintChip({ label, count = "12", className = "" }: { label: string;
  * badge, a 11.5px meta line (`mt-2`), tag row + "View task" (`mt-2.5`,
  * 21.75px) and the "Explain" button row under a rule (`mt-2.5 pt-2.5`,
  * 31.25px) that every task linked to a GitHub issue carries.
+ *
+ * The status is `AdminTaskStatusBadge` — a 6px dot and a 12.5px word, not
+ * a pill — and a task linked to a GitHub issue also carries the mono
+ * `#n` link (12px icon) at the end of its meta line, so both are drawn
+ * the same way here. The "Explain" toggle (`AiExplainToggle`) is
+ * `px-2.5 py-1.5 text-[11.5px]` with a 12px sparkle and a 12px chevron
+ * around the word, inside a plain block `div` exactly as the real row
+ * nests it, so the row's height comes out the same.
  */
 export function BlueprintContributeTasksPanel({ rows = 4 }: { rows?: number }) {
   return (
@@ -1299,14 +1409,19 @@ export function BlueprintContributeTasksPanel({ rows = 4 }: { rows?: number }) {
               <div className="min-w-0 flex-1 text-[13px] font-medium">
                 <BlueprintGhostText text="Task title goes here and can run long" />
               </div>
-              <BlueprintFill className="h-[21px] w-16 shrink-0 rounded-full" />
+              <BlueprintStatusWord text="In progress" />
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11.5px]">
               <BlueprintGhostText text="Backend, Frontend" />
               <span className="text-blueprint/50">·</span>
               <BlueprintGhostText text="Intermediate" />
               <span className="text-blueprint/50">·</span>
-              <BlueprintGhostText text="2 working" />
+              <BlueprintGhostText text="2 working, 1 completed" />
+              <span className="text-blueprint/50">·</span>
+              <span className="inline-flex items-center gap-1 font-mono">
+                <BlueprintFill className="h-3 w-3 shrink-0 rounded-[3px]" />
+                <BlueprintGhostText text="#1234" />
+              </span>
             </div>
             <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-1.5">
@@ -1316,7 +1431,13 @@ export function BlueprintContributeTasksPanel({ rows = 4 }: { rows?: number }) {
               <BlueprintGhostText text="View task ›" className="text-[11px]" />
             </div>
             <div className="mt-2.5 border-t border-blueprint/15 pt-2.5">
-              <BlueprintFill className="h-[31.25px] w-28 rounded-[7px]" />
+              <div>
+                <span className="inline-flex items-center gap-1.5 rounded-[7px] border border-blueprint/20 px-2.5 py-1.5 text-[11.5px] font-medium">
+                  <BlueprintFill className="h-3 w-3 shrink-0 rounded-[3px]" />
+                  <BlueprintGhostText text="Explain" />
+                  <BlueprintFill className="h-3 w-3 shrink-0 rounded-[3px]" />
+                </span>
+              </div>
             </div>
           </div>
         ))}
@@ -1327,64 +1448,85 @@ export function BlueprintContributeTasksPanel({ rows = 4 }: { rows?: number }) {
 
 /**
  * The "Ways to contribute" panel body (`ContributionWaysPanel`), the tab
- * the page opens on when the target has no tasks. It is static content,
- * so the shape is known: the category chips (`mb-4`, "Everything" + the
- * four categories + a right-aligned "No coding needed"), then each
- * category as a heading block (`mb-2.5`: 13px title, 12px summary 2px
- * under it) over a two-column grid of way cards (`gap-2`,
- * `rounded-[9px] p-3.5`: 13px title, 12px `leading-relaxed` description
- * `mt-1.5`, 11.5px effort line `mt-2.5`), sections 24px apart.
+ * the page opens on when the target has no tasks. Its content is the
+ * static catalog in `lib/contribute/contribution-ways.ts`, so this reads
+ * that same catalog instead of guessing at it: the chip counts, the four
+ * category blocks (5 / 6 / 5 / 4 cards), every card's title, description
+ * and effort line are the real strings, ghosted at their real width, so
+ * descriptions wrap onto the same number of lines and the grid rows come
+ * out the same height as the real ones. If a way is added or reworded,
+ * the skeleton follows with no edit here.
+ *
+ * Layout: the chip row (`mb-4`, "Everything" + the four categories + a
+ * right-aligned "No coding needed"); each category a heading block
+ * (`mb-2.5`: 13px title, 12px summary 2px under it) over a two-column
+ * grid of way cards (`gap-2`, `rounded-[9px] p-3.5`: 13px title, 12px
+ * `leading-relaxed` description `mt-1.5`, 11.5px effort line `mt-2.5`),
+ * sections 24px apart.
+ *
+ * `withLinks` is `false` for a target with no repository, where the real
+ * panel drops the right-hand "Open bugs" / "Discussions" … links.
  */
-export function BlueprintWaysPanel() {
-  const sections = [6, 4];
+export function BlueprintWaysPanel({ withLinks = true }: { withLinks?: boolean }) {
   return (
     <div aria-hidden="true">
       <div className="mb-4 flex flex-wrap items-center gap-1.5">
-        <BlueprintChip label="Everything" count="22" />
-        <BlueprintChip label="Code" count="6" />
-        <BlueprintChip label="Non-code" count="6" />
-        <BlueprintChip label="Process and tooling" count="5" />
-        <BlueprintChip label="Community" count="5" />
+        <BlueprintChip label="Everything" count={String(CONTRIBUTION_WAYS.length)} />
+        {CONTRIBUTION_CATEGORIES.map((category) => (
+          <BlueprintChip
+            key={category.id}
+            label={category.label}
+            count={String(CONTRIBUTION_WAYS.filter((way) => way.category === category.id).length)}
+          />
+        ))}
         <span className="ml-auto inline-flex items-center gap-1.5 rounded-[7px] border border-blueprint/20 px-2.5 py-1 text-[12px]">
           <BlueprintGhostText text="No coding needed" />
         </span>
       </div>
 
       <div className="flex flex-col gap-6">
-        {sections.map((cards, sectionIndex) => (
-          <section key={sectionIndex}>
+        {CONTRIBUTION_CATEGORIES.map((category) => (
+          <section key={category.id}>
             <div className="mb-2.5 flex items-start gap-2">
               <BlueprintFill className="mt-[3px] h-3.5 w-3.5 shrink-0 rounded-[3px]" />
               <div>
                 <div className="text-[13px] font-medium">
-                  <BlueprintGhostText text="Category name" />
+                  <BlueprintGhostText text={category.label} />
                 </div>
-                <div className="mt-0.5 text-[12px]">
-                  <BlueprintGhostText text="One-line summary of what this group covers" />
+                <div className="mt-0.5">
+                  <BlueprintGhostParagraph text={category.summary} className="text-[12px]" />
                 </div>
               </div>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {Array.from({ length: cards }).map((_, index) => (
+              {CONTRIBUTION_WAYS.filter((way) => way.category === category.id).map((way) => (
                 <div
-                  key={index}
+                  key={way.id}
                   className="flex flex-col rounded-[9px] border border-blueprint/15 bg-blueprint/[0.07] p-3.5"
                 >
                   <div className="flex items-start gap-2">
                     <BlueprintFill className="mt-[2px] h-3.5 w-3.5 shrink-0 rounded-[3px]" />
                     <div className="flex-1 text-[13px] font-medium">
-                      <BlueprintGhostText text="Way to contribute" />
+                      <BlueprintGhostText text={way.label} />
                     </div>
                   </div>
                   <div className="mt-1.5">
-                    <BlueprintGhostLines
-                      widths={["w-full", "w-full", "w-1/2"]}
+                    <BlueprintGhostParagraph
+                      text={way.description}
                       className="text-[12px] leading-relaxed"
                     />
                   </div>
                   <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px]">
-                    <BlueprintGhostText text="Small first step" />
-                    <BlueprintGhostText text="Open on GitHub" className="ml-auto" />
+                    <BlueprintGhostText text={`${way.effort} first step`} />
+                    {way.needsCode ? null : (
+                      <>
+                        <span className="invisible">·</span>
+                        <BlueprintGhostText text="No code required" />
+                      </>
+                    )}
+                    {withLinks && way.repoPath && way.linkLabel ? (
+                      <BlueprintGhostText text={way.linkLabel} className="ml-auto font-medium" />
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -1411,13 +1553,7 @@ export function BlueprintContributeSidebar({ withTags = true }: { withTags?: boo
     <aside className="flex w-full flex-col gap-4 lg:w-[280px] lg:shrink-0" aria-hidden="true">
       <BlueprintRailCard>
         <BlueprintRailHeading text="BEFORE YOUR FIRST CHANGE" />
-        <div className="flex flex-col gap-2 text-[12.5px]">
-          {["CONTRIBUTING.md", "README.md", "Code of conduct", "Open issues"].map((label) => (
-            <div key={label}>
-              <BlueprintGhostText text={label} />
-            </div>
-          ))}
-        </div>
+        <BlueprintRailLinks labels={["CONTRIBUTING.md", "README.md", "Code of conduct", "Open issues"]} />
         <div className="mt-3 border-t border-blueprint/15 pt-3 text-[12px]">
           <BlueprintGhostText text="45 open issues on GitHub" />
         </div>
@@ -1432,7 +1568,10 @@ export function BlueprintContributeSidebar({ withTags = true }: { withTags?: boo
           <BlueprintFill className="h-[26px] w-[26px] shrink-0 rounded-[6px]" />
         </div>
         <div className="mt-2">
-          <BlueprintGhostLines widths={["w-full", "w-full", "w-2/3"]} className="text-[11.5px]" />
+          <BlueprintGhostParagraph
+            text="Clone your own fork to push to it. This is the upstream URL — useful as your upstream remote."
+            className="text-[11.5px]"
+          />
         </div>
       </BlueprintRailCard>
 
@@ -1453,13 +1592,13 @@ export function BlueprintContributeSidebar({ withTags = true }: { withTags?: boo
       <BlueprintRailCard>
         <BlueprintRailHeading text="WHY PEOPLE START" />
         <div className="flex flex-col gap-2.5">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index}>
+          {CONTRIBUTION_MOTIVATIONS.map((motivation) => (
+            <div key={motivation.id}>
               <div className="text-[12.5px]">
-                <BlueprintGhostText text="You hit the problem yourself" />
+                <BlueprintGhostText text={motivation.label} />
               </div>
-              <div className="mt-0.5 text-[11.5px]">
-                <BlueprintGhostText text="A short line of detail under it" />
+              <div className="mt-0.5">
+                <BlueprintGhostParagraph text={motivation.detail} className="text-[11.5px]" />
               </div>
             </div>
           ))}
@@ -1468,15 +1607,30 @@ export function BlueprintContributeSidebar({ withTags = true }: { withTags?: boo
 
       <BlueprintRailCard>
         <BlueprintRailHeading text="ELSEWHERE ON DEVTUNNEL" />
-        <div className="flex flex-col gap-2 text-[12.5px]">
-          {["Tasks across every project", "All open issues", "Browse other projects"].map((label) => (
-            <div key={label}>
-              <BlueprintGhostText text={label} />
-            </div>
-          ))}
-        </div>
+        <BlueprintRailLinks
+          labels={["Tasks across every project", "All open issues", "Browse other projects"]}
+        />
       </BlueprintRailCard>
     </aside>
+  );
+}
+
+/**
+ * A rail's list of plain links (`<ul class="flex flex-col gap-2"><li><a
+ * class="text-[12.5px]">`). The 12.5px size sits on the *link*, not the
+ * `li`, so each row's height is set by the `li`'s inherited 16px × 1.5
+ * line — 24px, not the 18.75px a 12.5px block would be. Reproduced the
+ * same way: a default-size block holding a 12.5px inline ghost.
+ */
+function BlueprintRailLinks({ labels }: { labels: string[] }) {
+  return (
+    <div className="flex flex-col gap-2">
+      {labels.map((label) => (
+        <div key={label}>
+          <BlueprintGhostText text={label} className="text-[12.5px]" />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -1777,12 +1931,9 @@ export function BlueprintTaskHeader({
  * under a `mt-4 border-t pt-3` rule.
  */
 export function BlueprintTaskTracker() {
-  const stages = [
-    { label: "Open", description: "Available to pick up" },
-    { label: "Started", description: "Forked and being worked on" },
-    { label: "PR submitted", description: "Pull request open, waiting on review" },
-    { label: "Done", description: "Completed" },
-  ];
+  // The real tracker's own stage list, so a reworded stage can't leave
+  // this sheet wrapping differently from the page that replaces it.
+  const stages = TASK_STAGES;
   return (
     <BlueprintTaskSection>
       <BlueprintTaskHeading text="Progress" className="mb-4" />
@@ -1972,18 +2123,46 @@ export function BlueprintTaskSidebar() {
   );
 }
 
-/** One numbered step card of the task Contribute page (`rounded-[9px] border p-3.5`). */
+/**
+ * Wrapping inline ghost: an invisible copy of `children` (so it wraps at
+ * the same widths and takes the same number of lines as the real text)
+ * with a hatched bar over it that is only as wide as the text itself.
+ * `BlueprintGhostText` is the same thing without wrapping.
+ */
+function BlueprintGhostInline({ children }: { children: ReactNode }) {
+  return (
+    <span className="relative" aria-hidden="true">
+      <span className="invisible">{children}</span>
+      <BlueprintFill className="absolute inset-x-0 inset-y-[0.22em]" />
+    </span>
+  );
+}
+
+/**
+ * One numbered step card of the task Contribute page
+ * (`rounded-[9px] border p-3.5`), the same card `TaskContributeCliPanel`
+ * and `ContributeWorkflowPanel` draw: a 13px title led by its mono 11.5px
+ * number (`mr-1.5`), the 12px `leading-relaxed` detail (`mt-1.5`), the
+ * `CommandBlock` (`mt-2.5`, one wrapping mono line per command beside a
+ * 26px copy button) and the 11.5px note (`mt-2`). The manual-Git steps
+ * also lead with a 14px checkbox. Every string comes from the real step
+ * data, so the title, detail and each command wrap onto the same number
+ * of lines they will on the page.
+ */
 function BlueprintStepCard({
+  index,
   title,
   detail,
-  commandLines,
+  commands,
   checkbox = false,
   note,
 }: {
+  /** 1-based position, the number the real card shows before the title. */
+  index: number;
   title: string;
   detail: string;
-  /** Lines in the `CommandBlock` under the detail; omit for a step without commands. */
-  commandLines?: number;
+  /** The `CommandBlock` lines under the detail; omit for a step without commands. */
+  commands?: string[];
   checkbox?: boolean;
   note?: string;
 }) {
@@ -1992,15 +2171,23 @@ function BlueprintStepCard({
       <div className="flex items-start gap-3">
         {checkbox ? <BlueprintFill className="mt-[3px] h-3.5 w-3.5 shrink-0 rounded-[3px]" /> : null}
         <div className="min-w-0 flex-1">
-          <div className="overflow-hidden text-[13px] font-medium">
-            <BlueprintGhostText text={`1  ${title}`} />
+          <div className="text-[13px] font-medium">
+            <BlueprintGhostInline>
+              <span className="mr-1.5 font-mono text-[11.5px]">{index}</span>
+              {title}
+            </BlueprintGhostInline>
           </div>
           <BlueprintGhostParagraph text={detail} className="mt-1.5 text-[12px] leading-relaxed" />
-          {commandLines ? (
+          {commands && commands.length > 0 ? (
             <div className="mt-2.5 flex items-start gap-2 rounded-[8px] border border-blueprint/15 px-3 py-2.5">
-              <div className="min-w-0 flex-1 font-mono text-[11.5px] leading-relaxed">
-                {Array.from({ length: commandLines }).map((_, index) => (
-                  <BlueprintGhostLines key={index} widths={["w-4/5"]} className="text-[11.5px] leading-relaxed" />
+              <div className="min-w-0 flex-1">
+                {commands.map((command, commandIndex) => (
+                  <div
+                    key={commandIndex}
+                    className="whitespace-pre-wrap break-words font-mono text-[11.5px] leading-relaxed"
+                  >
+                    <BlueprintGhostInline>{command}</BlueprintGhostInline>
+                  </div>
                 ))}
               </div>
               <BlueprintFill className="h-[26px] w-[26px] shrink-0 rounded-[6px]" />
@@ -2046,15 +2233,26 @@ export function BlueprintContributeTaskSummary() {
   );
 }
 
-/** "Fastest way: the DevTunnel CLI" card: heading block, five single-command steps, the `dev test` note. */
+/**
+ * A task id is a UUID, so a 36-character stand-in makes the `dev start` /
+ * `dev submit` lines wrap exactly where the real ones will.
+ */
+const SAMPLE_TASK_ID = "00000000-0000-0000-0000-000000000000";
+const SAMPLE_REPOSITORY_FULL_NAME = "owner/repository-name";
+const SAMPLE_REPOSITORY_URL = `https://github.com/${SAMPLE_REPOSITORY_FULL_NAME}`;
+
+/**
+ * "Fastest way: the DevTunnel CLI" card (`TaskContributeCliPanel`):
+ * heading block, then one numbered step per CLI row, then the `dev test`
+ * note. Built from `buildCliCommands` and `TASK_CLI_STEP_TITLES` — the
+ * very data the real panel renders — so each step's description (the
+ * install row's is two lines long) and command wrap as they will on the
+ * page.
+ */
 export function BlueprintContributeCliSection() {
-  const steps = [
-    ["Install the CLI", "Install the DevTunnel command-line tool once on your machine."],
-    ["Sign in with GitHub", "Authenticate so the CLI can fork and open pull requests for you."],
-    ["Start this task", "Forks the repository and creates a branch for this task."],
-    ["Run the tests", "Run the project's checks before you submit anything."],
-    ["Submit your work", "Pushes your branch and opens the pull request."],
-  ];
+  const steps = buildCliCommands({ projectId: null, tasks: [{ id: SAMPLE_TASK_ID }] }).filter(
+    (row) => row.id in TASK_CLI_STEP_TITLES,
+  );
   return (
     <BlueprintTaskSection>
       <div className="mb-4">
@@ -2067,8 +2265,14 @@ export function BlueprintContributeCliSection() {
         />
       </div>
       <div className="flex flex-col gap-2">
-        {steps.map(([title, detail]) => (
-          <BlueprintStepCard key={title} title={title} detail={detail} commandLines={1} />
+        {steps.map((step, index) => (
+          <BlueprintStepCard
+            key={step.id}
+            index={index + 1}
+            title={TASK_CLI_STEP_TITLES[step.id] ?? step.id}
+            detail={step.description}
+            commands={[step.command]}
+          />
         ))}
       </div>
       <BlueprintGhostParagraph
@@ -2079,18 +2283,21 @@ export function BlueprintContributeCliSection() {
   );
 }
 
-/** The manual fork-to-PR card: intro, workflow heading + counter, CONTRIBUTING.md link bar, eight tickable steps. */
+/**
+ * The manual fork-to-PR card (`ContributeWorkflowPanel` inside
+ * `TaskContributePage`): intro, workflow heading + counter, CONTRIBUTING.md
+ * link bar, then one tickable step per workflow step. The steps come from
+ * `buildTaskWorkflowSteps` — the builder the page itself calls — so every
+ * step's real detail, command lines and note (the fork step's
+ * `<your-username>` reminder included) are drawn at their real length.
+ */
 export function BlueprintContributeManualSection() {
-  const steps: { title: string; detail: string; commandLines?: number; note?: string }[] = [
-    { title: "Read the contributing guide first", detail: "Check the project's own rules for branches, commits and tests before you change anything." },
-    { title: "Claim the work before you write it", detail: "Comment on the issue so maintainers and other contributors know you are on it." },
-    { title: "Fork, then clone your fork", detail: "Work on your own copy of the repository and keep the original as upstream.", commandLines: 3 },
-    { title: "Create a branch for the change", detail: "Keep each change on its own branch so the pull request stays small.", commandLines: 1 },
-    { title: "Set up, change, and test locally", detail: "Follow the project's setup steps, make the change and run its tests." },
-    { title: "Commit with a message that explains the change", detail: "Say what changed and link the issue so reviewers have the context.", commandLines: 2 },
-    { title: "Push and open the pull request", detail: "Push the branch to your fork and open the pull request against the project.", commandLines: 1, note: "Then open the PR against owner/repository-name." },
-    { title: "Respond to review until it merges", detail: "Answer review comments and push follow-up commits to the same branch." },
-  ];
+  const steps =
+    buildTaskWorkflowSteps({
+      repositoryUrl: SAMPLE_REPOSITORY_URL,
+      repositoryFullName: SAMPLE_REPOSITORY_FULL_NAME,
+      issueNumber: 1234,
+    }) ?? [];
   return (
     <BlueprintTaskSection>
       <BlueprintGhostParagraph
@@ -2102,23 +2309,32 @@ export function BlueprintContributeManualSection() {
           <div className="text-[13px] font-medium">
             <BlueprintGhostText text="From forked repository to merged pull request" />
           </div>
-          <div className="mt-1 text-[12px]">
-            <BlueprintGhostText text="Tick steps off as you go. This is a scratchpad for this visit — nothing is saved." />
-          </div>
+          <BlueprintGhostParagraph
+            className="mt-1 text-[12px]"
+            text="Tick steps off as you go. This is a scratchpad for this visit — nothing is saved."
+          />
         </div>
         <div className="text-[11.5px]">
-          <BlueprintGhostText text="0 of 8 ticked" />
+          <BlueprintGhostText text={`0 of ${steps.length} ticked`} />
         </div>
       </div>
       <div className="mb-4 flex items-center justify-between gap-3 rounded-[9px] border border-blueprint/20 px-3.5 py-2.5 text-[12.5px]">
-        <div className="min-w-0 flex-1 overflow-hidden">
-          <BlueprintGhostText text="This project's own contributing guide overrides anything below it." />
+        <div className="min-w-0">
+          <BlueprintGhostParagraph text="This project's own contributing guide overrides anything below it." />
         </div>
         <BlueprintGhostText text="Read CONTRIBUTING.md" className="shrink-0 font-medium" />
       </div>
       <div className="flex flex-col gap-2">
-        {steps.map((step) => (
-          <BlueprintStepCard key={step.title} checkbox {...step} />
+        {steps.map((step, index) => (
+          <BlueprintStepCard
+            key={step.id}
+            checkbox
+            index={index + 1}
+            title={step.title}
+            detail={step.detail}
+            commands={step.commands}
+            note={step.note}
+          />
         ))}
       </div>
     </BlueprintTaskSection>
@@ -2324,5 +2540,579 @@ export function BlueprintSubmissionSections() {
         </div>
       </BlueprintTaskSection>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Profile page (`/profile`) — one export per real component, in page
+ * order: `ProfileHeader`, `ProfileTags`, `ProfileStats`, `MilestoneTrack`
+ * and `ProfileTabs` with its two `ContributionCalendar`s.
+ *
+ * The real cards are borderless `bg-surface` panels, so the placeholders
+ * outline themselves with an inset ring (`ring-1 ring-inset`) instead of
+ * a border: a ring draws the same hairline without adding the 2px of
+ * layout a border would, which is what keeps every card here the exact
+ * height of the one that replaces it.
+ * ------------------------------------------------------------------ */
+
+/** The faint panel + inset hairline standing in for a borderless `bg-surface` card. */
+const BLUEPRINT_PANEL = "bg-blueprint/[0.05] ring-1 ring-inset ring-blueprint/20";
+
+/**
+ * `ProfileHeader`: `mb-5`, a 56px avatar beside the name (`text-base`,
+ * `mb-0.5`), the mono 12px `@username · GitHub` line (`mb-2`) and the
+ * bio (12.5px `leading-relaxed`, `sm:max-w-[380px]`), and the
+ * "Edit profile" button (`px-3.5 py-[7px] text-xs`, 13px icon).
+ *
+ * The bio is drawn as two lines — the usual length at the 380px cap. A
+ * profile with no bio, or a one-line one, is shorter than this by one or
+ * two 20px lines.
+ */
+export function BlueprintProfileHeader() {
+  return (
+    <div
+      className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
+      aria-hidden="true"
+    >
+      <div className="flex min-w-0 gap-3.5">
+        <BlueprintFill className="h-14 w-14 shrink-0 rounded-full" />
+        <div className="min-w-0">
+          <div className="mb-0.5 truncate text-base font-medium">
+            <BlueprintGhostText text="Contributor Name" />
+          </div>
+          <div className="mb-2 font-mono text-xs">
+            <BlueprintGhostText text="@username · GitHub" />
+          </div>
+          <div className="max-w-full sm:max-w-[380px]">
+            <BlueprintGhostLines
+              widths={["w-full", "w-2/3"]}
+              className="text-[12.5px] leading-relaxed"
+            />
+          </div>
+        </div>
+      </div>
+      <span className="flex shrink-0 items-center justify-center gap-1.5 self-start rounded-md border border-blueprint/25 bg-blueprint/[0.05] px-3.5 py-[7px] text-xs sm:self-auto">
+        <BlueprintFill className="h-[13px] w-[13px] shrink-0 rounded-[3px]" />
+        <BlueprintGhostText text="Edit profile" />
+      </span>
+    </div>
+  );
+}
+
+/** One `rounded-md border px-2.5 py-1 text-[11px]` badge of `ProfileTags` (26.5px tall). */
+function BlueprintProfileBadge({ label }: { label: string }) {
+  return (
+    <span className="rounded-md border border-blueprint/25 bg-blueprint/[0.05] px-2.5 py-1 text-[11px]">
+      <BlueprintGhostText text={label} />
+    </span>
+  );
+}
+
+/**
+ * `ProfileTags`: `mb-5`, the account-role badge, one badge per developer
+ * role, the experience badge, a hairline divider, the skill / technology
+ * tags, and — on its own `mt-2` row — "Interested in" with the interest
+ * tags. Labels come from the real role / experience tables; the tech and
+ * interest names are stand-ins, since they are the user's own.
+ */
+export function BlueprintProfileTags() {
+  return (
+    <div className="mb-5" aria-hidden="true">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <BlueprintProfileBadge label="Contributor" />
+        <BlueprintProfileBadge label={DEVELOPER_ROLE_LABEL.FRONTEND} />
+        <BlueprintProfileBadge label={DEVELOPER_ROLE_LABEL.BACKEND} />
+        <BlueprintProfileBadge label={EXPERIENCE_LEVEL_LABEL.INTERMEDIATE} />
+        <span className="mx-1 h-3.5 w-px bg-blueprint/30" />
+        {["TypeScript", "React", "Node.js", "PostgreSQL", "Docker"].map((name) => (
+          <BlueprintProfileBadge key={name} label={name} />
+        ))}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px]">
+          <BlueprintGhostText text="Interested in" />
+        </span>
+        {["Open source", "Developer tools", "Education"].map((name) => (
+          <BlueprintProfileBadge key={name} label={name} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * `ProfileStats`: `mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4`, four
+ * `rounded-lg px-3.5 py-3` cards each a 28px icon chip, an 11px label
+ * (`mt-2 mb-1`) and a `text-xl` value. "Contributions" spans both columns
+ * below `sm` and carries two figures side by side (GitHub | via
+ * DevTunnel), each with a 10px caption under it — that caption is what
+ * makes it the tallest card, so the other three stretch to its height in
+ * the grid exactly as they do on the page.
+ */
+export function BlueprintProfileStats() {
+  const single = [
+    "Projects",
+    "Tasks submitted",
+    "Pull requests merged",
+  ];
+  return (
+    <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4" aria-hidden="true">
+      <div className={`col-span-2 rounded-lg px-3.5 py-3 sm:col-span-1 ${BLUEPRINT_PANEL}`}>
+        <BlueprintFill className="h-7 w-7 rounded-md" />
+        <div className="mb-1 mt-2 text-[11px]">
+          <BlueprintGhostText text="Contributions" />
+        </div>
+        <div className="flex items-baseline gap-3">
+          <div>
+            <div className="text-xl font-medium">
+              <BlueprintGhostText text="1,234" />
+            </div>
+            <div className="text-[10px]">
+              <BlueprintGhostText text="GitHub" />
+            </div>
+          </div>
+          <div className="h-6 w-px bg-blueprint/30" />
+          <div>
+            <div className="text-xl font-medium">
+              <BlueprintGhostText text="56" />
+            </div>
+            <div className="text-[10px]">
+              <BlueprintGhostText text="via DevTunnel" />
+            </div>
+          </div>
+        </div>
+      </div>
+      {single.map((label) => (
+        <div key={label} className={`rounded-lg px-3.5 py-3 ${BLUEPRINT_PANEL}`}>
+          <BlueprintFill className="h-7 w-7 rounded-md" />
+          <div className="mb-1 mt-2 text-[11px]">
+            <BlueprintGhostText text={label} />
+          </div>
+          <div className="text-xl font-medium">
+            <BlueprintGhostText text="12" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * `MilestoneTrack`, block for block:
+ *
+ *  - the label row (`mb-2.5`, items at the bottom): a 14px title over an
+ *    11px caption on the left, the 22px `leading-[1.2]` "n / 30 active
+ *    days" on the right;
+ *  - the panel (`rounded-lg px-3 py-3.5`): the 30-day strip of 14px cells
+ *    (`gap-[3px]`, `mb-1`), the two 11px end dates (`mb-4`), the 6px
+ *    overall bar (`mb-3`), and the checkpoint grid — `grid-cols-3`,
+ *    `sm:grid-cols-5`, `gap-2` — of centred cards (`px-2 py-2.5`: a 16px
+ *    icon, a 12px label `mt-1.5`, an 11px "Day n · status" line);
+ *  - the two bonus-goal cards (`mt-2.5 sm:grid-cols-2`, `px-3 py-2.5`):
+ *    icon + label and "n of m" on one 12px row (`mb-1.5`), over a 4px bar.
+ *
+ * The checkpoint cards carry a 1px border because the page's one "next
+ * checkpoint" card does (`border border-accent`), and that card sets the
+ * height of the whole row. The checkpoint and goal labels come from the
+ * backend, so the wording here is a stand-in of the same length.
+ */
+export function BlueprintMilestoneTrack() {
+  return (
+    <div className="mb-5" aria-hidden="true">
+      <div className="mb-2.5 flex flex-wrap items-end justify-between gap-2.5">
+        <div>
+          <div className="text-sm font-medium">
+            <BlueprintGhostText text="30-day milestones" />
+          </div>
+          <div className="text-[11px]">
+            <BlueprintGhostText text="Days you contributed in the last 30 days · rolling window" />
+          </div>
+        </div>
+        <div className="text-right text-[22px] font-medium leading-[1.2]">
+          <BlueprintGhostText text="12" />{" "}
+          <span className="text-[13px] font-normal">
+            <BlueprintGhostText text="/ 30 active days" />
+          </span>
+        </div>
+      </div>
+
+      <div className={`rounded-lg px-3 py-3.5 ${BLUEPRINT_PANEL}`}>
+        <div className="mb-1 flex gap-[3px]">
+          {Array.from({ length: 30 }).map((_, index) => (
+            <BlueprintFill key={index} className="h-3.5 flex-1 rounded-[3px]" />
+          ))}
+        </div>
+        <div className="mb-4 flex justify-between">
+          <span className="text-[11px]">
+            <BlueprintGhostText text="Sep 2" />
+          </span>
+          <span className="text-[11px]">
+            <BlueprintGhostText text="Oct 1" />
+          </span>
+        </div>
+
+        <BlueprintFill className="mb-3 h-1.5 w-full rounded-full" />
+
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+          {["Starter", "Regular", "Committed", "Champion", "Legend"].map((label, index) => (
+            <div
+              key={label}
+              className="rounded-lg border border-blueprint/15 bg-blueprint/[0.07] px-2 py-2.5 text-center"
+            >
+              <BlueprintFill className="mx-auto h-4 w-4 rounded-[3px]" />
+              <div className="mt-1.5 text-[12px] font-medium">
+                <BlueprintGhostText text={label} />
+              </div>
+              <div className="text-[11px]">
+                <BlueprintGhostText text={`Day ${[3, 7, 14, 21, 30][index]} · Locked`} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        {["Tasks submitted", "Pull requests merged"].map((label) => (
+          <div key={label} className={`rounded-lg px-3 py-2.5 ${BLUEPRINT_PANEL}`}>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-[12px]">
+                <BlueprintFill className="h-3.5 w-3.5 shrink-0 rounded-[3px]" />
+                <BlueprintGhostText text={label} />
+              </span>
+              <span className="text-[12px]">
+                <BlueprintGhostText text="2 of 5" />
+              </span>
+            </div>
+            <BlueprintFill className="block h-1 w-full rounded-full" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One `ContributionCalendar` in its loaded state, which is what stays on
+ * screen: the header row (`mb-3`, 24px — the two `h-6 w-6` month buttons
+ * set its height — with the 12.5px "n contributions in Month Year" on the
+ * left), then the `rounded-lg border p-3 sm:p-4` panel holding a
+ * shrink-wrapped grid (`w-fit`, `gap-1`, `pb-1`): a weekday column
+ * (`pr-2`, seven `h-4 w-6` rows) and one 7-cell column of 16px cells per
+ * week, then the "Less ▫▫▫▫▫ More" legend (`mt-3`, 10px squares).
+ *
+ * The grid is always seven cells tall, so the panel's height never
+ * changes; a month of five weeks is drawn (the usual) and only the
+ * grid's width differs for a four- or six-week month.
+ */
+function BlueprintContributionCalendar() {
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <div className="text-[12.5px]">
+          <BlueprintGhostText text="12 contributions in October 2026" />
+        </div>
+        <div className="flex items-center gap-1">
+          <BlueprintFill className="h-6 w-6 rounded-md" />
+          <BlueprintFill className="h-6 w-6 rounded-md" />
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-blueprint/20 bg-blueprint/[0.05] p-3 sm:p-4">
+        <div className="-mx-3 overflow-x-auto overflow-y-hidden px-3 sm:mx-0 sm:overflow-visible sm:px-0">
+          <div className="flex w-fit gap-1 pb-1">
+            <div className="flex shrink-0 flex-col gap-1 pr-2">
+              {Array.from({ length: 7 }).map((_, index) => (
+                <span key={index} className="flex h-4 w-6 items-center">
+                  <BlueprintFill className="h-[9px] w-3.5" />
+                </span>
+              ))}
+            </div>
+            {Array.from({ length: 5 }).map((_, week) => (
+              <div key={week} className="flex flex-col gap-1">
+                {Array.from({ length: 7 }).map((_, day) => (
+                  <BlueprintFill key={day} className="h-4 w-4 shrink-0 rounded-[3px]" />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="mt-3 flex items-center justify-end gap-1 text-[10px]">
+          <BlueprintGhostText text="Less" />
+          {Array.from({ length: 5 }).map((_, index) => (
+            <BlueprintFill key={index} className="h-[10px] w-[10px] rounded-[2px]" />
+          ))}
+          <BlueprintGhostText text="More" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * `ProfileTabs` on the tab the page opens on, "Contribution history":
+ * the four-tab strip (`mb-3.5`, `gap-4`, text-only tabs at 12.5px with
+ * `pb-[9px]` and a 1.5px bottom border; Projects and Tasks carry their
+ * `ml-1.5` count) over two calendars side by side from `lg`, each under
+ * its 11px uppercase "GitHub" / "Through DevTunnel" heading (`mb-2`).
+ */
+export function BlueprintProfileTabs() {
+  const tabs: { label: string; count?: string }[] = [
+    { label: "Contribution history" },
+    { label: "Projects", count: "3" },
+    { label: "Tasks", count: "5" },
+    { label: "Pull requests merged" },
+  ];
+  return (
+    <div aria-hidden="true">
+      <div className="mb-3.5 flex gap-4 overflow-hidden border-b border-blueprint/15">
+        {tabs.map((tab) => (
+          <div
+            key={tab.label}
+            className="-mb-px shrink-0 whitespace-nowrap border-b-[1.5px] border-transparent pb-[9px] text-[12.5px]"
+          >
+            <BlueprintGhostText text={tab.label} />
+            {tab.count ? (
+              <span className="ml-1.5">
+                <BlueprintGhostText text={tab.count} />
+              </span>
+            ) : null}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {["GitHub", "Through DevTunnel"].map((heading) => (
+          <div key={heading}>
+            <div className="mb-2 text-[11px] font-medium uppercase tracking-wide">
+              <BlueprintGhostText text={heading} />
+            </div>
+            <BlueprintContributionCalendar />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Settings page (`/settings`) — one export per card, in page order:
+ * `ProfileSettingsForm`, `SkillsBackgroundCard`, `ConnectedAccountCard`,
+ * the Session card and `DeleteAccountButton`'s "Danger zone". Every card
+ * is the real `rounded-[10px] border p-5` shell.
+ * ------------------------------------------------------------------ */
+
+/** The `rounded-[10px] border p-5` shell shared by every settings card. */
+function BlueprintSettingsCard({
+  children,
+  danger = false,
+}: {
+  children: ReactNode;
+  danger?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-[10px] border p-5 ${
+        danger
+          ? "border-status-error-border/40 bg-blueprint/[0.05]"
+          : "border-blueprint/25 bg-blueprint/[0.05]"
+      }`}
+      aria-hidden="true"
+    >
+      {children}
+    </div>
+  );
+}
+
+/** A card's `m-0 text-sm font-medium` title (20px line); `mb` sets the gap under it. */
+function BlueprintSettingsTitle({ text, className = "mb-3" }: { text: string; className?: string }) {
+  return (
+    <div className={`${className} text-sm font-medium`}>
+      <BlueprintGhostText text={text} />
+    </div>
+  );
+}
+
+/** A real-sized outlined button (`rounded-md border`, 14px icon, ghost label). */
+function BlueprintSettingsButton({
+  label,
+  className,
+  icon = true,
+}: {
+  label: string;
+  /** Padding / text size, copied from the real button. */
+  className: string;
+  icon?: boolean;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-md border border-blueprint/25 bg-blueprint/[0.05] font-medium ${className}`}
+    >
+      {icon ? <BlueprintFill className="h-3.5 w-3.5 shrink-0 rounded-[3px]" /> : null}
+      <BlueprintGhostText text={label} />
+    </span>
+  );
+}
+
+/** `ProfileSettingsForm` in its view state: avatar, name + experience badge, handle line, bio, "Edit profile". */
+export function BlueprintSettingsProfileCard() {
+  return (
+    <BlueprintSettingsCard>
+      <div className="flex flex-wrap items-center gap-4">
+        <BlueprintFill className="h-14 w-14 shrink-0 rounded-full" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="truncate text-[16px] font-medium">
+              <BlueprintGhostText text="Contributor Name" />
+            </div>
+            <span className="inline-flex flex-shrink-0 items-center rounded-md border border-blueprint/25 px-2 py-0.5 text-[10.5px]">
+              <BlueprintGhostText text={EXPERIENCE_LEVEL_LABEL.INTERMEDIATE} />
+            </span>
+          </div>
+          <div className="mt-0.5 truncate font-mono text-[11px]">
+            <BlueprintGhostText text="@username · name@example.com" />
+          </div>
+          <div className="mt-1.5">
+            <BlueprintGhostLines widths={["w-4/5"]} className="text-[12px] leading-[1.5]" />
+          </div>
+        </div>
+        <BlueprintSettingsButton label="Edit profile" className="px-3 py-2 text-[12px]" />
+      </div>
+    </BlueprintSettingsCard>
+  );
+}
+
+/** A `px-3 py-1 text-[11px]` / `px-2.5 py-1 text-[11.5px]` chip of the skills card. */
+function BlueprintSettingsChip({
+  label,
+  round = false,
+  className,
+}: {
+  label: string;
+  round?: boolean;
+  className: string;
+}) {
+  return (
+    <span
+      className={`border border-blueprint/25 ${round ? "rounded-full" : "rounded-md"} ${className}`}
+    >
+      <BlueprintGhostText text={label} />
+    </span>
+  );
+}
+
+/**
+ * `SkillsBackgroundCard` in its view state: the title + onboarding note
+ * beside the "Edit" button (`mb-4`), then `gap-4` groups — the developer
+ * role pills (`px-3 py-1`, 11px), and "Skills", "Technologies" and
+ * "Interests", each an 11px label (`mb-1.5`) over a wrapping row of
+ * `px-2.5 py-1` 11.5px chips. The chip names are stand-ins for the
+ * user's own; a group the user left empty is absent from the real card.
+ */
+export function BlueprintSettingsSkillsCard() {
+  const groups: { label: string; values: string[] }[] = [
+    { label: "Skills", values: ["API design", "Testing", "Code review", "Accessibility"] },
+    { label: "Technologies", values: ["TypeScript", "React", "Node.js", "PostgreSQL"] },
+    { label: "Interests", values: ["Open source", "Developer tools", "Education"] },
+  ];
+  return (
+    <BlueprintSettingsCard>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <BlueprintSettingsTitle text="Skills and background" className="mb-1" />
+          <div className="text-[11.5px]">
+            <BlueprintGhostText text="Set during onboarding — shown to maintainers when you apply to a project." />
+          </div>
+        </div>
+        <BlueprintSettingsButton label="Edit" className="flex-shrink-0 px-3 py-1.5 text-[12px]" />
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap gap-1.5">
+          <BlueprintSettingsChip
+            round
+            label={DEVELOPER_ROLE_LABEL.FRONTEND}
+            className="px-3 py-1 text-[11px]"
+          />
+          <BlueprintSettingsChip
+            round
+            label={DEVELOPER_ROLE_LABEL.BACKEND}
+            className="px-3 py-1 text-[11px]"
+          />
+        </div>
+        {groups.map((group) => (
+          <div key={group.label}>
+            <div className="mb-1.5 text-[11px]">
+              <BlueprintGhostText text={group.label} />
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {group.values.map((value) => (
+                <BlueprintSettingsChip
+                  key={value}
+                  label={value}
+                  className="px-2.5 py-1 text-[11.5px]"
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </BlueprintSettingsCard>
+  );
+}
+
+/**
+ * `ConnectedAccountCard`: title (`mb-3`), the "GitHub" / "Connected as
+ * @user" pair beside the "Connected" badge, then the `mt-3 inline-block`
+ * 12px "View GitHub profile" link — an inline-block in a block parent,
+ * built the same way here so the line box around it comes out the same.
+ */
+export function BlueprintSettingsConnectedCard() {
+  return (
+    <BlueprintSettingsCard>
+      <BlueprintSettingsTitle text="Connected account" />
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <div className="text-[13px]">
+            <BlueprintGhostText text="GitHub" />
+          </div>
+          <div className="truncate text-[11.5px]">
+            <BlueprintGhostText text="Connected as @username" />
+          </div>
+        </div>
+        <span className="inline-flex flex-shrink-0 items-center rounded-md border border-blueprint/25 px-2.5 py-1 text-[11px] font-medium">
+          <BlueprintGhostText text="Connected" />
+        </span>
+      </div>
+      <span className="mt-3 inline-block text-[12px]">
+        <BlueprintGhostText text="View GitHub profile" />
+      </span>
+    </BlueprintSettingsCard>
+  );
+}
+
+/** The Session card: title (`mb-3`), 13px line (`mb-3`), then the inline-flex "Sign out" button (`px-3.5 py-2 text-[13px]`, no icon). */
+export function BlueprintSettingsSessionCard() {
+  return (
+    <BlueprintSettingsCard>
+      <BlueprintSettingsTitle text="Session" />
+      <div className="mb-3 text-[13px]">
+        <BlueprintGhostText text="Sign out of DevTunnel on this device." />
+      </div>
+      <BlueprintSettingsButton label="Sign out" icon={false} className="px-3.5 py-2 text-[13px]" />
+    </BlueprintSettingsCard>
+  );
+}
+
+/** `DeleteAccountButton`'s "Danger zone": title (`mb-1`), the 12.5px warning (`mb-3`), the red "Delete account" button (`px-4 py-2 text-[13px]`). */
+export function BlueprintSettingsDangerCard() {
+  return (
+    <BlueprintSettingsCard danger>
+      <BlueprintSettingsTitle text="Danger zone" className="mb-1" />
+      <BlueprintGhostParagraph
+        className="mb-3 text-[12.5px]"
+        text="Deleting your account removes your profile and contribution history. This can't be undone."
+      />
+      <BlueprintSettingsButton label="Delete account" className="px-4 py-2 text-[13px]" />
+    </BlueprintSettingsCard>
   );
 }

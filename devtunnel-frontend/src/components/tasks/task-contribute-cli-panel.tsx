@@ -1,5 +1,5 @@
 import { CommandBlock } from "@/components/contribute/command-block";
-import { buildCliCommands } from "@/lib/contribute/cli-commands";
+import { TASK_CLI_STEP_TITLES, buildCliCommands } from "@/lib/contribute/cli-commands";
 
 /**
  * "Fastest way: the DevTunnel CLI" — the `dev` commands for picking up
@@ -18,13 +18,7 @@ import { buildCliCommands } from "@/lib/contribute/cli-commands";
  * a sequence: you can't submit before you've started. (`dev test` can be
  * repeated, which the note under the list says.)
  */
-const STEP_TITLES: Record<string, string> = {
-  install: "Install the CLI",
-  login: "Sign in with GitHub",
-  "start-task": "Start this task",
-  test: "Run the tests",
-  "submit-task": "Submit your work",
-};
+const STEP_TITLES = TASK_CLI_STEP_TITLES;
 
 export function TaskContributeCliPanel({ taskId }: { taskId: string }) {
   const steps = buildCliCommands({ projectId: null, tasks: [{ id: taskId }] }).filter(

@@ -18,7 +18,14 @@ import {
  * The page renders the same components as `/github-projects/:slug`
  * (`GithubProjectDetailTabs`, `GithubProjectSidebar`), so this is the
  * same sheet with the catalog's own wording: "Back to Github Open Source
- * Tools", that breadcrumb, and the tool-specific nominate button.
+ * Tools", that breadcrumb, and the tool-specific request button
+ * (`RequestToolOnboardingButton` reads "Request to add as DevTunnel
+ * project or tool", not "Nominate for DevTunnel" — it is a much wider
+ * button, so the header wraps differently).
+ *
+ * Like the project page: the 56px logo is a circle (`RepoLogo`), and the
+ * Project Info panel uses the GitHub catalog's 140px label column with
+ * its real six labels (Description … Forks).
  */
 export default function GithubToolDetailLoading() {
   return (
@@ -31,6 +38,7 @@ export default function GithubToolDetailLoading() {
       <BlueprintBreadcrumb text="Github Open Source Tools / Tool name" />
 
       <BlueprintPublicHeader
+        circularLogo
         title="Tool name"
         meta={
           <>
@@ -47,7 +55,7 @@ export default function GithubToolDetailLoading() {
             <BlueprintHeaderButton label="Contribute" bordered={false} />
             <BlueprintHeaderButton label="View on GitHub" />
             <BlueprintHeaderButton label="Star 12" />
-            <BlueprintHeaderButton label="Nominate for DevTunnel" icon={false} />
+            <BlueprintHeaderButton label="Request to add as DevTunnel project or tool" icon={false} />
           </>
         }
       />
@@ -55,7 +63,19 @@ export default function GithubToolDetailLoading() {
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
           <BlueprintTabStrip labels={["Project Info", "README", "Tasks", "Issues"]} badges={[3]} />
-          <BlueprintInfoPanel rows={6} tagHeading="Tech stack" />
+          <BlueprintInfoPanel
+            rows={6}
+            labelColumn="140px"
+            rowLabels={[
+              { label: "Description", value: "A short description of the repository goes here" },
+              { label: "Primary language", value: "TypeScript" },
+              { label: "License", value: "MIT License" },
+              { label: "Contributors", value: "1,234" },
+              { label: "Stars", value: "12,345" },
+              { label: "Forks", value: "1,234" },
+            ]}
+            tagHeading="Tech stack"
+          />
         </div>
         <BlueprintGithubSidebar />
       </div>

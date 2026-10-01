@@ -1,16 +1,29 @@
 import { BlueprintSheet } from "@/components/ui/blueprint-loader";
-import { BlueprintFill } from "@/components/ui/blueprint-kit";
+import {
+  BlueprintGhostText,
+  BlueprintSettingsProfileCard,
+  BlueprintSettingsSkillsCard,
+  BlueprintSettingsConnectedCard,
+  BlueprintSettingsSessionCard,
+  BlueprintSettingsDangerCard,
+} from "@/components/ui/blueprint-kit";
 
 /**
- * `/settings` — `getServerUser` + `getServerNotificationPreferences`,
- * rendered as 5 stacked `rounded-[10px] border p-5` sections: Profile
- * (name/bio fields), Connected account (read-only GitHub status),
- * Notifications (3 toggle rows), Session (sign out), and the Danger
- * zone (delete account) — previously only 2 of these 5 sections were
- * represented here, so the page grew noticeably taller the moment real
- * data replaced the skeleton. Outer padding matches the real page's
- * own `px-4 py-5 sm:px-[26px] sm:py-[22px]` main, with a real h1 +
- * subtitle line rather than a single title bar.
+ * Route-segment loading boundary for `/settings`.
+ *
+ * Mirrors `SettingsPage` in order, inside the real `max-w-[680px]`
+ * column: the `h1` ("Settings", `text-xl`, `mb-1`) and its 13px
+ * subtitle (`mb-6`), then the `gap-4` stack —
+ *
+ *  1. `ProfileSettingsForm` — avatar, name + experience badge, handle, bio, "Edit profile";
+ *  2. `SkillsBackgroundCard` — roles, skills, technologies, interests, "Edit";
+ *  3. `ConnectedAccountCard` and the Session card, side by side from `sm`;
+ *  4. `DeleteAccountButton`'s "Danger zone".
+ *
+ * The page no longer renders Notifications (`NotificationPreferencesForm`
+ * is unmounted), so this sheet doesn't draw it either. Drawn with all
+ * three skill groups filled in and a bio; an empty group is absent from
+ * the real card.
  */
 export default function SettingsLoading() {
   return (
@@ -19,61 +32,22 @@ export default function SettingsLoading() {
       revLabel="Rev — loading your settings"
       contentClassName="w-full px-4 py-5 sm:px-[26px] sm:py-[22px]"
     >
-      <div className="mx-auto w-full max-w-[640px]">
-        <BlueprintFill className="mb-1 h-5 w-24" />
-        <BlueprintFill className="mb-6 h-3 w-64" />
+      <div className="mx-auto w-full max-w-[680px]">
+        <div className="mb-1 text-xl font-medium" aria-hidden="true">
+          <BlueprintGhostText text="Settings" />
+        </div>
+        <div className="mb-6 text-[13px]" aria-hidden="true">
+          <BlueprintGhostText text="Manage your profile, skills, and connected accounts." />
+        </div>
 
-        <div className="flex flex-col gap-6">
-          {/* Profile: name + bio fields. */}
-          <div className="rounded-[10px] border border-blueprint/25 p-5">
-            <BlueprintFill className="mb-4 h-4 w-16" />
-            <div className="mb-3 flex flex-col gap-1.5">
-              <BlueprintFill className="h-2.5 w-10" />
-              <BlueprintFill className="h-9 w-full" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <BlueprintFill className="h-2.5 w-8" />
-              <BlueprintFill className="h-16 w-full" />
-            </div>
+        <div className="flex flex-col gap-4">
+          <BlueprintSettingsProfileCard />
+          <BlueprintSettingsSkillsCard />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <BlueprintSettingsConnectedCard />
+            <BlueprintSettingsSessionCard />
           </div>
-
-          {/* Connected account: GitHub status row. */}
-          <div className="rounded-[10px] border border-blueprint/25 p-5">
-            <BlueprintFill className="mb-3 h-4 w-40" />
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-1.5">
-                <BlueprintFill className="h-3 w-14" />
-                <BlueprintFill className="h-2.5 w-32" />
-              </div>
-              <BlueprintFill className="h-6 w-24 rounded-md" />
-            </div>
-          </div>
-
-          {/* Notifications: 3 toggle rows. */}
-          <div className="rounded-[10px] border border-blueprint/25 p-5">
-            <BlueprintFill className="mb-3 h-4 w-28" />
-            <div className="flex flex-col gap-3.5">
-              {Array.from({ length: 3 }).map((_, index) => (
-                <div key={index} className="flex items-center justify-between gap-4">
-                  <BlueprintFill className="h-3 w-48" delayMs={index * 60} />
-                  <BlueprintFill className="h-5 w-9 rounded-full" delayMs={index * 60} />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Session: sign out. */}
-          <div className="rounded-[10px] border border-blueprint/25 p-5">
-            <BlueprintFill className="mb-3 h-4 w-16" />
-            <BlueprintFill className="mb-3 h-3 w-56" />
-            <BlueprintFill className="h-9 w-24" />
-          </div>
-
-          {/* Danger zone: delete account. */}
-          <div className="rounded-[10px] border border-status-error-border/40 p-5">
-            <BlueprintFill className="mb-3 h-4 w-24" />
-            <BlueprintFill className="h-9 w-40" />
-          </div>
+          <BlueprintSettingsDangerCard />
         </div>
       </div>
     </BlueprintSheet>
