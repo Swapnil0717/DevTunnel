@@ -253,7 +253,7 @@ function ExplanationBody({ explanation, generatedAt }: { explanation: AiIssueExp
       <p className="m-0 mt-3 text-[11px] leading-relaxed text-text-faint">
         Written by AI from the issue text, so it can be wrong — read the issue itself before you start. Anything marked
         &ldquo;Suggestion&rdquo; is a guess the issue doesn&apos;t confirm. Generated{" "}
-        <time dateTime={generatedAt}>{formatRelativeTime(generatedAt)}</time>.
+        <time suppressHydrationWarning dateTime={generatedAt}>{formatRelativeTime(generatedAt)}</time>.
       </p>
     </div>
   );

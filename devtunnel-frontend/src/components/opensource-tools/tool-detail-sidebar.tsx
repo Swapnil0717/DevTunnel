@@ -182,12 +182,12 @@ export function ToolDetailSidebar({
         <div className="mt-3 flex flex-col gap-1.5 border-t border-border-subtle pt-3 text-[11.5px] text-text-faint">
           <span className="inline-flex items-center gap-1.5">
             <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
-            Added <time dateTime={tool.createdAt}>{formatRelativeTime(tool.createdAt)}</time>
+            Added <time suppressHydrationWarning dateTime={tool.createdAt}>{formatRelativeTime(tool.createdAt)}</time>
           </span>
           {repo ? (
             <span className="inline-flex items-center gap-1.5">
               <RefreshIcon className="h-3.5 w-3.5 shrink-0" />
-              Updated <time dateTime={repo.pushedAt}>{formatRelativeTime(repo.pushedAt)}</time>
+              Updated <time suppressHydrationWarning dateTime={repo.pushedAt}>{formatRelativeTime(repo.pushedAt)}</time>
             </span>
           ) : null}
         </div>

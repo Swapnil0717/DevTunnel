@@ -221,8 +221,8 @@ export function TaskDetailsStep({
           <div>
             <dt className="text-text-muted">Created / updated</dt>
             <dd className="m-0 text-text">
-              <time dateTime={issue.createdAt}>{formatDate(issue.createdAt)}</time> ·{" "}
-              <time dateTime={issue.updatedAt}>{formatDate(issue.updatedAt)}</time>
+              <time suppressHydrationWarning dateTime={issue.createdAt}>{formatDate(issue.createdAt)}</time> ·{" "}
+              <time suppressHydrationWarning dateTime={issue.updatedAt}>{formatDate(issue.updatedAt)}</time>
             </dd>
           </div>
         </dl>

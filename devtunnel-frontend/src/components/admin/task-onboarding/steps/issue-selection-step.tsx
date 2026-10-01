@@ -162,8 +162,8 @@ export function IssueSelectionStep({ draft, onSelected }: IssueSelectionStepProp
                   </span>
 
                   <span className="text-[11.5px] text-text-faint">
-                    Opened <time dateTime={issue.createdAt}>{formatDate(issue.createdAt)}</time>{" "}
-                    · Updated <time dateTime={issue.updatedAt}>{formatDate(issue.updatedAt)}</time>
+                    Opened <time suppressHydrationWarning dateTime={issue.createdAt}>{formatDate(issue.createdAt)}</time>{" "}
+                    · Updated <time suppressHydrationWarning dateTime={issue.updatedAt}>{formatDate(issue.updatedAt)}</time>
                     {isSelecting ? " · Selecting…" : isSelected ? " · Selected" : ""}
                   </span>
                 </button>

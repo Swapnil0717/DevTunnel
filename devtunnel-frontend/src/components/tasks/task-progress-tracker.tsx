@@ -51,7 +51,7 @@ export function TaskProgressTracker({ task }: { task: TaskDetail }) {
     if (index === 1 && reached && progress?.startedAt) {
       return (
         <>
-          Started <time dateTime={progress.startedAt}>{formatRelativeTime(progress.startedAt)}</time>
+          Started <time suppressHydrationWarning dateTime={progress.startedAt}>{formatRelativeTime(progress.startedAt)}</time>
         </>
       );
     }
@@ -179,7 +179,7 @@ function ProgressSummary({ task }: { task: TaskDetail }) {
           {progress?.startedAt ? (
             <>
               {" "}
-              <time dateTime={progress.startedAt}>{formatRelativeTime(progress.startedAt)}</time>
+              <time suppressHydrationWarning dateTime={progress.startedAt}>{formatRelativeTime(progress.startedAt)}</time>
             </>
           ) : null}
           {progress?.branch ? (

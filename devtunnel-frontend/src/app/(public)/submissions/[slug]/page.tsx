@@ -172,7 +172,7 @@ export default async function SubmissionDetailPage({ params }: SubmissionDetailP
                 </span>
                 <span>
                   Submitted{" "}
-                  <time dateTime={submission.createdAt}>
+                  <time suppressHydrationWarning dateTime={submission.createdAt}>
                     {formatRelativeTime(submission.createdAt)}
                   </time>
                 </span>

@@ -110,7 +110,7 @@ export function GithubIssuesPanel({
                     {issue.title}
                   </span>
                   <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-text-faint">
-                    <time dateTime={issue.createdAt}>
+                    <time suppressHydrationWarning dateTime={issue.createdAt}>
                       Opened {new Date(issue.createdAt).toLocaleDateString()}
                     </time>
                     {issue.commentCount > 0 ? (

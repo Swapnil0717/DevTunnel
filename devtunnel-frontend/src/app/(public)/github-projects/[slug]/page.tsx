@@ -175,7 +175,7 @@ export default async function GithubProjectDetailPage({
                   ·
                 </span>
                 <span>
-                  Updated <time dateTime={project.pushedAt}>{formatRelativeTime(project.pushedAt)}</time>
+                  Updated <time suppressHydrationWarning dateTime={project.pushedAt}>{formatRelativeTime(project.pushedAt)}</time>
                 </span>
               </div>
             </div>

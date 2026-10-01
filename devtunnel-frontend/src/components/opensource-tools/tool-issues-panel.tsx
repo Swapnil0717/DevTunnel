@@ -165,7 +165,7 @@ export function ToolIssuesPanel({
                   </span>
 
                   <span className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-[22px] text-[11px] text-text-faint">
-                    <time dateTime={issue.createdAt}>Opened {formatDate(issue.createdAt)}</time>
+                    <time suppressHydrationWarning dateTime={issue.createdAt}>Opened {formatDate(issue.createdAt)}</time>
                     {issue.commentCount > 0 ? (
                       <>
                         <span aria-hidden="true">·</span>

@@ -149,7 +149,7 @@ function SummaryBody({
 
       <p className="m-0 mt-3 text-[11px] leading-relaxed text-text-faint">
         Written by AI from the README and description, so it can be wrong — check the README before relying on it.
-        Generated <time dateTime={generatedAt}>{formatRelativeTime(generatedAt)}</time>.
+        Generated <time suppressHydrationWarning dateTime={generatedAt}>{formatRelativeTime(generatedAt)}</time>.
       </p>
     </div>
   );

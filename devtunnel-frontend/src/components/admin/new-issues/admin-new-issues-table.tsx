@@ -25,7 +25,7 @@ function formatDate(iso: string): string {
  * Issue #, Issue Title, Project, GitHub Author, Labels, Created, Updated,
  * Actions.
  *
- * Dates are shown as readable text plus a machine-readable `<time
+ * Dates are shown as readable text plus a machine-readable `<time suppressHydrationWarning
  * datetime>` (Frontend_Development_Rules.txt rule 46), and the state
  * badge is always paired with the word "Open"/"Closed" — never color
  * alone (rule 43).
@@ -149,12 +149,12 @@ export function AdminNewIssuesTable({ issues }: { issues: AdminNewIssue[] }) {
 
                 {/* Created */}
                 <td className="whitespace-nowrap px-4 py-3 align-top text-text-secondary">
-                  <time dateTime={issue.createdAt}>{formatDate(issue.createdAt)}</time>
+                  <time suppressHydrationWarning dateTime={issue.createdAt}>{formatDate(issue.createdAt)}</time>
                 </td>
 
                 {/* Updated */}
                 <td className="whitespace-nowrap px-4 py-3 align-top text-text-secondary">
-                  <time dateTime={issue.updatedAt}>{formatDate(issue.updatedAt)}</time>
+                  <time suppressHydrationWarning dateTime={issue.updatedAt}>{formatDate(issue.updatedAt)}</time>
                 </td>
 
                 {/* Actions */}

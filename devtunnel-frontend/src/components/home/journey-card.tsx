@@ -144,7 +144,7 @@ function describeState({
             {featured.startedAt ? (
               <>
                 {" "}
-                <time dateTime={featured.startedAt}>
+                <time suppressHydrationWarning dateTime={featured.startedAt}>
                   {formatRelativeTime(featured.startedAt)}
                 </time>
               </>

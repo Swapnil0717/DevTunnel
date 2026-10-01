@@ -112,7 +112,7 @@ export function DevtunnelOpenSourceToolCard({ tool }: { tool: OpenSourceToolSumm
         </a>
 
         <p className="m-0 shrink-0 text-[10.5px] text-text-faint">
-          Added <time dateTime={tool.createdAt}>{formatRelativeTime(tool.createdAt)}</time>
+          Added <time suppressHydrationWarning dateTime={tool.createdAt}>{formatRelativeTime(tool.createdAt)}</time>
         </p>
       </div>
     </article>

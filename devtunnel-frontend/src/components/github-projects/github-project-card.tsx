@@ -149,7 +149,7 @@ export function GithubProjectCard({
           rel="noreferrer noopener"
           className="relative z-10 m-0 shrink-0 text-[10.5px] text-text-faint hover:text-accent"
         >
-          Updated <time dateTime={project.pushedAt}>{formatRelativeTime(project.pushedAt)}</time>
+          Updated <time suppressHydrationWarning dateTime={project.pushedAt}>{formatRelativeTime(project.pushedAt)}</time>
         </a>
       </div>
     </article>

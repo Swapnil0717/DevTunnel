@@ -183,7 +183,7 @@ export function ToolDetailTabs({ tool }: { tool: OpenSourceToolDetail }) {
 
           <span className="text-text-faint">Added to DevTunnel</span>
           <span className="text-text-secondary">
-            <time dateTime={tool.createdAt}>{formatRelativeTime(tool.createdAt)}</time>
+            <time suppressHydrationWarning dateTime={tool.createdAt}>{formatRelativeTime(tool.createdAt)}</time>
           </span>
         </div>
 

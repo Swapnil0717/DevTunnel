@@ -79,7 +79,7 @@ export function TaskRow(props: TaskRowProps) {
             {props.startedAt ? (
               <>
                 Started{" "}
-                <time dateTime={props.startedAt}>{formatRelativeTime(props.startedAt)}</time>
+                <time suppressHydrationWarning dateTime={props.startedAt}>{formatRelativeTime(props.startedAt)}</time>
               </>
             ) : null}
           </span>

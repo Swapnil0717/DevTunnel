@@ -226,9 +226,9 @@ export function ProjectIssuesPanel({
                     <span className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-[22px] text-[11px] text-text-faint">
                       <span>@{issue.author.username}</span>
                       <span aria-hidden="true">·</span>
-                      <time dateTime={issue.createdAt}>Opened {formatDate(issue.createdAt)}</time>
+                      <time suppressHydrationWarning dateTime={issue.createdAt}>Opened {formatDate(issue.createdAt)}</time>
                       <span aria-hidden="true">·</span>
-                      <time dateTime={issue.updatedAt}>Updated {formatDate(issue.updatedAt)}</time>
+                      <time suppressHydrationWarning dateTime={issue.updatedAt}>Updated {formatDate(issue.updatedAt)}</time>
                       {visibleLabels.map((label) => (
                         <span
                           key={label}

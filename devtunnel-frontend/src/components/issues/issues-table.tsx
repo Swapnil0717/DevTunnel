@@ -46,7 +46,7 @@ function formatDate(iso: string): string {
  * its click alone instead of opening the GitHub issue, and the expanded
  * panel is excluded from the card's click-to-open behavior too.
  *
- * Dates are shown as readable text plus a machine-readable `<time
+ * Dates are shown as readable text plus a machine-readable `<time suppressHydrationWarning
  * datetime>` (rule 46), and the state is always the word "Open"/"Closed" —
  * never color alone (rule 43). The whole card also opens the GitHub issue in
  * a new tab on click (`ClickableCard`), same destination as the title link
@@ -146,8 +146,8 @@ export function IssuesTable({ issues, insights }: { issues: Issue[]; insights?: 
                 {/* Footer — dates, AI "Explain", View on GitHub. Task creation/curation stays an Admin action. */}
                 <div className="mt-3.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border-subtle pt-3">
                   <p className="m-0 text-[12px] text-text-muted">
-                    Created <time dateTime={issue.createdAt}>{formatDate(issue.createdAt)}</time> · Updated{" "}
-                    <time dateTime={issue.updatedAt}>{formatDate(issue.updatedAt)}</time>
+                    Created <time suppressHydrationWarning dateTime={issue.createdAt}>{formatDate(issue.createdAt)}</time> · Updated{" "}
+                    <time suppressHydrationWarning dateTime={issue.updatedAt}>{formatDate(issue.updatedAt)}</time>
                   </p>
                   <div className="flex items-center gap-2">
                     {canExplain ? (

@@ -77,7 +77,7 @@ function timeline(task: ProfileTask): { key: string; label: string; at: string }
  * shown as that, never as "you haven't done anything yet".
  *
  * Relative times are computed from the clock, so the server render and the
- * browser can disagree by a second; `suppressHydrationWarning` on each `<time>`
+ * browser can disagree by a second; `suppressHydrationWarning` on each `<time suppressHydrationWarning>`
  * covers that (the `dateTime` attribute is the real, stable value).
  */
 export function ProfileTasksList({ tasks }: { tasks: ProfileTask[] | null }) {

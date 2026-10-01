@@ -108,7 +108,7 @@ export function SubmissionDetailSidebar({
         </div>
         <p className="m-0 mt-3 border-t border-border-subtle pt-3 text-[11.5px] text-text-faint">
           Submitted{" "}
-          <time dateTime={submission.createdAt}>{formatRelativeTime(submission.createdAt)}</time>
+          <time suppressHydrationWarning dateTime={submission.createdAt}>{formatRelativeTime(submission.createdAt)}</time>
           . Not reviewed or curated by DevTunnel.
         </p>
       </div>
@@ -138,11 +138,11 @@ export function SubmissionDetailSidebar({
               <div className="mt-3 flex flex-col gap-1 border-t border-border-subtle pt-3 text-[11.5px] text-text-faint">
                 <span>
                   Created{" "}
-                  <time dateTime={github.createdAt}>{formatRelativeTime(github.createdAt)}</time>
+                  <time suppressHydrationWarning dateTime={github.createdAt}>{formatRelativeTime(github.createdAt)}</time>
                 </span>
                 <span>
                   Last push{" "}
-                  <time dateTime={github.pushedAt}>{formatRelativeTime(github.pushedAt)}</time>
+                  <time suppressHydrationWarning dateTime={github.pushedAt}>{formatRelativeTime(github.pushedAt)}</time>
                 </span>
               </div>
             </>

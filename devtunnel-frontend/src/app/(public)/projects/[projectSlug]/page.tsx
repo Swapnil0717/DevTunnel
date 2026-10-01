@@ -169,7 +169,7 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
                 </span>
                 <span>
                   Updated{" "}
-                  <time dateTime={project.pushedAt}>{formatRelativeTime(project.pushedAt)}</time>
+                  <time suppressHydrationWarning dateTime={project.pushedAt}>{formatRelativeTime(project.pushedAt)}</time>
                 </span>
               </div>
             </div>

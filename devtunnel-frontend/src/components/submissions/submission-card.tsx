@@ -184,7 +184,7 @@ export function SubmissionCard({
             )}
           </span>
           <span aria-hidden="true">·</span>
-          <time dateTime={submission.createdAt}>
+          <time suppressHydrationWarning dateTime={submission.createdAt}>
             {formatRelativeTime(submission.createdAt)}
           </time>
 

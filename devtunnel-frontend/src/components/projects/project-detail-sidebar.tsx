@@ -207,11 +207,11 @@ export function ProjectDetailSidebar({
         <div className="mt-3 flex flex-col gap-1.5 border-t border-border-subtle pt-3 text-[11.5px] text-text-faint">
           <span className="inline-flex items-center gap-1.5">
             <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
-            Created <time dateTime={project.createdAt}>{formatRelativeTime(project.createdAt)}</time>
+            Created <time suppressHydrationWarning dateTime={project.createdAt}>{formatRelativeTime(project.createdAt)}</time>
           </span>
           <span className="inline-flex items-center gap-1.5">
             <RefreshIcon className="h-3.5 w-3.5 shrink-0" />
-            Updated <time dateTime={project.pushedAt}>{formatRelativeTime(project.pushedAt)}</time>
+            Updated <time suppressHydrationWarning dateTime={project.pushedAt}>{formatRelativeTime(project.pushedAt)}</time>
           </span>
         </div>
       </div>

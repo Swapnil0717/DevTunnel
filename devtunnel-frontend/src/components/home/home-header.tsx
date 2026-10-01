@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/use-auth";
 
-/** `YYYY-MM-DD` in the viewer's own time zone — what `<time datetime>` should say about "today". */
+/** `YYYY-MM-DD` in the viewer's own time zone — what `<time suppressHydrationWarning datetime>` should say about "today". */
 function toLocalIsoDate(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
@@ -39,7 +39,7 @@ export function HomeHeader() {
     <header className="mb-7 flex items-center justify-between gap-4">
       <p className="m-0 min-h-[18px] flex-none whitespace-nowrap font-mono text-xs leading-[18px] text-text-dim">
         {today ? (
-          <time dateTime={toLocalIsoDate(today)}>
+          <time suppressHydrationWarning dateTime={toLocalIsoDate(today)}>
             {today.toLocaleDateString("en-US", {
               weekday: "long",
               month: "long",

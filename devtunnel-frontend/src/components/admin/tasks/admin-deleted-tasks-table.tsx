@@ -89,7 +89,7 @@ export function AdminDeletedTasksTable({
               {/* Deleted at */}
               <td className="px-4 py-3 text-text-secondary">
                 {task.deletedAt ? (
-                  <time dateTime={task.deletedAt}>
+                  <time suppressHydrationWarning dateTime={task.deletedAt}>
                     {formatDate(task.deletedAt)}
                   </time>
                 ) : (

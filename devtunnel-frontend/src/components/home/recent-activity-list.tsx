@@ -53,7 +53,7 @@ function activityDetail(item: RecentActivity): string {
  *
  * Like every other row on Home, the whole row is one link (to the task, or to
  * the project for project-level events); the PR number is plain text rather
- * than a nested link, and the time is a real `<time>` element (rule 46).
+ * than a nested link, and the time is a real `<time suppressHydrationWarning>` element (rule 46).
  */
 export async function RecentActivityList() {
   const result = await getRecentActivity();
@@ -104,7 +104,7 @@ export async function RecentActivityList() {
               >
                 {ACTIVITY_LABEL[item.type]}
               </span>
-              <time
+              <time suppressHydrationWarning
                 dateTime={item.occurredAt}
                 className="min-w-[44px] text-right font-mono text-[11.5px] text-text-dim"
               >

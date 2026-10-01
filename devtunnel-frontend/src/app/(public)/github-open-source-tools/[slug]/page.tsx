@@ -176,7 +176,7 @@ export default async function GithubToolDetailPage({ params }: GithubToolDetailP
                   ·
                 </span>
                 <span>
-                  Updated <time dateTime={tool.pushedAt}>{formatRelativeTime(tool.pushedAt)}</time>
+                  Updated <time suppressHydrationWarning dateTime={tool.pushedAt}>{formatRelativeTime(tool.pushedAt)}</time>
                 </span>
               </div>
             </div>

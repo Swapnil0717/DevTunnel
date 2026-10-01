@@ -190,7 +190,7 @@ function InsightsBody({ controller, data }: { controller: IssueInsightsControlle
       <p className="m-0 mt-3 text-[11px] leading-relaxed text-text-faint">
         Written by AI from issue titles, labels and short excerpts, so it can be wrong — open the issue before you start. Covers{" "}
         {data.analyzedIssueCount} open issues; an issue the AI hasn&apos;t reached shows &ldquo;Not analyzed&rdquo;. Last updated{" "}
-        <time dateTime={data.generatedAt}>{formatRelativeTime(data.generatedAt)}</time>.
+        <time suppressHydrationWarning dateTime={data.generatedAt}>{formatRelativeTime(data.generatedAt)}</time>.
       </p>
     </div>
   );

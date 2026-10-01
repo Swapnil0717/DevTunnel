@@ -140,19 +140,19 @@ export function AdminIssuesSinceOnboardingTable({ issues }: { issues: AdminNewIs
 
                 {/* Added to DevTunnel — the project's own onboarding date */}
                 <td className="whitespace-nowrap px-4 py-3 align-top text-text-secondary">
-                  <time dateTime={issue.project.onboardedAt}>
+                  <time suppressHydrationWarning dateTime={issue.project.onboardedAt}>
                     {formatDate(issue.project.onboardedAt)}
                   </time>
                 </td>
 
                 {/* Created */}
                 <td className="whitespace-nowrap px-4 py-3 align-top text-text-secondary">
-                  <time dateTime={issue.createdAt}>{formatDate(issue.createdAt)}</time>
+                  <time suppressHydrationWarning dateTime={issue.createdAt}>{formatDate(issue.createdAt)}</time>
                 </td>
 
                 {/* Updated */}
                 <td className="whitespace-nowrap px-4 py-3 align-top text-text-secondary">
-                  <time dateTime={issue.updatedAt}>{formatDate(issue.updatedAt)}</time>
+                  <time suppressHydrationWarning dateTime={issue.updatedAt}>{formatDate(issue.updatedAt)}</time>
                 </td>
 
                 {/* Actions */}

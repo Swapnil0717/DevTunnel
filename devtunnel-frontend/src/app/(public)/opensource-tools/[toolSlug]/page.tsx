@@ -154,7 +154,7 @@ export default async function ToolDetailPage({ params }: ToolDetailPageProps) {
                   ·
                 </span>
                 <span>
-                  Added <time dateTime={tool.createdAt}>{formatRelativeTime(tool.createdAt)}</time>
+                  Added <time suppressHydrationWarning dateTime={tool.createdAt}>{formatRelativeTime(tool.createdAt)}</time>
                 </span>
               </div>
             </div>

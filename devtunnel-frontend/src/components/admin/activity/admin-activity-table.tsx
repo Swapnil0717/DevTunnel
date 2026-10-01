@@ -86,7 +86,7 @@ export function AdminActivityTable({ entries }: { entries: AdminAuditEntry[] }) 
               >
                 {/* Time */}
                 <td className="whitespace-nowrap px-4 py-3 align-top text-text-secondary">
-                  <time dateTime={entry.createdAt}>{formatTimestamp(entry.createdAt)}</time>
+                  <time suppressHydrationWarning dateTime={entry.createdAt}>{formatTimestamp(entry.createdAt)}</time>
                 </td>
 
                 {/* Action */}
