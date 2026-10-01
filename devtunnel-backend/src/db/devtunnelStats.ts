@@ -22,27 +22,28 @@ export async function getIsMaintainer(supabase: SupabaseClient, userId: string):
 }
 
 /**
- * Projects created, projects maintained, tasks completed, and pull
- * requests merged — every count here comes from a real table
+ * Projects created, projects maintained, tasks submitted (pull
+ * requests submitted), and pull requests merged — every count here comes from a real table
  * (sql/004_add_devtunnel_contributions.sql), never invented. Backs
  * `GET /users/me/devtunnel-stats` (routes/devtunnelStats.ts) and the
- * profile page's "Projects" / "Tasks done" / "Pull requests" stat cards.
+ * profile page's "Projects" / "Tasks submitted" / "Pull requests merged" stat cards.
  */
 export async function getDevTunnelStats(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<DevTunnelStats> {
-  const [projectsCreated, projectsMaintaining, tasksCompleted, pullRequestsMerged] = await Promise.all([
+  const [projectsCreated, projectsMaintaining, tasksSubmitted, pullRequestsMerged] = await Promise.all([
     supabase.from("projects").select("id", { count: "exact", head: true }).eq("created_by", userId),
     supabase
       .from("project_maintainers")
       .select("project_id", { count: "exact", head: true })
       .eq("user_id", userId),
+    // "Tasks submitted" = every pull request this user has submitted via
+    // `dev submit` (any status: OPEN, MERGED or CLOSED).
     supabase
-      .from("tasks")
+      .from("pull_requests")
       .select("id", { count: "exact", head: true })
-      .eq("assignee_id", userId)
-      .eq("status", "DONE"),
+      .eq("author_id", userId),
     supabase
       .from("pull_requests")
       .select("id", { count: "exact", head: true })
@@ -50,14 +51,14 @@ export async function getDevTunnelStats(
       .eq("status", "MERGED"),
   ]);
 
-  for (const result of [projectsCreated, projectsMaintaining, tasksCompleted, pullRequestsMerged]) {
+  for (const result of [projectsCreated, projectsMaintaining, tasksSubmitted, pullRequestsMerged]) {
     if (result.error) throw new Error(`Failed to load DevTunnel stats: ${result.error.message}`);
   }
 
   return {
     projectsCreated: projectsCreated.count ?? 0,
     projectsMaintaining: projectsMaintaining.count ?? 0,
-    tasksCompleted: tasksCompleted.count ?? 0,
+    tasksSubmitted: tasksSubmitted.count ?? 0,
     pullRequestsMerged: pullRequestsMerged.count ?? 0,
     isMaintainer: (projectsMaintaining.count ?? 0) > 0,
   };
@@ -129,7 +130,7 @@ export async function getDevTunnelContributionSummary(
  * A single query over `activity_log` (sql/004) gives both pieces the
  * route needs: `dailyCounts` (any activity type, used for the "active
  * day" strip — merged with the caller's GitHub days by the route) and
- * the `TASK_COMPLETED` / `PULL_REQUEST_MERGED` counts for the two bonus
+ * the `PULL_REQUEST_SUBMITTED` / `PULL_REQUEST_MERGED` counts for the two bonus
  * goals. One query rather than three, since `activity_log` already rows
  * up every event this needs.
  */
@@ -140,7 +141,7 @@ export async function getDevTunnelActivityWindow(
   toISO: string,
 ): Promise<{
   dailyCounts: Map<string, number>;
-  tasksCompleted: number;
+  tasksSubmitted: number;
   pullRequestsMerged: number;
 }> {
   const { data, error } = await supabase
@@ -153,15 +154,17 @@ export async function getDevTunnelActivityWindow(
   if (error) throw new Error(`Failed to load DevTunnel activity window: ${error.message}`);
 
   const dailyCounts = new Map<string, number>();
-  let tasksCompleted = 0;
+  let tasksSubmitted = 0;
   let pullRequestsMerged = 0;
 
   for (const row of (data ?? []) as { occurred_at: string; type: string }[]) {
     const date = row.occurred_at.slice(0, 10);
     dailyCounts.set(date, (dailyCounts.get(date) ?? 0) + 1);
-    if (row.type === "TASK_COMPLETED") tasksCompleted += 1;
+    // "Tasks submitted" = pull requests submitted via `dev submit`
+    // (PULL_REQUEST_SUBMITTED, sql/044/045).
+    if (row.type === "PULL_REQUEST_SUBMITTED") tasksSubmitted += 1;
     if (row.type === "PULL_REQUEST_MERGED") pullRequestsMerged += 1;
   }
 
-  return { dailyCounts, tasksCompleted, pullRequestsMerged };
+  return { dailyCounts, tasksSubmitted, pullRequestsMerged };
 }

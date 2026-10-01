@@ -45,7 +45,7 @@ function dateLabel(dateStr: string): string {
  * See the route's own comment for why this section treats them
  * differently.
  *
- * The two bonus goal targets (5 tasks, 2 pull requests) are example
+ * The two bonus goal targets (5 tasks submitted, 2 pull requests merged) are example
  * numbers, not tuned figures — see devtunnel-backend
  * src/lib/milestones.ts BONUS_GOALS for where to change them.
  *
@@ -206,7 +206,7 @@ export function MilestoneTrack({ milestoneWindow }: { milestoneWindow: Milestone
                 <div className={`h-1 rounded-full ${barColor}`} style={{ width: `${percent}%` }} />
               </div>
               <span className="sr-only">
-                {goal.reached ? "Goal reached" : `${goal.current} of ${goal.target} complete`}
+                {goal.reached ? "Goal reached" : `${goal.current} of ${goal.target} ${goal.id === "tasks" ? "submitted" : "merged"}`}
               </span>
             </div>
           );

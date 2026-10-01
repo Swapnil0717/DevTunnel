@@ -50,7 +50,7 @@ function accountCreationMonth(createdAt: string): string {
  * caller that only hits this endpoint doesn't need a second request.
  *
  * Response: { data: { projectsCreated, projectsMaintaining,
- *   tasksCompleted, pullRequestsMerged, isMaintainer } }
+ *   tasksSubmitted, pullRequestsMerged, isMaintainer } }
  */
 devtunnelStats.get("/users/me/devtunnel-stats", requireAuth, async (c) => {
   const env = getEnv(c.env);
@@ -262,7 +262,7 @@ devtunnelStats.get("/users/me/contributions/milestones", requireAuth, async (c) 
 
     const milestoneWindow = buildMilestoneWindow(
       devtunnelWindow.dailyCounts,
-      devtunnelWindow.tasksCompleted,
+      devtunnelWindow.tasksSubmitted,
       devtunnelWindow.pullRequestsMerged,
     );
 

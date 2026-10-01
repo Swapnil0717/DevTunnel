@@ -389,6 +389,43 @@ export function BlueprintPagination({ pageNumbers = 4 }: { pageNumbers?: number 
 }
 
 /**
+ * N task/issue-card placeholders matching the card layout of `TasksTable`
+ * and `IssuesTable` (`/tasks`, `/issues`): a title line with a status
+ * placeholder on the right, a project/repository line, a row of chips, then
+ * a footer row (counts on the left, two buttons on the right) above a
+ * hairline — same `rounded-[10px]` corner, `px-4 py-3.5` padding and
+ * `gap-3` between cards as the real list, so nothing shifts when the data
+ * arrives.
+ */
+export function BlueprintTaskCardList({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="flex flex-col gap-3" aria-hidden="true">
+      {Array.from({ length: rows }).map((_, index) => (
+        <div key={index} className="rounded-[10px] border border-blueprint/25 px-4 py-3.5 sm:px-5">
+          <div className="flex items-start justify-between gap-3">
+            <BlueprintFill className="h-4 w-3/5" />
+            <BlueprintFill className="h-3.5 w-16" />
+          </div>
+          <BlueprintFill className="mt-2.5 h-3 w-2/5" />
+          <div className="mt-3 flex gap-1.5">
+            <BlueprintFill className="h-5 w-20" />
+            <BlueprintFill className="h-5 w-24" />
+            <BlueprintFill className="h-5 w-16" />
+          </div>
+          <div className="mt-3.5 flex items-center justify-between gap-4 border-t border-blueprint/15 pt-3">
+            <BlueprintFill className="h-3 w-36" />
+            <div className="flex gap-2">
+              <BlueprintFill className="h-7 w-[84px]" />
+              <BlueprintFill className="h-7 w-[84px]" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
  * Filter bar + N review-card placeholders, matching `AiDiscoveryQueue`'s
  * rendered list (title link, subtitle line, meta chips, Confirm/Reject
  * buttons) — replaces `BlueprintTable`, which this queue never actually

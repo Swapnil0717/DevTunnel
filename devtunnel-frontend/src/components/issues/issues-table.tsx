@@ -1,16 +1,16 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { AiExplainToggle, AiExplanationPanel } from "@/components/ai/ai-explain-button";
 import { IssueInsightBadges } from "@/components/ai/issue-insights-card";
-import { AdminTableRow } from "@/components/admin/admin-table-row";
+import { ClickableCard } from "@/components/ui/clickable-card";
 import { RepoLogo } from "@/components/admin/repo-logo";
 import { IssueIcon } from "@/components/layout/nav-icons";
 import type { IssuesPageInsights } from "@/lib/ai/use-issues-page-insights";
 import type { Issue } from "@/lib/issues/types";
 
 /** How many labels to show inline before collapsing into "+N". */
-const MAX_VISIBLE_LABELS = 3;
+const MAX_VISIBLE_LABELS = 4;
 
 function formatDate(iso: string): string {
   const date = new Date(iso);
@@ -23,38 +23,34 @@ function formatDate(iso: string): string {
 }
 
 /**
- * All Issues table (`/issues`) — the contributor-facing counterpart to
- * `AdminNewIssuesTable`: Issue #, Issue Title, Project, GitHub Author,
- * Labels, Created, Updated, Actions. Same columns, but the only action a
- * contributor gets is "View on GitHub" — "Create Task" and "Ignore"
- * curate DevTunnel's task list, which is an Admin/Maintainer
- * responsibility (see `AdminNewIssuesTable`'s own doc comment), not
- * something a contributor does from this browse view.
+ * All Issues list (`/issues`) — the contributor-facing counterpart to
+ * `AdminNewIssuesTable`. Each issue is one card instead of a row in a
+ * 7-column table (same redesign as `TasksTable`), so a long title wraps
+ * across the card's full width and nothing scrolls sideways at any screen
+ * size.
  *
- * `AdminTableRow` and `RepoLogo` are reused as-is rather than
- * duplicated: both are already generic, role-agnostic presentational
- * components (no admin API calls, no admin-only state, no auth check),
- * so copying them here would just be the same logic twice
- * (Frontend_Development_Rules.txt rule 51 — keep this kind of logic
- * centralized).
+ * A card shows the same facts the table did, regrouped:
+ *  - issue title + Open/Closed state (top row);
+ *  - issue number, project, repository and GitHub author (second line);
+ *  - labels as chips, and — once the visitor has asked for the AI analysis —
+ *    the AI labels (role, level, technologies) from `IssueInsightBadges`;
+ *  - created / updated dates, the AI "Explain" toggle and "View on GitHub"
+ *    (footer).
+ * Task creation/curation stays an Admin action; the only action a
+ * contributor gets here is opening the issue on GitHub.
  *
- * Open issues also get an "Explain" toggle in the Actions column (Part 5).
- * Opening it adds a full-width row under the issue holding the AI explanation
- * (`AiExplanationPanel`, which only asks the backend once it is on screen).
- * That per-row open state is why this file is now a client component; the
- * toggle is a `<button>`, so `AdminTableRow` leaves its click alone instead
- * of opening the GitHub issue.
- *
- * When `insights` is given (Part 6 on this page, `useIssuesPageInsights`), each
- * open issue shows its AI labels — role, level, technologies — under its title,
- * once the visitor has asked for the analysis. They sit beside the title link,
- * not inside it, and an issue the AI hasn't reached says so.
+ * Open issues also get an "Explain" toggle (Part 5). Opening it shows the AI
+ * explanation inside the card (`AiExplanationPanel`, which only asks the
+ * backend once it is on screen). That per-card open state is why this file is
+ * a client component. The toggle is a `<button>`, so `ClickableCard` leaves
+ * its click alone instead of opening the GitHub issue, and the expanded
+ * panel is excluded from the card's click-to-open behavior too.
  *
  * Dates are shown as readable text plus a machine-readable `<time
- * datetime>` (rule 46), and the state badge is always paired with the
- * word "Open"/"Closed" — never color alone (rule 43). The whole row also
- * opens the GitHub issue in a new tab on click (`AdminTableRow`), same
- * destination as the "View on GitHub" link.
+ * datetime>` (rule 46), and the state is always the word "Open"/"Closed" —
+ * never color alone (rule 43). The whole card also opens the GitHub issue in
+ * a new tab on click (`ClickableCard`), same destination as the title link
+ * and "View on GitHub".
  */
 export function IssuesTable({ issues, insights }: { issues: Issue[]; insights?: IssuesPageInsights }) {
   const [openKeys, setOpenKeys] = useState<ReadonlySet<string>>(new Set());
@@ -69,73 +65,54 @@ export function IssuesTable({ issues, insights }: { issues: Issue[]; insights?: 
   }
 
   return (
-    <div className="overflow-x-auto rounded-[10px] border border-border">
-      <table className="w-full min-w-[960px] border-collapse text-left text-[12.5px]">
-        <thead>
-          <tr className="border-b border-border bg-surface">
-            {["Issue", "Project", "GitHub author", "Labels", "Created", "Updated", "Actions"].map(
-              (heading) => (
-                <th
-                  key={heading}
-                  scope="col"
-                  className="px-4 py-3 text-[11px] font-normal uppercase tracking-wide text-text-faint"
-                >
-                  {heading}
-                </th>
-              ),
-            )}
-          </tr>
-        </thead>
+    <ul className="m-0 flex list-none flex-col gap-3 p-0" aria-label="Issues">
+      {issues.map((issue) => {
+        const visibleLabels = issue.labels.slice(0, MAX_VISIBLE_LABELS);
+        const hiddenLabelCount = issue.labels.length - visibleLabels.length;
+        const rowKey = `${issue.project.slug}-${issue.number}`;
+        const panelId = `ai-explain-${rowKey}`;
+        const canExplain = issue.state === "OPEN" && /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(issue.project.repositoryFullName);
+        const isOpen = canExplain && openKeys.has(rowKey);
+        const isOpenIssue = issue.state === "OPEN";
 
-        <tbody>
-          {issues.map((issue) => {
-            const visibleLabels = issue.labels.slice(0, MAX_VISIBLE_LABELS);
-            const hiddenLabelCount = issue.labels.length - visibleLabels.length;
-            const rowKey = `${issue.project.slug}-${issue.number}`;
-            const panelId = `ai-explain-${rowKey}`;
-            const canExplain = issue.state === "OPEN" && /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(issue.project.repositoryFullName);
-            const isOpen = canExplain && openKeys.has(rowKey);
+        return (
+          <li key={rowKey}>
+            <ClickableCard
+              externalHref={issue.url}
+              className="overflow-hidden rounded-[10px] border border-border bg-surface transition-colors hover:border-border-subtle hover:bg-surface-raised"
+            >
+              <div className="px-4 py-3.5 sm:px-5">
+                {/* Title + state */}
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="m-0 min-w-0 text-[14.5px] font-medium leading-snug text-text">
+                    <a
+                      href={issue.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-flex items-start gap-1.5 hover:text-accent"
+                    >
+                      <IssueIcon className="mt-[3px] h-3.5 w-3.5 shrink-0" />
+                      <span>{issue.title}</span>
+                    </a>
+                  </h3>
+                  <span className="inline-flex shrink-0 items-center gap-1.5 pt-0.5 text-[12.5px] text-text-secondary">
+                    <span
+                      aria-hidden="true"
+                      className="inline-block h-[6px] w-[6px] rounded-full"
+                      style={{ backgroundColor: isOpenIssue ? "#1D9E75" : "#6B6B6B" }}
+                    />
+                    {isOpenIssue ? "Open" : "Closed"}
+                  </span>
+                </div>
 
-            return (
-              <Fragment key={rowKey}>
-              <AdminTableRow
-                externalHref={issue.url}
-                className={`${isOpen ? "" : "border-b border-border-subtle last:border-b-0"} hover:bg-surface/60`}
-              >
-                {/* Issue # + title + open/closed state */}
-                <th scope="row" className="px-4 py-3 align-top font-medium text-text">
-                  <a
-                    href={issue.url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="inline-flex items-start gap-1.5 hover:text-accent"
-                  >
-                    <IssueIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    <span>
-                      <span className="block">{issue.title}</span>
-                      <span className="mt-0.5 block font-mono text-[11px] text-text-faint">
-                        #{issue.number} · {issue.state === "OPEN" ? "Open" : "Closed"}
-                      </span>
-                    </span>
-                  </a>
-                  {insights && canExplain ? (
-                    <div className="mt-2 pl-5 font-normal">
-                      <IssueInsightBadges controller={insights.sourceFor(issue.project.repositoryFullName)} issueNumber={issue.number} />
-                    </div>
-                  ) : null}
-                </th>
-
-                {/* Project (+ repository) */}
-                <td className="px-4 py-3 align-top">
-                  <p className="m-0 text-text-secondary">{issue.project.name}</p>
-                  <p className="m-0 mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-text-faint">
+                {/* Number, project, repository, author */}
+                <p className="m-0 mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-text-muted">
+                  <span className="font-mono text-[11.5px] text-text-secondary">#{issue.number}</span>
+                  <span className="inline-flex min-w-0 items-center gap-1.5">
                     <RepoLogo repositoryFullName={issue.project.repositoryFullName} size={14} />
-                    {issue.project.repositoryFullName}
-                  </p>
-                </td>
-
-                {/* GitHub author */}
-                <td className="px-4 py-3 align-top text-text-secondary">
+                    <span className="truncate">{issue.project.name}</span>
+                    <span className="truncate font-mono text-[11px] text-text-faint">{issue.project.repositoryFullName}</span>
+                  </span>
                   <a
                     href={issue.author.profileUrl}
                     target="_blank"
@@ -144,51 +121,35 @@ export function IssuesTable({ issues, insights }: { issues: Issue[]; insights?: 
                   >
                     @{issue.author.username}
                   </a>
-                </td>
+                </p>
 
-                {/* Labels */}
-                <td className="px-4 py-3 align-top">
-                  {issue.labels.length === 0 ? (
-                    <span className="text-text-faint">—</span>
-                  ) : (
-                    <div className="flex flex-wrap items-center gap-1">
-                      {visibleLabels.map((label) => (
-                        <span
-                          key={label}
-                          className="inline-flex items-center rounded-md border border-border bg-surface px-1.5 py-0.5 text-[11px] text-text-secondary"
-                        >
-                          {label}
-                        </span>
-                      ))}
-                      {hiddenLabelCount > 0 ? (
-                        <span className="text-[11px] text-text-faint">+{hiddenLabelCount}</span>
-                      ) : null}
-                    </div>
-                  )}
-                </td>
+                {/* Labels + AI insight labels */}
+                {issue.labels.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                    {visibleLabels.map((label) => (
+                      <span
+                        key={label}
+                        className="inline-flex items-center rounded-md border border-border bg-surface-raised px-2 py-0.5 text-[11.5px] text-text-secondary"
+                      >
+                        {label}
+                      </span>
+                    ))}
+                    {hiddenLabelCount > 0 ? <span className="text-[11px] text-text-faint">+{hiddenLabelCount}</span> : null}
+                  </div>
+                ) : null}
+                {insights && canExplain ? (
+                  <div className="mt-2.5">
+                    <IssueInsightBadges controller={insights.sourceFor(issue.project.repositoryFullName)} issueNumber={issue.number} />
+                  </div>
+                ) : null}
 
-                {/* Created */}
-                <td className="whitespace-nowrap px-4 py-3 align-top text-text-secondary">
-                  <time dateTime={issue.createdAt}>{formatDate(issue.createdAt)}</time>
-                </td>
-
-                {/* Updated */}
-                <td className="whitespace-nowrap px-4 py-3 align-top text-text-secondary">
-                  <time dateTime={issue.updatedAt}>{formatDate(issue.updatedAt)}</time>
-                </td>
-
-                {/* Actions — View on GitHub, plus the AI "Explain" toggle for open issues.
-                    Task creation/curation stays an Admin action. */}
-                <td className="whitespace-nowrap px-4 py-3 align-top">
-                  <div className="flex items-center gap-1">
-                    <a
-                      href={issue.url}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="inline-block rounded-md px-2 py-1 text-[11.5px] font-medium text-text-secondary hover:text-accent"
-                    >
-                      View on GitHub
-                    </a>
+                {/* Footer — dates, AI "Explain", View on GitHub. Task creation/curation stays an Admin action. */}
+                <div className="mt-3.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border-subtle pt-3">
+                  <p className="m-0 text-[12px] text-text-muted">
+                    Created <time dateTime={issue.createdAt}>{formatDate(issue.createdAt)}</time> · Updated{" "}
+                    <time dateTime={issue.updatedAt}>{formatDate(issue.updatedAt)}</time>
+                  </p>
+                  <div className="flex items-center gap-2">
                     {canExplain ? (
                       <AiExplainToggle
                         open={isOpen}
@@ -197,27 +158,33 @@ export function IssuesTable({ issues, insights }: { issues: Issue[]; insights?: 
                         issueNumber={issue.number}
                       />
                     ) : null}
+                    <a
+                      href={issue.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-flex items-center gap-1 rounded-[7px] px-2.5 py-1.5 text-[12px] font-medium text-text-secondary hover:text-accent"
+                    >
+                      View on GitHub <span aria-hidden="true">→</span>
+                    </a>
                   </div>
-                </td>
-              </AdminTableRow>
+                </div>
+              </div>
 
               {isOpen ? (
-                <tr className="border-b border-border-subtle last:border-b-0">
-                  <td colSpan={7} className="px-4 pb-4 pt-0">
-                    <AiExplanationPanel
-                      id={panelId}
-                      source="devtunnel"
-                      repo={issue.project.repositoryFullName}
-                      issueNumber={issue.number}
-                    />
-                  </td>
-                </tr>
+                <div className="border-t border-border bg-surface-raised">
+                  <AiExplanationPanel
+                    id={panelId}
+                    source="devtunnel"
+                    repo={issue.project.repositoryFullName}
+                    issueNumber={issue.number}
+                    embedded
+                  />
+                </div>
               ) : null}
-              </Fragment>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+            </ClickableCard>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

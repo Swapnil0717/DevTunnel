@@ -7,7 +7,7 @@ import {
 } from "@/components/layout/nav-icons";
 
 /**
- * Contributions / Projects / Tasks done / Pull requests stat cards
+ * Contributions / Projects / Tasks submitted / Pull requests merged stat cards
  * (5_devtunnel_profile_page.html), now entirely backed by real data:
  *
  * - "Contributions" shows two numbers side by side rather than one:
@@ -23,8 +23,8 @@ import {
  *   when this user maintains at least one project (a contributor can
  *   also be a maintainer — see profile-tags.tsx for the badge version of
  *   the same fact).
- * - "Tasks done" and "Pull requests" are `devtunnelStats.tasksCompleted`
- *   / `pullRequestsMerged`, both from `GET /users/me/devtunnel-stats`.
+ * - "Tasks submitted" and "Pull requests merged" are
+ *   `devtunnelStats.tasksSubmitted` (PRs submitted) / `pullRequestsMerged`, both from `GET /users/me/devtunnel-stats`.
  *
  * Every card still falls back to an honest "—" (not a guessed 0) when
  * its source failed to load server-side — never invent a number
@@ -124,9 +124,9 @@ export function ProfileStats({
           bgClassName="bg-status-info-bg"
           colorClassName="text-status-info-text"
         />
-        <p className="m-0 mb-1 mt-2 text-[11px] text-text-dim">Tasks done</p>
+        <p className="m-0 mb-1 mt-2 text-[11px] text-text-dim">Tasks submitted</p>
         {devtunnelStats ? (
-          <p className="m-0 text-xl font-medium text-text">{devtunnelStats.tasksCompleted}</p>
+          <p className="m-0 text-xl font-medium text-text">{devtunnelStats.tasksSubmitted}</p>
         ) : (
           <>
             <p className="m-0 text-xl font-medium text-text-faint" aria-hidden="true">
@@ -143,7 +143,7 @@ export function ProfileStats({
           bgClassName="bg-tag-skill-bg"
           colorClassName="text-tag-skill-text"
         />
-        <p className="m-0 mb-1 mt-2 text-[11px] text-text-dim">Pull requests</p>
+        <p className="m-0 mb-1 mt-2 text-[11px] text-text-dim">Pull requests merged</p>
         {devtunnelStats ? (
           <p className="m-0 text-xl font-medium text-text">{devtunnelStats.pullRequestsMerged}</p>
         ) : (

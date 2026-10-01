@@ -2,7 +2,7 @@ import { BlueprintSheet } from "@/components/ui/blueprint-loader";
 import {
   BlueprintPageHeader,
   BlueprintPublicFilterBar,
-  BlueprintTable,
+  BlueprintTaskCardList,
   BlueprintPagination,
 } from "@/components/ui/blueprint-kit";
 
@@ -26,9 +26,10 @@ import {
  * box, an optional "Match my profile" row, then a wrapped row of 5
  * label-over-select filters (Role, Difficulty, Tech stack, Project,
  * Status) — and its wrapper is `mb-3`, not the `mb-4` the card-grid
- * pages use. `TasksTable`'s 9 real column headings replace the old
- * blank equal-width columns, and a `BlueprintPagination` footer now
- * matches the real `PagePaginationControls` under the table.
+ * pages use. `TasksTable` is a list of task cards (no columns), so the
+ * skeleton is `BlueprintTaskCardList` — same card shape and spacing — and a
+ * `BlueprintPagination` footer matches the real `PagePaginationControls`
+ * under the list.
  */
 export default function TasksLoading() {
   return (
@@ -39,21 +40,7 @@ export default function TasksLoading() {
     >
       <BlueprintPageHeader withAction={false} />
       <BlueprintPublicFilterBar filters={5} withMatchProfile bottomMarginClassName="mb-3" />
-      <BlueprintTable
-        rows={10}
-        headings={[
-          "Task",
-          "Project",
-          "GitHub issue",
-          "Role",
-          "Difficulty",
-          "Tech stack",
-          "Contributors",
-          "Status",
-          "Actions",
-        ]}
-        twoLineColumns={2}
-      />
+      <BlueprintTaskCardList rows={6} />
       <BlueprintPagination />
     </BlueprintSheet>
   );

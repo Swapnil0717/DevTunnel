@@ -329,7 +329,7 @@ export interface ContributionCalendar {
 export interface DevTunnelStats {
   projectsCreated: number;
   projectsMaintaining: number;
-  tasksCompleted: number;
+  tasksSubmitted: number;
   pullRequestsMerged: number;
   isMaintainer: boolean;
 }

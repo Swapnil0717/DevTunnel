@@ -1,12 +1,12 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { AdminTableRow } from "@/components/admin/admin-table-row";
+import { ClickableCard } from "@/components/ui/clickable-card";
 import { AdminTaskStatusBadge } from "@/components/admin/tasks/admin-task-status-badge";
 import { RepoLogo } from "@/components/admin/repo-logo";
 import { IssueIcon } from "@/components/layout/nav-icons";
-import { AiExplainButton, AiExplainToggle, AiExplanationPanel } from "@/components/ai/ai-explain-button";
+import { AiExplainToggle, AiExplanationPanel } from "@/components/ai/ai-explain-button";
 import { getTaskExplainTarget } from "@/lib/ai/task-explain";
 import { TechIcon } from "@/components/onboarding/tech-icon";
 import { DEVELOPER_ROLE_LABEL, EXPERIENCE_LEVEL_LABEL } from "@/lib/onboarding/types";
@@ -22,51 +22,45 @@ function taskHref(task: Task): string {
 }
 
 /** How many tech-stack chips to show inline before collapsing into "+N". */
-const MAX_VISIBLE_TECH = 3;
+const MAX_VISIBLE_TECH = 4;
 
 /**
- * Tasks table (`/tasks`) — the contributor-facing counterpart to
- * `AdminTasksTable`: Task, Project, GitHub Issue, Role, Difficulty, Tech
- * Stack, Contributors, Status, Actions. Same columns minus "Submissions"
- * (see `lib/tasks/types.ts`'s doc comment on why) and minus Edit/Delete —
- * those curate DevTunnel's task list, an Admin responsibility; the only
- * action a contributor gets here is opening the task's own page
- * ("View Task"), with the underlying GitHub issue reachable separately
- * from the "GitHub issue" cell.
+ * Tasks list (`/tasks`) — the contributor-facing counterpart to
+ * `AdminTasksTable`. Each task is one card instead of a row in a 9-column
+ * table, so a long title wraps across the full card width and nothing needs
+ * a sideways scroll at any screen size (the old table forced `min-w-[1080px]`
+ * and a separate mobile layout; this is one layout for every width).
  *
- * `AdminTableRow`, `RepoLogo`, and `AdminTaskStatusBadge` are reused as-is
- * rather than duplicated: all three are already generic, role-agnostic
- * presentational components (no admin API calls, no admin-only state, no
- * auth check — `AdminTaskStatusBadge` only takes the shared `TaskStatus`
- * value), so copying them here would just be the same code twice
- * (Frontend_Development_Rules.txt rule 51). Same for `TechIcon` /
- * `DEVELOPER_ROLE_LABEL` / `EXPERIENCE_LEVEL_LABEL`, which already back
- * the onboarding form these tasks are filtered against.
+ * A card shows the same facts the table did, regrouped by how they are read:
+ *  - title + status (top row);
+ *  - project, repository and the linked GitHub issue (second line);
+ *  - difficulty, role(s) and tech stack as chips;
+ *  - contributor counts, the AI "Explain" toggle and the "View task" link
+ *    (footer).
+ * Facts a task doesn't have (no roles, no difficulty, no tech stack, no
+ * linked issue) are left out rather than filled with a dash. Important
+ * facts (role, difficulty, status) are always text, never color/icon alone
+ * (rule 43).
  *
- * Every row opens the task's own DevTunnel page — same
- * `/projects/:projectSlug/tasks/:taskId` destination as the "View Task"
- * action (`AdminTableRow`'s internal `href`, real client-side navigation
- * rather than a new tab, per rule 10) — on click anywhere in the row.
- * The underlying GitHub issue is still one click away from the
- * "GitHub issue" cell's own link; it just isn't what the row itself
- * opens, since the row's job is to show what *this task* is, not the
- * raw issue. Important facts (role, difficulty, status) are always
- * shown as text next to any icon, never color/icon alone (rule 43).
+ * Every card opens the task's own DevTunnel page — same
+ * `/projects/:projectSlug/tasks/:taskId` destination as the "View task"
+ * link (`ClickableCard`, real client-side navigation rather than a new tab,
+ * per rule 10) — on click anywhere on the card that isn't itself a link or
+ * button. The underlying GitHub issue is still one click away from its own
+ * link; it just isn't what the card itself opens, since the card's job is to
+ * show what *this task* is, not the raw issue.
  *
- * Tasks that come from an open GitHub issue also get an \"Explain\" toggle
+ * Tasks that come from an open GitHub issue also get an "Explain" toggle
  * (AI, `AiExplainToggle`): it expands a plain-language explanation of the
- * issue under the row (`AiExplanationPanel`, which only asks the backend
+ * issue inside the card (`AiExplanationPanel`, which only asks the backend
  * once it is on screen, so a task nobody clicks costs nothing). The toggle
- * is a real `<button>` beside the row's links, never inside one.
+ * is a real `<button>` beside the card's links, never inside one, and the
+ * expanded panel is excluded from the card's click-to-open behavior so
+ * reading or selecting its text never navigates away.
  *
- * Two renderings of the same `tasks` list, swapped by breakpoint rather
- * than one squeezed to fit both: below `md` a 9-column table forced the
- * whole page into a sideways-scrolling strip that only ever showed a
- * couple of columns at once, so `<768px` gets `TaskCardList` — one full-
- * width card per task, everything readable without horizontal scroll —
- * and `md` and up keeps the table, still `overflow-x-auto` for anyone on
- * a narrower laptop window. Same data, same fields, same "whole row/card
- * opens the task" behavior either way — nothing is dropped on mobile.
+ * `AdminTaskStatusBadge`, `RepoLogo`, `TechIcon`, `DEVELOPER_ROLE_LABEL`
+ * and `EXPERIENCE_LEVEL_LABEL` are reused as-is — all generic,
+ * role-agnostic presentational pieces (rule 51).
  */
 export function TasksTable({ tasks }: { tasks: Task[] }) {
   const [openIds, setOpenIds] = useState<ReadonlySet<string>>(new Set());
@@ -81,274 +75,118 @@ export function TasksTable({ tasks }: { tasks: Task[] }) {
   }
 
   return (
-    <>
-      <TaskCardList tasks={tasks} className="md:hidden" />
-
-      <div className="hidden overflow-x-auto rounded-[10px] border border-border md:block">
-        <table className="w-full min-w-[1080px] border-collapse text-left text-[12.5px]">
-          <thead>
-            <tr className="border-b border-border bg-surface">
-              {[
-                "Task",
-                "Project",
-                "GitHub issue",
-                "Role",
-                "Difficulty",
-                "Tech stack",
-                "Contributors",
-                "Status",
-                "Actions",
-              ].map((heading) => (
-                <th
-                  key={heading}
-                  scope="col"
-                  className="px-4 py-3 text-[11px] font-normal uppercase tracking-wide text-text-faint"
-                >
-                  {heading}
-                </th>
-              ))}
-            </tr>
-          </thead>
-
-          <tbody>
-            {tasks.map((task) => {
-              const visibleTech = task.techStack.slice(0, MAX_VISIBLE_TECH);
-              const hiddenTechCount = task.techStack.length - visibleTech.length;
-              const explainTarget = getTaskExplainTarget(task);
-              const panelId = `ai-explain-task-${task.id}`;
-              const isOpen = explainTarget !== null && openIds.has(task.id);
-
-              return (
-                <Fragment key={task.id}>
-                <AdminTableRow
-                  href={taskHref(task)}
-                  className={`${isOpen ? "" : "border-b border-border-subtle last:border-b-0"} hover:bg-surface/60`}
-                >
-                  {/* Task */}
-                  <th scope="row" className="px-4 py-3 align-top font-medium text-text">
-                    <Link href={taskHref(task)} className="hover:text-accent">
-                      {task.title}
-                    </Link>
-                  </th>
-
-                  {/* Project (+ repository) */}
-                  <td className="px-4 py-3 align-top">
-                    <p className="m-0 text-text-secondary">{task.project.name}</p>
-                    <p className="m-0 mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-text-faint">
-                      <RepoLogo repositoryFullName={task.project.repositoryFullName} size={14} />
-                      {task.project.repositoryFullName}
-                    </p>
-                  </td>
-
-                  {/* GitHub issue */}
-                  <td className="px-4 py-3 align-top">
-                    {task.githubIssue ? (
-                      <a
-                        href={task.githubIssue.url}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="inline-flex items-center gap-1.5 font-mono text-[11.5px] text-text-secondary hover:text-accent"
-                      >
-                        <IssueIcon className="h-3.5 w-3.5 shrink-0" />#{task.githubIssue.number}
-                      </a>
-                    ) : (
-                      <span className="text-text-faint">—</span>
-                    )}
-                  </td>
-
-                  {/* Role */}
-                  <td className="px-4 py-3 align-top text-text-secondary">
-                    {task.roles.length
-                      ? task.roles.map((role) => DEVELOPER_ROLE_LABEL[role]).join(", ")
-                      : "—"}
-                  </td>
-
-                  {/* Difficulty */}
-                  <td className="px-4 py-3 align-top text-text-secondary">
-                    {task.difficulty ? EXPERIENCE_LEVEL_LABEL[task.difficulty] : "—"}
-                  </td>
-
-                  {/* Tech stack */}
-                  <td className="px-4 py-3 align-top">
-                    {task.techStack.length === 0 ? (
-                      <span className="text-text-faint">—</span>
-                    ) : (
-                      <div className="flex flex-wrap items-center gap-1">
-                        {visibleTech.map((value) => (
-                          <span
-                            key={value}
-                            className="inline-flex items-center gap-1 rounded-md border border-tag-tech-border bg-tag-tech-bg px-1.5 py-0.5 text-[11px] text-tag-tech-text"
-                          >
-                            <TechIcon name={value} />
-                            {value}
-                          </span>
-                        ))}
-                        {hiddenTechCount > 0 ? (
-                          <span className="text-[11px] text-text-faint">+{hiddenTechCount}</span>
-                        ) : null}
-                      </div>
-                    )}
-                  </td>
-
-                  {/* Contributors */}
-                  <td className="whitespace-nowrap px-4 py-3 align-top text-text-secondary">
-                    {task.activeContributorCount} working · {task.completedContributorCount} completed
-                  </td>
-
-                  {/* Status */}
-                  <td className="px-4 py-3 align-top">
-                    <AdminTaskStatusBadge status={task.status} />
-                  </td>
-
-                  {/* Actions — View, plus the AI "Explain" toggle; editing/deleting a task is an Admin action */}
-                  <td className="whitespace-nowrap px-4 py-3 align-top">
-                    <div className="flex items-center gap-1">
-                      <Link
-                        href={taskHref(task)}
-                        className="inline-block rounded-md px-2 py-1 text-[11.5px] font-medium text-text-secondary hover:text-accent"
-                      >
-                        View Task
-                      </Link>
-                      {explainTarget ? (
-                        <AiExplainToggle
-                          open={isOpen}
-                          onToggle={() => toggle(task.id)}
-                          controlsId={panelId}
-                          issueNumber={explainTarget.issueNumber}
-                        />
-                      ) : null}
-                    </div>
-                  </td>
-                </AdminTableRow>
-
-                {isOpen && explainTarget ? (
-                  <tr className="border-b border-border-subtle last:border-b-0">
-                    <td colSpan={9} className="px-4 pb-4 pt-0">
-                      <AiExplanationPanel
-                        id={panelId}
-                        source="devtunnel"
-                        repo={explainTarget.repo}
-                        issueNumber={explainTarget.issueNumber}
-                      />
-                    </td>
-                  </tr>
-                ) : null}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </>
-  );
-}
-
-/**
- * Mobile counterpart to the table above (`<768px`, `md:hidden`) — the
- * same nine facts per task, laid out as a stack of full-width cards
- * instead of table columns, so nothing needs a sideways scroll to read
- * on a phone. Every card is one `Link` to the task page, same as a table
- * row; the GitHub issue keeps its own separate link within the card, same
- * split the table draws between the row's own destination and the
- * "GitHub issue" cell's link.
- */
-function TaskCardList({ tasks, className = "" }: { tasks: Task[]; className?: string }) {
-  return (
-    <ul className={`m-0 flex list-none flex-col gap-3 p-0 ${className}`}>
+    <ul className="m-0 flex list-none flex-col gap-3 p-0" aria-label="Tasks">
       {tasks.map((task) => {
         const visibleTech = task.techStack.slice(0, MAX_VISIBLE_TECH);
         const hiddenTechCount = task.techStack.length - visibleTech.length;
         const explainTarget = getTaskExplainTarget(task);
+        const panelId = `ai-explain-task-${task.id}`;
+        const isOpen = explainTarget !== null && openIds.has(task.id);
+        const hasChips = Boolean(task.difficulty) || task.roles.length > 0 || task.techStack.length > 0;
 
         return (
-          <li
-            key={task.id}
-            className="rounded-[10px] border border-border bg-surface p-4"
-          >
-            <div className="mb-2 flex items-start justify-between gap-3">
-              <Link
-                href={taskHref(task)}
-                className="text-[13.5px] font-medium text-text hover:text-accent"
-              >
-                {task.title}
-              </Link>
-              <AdminTaskStatusBadge status={task.status} />
-            </div>
-
-            <p className="m-0 mb-3 flex items-center gap-1.5 font-mono text-[11px] text-text-faint">
-              <RepoLogo repositoryFullName={task.project.repositoryFullName} size={14} />
-              <span className="truncate">
-                {task.project.name} · {task.project.repositoryFullName}
-              </span>
-            </p>
-
-            <dl className="m-0 mb-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[12px]">
-              <div>
-                <dt className="text-text-faint">Role</dt>
-                <dd className="m-0 mt-0.5 text-text-secondary">
-                  {task.roles.length
-                    ? task.roles.map((role) => DEVELOPER_ROLE_LABEL[role]).join(", ")
-                    : "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-text-faint">Difficulty</dt>
-                <dd className="m-0 mt-0.5 text-text-secondary">
-                  {task.difficulty ? EXPERIENCE_LEVEL_LABEL[task.difficulty] : "—"}
-                </dd>
-              </div>
-              <div className="col-span-2">
-                <dt className="text-text-faint">Contributors</dt>
-                <dd className="m-0 mt-0.5 text-text-secondary">
-                  {task.activeContributorCount} working · {task.completedContributorCount} completed
-                </dd>
-              </div>
-            </dl>
-
-            {task.techStack.length > 0 ? (
-              <div className="mb-3 flex flex-wrap items-center gap-1">
-                {visibleTech.map((value) => (
-                  <span
-                    key={value}
-                    className="inline-flex items-center gap-1 rounded-md border border-tag-tech-border bg-tag-tech-bg px-1.5 py-0.5 text-[11px] text-tag-tech-text"
-                  >
-                    <TechIcon name={value} />
-                    {value}
+          <li key={task.id}>
+            <ClickableCard
+              href={taskHref(task)}
+              className="overflow-hidden rounded-[10px] border border-border bg-surface transition-colors hover:border-border-subtle hover:bg-surface-raised"
+            >
+              <div className="px-4 py-3.5 sm:px-5">
+                {/* Title + status */}
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="m-0 min-w-0 text-[14.5px] font-medium leading-snug text-text">
+                    <Link href={taskHref(task)} className="hover:text-accent">
+                      {task.title}
+                    </Link>
+                  </h3>
+                  <span className="shrink-0 pt-0.5">
+                    <AdminTaskStatusBadge status={task.status} />
                   </span>
-                ))}
-                {hiddenTechCount > 0 ? (
-                  <span className="text-[11px] text-text-faint">+{hiddenTechCount}</span>
+                </div>
+
+                {/* Project, repository, GitHub issue */}
+                <p className="m-0 mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-text-muted">
+                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                    <RepoLogo repositoryFullName={task.project.repositoryFullName} size={14} />
+                    <span className="truncate">{task.project.name}</span>
+                    <span className="truncate font-mono text-[11px] text-text-faint">{task.project.repositoryFullName}</span>
+                  </span>
+                  {task.githubIssue ? (
+                    <a
+                      href={task.githubIssue.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-flex items-center gap-1 font-mono text-[11.5px] text-text-secondary hover:text-accent"
+                    >
+                      <IssueIcon className="h-3.5 w-3.5 shrink-0" />#{task.githubIssue.number}
+                    </a>
+                  ) : null}
+                </p>
+
+                {/* Difficulty, roles, tech stack */}
+                {hasChips ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                    {task.difficulty ? (
+                      <span className="inline-flex items-center rounded-md border border-border bg-surface-raised px-2 py-0.5 text-[11.5px] text-text-secondary">
+                        {EXPERIENCE_LEVEL_LABEL[task.difficulty]}
+                      </span>
+                    ) : null}
+                    {task.roles.map((role) => (
+                      <span
+                        key={role}
+                        className="inline-flex items-center rounded-md border border-border-subtle px-2 py-0.5 text-[11.5px] text-text-muted"
+                      >
+                        {DEVELOPER_ROLE_LABEL[role]}
+                      </span>
+                    ))}
+                    {visibleTech.map((value) => (
+                      <span
+                        key={value}
+                        className="inline-flex items-center gap-1 rounded-md border border-tag-tech-border bg-tag-tech-bg px-1.5 py-0.5 text-[11.5px] text-tag-tech-text"
+                      >
+                        <TechIcon name={value} />
+                        {value}
+                      </span>
+                    ))}
+                    {hiddenTechCount > 0 ? <span className="text-[11px] text-text-faint">+{hiddenTechCount}</span> : null}
+                  </div>
                 ) : null}
+
+                {/* Footer — contributors, AI "Explain", View task. Editing/deleting a task is an Admin action. */}
+                <div className="mt-3.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border-subtle pt-3">
+                  <p className="m-0 text-[12px] text-text-muted">
+                    {task.activeContributorCount} working · {task.completedContributorCount} completed
+                  </p>
+                  <div className="flex items-center gap-2">
+                    {explainTarget ? (
+                      <AiExplainToggle
+                        open={isOpen}
+                        onToggle={() => toggle(task.id)}
+                        controlsId={panelId}
+                        issueNumber={explainTarget.issueNumber}
+                      />
+                    ) : null}
+                    <Link
+                      href={taskHref(task)}
+                      className="inline-flex items-center gap-1 rounded-[7px] px-2.5 py-1.5 text-[12px] font-medium text-text-secondary hover:text-accent"
+                    >
+                      View task <span aria-hidden="true">→</span>
+                    </Link>
+                  </div>
+                </div>
               </div>
-            ) : null}
 
-            <div className="flex items-center justify-between gap-3 border-t border-border-subtle pt-3">
-              {task.githubIssue ? (
-                <a
-                  href={task.githubIssue.url}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="inline-flex items-center gap-1.5 font-mono text-[11.5px] text-text-secondary hover:text-accent"
-                >
-                  <IssueIcon className="h-3.5 w-3.5 shrink-0" />#{task.githubIssue.number}
-                </a>
-              ) : (
-                <span className="text-[11.5px] text-text-faint">No linked issue</span>
-              )}
-
-              <Link
-                href={taskHref(task)}
-                className="inline-flex items-center rounded-md px-2 py-1 text-[12px] font-medium text-accent hover:underline"
-              >
-                View Task →
-              </Link>
-            </div>
-
-            {explainTarget ? (
-              <div className="mt-3 border-t border-border-subtle pt-3">
-                <AiExplainButton source="devtunnel" repo={explainTarget.repo} issueNumber={explainTarget.issueNumber} />
-              </div>
-            ) : null}
+              {isOpen && explainTarget ? (
+                <div className="border-t border-border bg-surface-raised">
+                  <AiExplanationPanel
+                    id={panelId}
+                    source="devtunnel"
+                    repo={explainTarget.repo}
+                    issueNumber={explainTarget.issueNumber}
+                    embedded
+                  />
+                </div>
+              ) : null}
+            </ClickableCard>
           </li>
         );
       })}

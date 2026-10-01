@@ -60,7 +60,7 @@ export type ContributionSummary = {
 export type DevTunnelStats = {
   projectsCreated: number;
   projectsMaintaining: number;
-  tasksCompleted: number;
+  tasksSubmitted: number;
   pullRequestsMerged: number;
   isMaintainer: boolean;
 };

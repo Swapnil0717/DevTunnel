@@ -134,7 +134,7 @@ export async function fetchDevTunnelContributionSummary(): Promise<ContributionS
  * `GET /users/me/devtunnel-stats` (devtunnel-backend
  * src/routes/devtunnelStats.ts) — projects created/maintained, tasks
  * completed, pull requests merged. Backs the profile page's "Projects" /
- * "Tasks done" / "Pull requests" stat cards.
+ * "Tasks submitted" / "Pull requests merged" stat cards.
  */
 export async function fetchDevTunnelStats(): Promise<DevTunnelStats> {
   const res = await fetch(`${API_BASE_URL}/users/me/devtunnel-stats`, {

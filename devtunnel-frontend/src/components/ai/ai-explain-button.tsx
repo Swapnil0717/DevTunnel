@@ -27,8 +27,8 @@ function isPermanentFailure(code: string | undefined): boolean {
 }
 
 /**
- * The toggle on its own — used directly by the `/issues` table, whose expanded
- * panel has to live in its own full-width `<tr>` and so can't sit next to the
+ * The toggle on its own — used directly by the `/tasks` and `/issues` cards, whose expanded
+ * panel lives in its own full-width section under the card body and so can't sit next to the
  * button. Everywhere else use `AiExplainButton`, which pairs it with the panel.
  *
  * A real `<button>` with `aria-expanded` / `aria-controls` (never a link, and
@@ -52,10 +52,22 @@ export function AiExplainToggle({
       aria-expanded={open}
       aria-controls={open ? controlsId : undefined}
       aria-label={`${open ? "Hide" : "Explain"} issue #${issueNumber} with AI`}
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-[7px] border border-border-subtle bg-transparent px-2.5 py-1 text-[11.5px] font-medium text-text-dim transition-colors hover:border-border hover:bg-surface-raised hover:text-text"
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-[7px] border border-border-subtle bg-transparent px-2.5 py-1.5 text-[11.5px] font-medium text-text-dim transition-colors hover:border-border hover:bg-surface-raised hover:text-text"
     >
       <SparkleIcon className="h-3 w-3" />
-      {open ? "Hide explanation" : "Explain"}
+      {open ? "Hide" : "Explain"}
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`}
+      >
+        <path d="m6 9 6 6 6-6" />
+      </svg>
     </button>
   );
 }
@@ -88,12 +100,15 @@ export function AiExplanationPanel({
   source,
   repo,
   issueNumber,
+  embedded = false,
 }: {
   id: string;
   source: AiExplainSource;
   /** `owner/repo` */
   repo: string;
   issueNumber: number;
+  /** Drop the panel's own border/background/radius — used inside a task or issue card that already provides them. */
+  embedded?: boolean;
 }) {
   const { status: authStatus } = useAuth();
   const [state, setState] = useState<{ status: Status; data: AiIssueExplanationResponse | null; error: Failure | null }>(() => {
@@ -161,60 +176,79 @@ export function AiExplanationPanel({
   }
 
   return (
-    <section id={id} aria-label={`AI explanation of issue #${issueNumber}`} className="rounded-[8px] border border-border-subtle bg-surface-raised p-4">
+    <section
+      id={id}
+      aria-label={`AI explanation of issue #${issueNumber}`}
+      data-card-static
+      className={embedded ? "p-4 sm:p-5" : "rounded-[8px] border border-border-subtle bg-surface-raised p-4"}
+    >
       <AiCardHeader title="Issue explained" level="h4" done={status === "done"} />
       {body}
     </section>
   );
 }
 
-function BulletSection({ title, items }: { title: string; items: string[] }) {
+function ListBox({ title, items, ordered = false }: { title: string; items: string[]; ordered?: boolean }) {
   if (items.length === 0) return null;
+  const List = ordered ? "ol" : "ul";
   return (
-    <>
-      <dt className="text-text-faint">{title}</dt>
-      <dd className="m-0 text-text-secondary">
-        <ul className="m-0 list-disc pl-4">
-          {items.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </dd>
-    </>
+    <div className="rounded-[8px] border border-border-subtle bg-surface px-3.5 py-3">
+      <h5 className="m-0 mb-2 text-[11px] font-normal uppercase tracking-wide text-text-faint">{title}</h5>
+      <List className={`m-0 pl-4 text-[12.5px] leading-relaxed text-text-secondary ${ordered ? "list-decimal" : "list-disc"}`}>
+        {items.map((item) => (
+          <li key={item} className="mb-0.5 last:mb-0">
+            {item}
+          </li>
+        ))}
+      </List>
+    </div>
   );
 }
 
 function ExplanationBody({ explanation, generatedAt }: { explanation: AiIssueExplanationData; generatedAt: string }) {
+  const hasLists = explanation.whatNeedsToBeDone.length > 0 || explanation.firstSteps.length > 0;
   return (
     <div>
-      <p className="m-0 text-[13px] leading-relaxed text-text">{explanation.plainSummary}</p>
+      <p className="m-0 max-w-[68ch] text-[13.5px] leading-relaxed text-text">{explanation.plainSummary}</p>
 
-      <dl className="m-0 mt-3 grid grid-cols-1 gap-x-4 gap-y-2 border-t border-border-subtle pt-3 text-[12px] sm:grid-cols-[120px_1fr]">
-        <BulletSection title="What needs doing" items={explanation.whatNeedsToBeDone} />
+      {hasLists ? (
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <ListBox title="What needs doing" items={explanation.whatNeedsToBeDone} />
+          <ListBox title="First steps" items={explanation.firstSteps} ordered />
+        </div>
+      ) : null}
 
-        {explanation.skillsNeeded.length > 0 ? (
-          <>
-            <dt className="text-text-faint">Skills</dt>
-            <dd className="m-0 flex flex-wrap gap-1.5">
+      {explanation.skillsNeeded.length > 0 || explanation.difficulty ? (
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          {explanation.skillsNeeded.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 text-[11px] uppercase tracking-wide text-text-faint">Skills</span>
               {explanation.skillsNeeded.map((skill) => (
-                <span key={skill} className="inline-block rounded-[5px] border border-border-subtle px-[7px] py-[2px] text-[10.5px] text-text-secondary">
+                <span key={skill} className="inline-block rounded-[6px] border border-border-subtle bg-surface px-2 py-[2px] text-[11px] text-text-secondary">
                   {skill}
                 </span>
               ))}
-            </dd>
-          </>
-        ) : null}
+            </div>
+          ) : null}
+          {explanation.difficulty ? (
+            <p className="m-0 text-[12px] text-text-secondary">
+              <span className="mr-1.5 text-[11px] uppercase tracking-wide text-text-faint">Difficulty</span>
+              {DIFFICULTY_LABEL[explanation.difficulty]}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
-        {explanation.difficulty ? (
-          <>
-            <dt className="text-text-faint">Difficulty</dt>
-            <dd className="m-0 text-text-secondary">{DIFFICULTY_LABEL[explanation.difficulty]}</dd>
-          </>
-        ) : null}
-
-        <BulletSection title="First steps" items={explanation.firstSteps} />
-        <BulletSection title="Watch out for" items={explanation.caveats} />
-      </dl>
+      {explanation.caveats.length > 0 ? (
+        <div className="mt-3 rounded-[8px] border border-border bg-surface-raised px-3.5 py-3">
+          <h5 className="m-0 mb-2 text-[11px] font-normal uppercase tracking-wide text-text-muted">Watch out for</h5>
+          <ul className="m-0 list-disc pl-4 text-[12.5px] leading-relaxed text-text-secondary">
+            {explanation.caveats.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <p className="m-0 mt-3 text-[11px] leading-relaxed text-text-faint">
         Written by AI from the issue text, so it can be wrong — read the issue itself before you start. Anything marked

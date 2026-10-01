@@ -46,7 +46,7 @@ export interface BonusGoalDefinition {
  * knows to revisit them rather than assume they were chosen with data.
  */
 export const BONUS_GOALS: readonly BonusGoalDefinition[] = [
-  { id: "tasks", label: "Tasks completed", target: 5 },
+  { id: "tasks", label: "Tasks submitted", target: 5 },
   { id: "pullRequests", label: "Pull requests merged", target: 2 },
 ];
 
@@ -73,13 +73,13 @@ function toDateKey(d: Date): string {
  * "Contributions" stat card, which deliberately keeps GitHub and
  * DevTunnel separate).
  *
- * `tasksCompleted` / `pullRequestsMerged` are the counts of those event
+ * `tasksSubmitted` (pull requests submitted) / `pullRequestsMerged` are the counts of those event
  * types within the same window, from `devtunnel.activity_log` — see
  * getDevTunnelActivityWindow.
  */
 export function buildMilestoneWindow(
   activeDayCounts: Map<string, number>,
-  tasksCompleted: number,
+  tasksSubmitted: number,
   pullRequestsMerged: number,
   now: Date = new Date(),
 ): MilestoneWindow {
@@ -116,7 +116,7 @@ export function buildMilestoneWindow(
     : null;
 
   const rawGoals: Record<BonusGoalDefinition["id"], number> = {
-    tasks: tasksCompleted,
+    tasks: tasksSubmitted,
     pullRequests: pullRequestsMerged,
   };
 

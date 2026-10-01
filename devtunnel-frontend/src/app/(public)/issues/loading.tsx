@@ -1,5 +1,5 @@
 import { BlueprintSheet } from "@/components/ui/blueprint-loader";
-import { BlueprintFill, BlueprintPageHeader, BlueprintPublicFilterBar } from "@/components/ui/blueprint-kit";
+import { BlueprintPageHeader, BlueprintPublicFilterBar, BlueprintTaskCardList } from "@/components/ui/blueprint-kit";
 
 /**
  * Next.js route-segment loading boundary for `/issues` ("All Issues").
@@ -55,7 +55,7 @@ export function IssuesLoadingSheet({ scanning = true }: { scanning?: boolean }) 
           </p>
         </div>
       ) : (
-        <BlueprintFill className="h-[220px] w-full" />
+        <BlueprintTaskCardList rows={4} />
       )}
     </BlueprintSheet>
   );
