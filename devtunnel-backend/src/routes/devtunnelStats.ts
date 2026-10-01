@@ -1,6 +1,6 @@
-import { Hono, type Context } from "hono";
+import { Hono } from "hono";
 import { z } from "zod";
-import type { Env, Variables, AuthUser, ContributionCalendar } from "../types";
+import type { Env, Variables } from "../types";
 import { getEnv } from "../config/env";
 import { getSupabase } from "../lib/supabase";
 import { requireAuth } from "../middleware/auth";
@@ -13,10 +13,7 @@ import {
   getDevTunnelContributionSummary,
   getDevTunnelActivityWindow,
 } from "../db/devtunnelStats";
-import { getValidGithubAccessToken, clearGithubTokens } from "../db/githubTokens";
-import { fetchContributionCalendar, GitHubGraphQLError } from "../lib/githubGraphql";
 import { buildMilestoneWindow, windowBounds } from "../lib/milestones";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const devtunnelStats = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -224,18 +221,12 @@ devtunnelStats.get("/users/me/contributions/devtunnel/summary", requireAuth, asy
  * targets, and its header for why those are constants rather than a
  * table.
  *
- * "Active day" combines two sources — this user's DevTunnel activity
- * (`devtunnel.activity_log`, via getDevTunnelActivityWindow) and, when a
- * GitHub account is linked, their GitHub contribution calendar for the
- * same window (`fetchContributionCalendar`) — into one merged set of
- * dates, unlike the "Contributions" stat card, which deliberately shows
- * the two sources side by side rather than combined (see
- * components/profile/profile-stats.tsx). A user with no GitHub account
- * linked still gets a real milestone window back, built from DevTunnel
- * activity alone — this is not the same "account not linked" error the
- * GitHub-only endpoints above return, since every signed-in user can
- * reach at least the "Warm-up" checkpoint through DevTunnel activity by
- * itself.
+ * "Active day" counts DevTunnel activity ONLY (`devtunnel.activity_log`,
+ * via getDevTunnelActivityWindow): a submitted PR
+ * (PULL_REQUEST_SUBMITTED), a merged PR, a completed task or a created
+ * project. GitHub contributions are deliberately NOT mixed in — this card
+ * measures what the contributor did through DevTunnel, and the profile's
+ * "Contributions" stat card already shows the GitHub total separately.
  *
  * Nothing here is stored: every call recomputes the window from the
  * `[today - 29 days, today]` bounds, so yesterday's "Day 1" naturally
@@ -267,24 +258,10 @@ devtunnelStats.get("/users/me/contributions/milestones", requireAuth, async (c) 
     const fromISO = from.toISOString();
     const toISO = to.toISOString();
 
-    const [devtunnelWindow, githubCalendar] = await Promise.all([
-      getDevTunnelActivityWindow(supabase, user.id, fromISO, toISO),
-      fetchGithubWindowCalendar(c, supabase, user, fromISO, toISO),
-    ]);
-
-    const mergedDailyCounts = new Map(devtunnelWindow.dailyCounts);
-    if (githubCalendar) {
-      for (const week of githubCalendar.weeks) {
-        for (const day of week.days) {
-          if (day.count > 0) {
-            mergedDailyCounts.set(day.date, (mergedDailyCounts.get(day.date) ?? 0) + day.count);
-          }
-        }
-      }
-    }
+    const devtunnelWindow = await getDevTunnelActivityWindow(supabase, user.id, fromISO, toISO);
 
     const milestoneWindow = buildMilestoneWindow(
-      mergedDailyCounts,
+      devtunnelWindow.dailyCounts,
       devtunnelWindow.tasksCompleted,
       devtunnelWindow.pullRequestsMerged,
     );
@@ -298,43 +275,3 @@ devtunnelStats.get("/users/me/contributions/milestones", requireAuth, async (c) 
     return errorResponse(c, 500, "internal_error", "Couldn't load milestone progress right now");
   }
 });
-
-/**
- * Best-effort GitHub side of the merged "active day" set above. Returns
- * `null` (never throws) when there's no linked account, no valid token,
- * or GitHub itself fails — the milestone window still renders correctly
- * from DevTunnel activity alone in every one of those cases, since
- * GitHub is additive here rather than required (contrast with
- * `/users/me/contributions`, which genuinely has nothing to show without
- * it). A dead token is still cleared here, same as the other two GitHub-
- * backed routes above, so the user isn't silently retried against it
- * forever.
- */
-async function fetchGithubWindowCalendar(
-  c: Context<{ Bindings: Env; Variables: Variables }>,
-  supabase: SupabaseClient,
-  user: AuthUser,
-  fromISO: string,
-  toISO: string,
-): Promise<ContributionCalendar | null> {
-  if (!user.githubUsername) return null;
-
-  const env = getEnv(c.env);
-  const accessToken = await getValidGithubAccessToken(supabase, env, user.id);
-  if (!accessToken) return null;
-
-  try {
-    return await fetchContributionCalendar(accessToken, user.githubUsername, fromISO, toISO);
-  } catch (err) {
-    if (err instanceof GitHubGraphQLError && err.reason === "invalid_token") {
-      await clearGithubTokens(supabase, user.id).catch((clearErr) =>
-        logger.error("github_token_clear_failed", { userId: user.id, error: String(clearErr) }),
-      );
-    }
-    logger.error("devtunnel_milestones_github_fetch_failed", {
-      error: err instanceof Error ? err.message : String(err),
-      requestId: c.get("requestId"),
-    });
-    return null;
-  }
-}
