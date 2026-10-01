@@ -11,8 +11,9 @@ import {
  * Source Tools on Devtunnel"). Wrapped in the same page shell the real
  * page renders (`mx-auto max-w-6xl px-6 py-10`, `BlueprintPageHeader`,
  * and the stacked `BlueprintPublicFilterBar` — matching
- * `DevtunnelOpenSourceToolsExplorer`'s real filter bar: search, then
- * Language/Label/Sort by, no "Match my profile" row) so nothing shifts
+ * `DevtunnelOpenSourceToolsExplorer`'s real filter bar: search, then the
+ * "Ask AI" panel, then Language/Label/Sort by, no "Match my profile"
+ * row) so nothing shifts
  * position once `getOpenSourceTools()` resolves — only the grid and
  * pagination footer below the filters swap from placeholders to real
  * content.
@@ -25,7 +26,7 @@ export default function OpenSourceToolsLoading() {
       contentClassName="w-full mx-auto max-w-6xl px-6 py-10"
     >
       <BlueprintPageHeader withAction={false} />
-      <BlueprintPublicFilterBar filters={3} />
+      <BlueprintPublicFilterBar filters={3} withAiSearch />
       <BlueprintDevtunnelOpenSourceToolCardGrid />
       <BlueprintPagination />
     </BlueprintSheet>
