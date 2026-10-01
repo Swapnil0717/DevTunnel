@@ -1005,7 +1005,7 @@ async function assertStarOk(res: Response, context: string): Promise<void> {
   });
   throw new GitHubRepoError(
     "unauthorized",
-    "GitHub didn't allow this action — reconnect GitHub and approve the Starring permission",
+    "GitHub didn't allow this action — sign out and sign back in to grant DevTunnel repository access, then try again",
   );
 }
 
@@ -1035,12 +1035,15 @@ async function assertStarOk(res: Response, context: string): Promise<void> {
  * still a `204`) — so callers don't need to pre-check GitHub's own
  * star status before calling either of these.
  *
- * Requires this backend's GitHub App to have the "Starring" user
- * permission granted (GitHub App → Permissions & events → Account
- * permissions → Starring: Read and write) — without it, GitHub
- * responds `403`, which `assertStarOk` below surfaces as a
- * `GitHubRepoError` with reason `"unauthorized"` (a genuine rate-limit
- * `403` stays `rate_limited`).
+ * Works on ANY public repository, with no DevTunnel installation on it:
+ * the user's token comes from the DevTunnel OAuth App (see the scope
+ * comment on `GITHUB_OAUTH_SCOPES` in src/lib/github.ts), and its
+ * `public_repo` scope covers starring public repos. A `403` here means
+ * the stored token predates that scope (the user signed in through the
+ * old GitHub App) — `assertStarOk` below surfaces it as a
+ * `GitHubRepoError` with reason `"unauthorized"`, which the star routes
+ * turn into `github_reauth_required` so the user signs in again (a
+ * genuine rate-limit `403` stays `rate_limited`).
  */
 export async function starRepositoryForUser(
   accessToken: string,

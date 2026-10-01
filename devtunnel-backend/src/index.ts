@@ -34,6 +34,7 @@ import {
 import { purgeExpiredCacheRows } from "./lib/cache";
 import { getEnv } from "./config/env";
 import { logger } from "./lib/logger";
+import { syncSubmittedPullRequests } from "./lib/prSync";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -118,6 +119,17 @@ async function handleScheduled(event: ScheduledEvent, env: Env, ctx: ExecutionCo
       ctx.waitUntil(
         warmContributorIssuesScan(validatedEnv, env).catch((err) => {
           logger.error("issues_warm_scheduled_run_failed", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }),
+      );
+      // Same 15-minute schedule also checks GitHub for the state of every
+      // submitted PR (lib/prSync.ts): merged -> task/project DONE, closed
+      // without merging -> back to IN_PROGRESS. Separate waitUntil so a
+      // failure in one job never affects the other.
+      ctx.waitUntil(
+        syncSubmittedPullRequests(validatedEnv).catch((err) => {
+          logger.error("pr_sync_scheduled_run_failed", {
             error: err instanceof Error ? err.message : String(err),
           });
         }),
