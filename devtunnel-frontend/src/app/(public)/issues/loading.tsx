@@ -1,35 +1,30 @@
 import { BlueprintSheet } from "@/components/ui/blueprint-loader";
-import { BlueprintPageHeader, BlueprintPublicFilterBar, BlueprintTaskCardList } from "@/components/ui/blueprint-kit";
+import {
+  BlueprintListPageHeader,
+  BlueprintIssueInsightsCard,
+  BlueprintPublicFilterBar,
+  BlueprintLoadIssueListBar,
+  BlueprintTaskCardList,
+  BlueprintListPagination,
+} from "@/components/ui/blueprint-kit";
 
 /**
  * Next.js route-segment loading boundary for `/issues` ("All Issues").
  *
- * Wrapped in the exact same page shell the real page renders
- * (`mx-auto max-w-6xl px-6 py-10`, `BlueprintPageHeader`, and the
- * stacked `BlueprintPublicFilterBar` matching `IssuesExplorer`'s real
- * filter bar — search, a "Match my profile" row, then 5 filters: State,
- * Repository, Author, Tech stack, Project, with the same `mb-3` wrapper
- * spacing the real component uses — not the admin side-by-side
- * `BlueprintFilterBar`) so nothing shifts position once `getIssues()`
- * resolves — only the area below the filters swaps from the spinner to
- * the real table.
+ * The sheet is the same shell the real page renders — the real title and
+ * subtitle, `IssuesExplorer`'s "Issue insights" card, its filter stack
+ * (search, "Match my profile", State / Repository / Author / Tech stack /
+ * Project, `mb-3`) and the "Load all issues" bar — so nothing shifts when
+ * `getIssues()` resolves. Only the area under that bar differs:
  *
- * That area deliberately stays a spinner, not a fourth skeleton table:
- * `getIssues()` walks `GET /issues`, the contributor-facing counterpart
- * to `GET /admin/new-issues` — a route this app treats as re-scanning
- * every onboarded project's GitHub repository live, on every request,
- * with no DevTunnel-side cache. A skeleton table there would imply
- * "almost done, just a cosmetic delay"; a spinner with a real
- * description is the honest signal for a wait that can genuinely take
- * a few seconds on a larger install. Without this file, that wait
- * would render as nothing at all — no spinner, no visible change —
- * which is indistinguishable from a broken click.
- */
-/**
- * The sheet itself, shared with `issues/page.tsx`: `BlueprintReveal`
- * paints this same sheet over the loaded page (see blueprint-reveal.tsx)
- * — with `scanning={false}`, since by then the scan is finished and a
- * "Scanning…" notice would be wrong.
+ *  - while scanning (`scanning`), a status notice, not a skeleton list:
+ *    `getIssues()` re-scans every onboarded repository on GitHub live, so
+ *    a list-shaped placeholder would promise "almost done" for a wait
+ *    that can genuinely take seconds. A description is the honest signal;
+ *  - once the scan is done (`scanning={false}`, the `BlueprintReveal`
+ *    overlay painted over the loaded page), the real card list shape —
+ *    `IssuesTable` cards plus the pagination footer — so the overlay
+ *    lines up with the page it's revealing.
  */
 export function IssuesLoadingSheet({ scanning = true }: { scanning?: boolean }) {
   return (
@@ -39,8 +34,16 @@ export function IssuesLoadingSheet({ scanning = true }: { scanning?: boolean }) 
       contentClassName="mx-auto w-full max-w-6xl px-6 py-10"
       ariaHidden={!scanning}
     >
-      <BlueprintPageHeader withAction={false} />
-      <BlueprintPublicFilterBar filters={5} withMatchProfile bottomMarginClassName="mb-3" />
+      <BlueprintListPageHeader
+        title="All Issues"
+        description="Every open GitHub issue across DevTunnel's onboarded projects — search or filter to find something to work on."
+      />
+      <BlueprintIssueInsightsCard />
+      <BlueprintPublicFilterBar
+        labels={["State", "Repository", "Author", "Tech stack", "Project"]}
+        withMatchProfile
+        bottomMarginClassName="mb-3"
+      />
       {scanning ? (
         <div
           role="status"
@@ -55,7 +58,11 @@ export function IssuesLoadingSheet({ scanning = true }: { scanning?: boolean }) 
           </p>
         </div>
       ) : (
-        <BlueprintTaskCardList rows={4} />
+        <>
+          <BlueprintLoadIssueListBar />
+          <BlueprintTaskCardList rows={6} variant="issue" />
+          <BlueprintListPagination itemLabel="issue" />
+        </>
       )}
     </BlueprintSheet>
   );
