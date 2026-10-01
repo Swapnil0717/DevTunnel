@@ -1,0 +1,14 @@
+-- DevTunnel — count a submitted pull request as a DevTunnel contribution
+-- (part 1 of 2).
+--
+-- A PR can sit in review for days. Until now DevTunnel only logged a
+-- contribution when the PR was merged (PULL_REQUEST_MERGED) or the task was
+-- marked DONE (TASK_COMPLETED), so a contributor who had done all the work
+-- showed nothing on their DevTunnel calendar or contribution total. This adds
+-- a new activity type, PULL_REQUEST_SUBMITTED, logged the moment `dev submit`
+-- opens the PR (see 045).
+--
+-- Run this file FIRST, on its own, then run 045_log_pull_request_submitted.sql.
+-- Postgres cannot use a newly added enum value in the same transaction that
+-- added it, so the two parts must be separate runs.
+alter type devtunnel.activity_type add value if not exists 'PULL_REQUEST_SUBMITTED';

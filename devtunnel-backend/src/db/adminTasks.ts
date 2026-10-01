@@ -94,7 +94,12 @@ export function contributorCounts(row: AdminTaskListRow): {
 } {
   const hasAssignee = row.assignee_id !== null;
   return {
-    activeContributorCount: hasAssignee && row.status === "IN_PROGRESS" ? 1 : 0,
+    // "Working" covers the whole time a claimed task is being worked on:
+    // IN_PROGRESS (coding) and IN_REVIEW (PR submitted, waiting on the
+    // maintainers). Counting only IN_PROGRESS made a task show "0 working"
+    // the moment its PR was opened, even though the contributor still owns it.
+    activeContributorCount:
+      hasAssignee && (row.status === "IN_PROGRESS" || row.status === "IN_REVIEW") ? 1 : 0,
     completedContributorCount: hasAssignee && row.status === "DONE" ? 1 : 0,
   };
 }
