@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { SignInLink } from "@/components/auth/sign-in-link";
-import { GithubLoginButton } from "@/components/auth/github-login-button";
+import { GithubReconnectPrompt } from "@/components/auth/github-reconnect-prompt";
 import { StarIcon } from "@/components/layout/nav-icons";
 import { useAuth } from "@/lib/auth/use-auth";
 import { formatCompactNumber } from "@/lib/github-projects/format-compact-number";
@@ -37,7 +37,7 @@ interface StarButtonProps {
  * un-reversible nomination action does.
  *
  * A contributor with no live GitHub connection gets a "Reconnect
- * GitHub" prompt inline (`GithubLoginButton`) instead of a generic error
+ * GitHub" prompt inline (`GithubReconnectPrompt`) instead of a generic error
  * — same `github_reauth_required` handling
  * `ContributionCalendar` (`components/profile/contribution-calendar.tsx`)
  * already establishes for this exact backend error code — since a plain
@@ -109,16 +109,7 @@ export function StarButton({
   }
 
   if (needsReauth) {
-    return (
-      <div className="flex flex-col items-start gap-1.5">
-        <p className="m-0 text-[12px] text-text-muted">
-          Reconnect your GitHub account to star this project.
-        </p>
-        <div className="max-w-[220px]">
-          <GithubLoginButton next={`/github-projects/${slug}`} />
-        </div>
-      </div>
-    );
+    return <GithubReconnectPrompt next={`/github-projects/${slug}`} action="star this project" />;
   }
 
   return (

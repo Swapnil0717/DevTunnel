@@ -45,7 +45,10 @@ type CallbackPhase = "verifying" | "success" | "error";
  * (next stays /home) but whose account has since been promoted to
  * role "ADMIN" must still land on the Admin Portal, never contributor
  * /home - so isAdmin(freshUser) is checked first, ahead of onboarding,
- * in the destination calculation below.
+ * in the destination calculation below. The exception is a sign-in that
+ * was started from a specific page (next is something other than the
+ * default /home): that deep link wins, so reconnecting GitHub from a
+ * project page brings an admin back to that page.
  *
  * Renders one of three real, mutually exclusive states - never a static
  * showcase of all of them at once (rule 23): verifying while GET /auth/me
@@ -102,9 +105,18 @@ export function OAuthCallbackView() {
         return;
       }
 
+      // An admin who signs in with no particular destination (the plain
+      // /login page, `next` defaulting to /home) still lands in the Admin
+      // Portal. But when the sign-in was started from a specific page — a
+      // "Reconnect GitHub" prompt on /projects/appwrite, say — `next` is a
+      // deliberate deep link and must be honoured, otherwise an admin is
+      // thrown into /admin every time and can never get back to the page
+      // they were on.
+      const hasDeepLink = next !== DEFAULT_DESTINATION && !isAdminNext;
+
       const destination = !freshUser
         ? next
-        : isAdmin(freshUser)
+        : isAdmin(freshUser) && !hasDeepLink
           ? "/admin"
           : needsOnboarding(freshUser)
             ? "/onboarding"

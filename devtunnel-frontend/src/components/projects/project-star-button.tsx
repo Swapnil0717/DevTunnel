@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { SignInLink } from "@/components/auth/sign-in-link";
-import { GithubLoginButton } from "@/components/auth/github-login-button";
+import { GithubReconnectPrompt } from "@/components/auth/github-reconnect-prompt";
 import { StarIcon } from "@/components/layout/nav-icons";
 import { useAuth } from "@/lib/auth/use-auth";
 import { formatCompactNumber } from "@/lib/github-projects/format-compact-number";
@@ -110,16 +110,7 @@ export function ProjectStarButton({
   }
 
   if (needsReauth) {
-    return (
-      <div className="flex flex-col items-start gap-1.5">
-        <p className="m-0 text-[12px] text-text-muted">
-          Reconnect your GitHub account to star this project.
-        </p>
-        <div className="max-w-[220px]">
-          <GithubLoginButton next={`/projects/${slug}`} />
-        </div>
-      </div>
-    );
+    return <GithubReconnectPrompt next={`/projects/${slug}`} action="star this project" />;
   }
 
   return (
