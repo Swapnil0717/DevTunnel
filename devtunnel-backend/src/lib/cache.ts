@@ -289,8 +289,15 @@ function newer<T>(a: Envelope<T> | null, b: Envelope<T> | null): Envelope<T> | n
 }
 
 /** Read-only recovery of the pre-migration KV entry (see header). */
+// Keys already looked up in the old KV this isolate: a miss there is
+// permanent (nothing writes to that KV any more), so asking again on every
+// cold request (or every poll) would only burn the 100k reads/day budget.
+const legacyKvChecked = new Set<string>();
+
 async function legacyKvRead<T>(env: Env, key: string): Promise<Envelope<T> | null> {
   if (env.KV_READ_FALLBACK === "false" || !env.RATE_LIMIT_KV) return null;
+  if (legacyKvChecked.has(key)) return null;
+  legacyKvChecked.add(key);
   try {
     const raw = await env.RATE_LIMIT_KV.get(LEGACY_KV_SWR_PREFIX + key);
     if (!raw) return null;

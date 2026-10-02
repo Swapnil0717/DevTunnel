@@ -13,6 +13,14 @@ import { API_BASE_URL } from "@/lib/config";
 const CATALOG_REVALIDATE_SECONDS = 1800;
 
 /**
+ * Longest the server render waits for the backend. Past this the page
+ * stops blocking and the browser loads the catalog itself
+ * (`CatalogAutoLoad`), so a slow backend never leaves the visitor staring
+ * at a blank page.
+ */
+const CATALOG_FETCH_TIMEOUT_MS = 6000;
+
+/**
  * How many rows the server-rendered first paint of a GitHub catalog page
  * (`/github-projects`, `/github-open-source-tools`) asks for. The backend
  * serves catalogs ranked by stars, so this is "the most-starred N" —
@@ -55,6 +63,7 @@ export async function fetchCatalogPreview<T>(
 
     const res = await fetch(`${API_BASE_URL}${path}?${query.toString()}`, {
       next: { revalidate: CATALOG_REVALIDATE_SECONDS },
+      signal: AbortSignal.timeout(CATALOG_FETCH_TIMEOUT_MS),
     });
 
     if (!res.ok) return { status: "error" };

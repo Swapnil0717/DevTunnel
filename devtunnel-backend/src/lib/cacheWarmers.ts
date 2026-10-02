@@ -78,17 +78,22 @@ export async function warmGithubCatalogs(env: ValidatedEnv, workerEnv: Env): Pro
 const STAR_BUCKET_TICK_MS = 60 * 60 * 1000;
 
 export async function warmGithubStarBuckets(env: ValidatedEnv, workerEnv: Env): Promise<void> {
-  try {
-    await warmRotatingCatalogFilter(
-      env,
-      workerEnv,
-      GITHUB_PROJECTS_CATALOG,
-      Math.floor(Date.now() / STAR_BUCKET_TICK_MS),
-    );
-  } catch (err) {
-    logger.error("catalog_star_bucket_warm_failed", {
-      error: err instanceof Error ? err.message : String(err),
-    });
+  // Each catalog's rotating filters get one slot per hourly tick:
+  // `/github-projects` -> one star bucket, `/github-open-source-tools` ->
+  // "alternative-to-paid". Sequential (shared GitHub Search budget); ~15 +
+  // ~22 subrequests, inside the Free plan's 50 per invocation.
+  const catalogs = [GITHUB_PROJECTS_CATALOG, GITHUB_OPEN_SOURCE_TOOLS_CATALOG];
+  const tickIndex = Math.floor(Date.now() / STAR_BUCKET_TICK_MS);
+
+  for (const catalog of catalogs) {
+    try {
+      await warmRotatingCatalogFilter(env, workerEnv, catalog, tickIndex);
+    } catch (err) {
+      logger.error("catalog_star_bucket_warm_failed", {
+        catalog: catalog.name,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 }
 

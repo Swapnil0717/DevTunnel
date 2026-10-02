@@ -292,8 +292,15 @@ function rateLimitRetryAfterSeconds(res: Response, body: string): number | null 
 }
 
 /** Like `githubGet`, but paced to the Search API budget and rate-limit aware. */
-async function githubSearchGet<T>(env: ValidatedEnv, path: string): Promise<T | null> {
-  await waitForSearchSlot();
+async function githubSearchGet<T>(
+  env: ValidatedEnv,
+  path: string,
+  paced: boolean = true,
+): Promise<T | null> {
+  // `paced: false` is only for the small, parallel first-visitor scan (a
+  // handful of calls, well inside the 30/min budget) where waiting
+  // 2.1s between calls is what made a cold load take ~15s.
+  if (paced) await waitForSearchSlot();
 
   const res = await fetch(`${GITHUB_API}${path}`, { headers: headers(env) });
   if (res.status === 404) return null;
@@ -331,6 +338,13 @@ export interface CatalogSearchOptions {
    * out a rate-limit window.
    */
   maxRateLimitWaitSeconds?: number;
+  /**
+   * Skip the ~2.1s inter-call pacing. Only for a cold-cache request's own
+   * small parallel scan (one page per query, a handful of queries) —
+   * never for a full background walk, which needs the pacing to stay under
+   * GitHub's 30 Search requests/minute.
+   */
+  unpaced?: boolean;
 }
 
 export interface CatalogSearchResult {
@@ -344,12 +358,14 @@ async function fetchCatalogPage(
   query: string,
   page: number,
   maxRateLimitWaitSeconds: number,
+  paced: boolean = true,
 ): Promise<{ items: GithubCatalogRepoItem[] } | "rate_limited"> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const data = await githubSearchGet<{ items: GithubCatalogRepoItem[] }>(
         env,
         `/search/repositories?q=${encodeURIComponent(query)}&sort=stars&order=desc&per_page=${CATALOG_PER_PAGE}&page=${page}`,
+        paced,
       );
       return { items: data?.items ?? [] };
     } catch (err) {
@@ -396,7 +412,13 @@ export async function searchOpenSourceCatalog(
   let rateLimited = false;
 
   for (let page = 1; page <= maxPages; page++) {
-    const outcome = await fetchCatalogPage(env, query, page, maxRateLimitWaitSeconds);
+    const outcome = await fetchCatalogPage(
+      env,
+      query,
+      page,
+      maxRateLimitWaitSeconds,
+      !options.unpaced,
+    );
     if (outcome === "rate_limited") {
       rateLimited = true;
       break;

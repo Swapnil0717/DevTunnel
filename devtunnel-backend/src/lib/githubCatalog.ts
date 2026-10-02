@@ -78,14 +78,15 @@ import { mapGithubTopicsToTechStack } from "./techTopics";
 const CATALOG_CACHE_SOFT_TTL_SECONDS = 30 * 60;
 
 /**
- * How long a catalog entry survives in KV as a usable *stale* fallback if
- * nothing has refreshed it — three soft-TTL windows, so a warmer outage of
- * up to a couple of hours still degrades to "serves an older catalog
- * instantly" rather than "a contributor's request pays for a live GitHub
- * Search walk". Exported so `lib/cacheWarmers.ts` writes with the exact
- * same hard TTL this route reads with.
+ * How long a catalog entry survives as a usable *stale* fallback if nothing
+ * has refreshed it. Deliberately long (a week): serving a slightly old
+ * catalog instantly is always better than a visitor hitting a cold slot,
+ * so a warmer outage (rate limit, subrequest cap, bad deploy) degrades to
+ * "older data" instead of "nothing to show". Exported so
+ * `lib/cacheWarmers.ts` writes with the exact same hard TTL this route
+ * reads with.
  */
-export const CATALOG_CACHE_HARD_TTL_SECONDS = CATALOG_CACHE_SOFT_TTL_SECONDS * 3;
+export const CATALOG_CACHE_HARD_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 /**
  * GitHub's Search API returns at most 1,000 results per query = 10 pages
@@ -116,6 +117,7 @@ const WARM_MAX_RATE_LIMIT_WAIT_SECONDS = 65;
  * exceeds the slowest scan (~45s paced + at most one 65s rate-limit wait).
  */
 const SCAN_LOCK_NAME = "github-catalog-scan";
+
 const SCAN_LOCK_TTL_SECONDS = 180;
 
 /**
@@ -345,6 +347,12 @@ export interface ScanCatalogOptions {
   maxPagesPerQuery?: number;
   /** See `CatalogSearchOptions.maxRateLimitWaitSeconds` — default 0 (never wait). */
   maxRateLimitWaitSeconds?: number;
+  /**
+   * Run every query at the same time, without GitHub-call pacing. Only for
+   * a cold-cache request's small one-page-per-query scan, where serial
+   * pacing (~2.1s x queries) is the difference between ~1s and ~15s.
+   */
+  parallel?: boolean;
 }
 
 export interface ScanCatalogResult {
@@ -389,33 +397,62 @@ export async function scanCatalog(
   let failedQueries = 0;
   let rateLimited = false;
 
-  for (const query of queries) {
-    try {
-      const result = await searchOpenSourceCatalog(env, query, {
-        maxPages: options.maxPagesPerQuery,
-        maxRateLimitWaitSeconds: options.maxRateLimitWaitSeconds,
-      });
+  const absorb = (result: Awaited<ReturnType<typeof searchOpenSourceCatalog>>) => {
+    for (const item of result.items) {
+      const summary = toSummary(item);
+      const existing = byFullName.get(summary.repositoryFullName);
+      if (!existing || summary.stars > existing.stars) {
+        byFullName.set(summary.repositoryFullName, summary);
+      }
+    }
+  };
 
-      for (const item of result.items) {
-        const summary = toSummary(item);
-        const existing = byFullName.get(summary.repositoryFullName);
-        if (!existing || summary.stars > existing.stars) {
-          byFullName.set(summary.repositoryFullName, summary);
+  if (options.parallel) {
+    const settled = await Promise.allSettled(
+      queries.map((query) =>
+        searchOpenSourceCatalog(env, query, {
+          maxPages: options.maxPagesPerQuery,
+          maxRateLimitWaitSeconds: options.maxRateLimitWaitSeconds,
+          unpaced: true,
+        }),
+      ),
+    );
+    settled.forEach((outcome, index) => {
+      if (outcome.status === "fulfilled") {
+        absorb(outcome.value);
+        if (outcome.value.rateLimited) rateLimited = true;
+      } else {
+        failedQueries += 1;
+        lastError = outcome.reason;
+        logger.error("catalog_scan_query_failed", {
+          query: queries[index],
+          error: outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason),
+        });
+      }
+    });
+  } else {
+    for (const query of queries) {
+      try {
+        const result = await searchOpenSourceCatalog(env, query, {
+          maxPages: options.maxPagesPerQuery,
+          maxRateLimitWaitSeconds: options.maxRateLimitWaitSeconds,
+        });
+
+        absorb(result);
+
+        if (result.rateLimited) {
+          // The remaining queries would just hit the same wall.
+          rateLimited = true;
+          break;
         }
+      } catch (err) {
+        failedQueries += 1;
+        lastError = err;
+        logger.error("catalog_scan_query_failed", {
+          query,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
-
-      if (result.rateLimited) {
-        // The remaining queries would just hit the same wall.
-        rateLimited = true;
-        break;
-      }
-    } catch (err) {
-      failedQueries += 1;
-      lastError = err;
-      logger.error("catalog_scan_query_failed", {
-        query,
-        error: err instanceof Error ? err.message : String(err),
-      });
     }
   }
 
@@ -439,37 +476,76 @@ export async function scanCatalog(
 }
 
 /**
- * Cold cache, nothing to serve stale: build a small catalog right now
- * (one page per query) so the very first visitor after a deploy or a long
- * warmer outage sees real data instead of an error. Guarded by the shared
- * scan lock — if another scan is already running, this re-checks the cache
- * once and otherwise reports `"busy"` (the route turns that into a 503
- * with `Retry-After`) rather than adding a second scan to the same GitHub
- * budget.
+ * How long a cold-cache request waits for another scan's result before
+ * running its own — short on purpose: waiting is only worth it if the
+ * result is about to land.
+ */
+const COLD_START_LOCK_WAIT_MS = 2500;
+const COLD_START_LOCK_POLL_MS = 500;
+
+/** Cold-start scans already running in THIS isolate, so concurrent visitors share one. */
+const coldStartInFlight = new Map<string, Promise<CatalogSummary[]>>();
+
+/**
+ * Cold cache, nothing to serve stale: build a first catalog right now so
+ * the visitor sees real data in about a second, never an error.
+ *
+ *  - One page per query, all queries in PARALLEL and unpaced (the 2.1s
+ *    pacing that protects the background scans is what made this ~15s).
+ *    That's 1-7 calls, far inside GitHub's 30 Search requests/minute.
+ *  - Concurrent visitors in the same isolate share one scan.
+ *  - If another isolate already holds the scan lock, wait briefly for its
+ *    result; if it doesn't land, scan anyway rather than failing — the
+ *    duplicated handful of calls is a far smaller cost than an empty page.
+ *  - The result is stored so the next visitor is served from cache; the
+ *    scheduled warmer later replaces it with the full catalog.
  */
 async function buildCatalogOnColdStart(
   env: ValidatedEnv,
   workerEnv: Env,
   resolved: ResolvedCatalogSlot,
-): Promise<CatalogSummary[] | "busy"> {
-  const { cacheSlot: slot, discoveryQueries: queries } = resolved;
-  const locked = await tryAcquireLock(workerEnv, SCAN_LOCK_NAME, SCAN_LOCK_TTL_SECONDS);
+): Promise<CatalogSummary[]> {
+  const { cacheSlot: slot } = resolved;
 
-  if (!locked) {
-    const again = await getCachedSWR<CatalogSummary[]>(workerEnv, slot, resolved.softTtlSeconds);
-    return again.status === "miss" ? "busy" : again.value;
-  }
+  const running = coldStartInFlight.get(slot);
+  if (running) return running;
 
-  try {
-    const scan = await scanCatalog(env, queries, {
-      maxPagesPerQuery: resolved.coldStartPages,
-    });
-    if (scan.items.length > 0) {
-      await setCachedSWR(workerEnv, slot, scan.items, resolved.hardTtlSeconds);
+  const run = (async () => {
+    const locked = await tryAcquireLock(workerEnv, SCAN_LOCK_NAME, SCAN_LOCK_TTL_SECONDS);
+
+    try {
+      if (!locked) {
+        const deadline = Date.now() + COLD_START_LOCK_WAIT_MS;
+        while (Date.now() + COLD_START_LOCK_POLL_MS < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, COLD_START_LOCK_POLL_MS));
+          const again = await getCachedSWR<CatalogSummary[]>(
+            workerEnv,
+            slot,
+            resolved.softTtlSeconds,
+          );
+          if (again.status !== "miss") return again.value;
+        }
+        logger.info("catalog_cold_start_unlocked_scan", { slot });
+      }
+
+      const scan = await scanCatalog(env, resolved.discoveryQueries, {
+        maxPagesPerQuery: resolved.coldStartPages,
+        parallel: true,
+      });
+      if (scan.items.length > 0) {
+        await setCachedSWR(workerEnv, slot, scan.items, resolved.hardTtlSeconds);
+      }
+      return scan.items;
+    } finally {
+      if (locked) await releaseLock(workerEnv, SCAN_LOCK_NAME);
     }
-    return scan.items;
+  })();
+
+  coldStartInFlight.set(slot, run);
+  try {
+    return await run;
   } finally {
-    await releaseLock(workerEnv, SCAN_LOCK_NAME);
+    coldStartInFlight.delete(slot);
   }
 }
 
@@ -576,6 +652,38 @@ export async function handleCatalogRefreshRequest(
 }
 
 /**
+ * First-page response cache (Cloudflare Cache API — free, no KV, no daily
+ * write cap). The server-rendered pages ask for the same first page
+ * (`limit` <= 100, no `before`) on every view; without this each one reads
+ * the cache layers and JSON-parses the whole multi-hundred-row catalog just
+ * to slice 60 rows. A hit here is a single local cache read.
+ *
+ * Only viewer-independent data is stored (the list has no per-user field),
+ * keyed by catalog slot + limit — never by cookies. Larger / paged requests
+ * (the "Load all" walk and the Refresh button's reload, `limit` 500) skip it
+ * so they always see the freshest scan. Entries live 60s, so a Refresh shows
+ * up in the preview within a minute at most. On a `*.workers.dev` URL
+ * `put` silently does nothing (works on the api.devtunnel.tech route).
+ */
+const PREVIEW_CACHE_MAX_LIMIT = 100;
+const PREVIEW_CACHE_TTL_SECONDS = 60;
+
+function previewCacheStorage(): Cache | null {
+  try {
+    const storage = (globalThis as unknown as { caches?: { default?: Cache } }).caches;
+    return storage?.default ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function previewCacheKey(slot: string, limit: number): Request {
+  return new Request(
+    `https://catalog-preview.devtunnel.internal/${encodeURIComponent(slot)}/${limit}`,
+  );
+}
+
+/**
  * Handles one `GET` request for a GitHub-wide catalog route: rate limit,
  * validate `limit`/`before`, read the cached catalog, paginate it in
  * memory, respond. Shared by every route built with this module so a fix
@@ -645,6 +753,29 @@ export async function handleCatalogListRequest(
   }
   const cacheSlot = resolved.cacheSlot;
 
+  const previewCache =
+    parsed.data.before === undefined && parsed.data.limit <= PREVIEW_CACHE_MAX_LIMIT
+      ? previewCacheStorage()
+      : null;
+  const previewKey = previewCache ? previewCacheKey(cacheSlot, parsed.data.limit) : null;
+
+  if (previewCache && previewKey) {
+    try {
+      const hit = await previewCache.match(previewKey);
+      if (hit) {
+        const nextCursor = hit.headers.get("X-Next-Cursor");
+        if (nextCursor) c.header("X-Next-Cursor", nextCursor);
+        c.header("X-Catalog-Cache", "hit");
+        return c.body(await hit.text(), 200, { "Content-Type": "application/json" });
+      }
+    } catch (err) {
+      // A cache failure must never fail the request — fall through to the catalog.
+      logger.warn("catalog_preview_cache_read_failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   try {
     const cached = await getCachedSWR<CatalogSummary[]>(
       c.env,
@@ -665,15 +796,6 @@ export async function handleCatalogListRequest(
       }
     } else {
       const built = await buildCatalogOnColdStart(env, c.env, resolved);
-      if (built === "busy") {
-        c.header("Retry-After", "15");
-        return errorResponse(
-          c,
-          503,
-          "catalog_warming",
-          "This catalog is still being built. Try again shortly.",
-        );
-      }
       // Empty only if GitHub genuinely returned nothing right now —
       // treated as an empty catalog, not an error.
       catalog = built;
@@ -686,6 +808,28 @@ export async function handleCatalogListRequest(
 
     if (hasMore) {
       c.header("X-Next-Cursor", String(startIndex + limit));
+    }
+
+    // Store the first page for the next visitors (best-effort, off the request path).
+    if (previewCache && previewKey && page.length > 0) {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Cache-Control": `public, max-age=${PREVIEW_CACHE_TTL_SECONDS}`,
+      };
+      if (hasMore) headers["X-Next-Cursor"] = String(startIndex + limit);
+      try {
+        c.executionCtx.waitUntil(
+          previewCache.put(previewKey, new Response(JSON.stringify(page), { headers })).catch(
+            (err: unknown) => {
+              logger.warn("catalog_preview_cache_write_failed", {
+                error: err instanceof Error ? err.message : String(err),
+              });
+            },
+          ),
+        );
+      } catch {
+        // No execution context (e.g. a test harness) — skip the write.
+      }
     }
 
     // Already `CatalogSummary` rows — `toSummary` ran at scan time.

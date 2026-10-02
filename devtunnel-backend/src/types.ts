@@ -48,6 +48,8 @@
   USE_RATE_LIMIT_BINDING?: string;
   /** Read-only recovery of old KV cache entries on a total miss. "false" disables it. */
   KV_READ_FALLBACK?: string;
+  /** `"true"` lifts the read-only KV guard (src/lib/kvGuard.ts). Leave unset on the Free plan. */
+  KV_WRITES_ALLOWED?: string;
 
   // --- Non-secret config (wrangler.toml [vars]) ---
   ENVIRONMENT: "production" | "staging" | "development";

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { guardKvWrites } from "./lib/kvGuard";
 import type { Env, Variables } from "./types";
 import { requestId } from "./middleware/requestId";
 import { corsMiddleware } from "./middleware/cors";
@@ -180,6 +181,10 @@ async function handleScheduled(event: ScheduledEvent, env: Env, ctx: ExecutionCo
 }
 
 export default {
-  fetch: app.fetch,
-  scheduled: handleScheduled,
+  // Both entry points get a read-only KV binding (src/lib/kvGuard.ts), so
+  // nothing in a request or a cron run can spend the Free plan's KV writes.
+  fetch: (request: Request, env: Env, ctx: ExecutionContext) =>
+    app.fetch(request, guardKvWrites(env), ctx),
+  scheduled: (event: ScheduledEvent, env: Env, ctx: ExecutionContext) =>
+    handleScheduled(event, guardKvWrites(env), ctx),
 };

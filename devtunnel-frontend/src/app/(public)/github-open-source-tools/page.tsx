@@ -8,6 +8,7 @@ import {
   type CatalogFilterConfig,
 } from "@/components/github-projects/github-projects-explorer";
 import { SectionMessage } from "@/components/home/section-message";
+import { CatalogAutoLoad } from "@/components/github-projects/catalog-auto-load";
 import { SkeletonFilterBar, SkeletonGithubProjectCardGrid } from "@/components/ui/skeleton";
 import RouteLoading from "./loading";
 import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
@@ -110,9 +111,36 @@ export default async function GithubOpenSourceToolsPage({
         </div>
 
         {result.status === "error" ? (
-          <SectionMessage>
-            GitHub open source tools aren&apos;t available yet — check back soon.
-          </SectionMessage>
+          // The server-side fetch failed — most often the backend's 503
+          // "catalog is still being built" on a cold cache. Instead of a
+          // dead-end "check back soon", load it from the browser with
+          // automatic retry (and a Try again button if it keeps failing).
+          // `key` restarts the load when the "Show" filter changes.
+          <CatalogAutoLoad
+            key={activeFilter}
+            catalogLoad={{
+              path: "/github-open-source-tools",
+              noun: "tools",
+              filter: activeFilter === NO_CATALOG_FILTER ? undefined : activeFilter,
+              hasMore: false,
+            }}
+            explorerProps={{
+              catalogFilter,
+              hideStarFilters: true,
+              cardBasePath: "/github-open-source-tools",
+              aiSearch: { path: "/github-open-source-tools" },
+            }}
+            emptyMessage={
+              activeFilter === NO_CATALOG_FILTER
+                ? "No open source tools found — check back soon."
+                : "No open-source alternatives to paid software found — check back soon."
+            }
+            fallbackLink={
+              activeFilter === NO_CATALOG_FILTER
+                ? undefined
+                : { href: "/github-open-source-tools", label: "Browse all tools instead" }
+            }
+          />
         ) : result.status === "empty" ? (
           <SectionMessage>
             {activeFilter === NO_CATALOG_FILTER

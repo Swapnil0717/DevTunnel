@@ -150,6 +150,20 @@ export const CATALOG_CONFIG: CatalogRouteConfig = {
         'is:public archived:false fork:false stars:>=10 "alternative to" in:name,description,topics',
       ],
       cacheKey: "github-open-source-tools:catalog:alternative-to-paid:v2",
+      // Warmed on its own hourly cron (`warmGithubStarBuckets` ->
+      // `warmRotatingCatalogFilter`), NOT on the `*/25` tick. Putting it
+      // there made one invocation run ~49 GitHub Search calls (projects
+      // 10 + tools base 21 + this filter 18) plus the lock/cache calls,
+      // which blows the Free plan's 50-subrequest cap — and because this
+      // slot was scanned last, it was the one that never got stored. A
+      // cold slot meant every visitor hit the cold-start path and got a
+      // 503 whenever another scan held the lock. Alone in its own
+      // invocation it costs ~18 + a few calls. TTLs are longer than the
+      // 30-minute default because it is refreshed hourly: a missed tick
+      // serves "a bit older", never a cold miss.
+      rotating: true,
+      softTtlSeconds: 3 * 60 * 60,
+      hardTtlSeconds: 7 * 24 * 60 * 60,
     },
   },
 };

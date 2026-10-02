@@ -4,6 +4,7 @@ import { buildMetadata } from "@/lib/seo";
 import { getGithubProjects } from "@/lib/github-projects/api";
 import { GithubProjectsExplorer } from "@/components/github-projects/github-projects-explorer";
 import { SectionMessage } from "@/components/home/section-message";
+import { CatalogAutoLoad } from "@/components/github-projects/catalog-auto-load";
 import { SkeletonFilterBar, SkeletonGithubProjectCardGrid } from "@/components/ui/skeleton";
 import RouteLoading from "./loading";
 import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
@@ -56,9 +57,19 @@ export default async function GithubProjectsPage() {
         </div>
 
         {result.status === "error" ? (
-          <SectionMessage>
-            GitHub projects aren&apos;t available yet — check back soon.
-          </SectionMessage>
+          // Server-side fetch failed (typically the backend's 503 while a
+          // cold catalog is being built) — load it from the browser with
+          // automatic retry rather than showing a dead-end message.
+          <CatalogAutoLoad
+            catalogLoad={{
+              path: "/github-projects",
+              noun: "projects",
+              hasMore: false,
+              starBuckets: true,
+            }}
+            explorerProps={{ aiSearch: { path: "/github-projects" } }}
+            emptyMessage="No GitHub projects have been added yet — check back soon."
+          />
         ) : result.status === "empty" ? (
           <SectionMessage>No GitHub projects have been added yet — check back soon.</SectionMessage>
         ) : (
