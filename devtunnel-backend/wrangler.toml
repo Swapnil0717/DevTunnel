@@ -197,7 +197,19 @@ GROQ_MODEL = "openai/gpt-oss-120b"
 # ---------------------------------------------------------------------------
 # AI foundation (src/lib/ai/*). All OPTIONAL. Provider API KEYS are secrets
 # and never go in this file — set each once per environment with
-#   npx wrangler secret put GROQ_API_KEY_2        (OPTIONAL: a Groq key from a DIFFERENT account)
+#   Groq: ONE KEY PER FUNCTIONALITY (each is used only by its own job)
+#   npx wrangler secret put GROQ_API_KEY            (discovery agent; required)
+#   npx wrangler secret put GROQ_API_KEY_SEARCH     (AI search bar)
+#   npx wrangler secret put GROQ_API_KEY_SUMMARY    (project / tool summaries)
+#   npx wrangler secret put GROQ_API_KEY_EXPLAIN    (issue "Explain")
+#   npx wrangler secret put GROQ_API_KEY_INSIGHTS   (issue insights card)
+#   Groq: SHARED BACKUPS (any job falls back to these after its own key)
+#   npx wrangler secret put GROQ_API_KEY_BACKUP
+#   npx wrangler secret put GROQ_API_KEY_2          (second backup)
+#   NOTE: Groq limits are per ORGANIZATION, not per key. For separate budgets,
+#   create each key in a different Groq account; keys from one account share
+#   that account's limits. Every Groq key is optional except GROQ_API_KEY.
+#   Other providers (Gemini, OpenRouter, ...) act as backups after the Groq keys.
 #   npx wrangler secret put CEREBRAS_API_KEY      (cloud.cerebras.ai)
 #   npx wrangler secret put GEMINI_API_KEY        (aistudio.google.com/apikey)
 #   npx wrangler secret put MISTRAL_API_KEY       (console.mistral.ai)

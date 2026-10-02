@@ -66,17 +66,22 @@ export interface AdminProvidersSnapshot {
   providers: AdminProviderRow[];
 }
 
-/** Model env vars per provider. Only Groq runs several models (discovery / search / secondary). */
+/** Model env vars per provider. Only the shared Groq keys run several models (discovery / search / secondary). */
 const MODEL_VARS: Record<ProviderId, Array<{ envVar: keyof ValidatedEnv; role: string | null }>> = {
-  groq: [
-    { envVar: "GROQ_MODEL", role: "discovery" },
-    { envVar: "GROQ_SEARCH_MODEL", role: "search" },
-    { envVar: "GROQ_SECONDARY_MODEL", role: "explain / insights backup" },
+  groq: [{ envVar: "GROQ_MODEL", role: "discovery (dedicated key)" }],
+  groq_search: [{ envVar: "GROQ_SEARCH_MODEL", role: "search (dedicated key)" }],
+  groq_summary: [{ envVar: "GROQ_SECONDARY_MODEL", role: "summary (dedicated key)" }],
+  groq_explain: [{ envVar: "GROQ_SECONDARY_MODEL", role: "explain (dedicated key)" }],
+  groq_insights: [{ envVar: "GROQ_SECONDARY_MODEL", role: "insights (dedicated key)" }],
+  groq_backup: [
+    { envVar: "GROQ_MODEL", role: "discovery backup" },
+    { envVar: "GROQ_SEARCH_MODEL", role: "search backup" },
+    { envVar: "GROQ_SECONDARY_MODEL", role: "summary / explain / insights backup" },
   ],
   groq_b: [
-    { envVar: "GROQ_MODEL", role: "discovery overflow" },
-    { envVar: "GROQ_SEARCH_MODEL", role: "search" },
-    { envVar: "GROQ_SECONDARY_MODEL", role: "explain / insights backup" },
+    { envVar: "GROQ_MODEL", role: "discovery backup 2" },
+    { envVar: "GROQ_SEARCH_MODEL", role: "search backup 2" },
+    { envVar: "GROQ_SECONDARY_MODEL", role: "summary / explain / insights backup 2" },
   ],
   cerebras: [{ envVar: "CEREBRAS_MODEL", role: null }],
   gemini: [{ envVar: "GEMINI_MODEL", role: null }],

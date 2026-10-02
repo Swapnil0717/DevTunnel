@@ -61,7 +61,17 @@ const envSchema = z.object({
   // wrangler.toml. Get keys at console.groq.com/keys, cloud.cerebras.ai,
   // aistudio.google.com/apikey, console.mistral.ai, openrouter.ai/keys,
   // github.com/marketplace/models.
-  // Optional SECOND Groq account (a different account = its own Groq limits).
+  // Dedicated Groq keys, one per AI functionality (src/lib/ai/chain.ts keeps
+  // each one to its own job). GROQ_API_KEY above is the discovery key.
+  // Groq limits are per ORGANIZATION: for truly separate budgets each key
+  // must come from a different Groq account.
+  GROQ_API_KEY_SEARCH: z.string().optional(),
+  GROQ_API_KEY_SUMMARY: z.string().optional(),
+  GROQ_API_KEY_EXPLAIN: z.string().optional(),
+  GROQ_API_KEY_INSIGHTS: z.string().optional(),
+  // Shared Groq backups: used by every job after its own key. _2 keeps its
+  // original name so existing deployments don't need a new secret.
+  GROQ_API_KEY_BACKUP: z.string().optional(),
   GROQ_API_KEY_2: z.string().optional(),
   CEREBRAS_API_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),

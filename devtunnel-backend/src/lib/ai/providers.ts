@@ -24,6 +24,11 @@ import type { ValidatedEnv } from "../../config/env";
 
 export type ProviderId =
   | "groq"
+  | "groq_search"
+  | "groq_summary"
+  | "groq_explain"
+  | "groq_insights"
+  | "groq_backup"
   | "groq_b"
   | "cerebras"
   | "gemini"
@@ -81,16 +86,75 @@ export const PROVIDERS: Record<ProviderId, ProviderDef> = {
     jsonMode: true,
     resetTz: "UTC",
   },
-  // A SECOND Groq account (GROQ_API_KEY_2). Groq enforces limits per
-  // organization, so a key from a different account has its own budgets.
-  // Same endpoint and models as `groq`; it is a separate provider id so each
-  // account keeps its own in-memory exhaustion state, its own usage rows
-  // and its own 401/403 "disabled for this run" flag. Never the discovery
-  // guard target: the 25/25/50 phase budgets govern account 1 only (see
-  // chain.ts, where account 2 acts as overflow).
+  // ---- Dedicated Groq keys: ONE KEY PER FUNCTIONALITY -----------------------
+  // Each key below is used ONLY by its own job (see GROQ_SLOT_JOB in chain.ts),
+  // so one busy feature can never drain another feature's Groq budget. Each is
+  // its own provider id so it keeps its own in-memory exhaustion state, its own
+  // usage rows and its own 401/403 "disabled for this run" flag.
+  //
+  // NOTE: Groq enforces limits per ORGANIZATION, not per key. Separate budgets
+  // only exist if these keys come from separate Groq accounts/organizations;
+  // several keys from one account all draw on that one account's limits.
+  //
+  // `groq` (GROQ_API_KEY) is the DISCOVERY key and the only discovery-guard
+  // target: the 25/25/50 phase budgets govern it alone (groqQuota.ts).
+  groq_search: {
+    id: "groq_search",
+    label: "Groq (search key)",
+    endpoint: "https://api.groq.com/openai/v1/chat/completions",
+    keyVar: "GROQ_API_KEY_SEARCH",
+    modelVar: "GROQ_SEARCH_MODEL",
+    toolCalling: true,
+    jsonMode: true,
+    resetTz: "UTC",
+  },
+  groq_summary: {
+    id: "groq_summary",
+    label: "Groq (summary key)",
+    endpoint: "https://api.groq.com/openai/v1/chat/completions",
+    keyVar: "GROQ_API_KEY_SUMMARY",
+    modelVar: "GROQ_SECONDARY_MODEL",
+    toolCalling: true,
+    jsonMode: true,
+    resetTz: "UTC",
+  },
+  groq_explain: {
+    id: "groq_explain",
+    label: "Groq (explain key)",
+    endpoint: "https://api.groq.com/openai/v1/chat/completions",
+    keyVar: "GROQ_API_KEY_EXPLAIN",
+    modelVar: "GROQ_SECONDARY_MODEL",
+    toolCalling: true,
+    jsonMode: true,
+    resetTz: "UTC",
+  },
+  groq_insights: {
+    id: "groq_insights",
+    label: "Groq (insights key)",
+    endpoint: "https://api.groq.com/openai/v1/chat/completions",
+    keyVar: "GROQ_API_KEY_INSIGHTS",
+    modelVar: "GROQ_SECONDARY_MODEL",
+    toolCalling: true,
+    jsonMode: true,
+    resetTz: "UTC",
+  },
+  // ---- Shared Groq BACKUP keys: usable by EVERY job once its own key (if any)
+  // is exhausted or failing. Tried before Cerebras / Gemini / OpenRouter.
+  groq_backup: {
+    id: "groq_backup",
+    label: "Groq (backup key)",
+    endpoint: "https://api.groq.com/openai/v1/chat/completions",
+    keyVar: "GROQ_API_KEY_BACKUP",
+    modelVar: "GROQ_MODEL",
+    toolCalling: true,
+    jsonMode: true,
+    resetTz: "UTC",
+  },
+  // Second backup (kept under its original id/env name GROQ_API_KEY_2 so an
+  // existing deployment's secret keeps working).
   groq_b: {
     id: "groq_b",
-    label: "Groq (account 2)",
+    label: "Groq (backup key 2)",
     endpoint: "https://api.groq.com/openai/v1/chat/completions",
     keyVar: "GROQ_API_KEY_2",
     modelVar: "GROQ_MODEL",

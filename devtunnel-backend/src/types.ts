@@ -84,7 +84,13 @@
 
   // --- AI foundation (src/lib/ai/*) — all optional; see src/config/env.ts ---
   // Secrets: a provider with no key is skipped.
-  /** Optional second Groq account key — its own Groq limits (provider id `groq_b`). */
+  /** Dedicated Groq keys, one per functionality (provider ids groq_search / groq_summary / groq_explain / groq_insights). GROQ_API_KEY is the discovery key. */
+  GROQ_API_KEY_SEARCH?: string;
+  GROQ_API_KEY_SUMMARY?: string;
+  GROQ_API_KEY_EXPLAIN?: string;
+  GROQ_API_KEY_INSIGHTS?: string;
+  /** Shared Groq backup keys, used by every job after its own key (provider ids `groq_backup`, `groq_b`). */
+  GROQ_API_KEY_BACKUP?: string;
   GROQ_API_KEY_2?: string;
   CEREBRAS_API_KEY?: string;
   GEMINI_API_KEY?: string;
