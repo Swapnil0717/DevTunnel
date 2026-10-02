@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ValidatedEnv } from "../config/env";
 import { getSupabase } from "./supabase";
 import { logger } from "./logger";
+import { listOpenExternalContributions, settleExternalContribution } from "../db/externalContributions";
 
 /**
  * Keeps DevTunnel's task / project status in step with the real pull
@@ -194,8 +195,69 @@ async function applyClosedUnmerged(supabase: SupabaseClient, row: OpenPullReques
   return true;
 }
 
+/**
+ * Same merged / closed check for PRs opened by `dev submit` on repositories
+ * that are not DevTunnel projects (`devtunnel.external_contributions`,
+ * sql/046). There is no task or project to move — settling the row is the
+ * whole job, and the sql/046 trigger writes the PULL_REQUEST_MERGED activity.
+ */
+async function syncExternalPullRequests(env: ValidatedEnv): Promise<void> {
+  const supabase = getSupabase(env);
+  const rows = await listOpenExternalContributions(supabase, MAX_OPEN_ROWS_SCANNED);
+  if (rows.length === 0) return;
+
+  let merged = 0;
+  let closed = 0;
+  let stillOpen = 0;
+  let skipped = 0;
+
+  for (const row of pickWindow(rows)) {
+    const ref = parsePrUrl({
+      id: row.id,
+      task_id: null,
+      project_id: null,
+      github_pr_url: row.github_pr_url,
+      github_pr_number: row.github_pr_number,
+    });
+    if (!ref) {
+      skipped++;
+      continue;
+    }
+
+    const pr = await fetchPrState(env.GITHUB_DISCOVERY_TOKEN, ref);
+    if (!pr) {
+      skipped++;
+      continue;
+    }
+
+    try {
+      if (pr.state === "open") {
+        stillOpen++;
+      } else if (pr.merged) {
+        if (await settleExternalContribution(supabase, row.id, { status: "MERGED", mergedAt: pr.mergedAt })) merged++;
+      } else if (await settleExternalContribution(supabase, row.id, { status: "CLOSED" })) {
+        closed++;
+      }
+    } catch (err) {
+      logger.error("pr_sync_external_apply_failed", {
+        externalContributionId: row.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  logger.info("pr_sync_external_run_complete", { openRows: rows.length, merged, closed, stillOpen, skipped });
+}
+
 export async function syncSubmittedPullRequests(env: ValidatedEnv): Promise<void> {
   const supabase = getSupabase(env);
+
+  // External (non-DevTunnel) PRs first, and isolated: a failure here must not
+  // stop the DevTunnel task sync below, and the DevTunnel sync's early
+  // `return` on "no open rows" must not skip this.
+  await syncExternalPullRequests(env).catch((err) => {
+    logger.error("pr_sync_external_failed", { error: err instanceof Error ? err.message : String(err) });
+  });
 
   const { data, error } = await supabase
     .from("pull_requests")

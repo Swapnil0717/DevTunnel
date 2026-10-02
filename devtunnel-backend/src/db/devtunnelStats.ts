@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ContributionCalendar, DevTunnelStats } from "../types";
 import { buildDevtunnelMonthCalendar, monthBoundsISO } from "../lib/devtunnelActivity";
+import { getExternalContributionCounts } from "./externalContributions";
 
 /**
  * Whether this user maintains at least one project
@@ -32,7 +33,7 @@ export async function getDevTunnelStats(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<DevTunnelStats> {
-  const [projectsCreated, projectsMaintaining, tasksSubmitted, pullRequestsMerged] = await Promise.all([
+  const [projectsCreated, projectsMaintaining, tasksSubmitted, pullRequestsMerged, external] = await Promise.all([
     supabase.from("projects").select("id", { count: "exact", head: true }).eq("created_by", userId),
     supabase
       .from("project_maintainers")
@@ -49,6 +50,9 @@ export async function getDevTunnelStats(
       .select("id", { count: "exact", head: true })
       .eq("author_id", userId)
       .eq("status", "MERGED"),
+    // PRs opened through `dev submit` on repositories that aren't DevTunnel
+    // projects (sql/046) count toward the same two stat cards.
+    getExternalContributionCounts(supabase, userId),
   ]);
 
   for (const result of [projectsCreated, projectsMaintaining, tasksSubmitted, pullRequestsMerged]) {
@@ -58,8 +62,8 @@ export async function getDevTunnelStats(
   return {
     projectsCreated: projectsCreated.count ?? 0,
     projectsMaintaining: projectsMaintaining.count ?? 0,
-    tasksSubmitted: tasksSubmitted.count ?? 0,
-    pullRequestsMerged: pullRequestsMerged.count ?? 0,
+    tasksSubmitted: (tasksSubmitted.count ?? 0) + external.submitted,
+    pullRequestsMerged: (pullRequestsMerged.count ?? 0) + external.merged,
     isMaintainer: (projectsMaintaining.count ?? 0) > 0,
   };
 }

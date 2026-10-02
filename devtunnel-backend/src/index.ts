@@ -16,6 +16,7 @@ import { githubOpenSourceTools } from "./routes/githubOpenSourceTools";
 import { projects } from "./routes/projects";
 import { openSourceTools } from "./routes/openSourceTools";
 import { tasks } from "./routes/tasks";
+import { githubWork } from "./routes/githubWork";
 import { contribute } from "./routes/contribute";
 import { submissions } from "./routes/submissions";
 import { settings } from "./routes/settings";
@@ -62,6 +63,8 @@ app.route("/", githubOpenSourceTools);
 app.route("/", projects);
 app.route("/", openSourceTools);
 app.route("/", tasks);
+// `dev start` / `dev submit` for ANY public GitHub repo + issue: `POST /github/start`, `POST /github/submit` (src/routes/githubWork.ts).
+app.route("/", githubWork);
 app.route("/", contribute);
 app.route("/", submissions);
 app.route("/", settings);
