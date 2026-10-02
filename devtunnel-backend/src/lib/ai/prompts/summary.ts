@@ -36,8 +36,14 @@ export const SUMMARY_README_MAX_CHARS = 12_000;
 const DESCRIPTION_MAX_CHARS = 1_000;
 const NOTES_MAX_CHARS = 3_000;
 
-/** Cap output size (rule 2). A full answer is ~250 tokens; the rest is headroom for models that think first. */
-export const SUMMARY_MAX_OUTPUT_TOKENS = 600;
+/**
+ * Cap output size (rule 2). A full answer is ~250 tokens; the rest is headroom
+ * for models that think first. Reasoning models (Groq gpt-oss) count their
+ * hidden reasoning against this cap, so a low cap leaves an empty/truncated
+ * answer that fails JSON parsing twice -> "The AI couldn't produce a usable
+ * summary". It is only a ceiling: a short answer still costs ~250 tokens.
+ */
+export const SUMMARY_MAX_OUTPUT_TOKENS = 2_000;
 
 export interface SummaryPromptInput {
   name: string;

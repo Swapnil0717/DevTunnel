@@ -43,7 +43,7 @@ const TITLE_MAX_CHARS = 300;
 const REPO_DESCRIPTION_MAX_CHARS = 500;
 
 /** Cap output size (rule 2). A full answer is ~350 tokens; the rest is headroom for models that think first. */
-export const EXPLAIN_MAX_OUTPUT_TOKENS = 900;
+export const EXPLAIN_MAX_OUTPUT_TOKENS = 2_000;
 
 export interface ExplainPromptInput {
   repoFullName: string;

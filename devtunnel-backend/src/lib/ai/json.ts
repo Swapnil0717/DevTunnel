@@ -4,7 +4,7 @@ import type { ValidatedEnv } from "../../config/env";
 import { logger } from "../logger";
 import type { AiJob } from "./chain";
 import type { ChatMessage } from "./providers";
-import { runChat, type AiCallOptions } from "./client";
+import { AiExhaustedError, AiNotConfiguredError, runChat, type AiCallOptions } from "./client";
 
 /**
  * Strict JSON extraction + zod validation (Part 1 rules 5 and 6: AI output
@@ -55,12 +55,19 @@ export interface JsonResult<T> {
 }
 
 /**
- * runChat + extractJson + zod, with ONE repair retry: the model is shown
- * (a truncated copy of) its own invalid reply and the validation problem
- * and asked for corrected JSON only. A second failure throws AiJsonError —
- * callers fall back to a non-AI result or an honest error, never a guess.
- * Prompts and full model output are never logged (rule 8).
+ * runChat + extractJson + zod, with PROVIDER FAILOVER on unusable output:
+ * when a model's reply is empty, truncated or fails validation, that provider
+ * is skipped and the SAME prompt goes to the next provider in the job's chain
+ * (Groq keys first, then the backups, then Gemini / OpenRouter / the rest), up
+ * to MAX_PROVIDER_ATTEMPTS providers. Only when no other provider is available
+ * does it fall back to the old single "repair" retry on the first provider
+ * (the model is shown a truncated copy of its own invalid reply and the
+ * validation problem). Still failing -> AiJsonError — callers fall back to a
+ * non-AI result or an honest error, never a guess. Prompts and full model
+ * output are never logged (rule 8).
  */
+const MAX_PROVIDER_ATTEMPTS = 3;
+
 export async function runJson<S extends z.ZodTypeAny>(
   env: ValidatedEnv,
   job: AiJob,
@@ -68,7 +75,6 @@ export async function runJson<S extends z.ZodTypeAny>(
   schema: S,
   options: AiCallOptions = {},
 ): Promise<JsonResult<z.infer<S>>> {
-  const first = await runChat(env, job, messages, { ...options, json: true });
   const attempt = (raw: string): { ok: true; data: z.infer<S> } | { ok: false; problem: string } => {
     try {
       const parsed = schema.safeParse(extractJson(raw));
@@ -79,22 +85,53 @@ export async function runJson<S extends z.ZodTypeAny>(
     }
   };
 
-  const firstTry = attempt(first.content);
-  if (firstTry.ok) return { data: firstTry.data, provider: first.provider, model: first.model, repaired: false };
+  const skipTargets: string[] = [...(options.skipTargets ?? [])];
+  let first: { content: string; provider: string; model: string } | null = null;
+  let firstProblem = "";
 
-  logger.warn("ai_json_invalid_retrying", { job, provider: first.provider, replyChars: first.content.length });
-  const repairMessages: ChatMessage[] = [
-    ...messages,
-    { role: "assistant", content: first.content.slice(0, 4000) },
-    {
-      role: "user",
-      content: `Your previous reply was rejected (${firstTry.problem.slice(0, 300)}). Reply again with ONLY the corrected JSON, no prose, no code fences.`,
-    },
-  ];
-  const second = await runChat(env, job, repairMessages, { ...options, json: true });
-  const secondTry = attempt(second.content);
-  if (secondTry.ok) return { data: secondTry.data, provider: second.provider, model: second.model, repaired: true };
+  for (let n = 0; n < MAX_PROVIDER_ATTEMPTS; n++) {
+    let res: Awaited<ReturnType<typeof runChat>>;
+    try {
+      res = await runChat(env, job, messages, { ...options, json: true, skipTargets });
+    } catch (err) {
+      // No further provider left to try: stop failing over (the first reply, if any, gets one repair below).
+      if (n > 0 && (err instanceof AiExhaustedError || err instanceof AiNotConfiguredError)) break;
+      throw err;
+    }
+    const tried = attempt(res.content);
+    if (tried.ok) return { data: tried.data, provider: res.provider, model: res.model, repaired: false };
 
-  logger.error("ai_json_invalid_giving_up", { job, provider: second.provider, replyChars: second.content.length });
-  throw new AiJsonError("Model did not return valid JSON after one repair attempt");
+    logger.warn("ai_json_invalid_trying_next_provider", {
+      job,
+      provider: res.provider,
+      model: res.model,
+      replyChars: res.content.length,
+    });
+    if (!first) {
+      first = res;
+      firstProblem = tried.problem;
+    }
+    skipTargets.push(`${res.provider}:${res.model}`);
+  }
+
+  if (first) {
+    // Last chance: ONE repair retry on the first provider (no skip list).
+    const repairMessages: ChatMessage[] = [
+      ...messages,
+      { role: "assistant", content: first.content.slice(0, 4000) },
+      {
+        role: "user",
+        content: `Your previous reply was rejected (${firstProblem.slice(0, 300)}). Reply again with ONLY the corrected JSON, no prose, no code fences.`,
+      },
+    ];
+    try {
+      const second = await runChat(env, job, repairMessages, { ...options, json: true });
+      const secondTry = attempt(second.content);
+      if (secondTry.ok) return { data: secondTry.data, provider: second.provider, model: second.model, repaired: true };
+      logger.error("ai_json_invalid_giving_up", { job, provider: second.provider, replyChars: second.content.length });
+    } catch (err) {
+      if (!(err instanceof AiExhaustedError || err instanceof AiNotConfiguredError)) throw err;
+    }
+  }
+  throw new AiJsonError("Model did not return valid JSON from any provider");
 }

@@ -78,6 +78,12 @@ export interface AiCallOptions {
   phase?: DiscoveryPhase;
   /** Read-only legacy KV, only used to honour an old admin budget split (groqQuota.ts). */
   legacyKv?: KVNamespace;
+  /**
+   * Target keys (`provider:model`, as in AiResult) to leave out of this call.
+   * json.ts uses it to move on to the NEXT provider when one answered with
+   * unusable output, so non-Groq providers act as true backups.
+   */
+  skipTargets?: string[];
 }
 
 export interface AiResult {
@@ -171,7 +177,10 @@ async function callWithFallbackInner(
   run: RunState,
   defaults: { timeoutMs: number; maxInlineWaitMs: number },
 ): Promise<CallOutcome> {
-  const targets = buildChain(env, job, { needsTools: !!request.tools?.length, needsJson: !!request.json });
+  const skip = new Set(opts.skipTargets ?? []);
+  const targets = buildChain(env, job, { needsTools: !!request.tools?.length, needsJson: !!request.json }).filter(
+    (t) => !skip.has(t.key),
+  );
   if (targets.length === 0) throw new AiNotConfiguredError(job);
 
   const timeoutMs = opts.timeoutMs ?? defaults.timeoutMs;
