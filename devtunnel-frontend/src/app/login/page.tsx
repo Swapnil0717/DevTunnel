@@ -16,6 +16,7 @@ import { needsOnboarding } from "@/lib/onboarding/needs-onboarding";
 import { isAdmin } from "@/lib/auth/is-admin";
 import { getServerViewMode } from "@/lib/auth/view-mode.server";
 import RouteLoading from "./loading";
+import { LoginSkeleton } from "@/components/auth/login-skeleton";
 import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 export const metadata: Metadata = buildMetadata({
@@ -65,7 +66,7 @@ export default async function LoginPage({
 
       return (
         <>
-          <BlueprintReveal skeleton={<RouteLoading />}>
+          <BlueprintReveal skeleton={<LoginSkeleton variant="portal" />}>
             <main className="flex min-h-screen flex-col items-center justify-center gap-9 px-6 py-16">
               <Logo />
 

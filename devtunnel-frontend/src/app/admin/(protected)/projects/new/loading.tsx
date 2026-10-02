@@ -1,12 +1,14 @@
 import { BlueprintSheet } from "@/components/ui/blueprint-loader";
-import { BlueprintWizardLayout } from "@/components/ui/blueprint-kit";
-
-const STEP_LABELS = ["Repository", "Description", "Tech stack", "Preview", "Validation"];
+import { BlueprintUrlStepBody, BlueprintWizardShell } from "@/components/ui/blueprint-wizard";
+import {
+  PROJECT_ONBOARDING_SHELL,
+  REPOSITORY_STEP_COPY,
+} from "@/components/ui/wizard-skeleton-copy";
 
 /**
- * `/admin/projects/new` — `ProjectOnboardingWizard`'s two-panel layout
- * (sidebar step rail + centered step content), not the `/admin/projects`
- * list page it used to borrow its loading state from.
+ * `/admin/projects/new` — `ProjectOnboardingWizard` on step 1,
+ * `RepositoryStep`: heading, intro, and the GitHub URL field with its
+ * "Fetch repository" button (the import card only appears after a fetch).
  */
 export default function AdminProjectOnboardingLoading() {
   return (
@@ -16,7 +18,9 @@ export default function AdminProjectOnboardingLoading() {
       contentClassName="w-full"
       ariaHidden
     >
-      <BlueprintWizardLayout stepLabels={STEP_LABELS} currentStep={1} />
+      <BlueprintWizardShell copy={PROJECT_ONBOARDING_SHELL}>
+        <BlueprintUrlStepBody copy={REPOSITORY_STEP_COPY} />
+      </BlueprintWizardShell>
     </BlueprintSheet>
   );
 }

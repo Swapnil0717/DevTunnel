@@ -1,16 +1,13 @@
 import { BlueprintSheet } from "@/components/ui/blueprint-loader";
-import { BlueprintWizardLayout } from "@/components/ui/blueprint-kit";
-
-const STEP_LABELS = ["Welcome", "Your profile", "Get started", "Review"];
+import { BlueprintWelcomeStepBody, BlueprintWizardShell } from "@/components/ui/blueprint-wizard";
+import { USER_ONBOARDING_SHELL } from "@/components/ui/wizard-skeleton-copy";
 
 /**
- * `/onboarding` — calls `getServerUser()` before it can decide whether
- * to redirect (already onboarded → `/home`, signed out → `/login`) or
- * render `OnboardingWizard`, which shares the exact same two-panel
- * shell as the admin/submission onboarding wizards (sidebar step rail
- * + centered step content) — see `BlueprintWizardLayout`. Previously
- * this rendered a generic progress-dots-and-box shape instead of that
- * sidebar, so the real page's layout shifted the moment it mounted.
+ * `/onboarding` — `getServerUser()` runs before the page can redirect or
+ * render `OnboardingWizard`, which opens on `WelcomeStep` (avatar,
+ * heading, intro, "Imported from GitHub" badge). The sheet is that exact
+ * screen: the wizard's sidebar rail with its step descriptions and
+ * "Signed in as" footnote, the welcome body, and the Back/Continue row.
  */
 export default function OnboardingLoading() {
   return (
@@ -20,7 +17,9 @@ export default function OnboardingLoading() {
       contentClassName="w-full"
       ariaHidden
     >
-      <BlueprintWizardLayout stepLabels={STEP_LABELS} currentStep={1} />
+      <BlueprintWizardShell copy={USER_ONBOARDING_SHELL}>
+        <BlueprintWelcomeStepBody />
+      </BlueprintWizardShell>
     </BlueprintSheet>
   );
 }

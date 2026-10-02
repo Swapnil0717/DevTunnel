@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { AiExplainButton } from "@/components/ai/ai-explain-button";
 import { IssueInsightBadges, IssueInsightsCard } from "@/components/ai/issue-insights-card";
 import { GithubEmptyState } from "@/components/github-projects/github-empty-state";
@@ -10,6 +11,7 @@ import { PagePaginationControls } from "@/components/admin/page-pagination-contr
 import { usePagePagination } from "@/lib/admin/use-page-pagination";
 import { parseGithubRepoFullName } from "@/lib/ai/explain-client";
 import { useIssueInsights } from "@/lib/ai/use-issue-insights";
+import { issueHref } from "@/lib/issues/hrefs";
 import { REPO_ISSUES_PAGE_SIZE, type LoadAllIssuesState } from "@/lib/issues/use-load-all-issues";
 import type { Issue, IssueState } from "@/lib/issues/types";
 
@@ -37,10 +39,11 @@ function formatDate(iso: string): string {
  * Distinct from the Tasks tab next to it, and the distinction matters to
  * a contributor: a *task* is something DevTunnel has curated (role,
  * difficulty, tech stack, a DevTunnel status), while an *issue* is the
- * raw GitHub object with none of that layered on. Which is also why every
- * row here opens GitHub rather than a DevTunnel page — an issue that
- * hasn't been turned into a task has no page of its own to show instead,
- * the same honest posture `IssuesTable` takes for `/issues`.
+ * raw GitHub object with none of that layered on. Every row opens the
+ * issue's own DevTunnel page (`/issues/:projectSlug/:issueNumber`) — the issue
+ * as filed, an AI explanation and how to contribute — which in turn links to
+ * GitHub and, when DevTunnel made a task from the issue, to that task. Same
+ * destination `IssuesTable` sends `/issues` rows to.
  *
  * `IssuesTable` itself isn't reused for the same reason `TasksTable`
  * isn't in the Tasks panel: it's a 960px-wide cross-project table with a
@@ -203,10 +206,8 @@ export function ProjectIssuesPanel({
 
               return (
                 <li key={issue.number}>
-                  <a
-                    href={issue.url}
-                    target="_blank"
-                    rel="noreferrer noopener"
+                  <Link
+                    href={issueHref(issue.project.slug, issue.number)}
                     className="flex flex-col gap-1 rounded-md px-3 py-2.5 hover:bg-surface-raised"
                   >
                     <span className="flex items-start gap-2 text-[13px] text-text">
@@ -239,7 +240,7 @@ export function ProjectIssuesPanel({
                       ))}
                       {hiddenLabelCount > 0 ? <span>+{hiddenLabelCount}</span> : null}
                     </span>
-                  </a>
+                  </Link>
                   {repoFullName && issue.state === "OPEN" ? (
                     <div className="flex flex-col gap-1.5 pb-2.5 pl-[34px] pr-3">
                       <IssueInsightBadges controller={insights} issueNumber={issue.number} />

@@ -1792,27 +1792,6 @@ export function BlueprintTaskCardList({
 }
 
 /**
- * The "Showing the N most recently updated open issues … / Load all
- * issues" row (`LoadIssueListBar`) above the `/issues` list: `mb-3`, a
- * 12px line left, a `py-1.5` 12px button (32px) right.
- */
-export function BlueprintLoadIssueListBar() {
-  return (
-    <div
-      className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2"
-      aria-hidden="true"
-    >
-      <div className="text-[12px]">
-        <BlueprintGhostText text="Showing the 100 most recently updated open issues — search and" />
-      </div>
-      <span className="inline-flex shrink-0 items-center rounded-[8px] border border-blueprint/25 px-3 py-1.5 text-[12px] font-medium">
-        <BlueprintGhostText text="Load all issues" />
-      </span>
-    </div>
-  );
-}
-
-/**
  * `IssuesInsightsCard` in its idle state, above the `/issues` filters:
  * `mb-4 rounded-[8px] p-4`, the sparkle + small-caps title row (`mb-2`),
  * then the 12.5px explanation beside a 32px "Analyze this page" button.

@@ -412,3 +412,94 @@ export function SkeletonToolCardGrid({ count = 6 }: { count?: number }) {
     </div>
   );
 }
+
+/**
+ * One `FilterGroup` (`components/ai/issue-insights-card.tsx`) of the AI
+ * issue insights: the 11px uppercase title (16.5px line, `mb-1.5`), then
+ * three chip rows. A real chip is `border px-2 py-1` around an 11.5px
+ * label line (17.25px) and, 4px under it, a 4px count bar:
+ * 2 + 8 + 17.25 + 4 + 4 = 35.25px, `gap-1` apart.
+ */
+function SkeletonInsightGroup({ titleWidth }: { titleWidth: string }) {
+  return (
+    <div aria-hidden="true">
+      <div className="mb-1.5 flex h-[16.5px] items-center">
+        <SkeletonBlock className={`h-2.5 ${titleWidth}`} />
+      </div>
+      <div className="flex flex-col gap-1">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <SkeletonBlock key={index} className="h-[35.25px] w-full rounded-[7px]" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Invisible copy of `text` with a skeleton bar over it, so it wraps onto exactly the real line count. */
+function SkeletonGhostParagraph({ text, className }: { text: string; className: string }) {
+  return (
+    <div className={`relative ${className}`} aria-hidden="true">
+      <span className="invisible">{text}</span>
+      <SkeletonBlock className="absolute inset-x-0 inset-y-[0.22em]" />
+    </div>
+  );
+}
+
+/**
+ * The loading twin of the AI issue insights' "done" body — what
+ * `AiLoading` shows in place of generic text bars while the analysis
+ * runs, so the card doesn't change height when the results land:
+ *
+ *  - `overview` (the single-repository card on a project / tool Issues
+ *    tab, `InsightsBody`): the 13px overview paragraph, the "Best suited
+ *    for" tag row (10.5px tags, 21.75px) and the `border-t pt-3`
+ *    Role / Level / Tech grid;
+ *  - without it (the All Issues page card, `IssuesInsightsCard`): the
+ *    Role / Level / Tech grid straight away.
+ *
+ * Both end with the real "Written by AI…" reminder, ghosted from its
+ * real wording (`mt-3 text-[11px] leading-relaxed`) so it wraps like it.
+ */
+export function SkeletonInsightsBody({
+  overview = false,
+  disclaimer,
+}: {
+  overview?: boolean;
+  disclaimer: string;
+}) {
+  return (
+    <div aria-hidden="true">
+      {overview ? (
+        <>
+          <div className="text-[13px] leading-relaxed">
+            <div className="relative">
+              <span className="invisible">&nbsp;</span>
+              <SkeletonBlock className="absolute inset-y-[0.22em] left-0 w-full" />
+            </div>
+            <div className="relative">
+              <span className="invisible">&nbsp;</span>
+              <SkeletonBlock className="absolute inset-y-[0.22em] left-0 w-2/3" />
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <SkeletonBlock className="mr-1 h-2.5 w-24" />
+            <SkeletonBlock className="h-[21.75px] w-16 rounded-[5px]" />
+            <SkeletonBlock className="h-[21.75px] w-20 rounded-[5px]" />
+            <SkeletonBlock className="h-[21.75px] w-14 rounded-[5px]" />
+          </div>
+        </>
+      ) : null}
+      <div
+        className={`grid grid-cols-1 gap-4 sm:grid-cols-3 ${
+          overview ? "mt-3 border-t border-border-subtle pt-3" : ""
+        }`}
+      >
+        <SkeletonInsightGroup titleWidth="w-8" />
+        <SkeletonInsightGroup titleWidth="w-10" />
+        <SkeletonInsightGroup titleWidth="w-8" />
+      </div>
+      <SkeletonGhostParagraph text={disclaimer} className="mt-3 text-[11px] leading-relaxed" />
+    </div>
+  );
+}
+

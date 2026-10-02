@@ -1,12 +1,18 @@
 import { BlueprintSheet } from "@/components/ui/blueprint-loader";
-import { BlueprintWizardLayout } from "@/components/ui/blueprint-kit";
-
-const STEP_LABELS = ["Repository URL", "Description & tech", "Preview & confirm"];
+import {
+  BlueprintKindOptionCards,
+  BlueprintUrlStepBody,
+  BlueprintWizardShell,
+} from "@/components/ui/blueprint-wizard";
+import {
+  SOURCE_URL_STEP_COPY,
+  SUBMISSION_ONBOARDING_SHELL,
+} from "@/components/ui/wizard-skeleton-copy";
 
 /**
- * `/submissions/new` — `SubmissionOnboardingWizard`'s two-panel layout
- * (3 steps, vs. 5 for the admin onboarding wizards), matching the shared
- * shell every onboarding wizard renders (see `BlueprintWizardLayout`).
+ * `/submissions/new` — `SubmissionOnboardingWizard` (3 steps) on step 1,
+ * `SourceUrlStep`: heading, intro, the "A project" / "A tool" option
+ * cards, then the GitHub URL field with its "Fetch repository" button.
  */
 export default function SubmitToCommunityLoading() {
   return (
@@ -16,7 +22,12 @@ export default function SubmitToCommunityLoading() {
       contentClassName="w-full"
       ariaHidden
     >
-      <BlueprintWizardLayout stepLabels={STEP_LABELS} currentStep={1} />
+      <BlueprintWizardShell copy={SUBMISSION_ONBOARDING_SHELL}>
+        <BlueprintUrlStepBody
+          copy={SOURCE_URL_STEP_COPY}
+          beforeForm={<BlueprintKindOptionCards />}
+        />
+      </BlueprintWizardShell>
     </BlueprintSheet>
   );
 }

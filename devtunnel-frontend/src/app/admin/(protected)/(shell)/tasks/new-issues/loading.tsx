@@ -1,31 +1,38 @@
-import { LoadingPanel } from "@/components/ui/spinner";
+import { BlueprintSheet } from "@/components/ui/blueprint-loader";
+import { BlueprintAdminIssuesPage } from "@/components/ui/blueprint-issues";
 
 /**
- * Next.js route-segment loading boundary for `/admin/tasks/new-issues`
- * — and, since a `loading.tsx` wraps its whole segment subtree, its
- * `/admin/tasks/new-issues/since-onboarding` child route too.
+ * `/admin/tasks/new-issues` — "All Issue". `getAdminNewIssues` re-scans
+ * every active project's GitHub repository live, so this is a long wait
+ * (see the note on the page); the sheet is the page it resolves to:
+ * the header with "Sync all issues" + "Create task", `AdminNewIssuesExplorer`'s
+ * search and State / Repository / Author / Tech stack / Project filters,
+ * `AdminNewIssuesTable` (Issue, Project, GitHub author, Labels, Created,
+ * Updated, Actions) and the 20-per-page pagination footer.
  *
- * This app has no `loading.tsx` anywhere else, which is fine for every
- * other admin page (a single indexed database query, effectively
- * instant). It is not fine here: both pages this covers call
- * `getAdminNewIssues`, which walks `GET /admin/new-issues` — a route
- * whose own doc comment calls it "the single most expensive read in
- * this admin backend," since it re-scans every active project's GitHub
- * repository live, on every single request, with no DevTunnel-side
- * cache (see `SyncAllIssuesButton`'s doc comment). Without this file,
- * that multi-second-or-longer wait rendered as nothing at all — no
- * spinner, no visible change — which is indistinguishable from a
- * broken click. `getAdminNewIssues` now also requests the full result
- * in one call instead of the default 100-row page size (see
- * `fetchAllAdminPages`'s `pageLimit` param), so on top of this visible
- * loading state, the wait itself should also be shorter for any
- * installation with more than ~100 combined new issues.
+ * The `Rev` label carries the "scanning live" message that the old
+ * spinner panel used to show.
+ *
+ * A `loading.tsx` wraps its whole segment subtree, so
+ * `since-onboarding/` has its own — its table has an extra column and
+ * its header reads differently.
  */
 export default function NewIssuesLoading() {
   return (
-    <LoadingPanel
-      label="Scanning your projects' GitHub repositories for new issues…"
-      description="This re-checks every connected repo live, so larger project lists can take a little while. Feel free to leave this tab open — it'll load automatically."
-    />
+    <BlueprintSheet
+      sheetLabel="Sheet A15 — All Issue"
+      revLabel="Rev — scanning repositories"
+      contentClassName="w-full mx-auto max-w-6xl px-6 py-10"
+      ariaHidden={false}
+    >
+      <p role="status" className="sr-only">
+        Scanning your projects&apos; GitHub repositories for new issues. This re-checks every
+        connected repo live, so larger project lists can take a little while.
+      </p>
+      <BlueprintAdminIssuesPage
+        title="All Issue"
+        description="GitHub issues from your projects' repositories that aren't onboarded as DevTunnel tasks yet."
+      />
+    </BlueprintSheet>
   );
 }

@@ -1,11 +1,14 @@
 import { BlueprintSheet } from "@/components/ui/blueprint-loader";
-import { BlueprintWizardLayout } from "@/components/ui/blueprint-kit";
-
-const STEP_LABELS = ["Project", "Issue", "Task details", "Preview", "Validation"];
+import {
+  BlueprintProjectSelectionStepBody,
+  BlueprintWizardShell,
+} from "@/components/ui/blueprint-wizard";
+import { TASK_ONBOARDING_SHELL } from "@/components/ui/wizard-skeleton-copy";
 
 /**
- * `/admin/tasks/new` — `TaskOnboardingWizard`'s two-panel layout, not
- * the `/admin/tasks` list page it used to borrow its loading state from.
+ * `/admin/tasks/new` — `TaskOnboardingWizard` on step 1,
+ * `ProjectSelectionStep`: heading, intro, project search field and the
+ * list of selectable project rows.
  */
 export default function AdminTaskOnboardingLoading() {
   return (
@@ -15,7 +18,9 @@ export default function AdminTaskOnboardingLoading() {
       contentClassName="w-full"
       ariaHidden
     >
-      <BlueprintWizardLayout stepLabels={STEP_LABELS} currentStep={1} />
+      <BlueprintWizardShell copy={TASK_ONBOARDING_SHELL}>
+        <BlueprintProjectSelectionStepBody />
+      </BlueprintWizardShell>
     </BlueprintSheet>
   );
 }

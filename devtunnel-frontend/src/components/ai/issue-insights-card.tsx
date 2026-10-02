@@ -1,5 +1,6 @@
 "use client";
 
+import { SkeletonInsightsBody } from "@/components/ui/skeleton";
 import { SparkleIcon } from "@/components/layout/nav-icons";
 import { AI_SECONDARY_BUTTON_CLASS, AiCardHeader, AiError, AiLoading, AiNotice, AiSignInPrompt } from "@/components/ai/ai-states";
 import { formatRelativeTime } from "@/lib/home/format-relative-time";
@@ -222,7 +223,17 @@ export function IssueInsightsCard({ controller }: { controller: IssueInsightsCon
   if (authStatus === "unauthenticated" || (status === "error" && error?.code === "unauthenticated")) {
     body = <AiSignInPrompt message="See which roles, levels and technologies this repository&apos;s open issues need." />;
   } else if (status === "loading") {
-    body = <AiLoading message="Analyzing open issues… this can take a few seconds the first time." skeletonLines={4} />;
+    body = (
+      <AiLoading
+        message="Analyzing open issues… this can take a few seconds the first time."
+        skeleton={
+          <SkeletonInsightsBody
+            overview
+            disclaimer="Written by AI from issue titles, labels and short excerpts, so it can be wrong — open the issue before you start. Covers 24 open issues; an issue the AI hasn't reached shows “Not analyzed”. Last updated just now."
+          />
+        }
+      />
+    );
   } else if (status === "error" && error?.code === "ai_disabled") {
     body = <AiNotice>AI issue insights are turned off right now.</AiNotice>;
   } else if (status === "error" && (error?.code === "no_issues" || error?.code === "not_found")) {

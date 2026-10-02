@@ -199,11 +199,6 @@ issues.get("/issues", optionalAuth, async (c) => {
     // scan below, using *this* contributor's own GitHub access token —
     // exactly the pre-existing miss-path behavior, just reached through
     // `withCacheSWR` instead of a hand-rolled get/set.
-    // Set once the cache-refresh callback below has done its own bounded live scan,
-    // so the "missing projects" fallback further down doesn't pile a second one
-    // on top of it in the same invocation.
-    let scannedLiveForCache = false;
-
     const scan = await withCacheSWR<GithubScanCacheEntry>(
       c.executionCtx,
       c.env,
@@ -211,11 +206,7 @@ issues.get("/issues", optionalAuth, async (c) => {
       { softTtlSeconds: ISSUES_SCAN_SOFT_TTL_SECONDS, hardTtlSeconds: ISSUES_SCAN_HARD_TTL_SECONDS },
       async () => {
         const accessToken = await resolveScanToken(supabase);
-        // Bounded: scan at most ISSUES_SCAN_BATCH_SIZE projects, not every active
-        // one. Each project walks up to 10 GitHub pages, so scanning all of them
-        // at once on a cold cache blows the Worker's subrequest/CPU limits
-        // (surfacing as a 500) -- the scheduled warmer fills the rest.
-        const scanned = await scanProjectIssues(accessToken, projects.slice(0, ISSUES_SCAN_BATCH_SIZE), (project, error) => {
+        const scanned = await scanProjectIssues(accessToken, projects, (project, error) => {
           logger.error("issues_project_scan_failed", {
             projectId: project.id,
             repositoryFullName: project.repositoryFullName,
@@ -225,7 +216,6 @@ issues.get("/issues", optionalAuth, async (c) => {
         });
         // Only cache what actually succeeded (rule 21: never fake data
         // that wasn't really fetched).
-        scannedLiveForCache = true;
         return scanned.length > 0
           ? ({ scannedAt: new Date().toISOString(), projects: scanned } satisfies GithubScanCacheEntry)
           : null;
@@ -252,7 +242,7 @@ issues.get("/issues", optionalAuth, async (c) => {
     // contributes nothing to *this* response and waits for the scheduled
     // warmer's next tick(s), the same graceful-degradation the per-issue
     // loop below already applies to an outright scan failure.
-    const missingProjects = scannedLiveForCache ? [] : allMissingProjects.slice(0, ISSUES_SCAN_BATCH_SIZE);
+    const missingProjects = allMissingProjects.slice(0, ISSUES_SCAN_BATCH_SIZE);
 
     let rawIssuesByProjectId = cachedByProjectId;
     if (missingProjects.length > 0) {

@@ -10,6 +10,7 @@ import { authCli } from "./routes/authCli";
 import { contributions } from "./routes/contributions";
 import { devtunnelStats } from "./routes/devtunnelStats";
 import { issues } from "./routes/issues";
+import { issueDetail } from "./routes/issueDetail";
 import { githubProjects } from "./routes/githubProjects";
 import { githubOpenSourceTools } from "./routes/githubOpenSourceTools";
 import { projects } from "./routes/projects";
@@ -53,6 +54,9 @@ app.route("/auth/cli", authCli);
 app.route("/", contributions);
 app.route("/", devtunnelStats);
 app.route("/", issues);
+// View Issue page data: `GET /issues/:projectSlug/:issueNumber` (src/routes/issueDetail.ts).
+// Public, read-only, no model calls and no KV writes.
+app.route("/", issueDetail);
 app.route("/", githubProjects);
 app.route("/", githubOpenSourceTools);
 app.route("/", projects);

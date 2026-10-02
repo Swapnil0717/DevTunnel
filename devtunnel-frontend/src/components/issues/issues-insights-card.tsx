@@ -1,5 +1,6 @@
 "use client";
 
+import { SkeletonInsightsBody } from "@/components/ui/skeleton";
 import { SparkleIcon } from "@/components/layout/nav-icons";
 import { FilterGroup, InsightFillStatus, type FilterRow } from "@/components/ai/issue-insights-card";
 import { AI_SECONDARY_BUTTON_CLASS, AiCardHeader, AiLoading, AiSignInPrompt } from "@/components/ai/ai-states";
@@ -47,7 +48,14 @@ export function IssuesInsightsCard({ insights }: { insights: IssuesPageInsights 
       </div>
     );
   } else if (summary.analyzed === 0 && fill.running) {
-    body = <AiLoading message="Analyzing the issues… this can take a few seconds the first time." skeletonLines={3} />;
+    body = (
+      <AiLoading
+        message="Analyzing the issues… this can take a few seconds the first time."
+        skeleton={
+          <SkeletonInsightsBody disclaimer="Written by AI from issue titles, labels and short excerpts, so it can be wrong — open the issue before you start. The counts cover the 10 of 200 open issues in this list that have been analyzed; an issue the AI hasn't reached shows “Not analyzed”." />
+        }
+      />
+    );
   } else {
     const { filters } = insights;
 

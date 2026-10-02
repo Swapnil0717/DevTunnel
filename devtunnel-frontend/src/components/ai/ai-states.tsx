@@ -48,27 +48,31 @@ export function AiCardHeader({ title, level, done }: { title: string; level: "h2
 
 /**
  * Loading state: `role="status"` + `aria-live="polite"`, a spinner and a
- * message. Pass `skeletonLines` inside a card to reserve the height of the
- * content that is about to appear; leave it out for the compact inline form
+ * message. Pass `skeleton` (a twin of the real content) or `skeletonLines`
+ * (generic bars) inside a card to reserve the height of the content that
+ * is about to appear; leave it out for the compact inline form
  * (the search bar).
  */
 export function AiLoading({
   message,
   skeletonLines,
+  skeleton,
   className,
 }: {
   message: string;
   skeletonLines?: number;
+  /** A skeleton shaped like the content that is about to appear; wins over `skeletonLines`. */
+  skeleton?: ReactNode;
   className?: string;
 }) {
-  if (skeletonLines) {
+  if (skeleton || skeletonLines) {
     return (
       <div role="status" aria-live="polite" className={className}>
         <div className="mb-3 flex items-center gap-2 text-[12px] text-text-dim">
           <Spinner size={13} />
           <span>{message}</span>
         </div>
-        <SkeletonLines count={skeletonLines} />
+        {skeleton ?? <SkeletonLines count={skeletonLines ?? 3} />}
       </div>
     );
   }
