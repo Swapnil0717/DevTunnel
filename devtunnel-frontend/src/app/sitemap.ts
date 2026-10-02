@@ -11,7 +11,7 @@ export const revalidate = 3600;
  * 8, 24).
  *
  * Included:
- *  - the homepage;
+ *  - the homepage and `/sponsors`;
  *  - each DevTunnel catalog index (`/projects`, `/opensource-tools`,
  *    `/tasks`) and every project, tool and task page — but only when the
  *    backend actually serves that list to an anonymous request (see
@@ -42,6 +42,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 1,
     },
   ];
+
+  // Public, static page with its own content (what sponsorship pays for, the
+  // goal, the sponsor wall) — indexable like the catalog indexes.
+  entries.push({ url: `${SITE_URL}/sponsors`, changeFrequency: "monthly", priority: 0.5 });
 
   const sections: Array<{ index: string; urls: string[] | null; priority: number }> = [
     { index: "/projects", urls: catalog.projects, priority: 0.8 },

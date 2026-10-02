@@ -13,6 +13,7 @@ import { ContributeSidebar } from "@/components/contribute/contribute-sidebar";
 import { ContributeWorkflowPanel } from "@/components/contribute/contribute-workflow-panel";
 import { TaskContributeCliPanel } from "@/components/tasks/task-contribute-cli-panel";
 import { TaskProgressTracker } from "@/components/tasks/task-progress-tracker";
+import { PostPrPrompt } from "@/components/tasks/post-pr-prompt";
 import { TaskAiExplainCard } from "@/components/tasks/task-ai-explain-card";
 import { getTaskClaim } from "@/lib/tasks/progress";
 import { buildTaskWorkflowSteps } from "@/lib/contribute/task-workflow";
@@ -78,6 +79,12 @@ export async function generateMetadata({ params }: TaskContributePageProps): Pro
  * task happens server-side inside `dev start` (`POST /tasks/:id/start`),
  * which forks and claims in one step, so there's nothing to gate on and
  * the information is most useful to someone still deciding.
+ *
+ * Once the viewer's own pull request is open (`IN_REVIEW` and
+ * `viewerIsAssignee`), a "Thanks for your contribution" card
+ * (`PostPrPrompt`) sits under the tracker: **Sponsor DevTunnel** (a link out
+ * to Razorpay), **Give feedback** (`POST /tasks/:id/feedback`) or **Maybe
+ * later**. Optional, and it never touches how the PR is reviewed.
  *
  * When the task is still workable, an AI card (`TaskAiExplainCard`) sits
  * between the task summary and the commands: one click for AI-written first
@@ -243,6 +250,11 @@ export default async function TaskContributePage({ params }: TaskContributePageP
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
           <div className="flex min-w-0 flex-1 flex-col gap-6">
             <TaskProgressTracker task={task} />
+
+            {/* The contributor's own PR is open: offer Sponsor / Give feedback (optional, never affects review). */}
+            {task.status === "IN_REVIEW" && task.progress?.viewerIsAssignee ? (
+              <PostPrPrompt taskId={task.id} />
+            ) : null}
 
             <section
               aria-labelledby="contribute-task-heading"

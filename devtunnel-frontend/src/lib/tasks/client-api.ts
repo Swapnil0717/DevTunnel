@@ -29,3 +29,35 @@ export async function recordTaskView(taskId: string): Promise<boolean> {
     return false;
   }
 }
+
+
+/**
+ * `POST /tasks/:id/feedback` (devtunnel-backend src/routes/contributionFeedback.ts)
+ * — saves the contributor's 1–5 rating and optional message from the post-PR
+ * prompt on the task Contribute page.
+ *
+ * Unlike `recordTaskView`, this is a deliberate user action, so the caller
+ * needs to know whether it worked: it resolves `true` when saved and `false`
+ * for any failure (offline, rate-limited, not eligible, older backend without
+ * the route), and never throws. The prompt shows one honest "try again" line
+ * for `false`; it doesn't need to tell the causes apart.
+ *
+ * Idempotent per (task, user) server-side — sending again replaces the
+ * earlier answer.
+ */
+export async function submitContributionFeedback(
+  taskId: string,
+  feedback: { rating: number; message: string },
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/tasks/${encodeURIComponent(taskId)}/feedback`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rating: feedback.rating, message: feedback.message.trim() || null }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}

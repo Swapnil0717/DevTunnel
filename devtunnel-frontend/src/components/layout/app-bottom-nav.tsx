@@ -14,6 +14,7 @@ import {
   GitBranchIcon,
   IssueIcon,
   UploadIcon,
+  HeartIcon,
   SettingsIcon,
 } from "./nav-icons";
 import { useAuth } from "@/lib/auth/use-auth";
@@ -21,10 +22,10 @@ import { signInHref } from "@/lib/auth/sign-in-href";
 
 /**
  * Fixed bottom tab bar, shown only below the `sm` breakpoint — the
- * mobile counterpart to `AppSidebar`. `AppSidebar` lists 9 items (Home,
+ * mobile counterpart to `AppSidebar`. `AppSidebar` lists 11 items (Home,
  * Projects on Devtunnel, Open Source Tools on Devtunnel, Tasks / Issues,
  * All Issues, Github Projects, Github Open source tools, Community,
- * Profile, Settings); a phone-width tab bar can't hold all of them
+ * Sponsor, Profile, Settings); a phone-width tab bar can't hold all of them
  * legibly, so this keeps the 4 most-used, in the same relative order as
  * the sidebar, plus a 5th **More** tab.
  *
@@ -41,7 +42,7 @@ import { signInHref } from "@/lib/auth/sign-in-href";
  * instead: Home and Profile both need an account, so they're swapped for
  * Tools and a "Sign in" tab — every tab a guest sees goes somewhere they
  * can actually open. Their `More` sheet drops Settings for the same
- * reason (it also needs an account) and Community stays, since browsing
+ * reason (it also needs an account) and Community and Sponsor stay, since browsing
  * `/submissions` doesn't.
  */
 const NAV_LINKS = [
@@ -64,6 +65,7 @@ const MORE_LINKS = [
   { href: "/github-projects", label: "Github Projects", Icon: GitBranchIcon, requiresAccount: false },
   { href: "/github-open-source-tools", label: "Github Open source tools", Icon: GridIcon, requiresAccount: false },
   { href: "/submissions", label: "Community", Icon: UploadIcon, requiresAccount: false },
+  { href: "/sponsors", label: "Sponsor", Icon: HeartIcon, requiresAccount: false },
   { href: "/settings", label: "Settings", Icon: SettingsIcon, requiresAccount: true },
 ] as const;
 

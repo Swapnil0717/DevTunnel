@@ -19,3 +19,26 @@ export const SITE_NAME = "DevTunnel";
 
 export const SITE_DESCRIPTION =
   "DevTunnel connects contributors with open source projects to build, and helps maintainers organize tasks, roles, and pull requests.";
+
+
+/**
+ * External Razorpay page (a payment link or payment page that asks the
+ * sponsor for the amount) that the "Sponsor with Razorpay" button on
+ * `/sponsors` opens in a new tab. The sidebar link and the post-PR prompt go
+ * to `/sponsors`, never straight here. DevTunnel takes no payment itself and never learns
+ * whether anyone paid.
+ *
+ * `null` unless `NEXT_PUBLIC_SPONSOR_URL` is set to an `https://` URL, so an
+ * unset (or mistyped) value hides the Razorpay button on `/sponsors` instead
+ * of rendering a button that goes nowhere or to a non-HTTPS target. Read at build time
+ * (`NEXT_PUBLIC_*`), so changing it needs a rebuild.
+ */
+export const SPONSOR_URL: string | null = (() => {
+  const raw = process.env.NEXT_PUBLIC_SPONSOR_URL?.trim();
+  if (!raw) return null;
+  try {
+    return new URL(raw).protocol === "https:" ? raw : null;
+  } catch {
+    return null;
+  }
+})();

@@ -22,6 +22,7 @@ import { submissions } from "./routes/submissions";
 import { settings } from "./routes/settings";
 import { userActivity } from "./routes/userActivity";
 import { profileActivity } from "./routes/profileActivity";
+import { contributionFeedback } from "./routes/contributionFeedback";
 import { githubCatalogContribute } from "./routes/githubCatalogContribute";
 import { aiSummary } from "./routes/aiSummary";
 import { aiIssueExplanation } from "./routes/aiIssueExplanation";
@@ -74,6 +75,9 @@ app.route("/", userActivity);
 // button (`POST /github-projects/:slug/contribute` and its tools twin,
 // src/routes/githubCatalogContribute.ts).
 app.route("/", profileActivity);
+// Post-PR feedback: `POST /tasks/:id/feedback` (src/routes/contributionFeedback.ts),
+// the "Give feedback" option on the task Contribute page once a PR is open.
+app.route("/", contributionFeedback);
 app.route("/", githubCatalogContribute);
 // AI summary card on the five detail pages: `POST /ai/summary`
 // (src/routes/aiSummary.ts, Part 4). Signed-in only; stored-first, so a page

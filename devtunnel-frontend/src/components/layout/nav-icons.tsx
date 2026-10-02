@@ -389,3 +389,37 @@
      </svg>
    );
  }
+
+ /**
+  * Post-PR prompt on the task Contribute page — "Sponsor DevTunnel" option.
+  * A plain outline heart, same stroke-only convention as every other icon
+  * here; always paired with the words "Sponsor DevTunnel" (rule 43).
+  */
+ export function HeartIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M12 19.6s-7.25-4.4-7.25-9.85A4.1 4.1 0 0 1 12 7.6a4.1 4.1 0 0 1 7.25 2.15c0 5.45-7.25 9.85-7.25 9.85Z" />
+     </svg>
+   );
+ }
+
+ /** Post-PR prompt — "Give feedback" option. A speech bubble with two text lines. */
+ export function MessageIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M4.5 6.2A1.7 1.7 0 0 1 6.2 4.5h11.6a1.7 1.7 0 0 1 1.7 1.7v8.1a1.7 1.7 0 0 1-1.7 1.7H10l-4 3.5v-3.5h-.1a1.4 1.4 0 0 1-1.4-1.4Z" />
+       <path d="M8.5 9h7M8.5 12h4.5" />
+     </svg>
+   );
+ }
+
+ /** Marks a link that leaves DevTunnel (the Razorpay sponsorship page). */
+ export function ExternalLinkIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M14 5h5v5" />
+       <path d="M19 5l-8 8" />
+       <path d="M17.5 13.5V18a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7.5a1 1 0 0 1 1-1h4.5" />
+     </svg>
+   );
+ }
