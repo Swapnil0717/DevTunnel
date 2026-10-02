@@ -254,11 +254,18 @@ CF_AI_MODEL = "@cf/openai/gpt-oss-20b"           # Workers AI model id (needs th
 #                    `warmRotatingCatalogFilter`); all 8 buckets cycle every
 #                    8 hours.
 #
-# All four are independent, best-effort background jobs — one failing
+#   "40 * * * *"   — hourly: syncs submitted PRs with GitHub (src/lib/prSync.ts):
+#                    DevTunnel task PRs and `dev submit` PRs on any repo. Its own
+#                    cron on purpose — sharing "*/15" with the issues warmer
+#                    exhausted the per-invocation subrequest limit and left the
+#                    caches cold. NOTE: Workers Free allows 5 cron triggers per
+#                    account in total; this is the 5th for production.
+#
+# All five are independent, best-effort background jobs — one failing
 # never blocks or delays another (see src/lib/cacheWarmers.ts).
 # ---------------------------------------------------------------------------
 [triggers]
-crons = ["0 3 * * *", "*/15 * * * *", "*/25 * * * *", "12 * * * *"]
+crons = ["0 3 * * *", "*/15 * * * *", "*/25 * * * *", "12 * * * *", "40 * * * *"]
 
 # ---------------------------------------------------------------------------
 # Per-environment overrides. Deploy with `wrangler deploy --env staging`.

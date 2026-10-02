@@ -27,7 +27,11 @@ import type { ContributeTarget } from "@/lib/contribute/types";
  * thin.
  */
 export function ContributeCliPanel({ target }: { target: ContributeTarget }) {
-  const commands = buildCliCommands({ projectId: target.projectId, tasks: target.tasks });
+  const commands = buildCliCommands({
+    projectId: target.projectId,
+    tasks: target.tasks,
+    repositoryFullName: target.repositoryFullName,
+  });
 
   return (
     <div>

@@ -28,6 +28,12 @@
  *    NOT also appear in this row — the CLI only accepts one `<id>` and
  *    would reject a second positional argument.
  *
+ * With a `repositoryFullName`, two more rows appear (`dev start owner/repo`,
+ * `dev submit`): the CLI works on ANY public GitHub repository, and that work
+ * is recorded as a DevTunnel contribution even when no DevTunnel project or
+ * task exists for it (backend `POST /github/start` / `/github/submit`). This
+ * is the only path a raw GitHub-catalog repository or a tool has.
+ *
  * A tool never carries DevTunnel tasks (sql/017 — see `ContributeTarget`
  * in `lib/contribute/types.ts`), so `buildCliCommands` only ever emits
  * the task-scoped rows when `target.tasks` is non-empty. A tool also has
@@ -73,9 +79,16 @@ export interface CliCommandsInput {
   projectId: string | null;
   /** This target's curated DevTunnel tasks, if any. Always `[]` for a tool. */
   tasks: CliCommandTaskInput[];
+  /**
+   * `owner/repo` of the GitHub repository being contributed to, when there is one.
+   * `dev start owner/repo` / `dev submit` work on ANY public repository — no DevTunnel
+   * project or task needed — and the work still counts as a DevTunnel contribution.
+   * Omit it (or pass `null`) and no repository rows are built.
+   */
+  repositoryFullName?: string | null;
 }
 
-export function buildCliCommands({ projectId, tasks }: CliCommandsInput): CliCommand[] {
+export function buildCliCommands({ projectId, tasks, repositoryFullName = null }: CliCommandsInput): CliCommand[] {
   // One real task id to build the task-scoped example rows with. `dev`
   // doesn't care which task — any of them demonstrates the shape — so
   // the first curated one is as good as any other.
@@ -108,6 +121,16 @@ export function buildCliCommands({ projectId, tasks }: CliCommandsInput): CliCom
     });
   }
 
+  if (repositoryFullName) {
+    commands.push({
+      id: "start-repo",
+      command: `dev start ${repositoryFullName}`,
+      description:
+        "Works on any public GitHub repo, no DevTunnel task needed: forks it, clones it, and checks out a branch from the latest upstream. Add #123 to target one issue, e.g. " +
+        `dev start ${repositoryFullName}#123.`,
+    });
+  }
+
   if (exampleTaskId) {
     commands.push({
       id: "start-task",
@@ -127,6 +150,15 @@ export function buildCliCommands({ projectId, tasks }: CliCommandsInput): CliCom
       id: "submit-project",
       command: `dev submit ${projectId} --project`,
       description: "Commits your changes, pushes them, and opens a pull request.",
+    });
+  }
+
+  if (repositoryFullName) {
+    commands.push({
+      id: "submit-repo",
+      command: "dev submit",
+      description:
+        "Run inside your clone: commits, pushes, and opens the pull request on the upstream repo (using its own PR template if it has one). It counts as a DevTunnel contribution even if the issue isn't a DevTunnel task.",
     });
   }
 

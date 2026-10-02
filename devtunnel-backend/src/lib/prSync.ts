@@ -48,9 +48,33 @@ const USER_AGENT = "devtunnel-backend";
  * calls). When more PRs are open than this, the window rotates every run
  * (see `pickWindow`) so none are starved.
  */
-const MAX_PRS_PER_RUN = 20;
+const MAX_PRS_PER_RUN = 12;
 const MAX_OPEN_ROWS_SCANNED = 1000;
-const RUN_INTERVAL_MS = 15 * 60 * 1000;
+// Must equal this job's cron interval in wrangler.toml ("40 * * * *" = hourly) so the rotating window advances one step per run.
+const RUN_INTERVAL_MS = 60 * 60 * 1000;
+
+/**
+ * Subrequests (every fetch(): GitHub AND each Supabase call) one invocation
+ * may spend. Workers Free allows 50 per invocation; stay under it so a busy
+ * backlog is simply finished by the next run instead of crashing this one.
+ *
+ * This job used to ride on the 15-minute cron next to the issues-cache
+ * warmer, and once it also synced external PRs the two together blew the
+ * 50-subrequest / CPU cap — the warmer died before writing the cache, and
+ * /issues, /github-projects and /github-open-source-tools fell back to slow
+ * live GitHub scans (\"Worker exceeded limit\"). It now has its own cron.
+ */
+const SUBREQUEST_BUDGET = 40;
+
+interface Budget {
+  left: number;
+}
+/** Takes `n` subrequests from the budget; false (and takes nothing) if they are not available. */
+function spend(budget: Budget, n: number): boolean {
+  if (budget.left < n) return false;
+  budget.left -= n;
+  return true;
+}
 
 interface OpenPullRequestRow {
   id: string;
@@ -201,8 +225,9 @@ async function applyClosedUnmerged(supabase: SupabaseClient, row: OpenPullReques
  * sql/046). There is no task or project to move — settling the row is the
  * whole job, and the sql/046 trigger writes the PULL_REQUEST_MERGED activity.
  */
-async function syncExternalPullRequests(env: ValidatedEnv): Promise<void> {
+async function syncExternalPullRequests(env: ValidatedEnv, budget: Budget): Promise<void> {
   const supabase = getSupabase(env);
+  if (!spend(budget, 1)) return;
   const rows = await listOpenExternalContributions(supabase, MAX_OPEN_ROWS_SCANNED);
   if (rows.length === 0) return;
 
@@ -224,11 +249,15 @@ async function syncExternalPullRequests(env: ValidatedEnv): Promise<void> {
       continue;
     }
 
+    if (!spend(budget, 1)) break;
     const pr = await fetchPrState(env.GITHUB_DISCOVERY_TOKEN, ref);
     if (!pr) {
       skipped++;
       continue;
     }
+
+    // Settling costs one database write; if the budget is gone the PR stays OPEN and the next run retries it.
+    if (pr.state !== "open" && !spend(budget, 1)) break;
 
     try {
       if (pr.state === "open") {
@@ -251,14 +280,24 @@ async function syncExternalPullRequests(env: ValidatedEnv): Promise<void> {
 
 export async function syncSubmittedPullRequests(env: ValidatedEnv): Promise<void> {
   const supabase = getSupabase(env);
+  const budget: Budget = { left: SUBREQUEST_BUDGET };
 
-  // External (non-DevTunnel) PRs first, and isolated: a failure here must not
-  // stop the DevTunnel task sync below, and the DevTunnel sync's early
-  // `return` on "no open rows" must not skip this.
-  await syncExternalPullRequests(env).catch((err) => {
+  // DevTunnel's own tasks first (they move task/project status), then external
+  // PRs with whatever budget is left. Each is isolated: a failure in one must
+  // not stop the other, and an early `return` on "no open rows" must not skip it.
+  try {
+    await syncDevtunnelPullRequests(env, supabase, budget);
+  } catch (err) {
+    logger.error("pr_sync_devtunnel_failed", { error: err instanceof Error ? err.message : String(err) });
+  }
+
+  await syncExternalPullRequests(env, budget).catch((err) => {
     logger.error("pr_sync_external_failed", { error: err instanceof Error ? err.message : String(err) });
   });
+}
 
+async function syncDevtunnelPullRequests(env: ValidatedEnv, supabase: SupabaseClient, budget: Budget): Promise<void> {
+  if (!spend(budget, 1)) return;
   const { data, error } = await supabase
     .from("pull_requests")
     .select("id, task_id, project_id, github_pr_url, github_pr_number")
@@ -287,11 +326,15 @@ export async function syncSubmittedPullRequests(env: ValidatedEnv): Promise<void
       continue;
     }
 
+    if (!spend(budget, 1)) break;
     const pr = await fetchPrState(env.GITHUB_DISCOVERY_TOKEN, ref);
     if (!pr) {
       skipped++;
       continue;
     }
+
+    // applyMerged / applyClosedUnmerged make up to 2 database calls.
+    if (pr.state !== "open" && !spend(budget, 2)) break;
 
     try {
       if (pr.state === "open") {

@@ -131,10 +131,12 @@ async function handleScheduled(event: ScheduledEvent, env: Env, ctx: ExecutionCo
           });
         }),
       );
-      // Same 15-minute schedule also checks GitHub for the state of every
-      // submitted PR (lib/prSync.ts): merged -> task/project DONE, closed
-      // without merging -> back to IN_PROGRESS. Separate waitUntil so a
-      // failure in one job never affects the other.
+      return;
+
+    case "40 * * * *":
+      // PR sync has its OWN cron (hourly) and therefore its own 50-subrequest
+      // budget. It used to share the "*/15" invocation with the issues-cache
+      // warmer, which starved the warmer and left the cache cold.
       ctx.waitUntil(
         syncSubmittedPullRequests(validatedEnv).catch((err) => {
           logger.error("pr_sync_scheduled_run_failed", {
