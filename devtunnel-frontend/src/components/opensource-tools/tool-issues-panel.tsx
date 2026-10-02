@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { AiExplainButton } from "@/components/ai/ai-explain-button";
 import { IssueInsightBadges, IssueInsightsCard } from "@/components/ai/issue-insights-card";
 import { GithubEmptyState } from "@/components/github-projects/github-empty-state";
@@ -10,6 +11,7 @@ import { PagePaginationControls } from "@/components/admin/page-pagination-contr
 import { usePagePagination } from "@/lib/admin/use-page-pagination";
 import { parseGithubRepoFullName } from "@/lib/ai/explain-client";
 import { useIssueInsights } from "@/lib/ai/use-issue-insights";
+import { issueHref, repoIssueSlug } from "@/lib/issues/hrefs";
 import { REPO_ISSUES_PAGE_SIZE, type LoadAllIssuesState } from "@/lib/issues/use-load-all-issues";
 import type { OpenSourceToolIssuePreview } from "@/lib/opensource-tools/types";
 
@@ -52,6 +54,32 @@ function formatDate(iso: string): string {
  * not inside — its link (a `<button>` nested in an `<a>` is invalid HTML). It
  * only appears when the tool's repository URL is a github.com repository.
  */
+/** An internal `Link` to DevTunnel's View Issue page, or a new-tab `<a>` when the tool has no GitHub repository slug. */
+function RowLink({
+  href,
+  external,
+  className,
+  children,
+}: {
+  href: string;
+  external: boolean;
+  className: string;
+  children: React.ReactNode;
+}) {
+  if (external) {
+    return (
+      <a href={href} target="_blank" rel="noreferrer noopener" className={className}>
+        {children}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} className={className}>
+      {children}
+    </Link>
+  );
+}
+
 export function ToolIssuesPanel({
   loader,
   repositoryUrl,
@@ -148,10 +176,9 @@ export function ToolIssuesPanel({
           <ul className="m-0 flex list-none flex-col divide-y divide-border-subtle p-0">
             {paged.pageItems.map((issue) => (
               <li key={issue.id}>
-                <a
-                  href={issue.url}
-                  target="_blank"
-                  rel="noreferrer noopener"
+                <RowLink
+                  href={repoFullName ? issueHref(repoIssueSlug(repoFullName), issue.number) : issue.url}
+                  external={!repoFullName}
                   className="flex flex-col gap-1 rounded-md px-3 py-2.5 hover:bg-surface-raised"
                 >
                   <span className="flex items-start gap-2 text-[13px] text-text">
@@ -184,7 +211,7 @@ export function ToolIssuesPanel({
                       </span>
                     ))}
                   </span>
-                </a>
+                </RowLink>
                 {repoFullName ? (
                   <div className="flex flex-col gap-1.5 pb-2.5 pl-[34px] pr-3">
                     <IssueInsightBadges controller={insights} issueNumber={issue.number} />

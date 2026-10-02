@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { buildMetadata } from "@/lib/seo";
 import { getIssueDetail } from "@/lib/issues/detail-api";
 import { getDevtunnelProjectBySlug } from "@/lib/projects/api";
-import { issueHref } from "@/lib/issues/hrefs";
+import { issueHref, issueProjectHref } from "@/lib/issues/hrefs";
 import { RepoLogo } from "@/components/admin/repo-logo";
 import { TechIcon } from "@/components/onboarding/tech-icon";
 import { ChevronLeftIcon, GitBranchIcon, IssueIcon } from "@/components/layout/nav-icons";
@@ -12,6 +12,7 @@ import { SectionMessage } from "@/components/home/section-message";
 import { ContributeSidebar } from "@/components/contribute/contribute-sidebar";
 import { ContributeWorkflowPanel } from "@/components/contribute/contribute-workflow-panel";
 import { IssueAiExplainCard } from "@/components/issues/issue-ai-explain-card";
+import { IssueContributeCliPanel } from "@/components/issues/issue-contribute-cli-panel";
 import { IssueLabels, IssueStateWord } from "@/components/issues/issue-detail-sections";
 import { buildTaskWorkflowSteps } from "@/lib/contribute/task-workflow";
 import type { ContributeTarget } from "@/lib/contribute/types";
@@ -76,7 +77,8 @@ export async function generateMetadata({ params }: IssueContributePageProps): Pr
  *  - a DevTunnel task exists — claiming happens on the task, so the page
  *    sends the visitor to its Contribute page instead of printing steps that
  *    would bypass it.
- *  - otherwise — the AI card, the "not a DevTunnel task" note and the manual
+ *  - otherwise (a DevTunnel project's issue or a GitHub-catalog / tool repository's) — the AI card, the
+ *    `dev` CLI commands with this issue's `owner/repo#number` filled in, a "no task to claim" note and the manual
  *    steps.
  *
  * Same three outcomes every detail route in this app uses: an unknown issue
@@ -115,7 +117,8 @@ export default async function IssueContributePage({ params }: IssueContributePag
   const issue = result.data;
   const isOpen = issue.state === "OPEN";
   const issuePageHref = issueHref(issue.project.slug, issue.number);
-  const projectHref = `/projects/${issue.project.slug}`;
+  const isGithubRepo = issue.source === "github";
+  const projectHref = issueProjectHref(issue.project.slug, issue.source);
 
   const workflowSteps = buildTaskWorkflowSteps({
     repositoryUrl: issue.project.repositoryUrl || null,
@@ -126,7 +129,28 @@ export default async function IssueContributePage({ params }: IssueContributePag
   // Same view model the project and task Contribute pages build, so the rail
   // can be shared as-is. Only possible when the project fetch succeeded.
   let sidebarTarget: ContributeTarget | null = null;
-  if (projectResult.status === "ok") {
+  if (isGithubRepo) {
+    // No DevTunnel project behind this issue, so the rail is built from the issue's own repository facts —
+    // no extra request, nothing invented (description / license / issue count are simply left out).
+    sidebarTarget = {
+      kind: "github-repo",
+      slug: issue.project.slug,
+      projectId: null,
+      name: issue.project.name,
+      description: null,
+      repositoryUrl: issue.project.repositoryUrl || null,
+      repositoryFullName: issue.project.repositoryFullName || null,
+      cloneUrl: issue.project.repositoryUrl ? `${issue.project.repositoryUrl}.git` : null,
+      techStack: issue.project.techStack,
+      license: null,
+      openIssuesCount: null,
+      detailHref: projectHref,
+      listHref: "/github-projects",
+      listLabel: "GitHub Projects",
+      viewerIsContributing: false,
+      tasks: [],
+    };
+  } else if (projectResult.status === "ok") {
     const project = projectResult.data;
     sidebarTarget = {
       kind: "project",
@@ -302,20 +326,34 @@ export default async function IssueContributePage({ params }: IssueContributePag
                 <IssueAiExplainCard issue={issue} variant="contribute" />
 
                 <section
+                  aria-label="Contribute with the DevTunnel CLI"
+                  className="rounded-[10px] border border-border bg-surface p-5"
+                >
+                  {issue.project.repositoryFullName ? (
+                    <IssueContributeCliPanel
+                      repositoryFullName={issue.project.repositoryFullName}
+                      issueNumber={issue.number}
+                    />
+                  ) : (
+                    <SectionMessage>
+                      This project has no linked GitHub repository, so there&apos;s nothing for the CLI to fork.
+                    </SectionMessage>
+                  )}
+                </section>
+
+                <section
                   aria-labelledby="contribute-not-task-heading"
                   className="rounded-[10px] border border-border bg-surface p-5"
                 >
                   <h2 id="contribute-not-task-heading" className="m-0 mb-2 text-[13px] font-medium text-text">
-                    This is a GitHub issue, not a DevTunnel task
+                    {isGithubRepo ? "This is a GitHub issue, not a DevTunnel task" : "No DevTunnel task for this issue yet"}
                   </h2>
                   <p className="m-0 text-[12.5px] leading-relaxed text-text-secondary">
-                    DevTunnel claims and tracks work only for tasks its maintainers have curated, so there&apos;s
-                    nothing to claim here and no <code className="font-mono">dev start</code> command for this issue.
-                    (The CLI&apos;s <code className="font-mono">--project</code> mode claims the whole project for one
-                    contributor at a time, so it isn&apos;t a fit for a single issue.)
+                    There&apos;s no DevTunnel task to claim, so nothing here marks the issue as taken. The CLI above
+                    works on any public GitHub issue, and your pull request still counts as a DevTunnel contribution.
                   </p>
                   <p className="m-0 mt-2 text-[12.5px] leading-relaxed text-text-secondary">
-                    Work on it the way you would on any open-source issue:{" "}
+                    Before you start, check nobody already has it and{" "}
                     <a
                       href={issue.url}
                       target="_blank"
@@ -324,9 +362,9 @@ export default async function IssueContributePage({ params }: IssueContributePag
                     >
                       leave a comment on GitHub
                     </a>{" "}
-                    saying you&apos;d like to take it — and check nobody already has — then follow the steps below.
-                    Mention <span className="font-mono text-text-muted">#{issue.number}</span> in your pull request so
-                    GitHub links the two.
+                    saying you&apos;d like to take it. The CLI links{" "}
+                    <span className="font-mono text-text-muted">#{issue.number}</span> in your pull request so GitHub
+                    connects the two.
                   </p>
                 </section>
 
@@ -337,7 +375,7 @@ export default async function IssueContributePage({ params }: IssueContributePag
                   {workflowSteps ? (
                     <>
                       <p className="m-0 mb-4 text-[12.5px] leading-relaxed text-text-secondary">
-                        Fork, branch, commit and open the pull request yourself, linking issue{" "}
+                        Prefer plain Git? Fork, branch, commit and open the pull request yourself, linking issue{" "}
                         <span className="font-mono text-text-muted">#{issue.number}</span>.
                       </p>
                       <ContributeWorkflowPanel

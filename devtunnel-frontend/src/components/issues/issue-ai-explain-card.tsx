@@ -40,7 +40,7 @@ export function IssueAiExplainCard({ issue, variant = "view" }: { issue: IssueDe
   if (!target) return null;
 
   if (open) {
-    return <AiExplanationPanel id={panelId} source="devtunnel" repo={target.repo} issueNumber={target.issueNumber} />;
+    return <AiExplanationPanel id={panelId} source={issue.source === "github" ? "github" : "devtunnel"} repo={target.repo} issueNumber={target.issueNumber} />;
   }
 
   return (

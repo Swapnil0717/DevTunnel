@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { buildMetadata } from "@/lib/seo";
 import { getIssueDetail } from "@/lib/issues/detail-api";
 import { getDevtunnelProjectBySlug } from "@/lib/projects/api";
+import { issueProjectHref } from "@/lib/issues/hrefs";
 import { RepoLogo } from "@/components/admin/repo-logo";
 import { ChevronLeftIcon, GitBranchIcon, IssueIcon } from "@/components/layout/nav-icons";
 import { SectionMessage } from "@/components/home/section-message";
@@ -112,8 +113,11 @@ export default async function IssueDetailPage({ params }: IssueDetailPageProps) 
   }
 
   const issue = result.data;
-  const projectDescription = projectResult.status === "ok" ? projectResult.data.description : null;
-  const projectTaskProgress = projectResult.status === "ok" ? (projectResult.data.taskProgress ?? null) : null;
+  // An issue of a GitHub-catalog repository or a tool has no DevTunnel project behind it.
+  const isGithubRepo = issue.source === "github";
+  const projectDescription = !isGithubRepo && projectResult.status === "ok" ? projectResult.data.description : null;
+  const projectTaskProgress =
+    !isGithubRepo && projectResult.status === "ok" ? (projectResult.data.taskProgress ?? null) : null;
 
   return (
     <BlueprintReveal skeleton={<RouteLoading />}>
@@ -190,8 +194,12 @@ export default async function IssueDetailPage({ params }: IssueDetailPageProps) 
             <TaskProjectSection
               project={issue.project}
               description={projectDescription}
-              unavailable={projectResult.status !== "ok"}
+              unavailable={!isGithubRepo && projectResult.status !== "ok"}
               taskProgress={projectTaskProgress}
+              projectHref={issueProjectHref(issue.project.slug, issue.source)}
+              emptyDescription={
+                isGithubRepo ? "This repository is on GitHub and hasn't been onboarded to DevTunnel yet." : undefined
+              }
             />
             <IssueAiExplainCard issue={issue} variant="view" />
             <TaskIssueSection issue={issue} body={issue.body} />

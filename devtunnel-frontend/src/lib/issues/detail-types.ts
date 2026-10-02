@@ -43,6 +43,12 @@ export interface IssueDetail {
   createdAt: string;
   updatedAt: string;
   project: IssueProjectRef;
+  /**
+   * `"devtunnel"` for an onboarded DevTunnel project, `"github"` for a repository that is only in
+   * the GitHub catalog (or a tool's repository) — those have no DevTunnel project page or tasks.
+   * Optional so a response from an older backend still reads as a DevTunnel project.
+   */
+  source?: "devtunnel" | "github";
   /** `null` when no live DevTunnel task covers this issue. */
   task: IssueDetailTaskRef | null;
 }

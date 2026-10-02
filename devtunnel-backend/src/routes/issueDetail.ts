@@ -8,7 +8,7 @@ import { checkRateLimit } from "../lib/rateLimit";
 import { errorResponse } from "../lib/response";
 import { logger } from "../lib/logger";
 import { withCacheSWR } from "../lib/cache";
-import { GitHubRepoError, fetchRepositoryIssue } from "../lib/githubRepo";
+import { GitHubRepoError, fetchRepositoryIssue, fetchRepositoryMetadata, type GitHubRepoMetadata } from "../lib/githubRepo";
 import { getProjectDetailBySlug } from "../db/projects";
 import { getTaskRefForIssue } from "../db/issueDetail";
 
@@ -66,6 +66,25 @@ export const issueDetail = new Hono<{ Bindings: Env; Variables: Variables }>();
 const ISSUE_CACHE_SOFT_TTL_SECONDS = 5 * 60;
 const ISSUE_CACHE_HARD_TTL_SECONDS = 30 * 60;
 
+/**
+ * The GitHub-catalog slug encoding (`lib/githubCatalog.ts`): `owner--repo`,
+ * lower-cased. Same decoding `routes/githubProjects.ts` uses. A slug without
+ * `--` is not a catalog slug.
+ */
+function catalogSlugToOwnerRepo(slug: string): { owner: string; repo: string } | null {
+  const separatorIndex = slug.indexOf("--");
+  if (separatorIndex <= 0) return null;
+  const owner = slug.slice(0, separatorIndex);
+  const repo = slug.slice(separatorIndex + 2);
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(owner)) return null;
+  if (!/^[A-Za-z0-9._-]+$/.test(repo) || repo === "." || repo === "..") return null;
+  return { owner, repo };
+}
+
+/** Repository facts (name, URL, language) for the issue page of a repo that isn't a DevTunnel project. */
+const REPO_META_SOFT_TTL_SECONDS = 10 * 60;
+const REPO_META_HARD_TTL_SECONDS = 60 * 60;
+
 const paramsSchema = z.object({
   projectSlug: z.string().trim().min(1, "Invalid project slug").max(200, "Invalid project slug"),
   issueNumber: z.coerce
@@ -74,6 +93,26 @@ const paramsSchema = z.object({
     .positive("Issue number must be positive")
     .max(10_000_000, "Issue number is too large"),
 });
+
+/** The issue fields shared by both kinds of project. */
+function toIssuePayload(issue: GithubIssueSummary) {
+  return {
+    number: issue.number,
+    title: issue.title,
+    url: issue.url,
+    state: issue.state,
+    // The issue text exactly as GitHub has it — never rewritten
+    // ("Do not modify the original GitHub issue", admin_workflow.txt
+    // section 10). The frontend renders it through its markdown
+    // component, which doesn't execute HTML.
+    body: issue.body,
+    labels: issue.labels,
+    commentCount: issue.commentCount,
+    author: issue.author,
+    createdAt: issue.createdAt,
+    updatedAt: issue.updatedAt,
+  };
+}
 
 issueDetail.get("/issues/:projectSlug/:issueNumber", optionalAuth, async (c) => {
   const env = getEnv(c.env);
@@ -109,56 +148,94 @@ issueDetail.get("/issues/:projectSlug/:issueNumber", optionalAuth, async (c) => 
     // Same 404 posture as `GET /projects/:slug`: unknown, soft-deleted and
     // archived projects are one indistinguishable "this page doesn't exist".
     const project = await getProjectDetailBySlug(supabase, projectSlug, null);
-    if (!project || !project.repo) {
+
+    if (project?.repo) {
+      const { owner, repo } = project.repo;
+
+      const [issue, task] = await Promise.all([
+        withCacheSWR<GithubIssueSummary>(
+          c.executionCtx,
+          c.env,
+          `issue-detail:${owner.toLowerCase()}/${repo.toLowerCase()}#${issueNumber}:v1`,
+          { softTtlSeconds: ISSUE_CACHE_SOFT_TTL_SECONDS, hardTtlSeconds: ISSUE_CACHE_HARD_TTL_SECONDS },
+          // `null` (no such issue / it's a pull request) is never cached — see `withCacheSWR`.
+          () => fetchRepositoryIssue(env.GITHUB_DISCOVERY_TOKEN, owner, repo, issueNumber),
+        ),
+        getTaskRefForIssue(supabase, project.id, issueNumber),
+      ]);
+
+      if (!issue) {
+        return errorResponse(c, 404, "issue_not_found", "That issue couldn't be found.");
+      }
+
+      return c.json(
+        {
+          ...toIssuePayload(issue),
+          source: "devtunnel" as const,
+          // Trimmed to the same fields as the frontend's `IssueProjectRef`
+          // (`lib/issues/types.ts`) — no project id, nothing a reader of an
+          // issue has a use for.
+          project: {
+            slug: project.slug,
+            name: project.name,
+            repositoryFullName: project.repositoryFullName,
+            repositoryUrl: project.repositoryUrl,
+            techStack: project.techStack,
+          },
+          // A live DevTunnel task created from this issue, or `null`. When it
+          // exists, the task page is where claiming and `dev start` happen.
+          task,
+        },
+        200,
+      );
+    }
+
+    // Not a DevTunnel project. Every issue on the site opens THIS page, so a
+    // raw GitHub-catalog repository (`/github-projects`,
+    // `/github-open-source-tools`) or a DevTunnel tool is resolved by its
+    // `owner--repo` slug instead. There is never a DevTunnel task for these.
+    const ref = catalogSlugToOwnerRepo(projectSlug);
+    if (!ref) {
       return errorResponse(c, 404, "not_found", "This project isn't on DevTunnel");
     }
-    const { owner, repo } = project.repo;
 
-    const [issue, task] = await Promise.all([
+    const [meta, issue] = await Promise.all([
+      withCacheSWR<GitHubRepoMetadata>(
+        c.executionCtx,
+        c.env,
+        `issue-repo:${ref.owner.toLowerCase()}/${ref.repo.toLowerCase()}:v1`,
+        { softTtlSeconds: REPO_META_SOFT_TTL_SECONDS, hardTtlSeconds: REPO_META_HARD_TTL_SECONDS },
+        () => fetchRepositoryMetadata(env.GITHUB_DISCOVERY_TOKEN, ref.owner, ref.repo),
+      ),
       withCacheSWR<GithubIssueSummary>(
         c.executionCtx,
         c.env,
-        `issue-detail:${owner.toLowerCase()}/${repo.toLowerCase()}#${issueNumber}:v1`,
+        `issue-detail:${ref.owner.toLowerCase()}/${ref.repo.toLowerCase()}#${issueNumber}:v1`,
         { softTtlSeconds: ISSUE_CACHE_SOFT_TTL_SECONDS, hardTtlSeconds: ISSUE_CACHE_HARD_TTL_SECONDS },
-        // `null` (no such issue / it's a pull request) is never cached — see `withCacheSWR`.
-        () => fetchRepositoryIssue(env.GITHUB_DISCOVERY_TOKEN, owner, repo, issueNumber),
+        () => fetchRepositoryIssue(env.GITHUB_DISCOVERY_TOKEN, ref.owner, ref.repo, issueNumber),
       ),
-      getTaskRefForIssue(supabase, project.id, issueNumber),
     ]);
 
+    // A private repository (or one that vanished) is the same "doesn't exist" as an unknown slug.
+    if (!meta || meta.isPrivate) {
+      return errorResponse(c, 404, "not_found", "This project isn't on DevTunnel");
+    }
     if (!issue) {
       return errorResponse(c, 404, "issue_not_found", "That issue couldn't be found.");
     }
 
     return c.json(
       {
-        number: issue.number,
-        title: issue.title,
-        url: issue.url,
-        state: issue.state,
-        // The issue text exactly as GitHub has it — never rewritten
-        // ("Do not modify the original GitHub issue", admin_workflow.txt
-        // section 10). The frontend renders it through its markdown
-        // component, which doesn't execute HTML.
-        body: issue.body,
-        labels: issue.labels,
-        commentCount: issue.commentCount,
-        author: issue.author,
-        createdAt: issue.createdAt,
-        updatedAt: issue.updatedAt,
-        // Trimmed to the same fields as the frontend's `IssueProjectRef`
-        // (`lib/issues/types.ts`) — no project id, nothing a reader of an
-        // issue has a use for.
+        ...toIssuePayload(issue),
+        source: "github" as const,
         project: {
-          slug: project.slug,
-          name: project.name,
-          repositoryFullName: project.repositoryFullName,
-          repositoryUrl: project.repositoryUrl,
-          techStack: project.techStack,
+          slug: projectSlug.toLowerCase(),
+          name: meta.name,
+          repositoryFullName: meta.fullName,
+          repositoryUrl: meta.htmlUrl,
+          techStack: meta.primaryLanguage ? [meta.primaryLanguage] : [],
         },
-        // A live DevTunnel task created from this issue, or `null`. When it
-        // exists, the task page is where claiming and `dev start` happen.
-        task,
+        task: null,
       },
       200,
     );

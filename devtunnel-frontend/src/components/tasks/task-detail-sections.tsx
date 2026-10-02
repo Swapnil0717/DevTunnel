@@ -59,11 +59,17 @@ export function TaskProjectSection({
   description,
   unavailable,
   taskProgress = null,
+  projectHref,
+  emptyDescription,
 }: {
   project: TaskProjectRef;
   description: string | null;
   unavailable: boolean;
   taskProgress?: TaskProgressCounts | null;
+  /** Where "View project" goes. Defaults to the DevTunnel project page; a GitHub-catalog repository passes its own. */
+  projectHref?: string;
+  /** Replaces the "no description yet" line, e.g. for a GitHub repository DevTunnel hasn't onboarded. */
+  emptyDescription?: string;
 }) {
   return (
     <section aria-labelledby="task-project-heading" className={SECTION_CLASS}>
@@ -72,7 +78,7 @@ export function TaskProjectSection({
           About the project
         </h2>
         <Link
-          href={`/projects/${project.slug}`}
+          href={projectHref ?? `/projects/${project.slug}`}
           className="text-[12px] font-medium text-text-muted transition-colors hover:text-accent"
         >
           View project
@@ -103,7 +109,7 @@ export function TaskProjectSection({
             <p className="m-0 mt-3 text-[12px] text-text-faint">
               {unavailable
                 ? "The project description isn't available right now."
-                : "This project has no description yet."}
+                : (emptyDescription ?? "This project has no description yet.")}
             </p>
           )}
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import { AiExplainButton } from "@/components/ai/ai-explain-button";
 import { IssueInsightBadges, IssueInsightsCard } from "@/components/ai/issue-insights-card";
 import { GithubEmptyState } from "@/components/github-projects/github-empty-state";
@@ -9,6 +10,7 @@ import { PagePaginationControls } from "@/components/admin/page-pagination-contr
 import { usePagePagination } from "@/lib/admin/use-page-pagination";
 import { parseGithubRepoFullName } from "@/lib/ai/explain-client";
 import { useIssueInsights } from "@/lib/ai/use-issue-insights";
+import { issueHref, repoIssueSlug } from "@/lib/issues/hrefs";
 import { REPO_ISSUES_PAGE_SIZE, type LoadAllIssuesState } from "@/lib/issues/use-load-all-issues";
 import type { GithubProjectIssuePreview } from "@/lib/github-projects/types";
 
@@ -17,10 +19,9 @@ import type { GithubProjectIssuePreview } from "@/lib/github-projects/types";
  * `/github-projects/:slug` and `/github-open-source-tools/:slug`, which
  * share `GithubProjectDetailTabs` because their detail shape is identical.
  *
- * The repository's currently-open issues, each linking straight out to
- * the real GitHub issue — this app has no issue tracker of its own for a
- * repository DevTunnel hasn't onboarded, so "read more on GitHub" is the
- * honest destination, same posture `IssuesTable` takes for `/issues`.
+ * The repository's currently-open issues. Every row opens DevTunnel's own
+ * View Issue page (`/issues/:owner--repo/:number`) — the issue as filed, an AI
+ * explanation and the `dev` commands to contribute — which links on to GitHub.
  *
  * The page ships only a first-page preview of the backlog. `loader` (see
  * `useLoadAllIssues`, held by the tabs component so it survives tab
@@ -49,6 +50,32 @@ import type { GithubProjectIssuePreview } from "@/lib/github-projects/types";
  * items while the preview came back empty (e.g. the newest items were all
  * pull requests) offers "Load all issues" instead of claiming it's clear.
  */
+/** An internal `Link` for a DevTunnel page, a plain new-tab `<a>` for the GitHub fallback. */
+function RowLink({
+  href,
+  external,
+  className,
+  children,
+}: {
+  href: string;
+  external: boolean;
+  className: string;
+  children: React.ReactNode;
+}) {
+  if (external) {
+    return (
+      <a href={href} target="_blank" rel="noreferrer noopener" className={className}>
+        {children}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} className={className}>
+      {children}
+    </Link>
+  );
+}
+
 export function GithubIssuesPanel({
   loader,
   repositoryUrl,
@@ -59,6 +86,9 @@ export function GithubIssuesPanel({
   const { issues, canLoadMore } = loader;
   // `null` (no Explain button, no insights card) if the URL isn't a github.com repository.
   const repoFullName = parseGithubRepoFullName(repositoryUrl);
+  // Every row opens DevTunnel's own View Issue page; only a repository URL that isn't github.com falls back to the raw link.
+  const rowHref = (number: number, fallbackUrl: string) =>
+    repoFullName ? issueHref(repoIssueSlug(repoFullName), number) : fallbackUrl;
   // The catalog endpoint only returns open issues. After "Load all issues" the ones without an AI insight yet
   // are analysed (only once the visitor has pressed "Analyze issues").
   const openIssueNumbers = useMemo(() => issues.map((issue) => issue.number), [issues]);
@@ -99,10 +129,9 @@ export function GithubIssuesPanel({
           <ul className="m-0 flex list-none flex-col divide-y divide-border-subtle p-0">
             {paged.pageItems.map((issue) => (
               <li key={issue.id}>
-                <a
-                  href={issue.url}
-                  target="_blank"
-                  rel="noreferrer noopener"
+                <RowLink
+                  href={rowHref(issue.number, issue.url)}
+                  external={!repoFullName}
                   className="flex flex-col gap-1 rounded-md px-3 py-2.5 hover:bg-surface-raised"
                 >
                   <span className="flex items-center gap-2 text-[13px] text-text">
@@ -131,7 +160,7 @@ export function GithubIssuesPanel({
                       </span>
                     ))}
                   </span>
-                </a>
+                </RowLink>
                 {repoFullName ? (
                   <div className="flex flex-col gap-1.5 px-3 pb-2.5">
                     <IssueInsightBadges controller={insights} issueNumber={issue.number} />

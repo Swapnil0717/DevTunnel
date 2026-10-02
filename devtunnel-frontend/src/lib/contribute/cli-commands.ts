@@ -86,9 +86,19 @@ export interface CliCommandsInput {
    * Omit it (or pass `null`) and no repository rows are built.
    */
   repositoryFullName?: string | null;
+  /**
+   * The GitHub issue being picked up. With it, the repository `dev start` row is the exact
+   * `dev start owner/repo#123` for that issue (nothing left to fill in).
+   */
+  issueNumber?: number | null;
 }
 
-export function buildCliCommands({ projectId, tasks, repositoryFullName = null }: CliCommandsInput): CliCommand[] {
+export function buildCliCommands({
+  projectId,
+  tasks,
+  repositoryFullName = null,
+  issueNumber = null,
+}: CliCommandsInput): CliCommand[] {
   // One real task id to build the task-scoped example rows with. `dev`
   // doesn't care which task — any of them demonstrates the shape — so
   // the first curated one is as good as any other.
@@ -122,12 +132,14 @@ export function buildCliCommands({ projectId, tasks, repositoryFullName = null }
   }
 
   if (repositoryFullName) {
+    const target = issueNumber ? `${repositoryFullName}#${issueNumber}` : repositoryFullName;
     commands.push({
       id: "start-repo",
-      command: `dev start ${repositoryFullName}`,
-      description:
-        "Works on any public GitHub repo, no DevTunnel task needed: forks it, clones it, and checks out a branch from the latest upstream. Add #123 to target one issue, e.g. " +
-        `dev start ${repositoryFullName}#123.`,
+      command: `dev start ${target}`,
+      description: issueNumber
+        ? "Works on any public GitHub issue, no DevTunnel task needed: forks the repo, clones it, and checks out a branch for this issue from the latest upstream."
+        : "Works on any public GitHub repo, no DevTunnel task needed: forks it, clones it, and checks out a branch from the latest upstream. Add #123 to target one issue, e.g. " +
+          `dev start ${repositoryFullName}#123.`,
     });
   }
 
@@ -191,4 +203,17 @@ export const TASK_CLI_STEP_TITLES: Record<string, string> = {
   "start-task": "Start this task",
   test: "Run the tests",
   "submit-task": "Submit your work",
+};
+
+
+/**
+ * Step titles for the CLI card on an issue's Contribute page
+ * (`IssueContributeCliPanel`), keyed by `CliCommand.id`.
+ */
+export const ISSUE_CLI_STEP_TITLES: Record<string, string> = {
+  install: "Install the CLI",
+  login: "Sign in with GitHub",
+  "start-repo": "Start this issue",
+  test: "Run the tests",
+  "submit-repo": "Submit your work",
 };
