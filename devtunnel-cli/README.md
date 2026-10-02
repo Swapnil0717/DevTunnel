@@ -139,3 +139,19 @@ New members added to the `devtunnelcli` org's "Developers" team
 read/write access to packages under this scope, so anyone who needs to
 cut a release should be added there rather than sharing one person's
 login.
+## Working on any GitHub repository
+
+`dev start` and `dev submit` work on any public GitHub repo, not only
+DevTunnel tasks and projects:
+
+```
+dev start owner/repo#123      # fork, then a new branch from upstream's latest default branch
+dev start owner/repo          # same, no issue
+dev test                      # runs the repo's own .github/workflows commands (or auto-detects)
+dev submit                    # commits, pushes, opens the PR (repo + issue inferred from the checkout)
+```
+
+- **Branching:** new branches start from `upstream`'s current default branch, not from your fork's possibly stale copy.
+- **Pull requests:** if the repository has a pull request template, the PR body is a short summary followed by that template. Otherwise a plain summary is used.
+- **`dev test`:** install / lint / typecheck / test / build commands are read from `.github/workflows/*.yml`. Steps that publish, deploy, upload, use secrets or `sudo` are skipped. `dev test --no-ci` goes back to auto-detection.
+- **Contributions:** a PR opened with `dev submit` counts toward your DevTunnel contribution calendar and totals, and a merge adds another once DevTunnel sees it. `dev start` alone does not count.

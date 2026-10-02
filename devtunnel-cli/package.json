@@ -1,6 +1,6 @@
 {
   "name": "@devtunnelcli/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "DevTunnel CLI — automates the GitHub contribution workflow: dev login, dev start, dev test, dev submit.",
   "type": "module",
   "bin": {

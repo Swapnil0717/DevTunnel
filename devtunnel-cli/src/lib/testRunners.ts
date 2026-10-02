@@ -38,7 +38,7 @@ const SKIP_DIRS = new Set([
 /** How many directories deep under the repo root to look for a nested package (e.g. `devtunnel-backend/`). Deep enough for a typical monorepo, shallow enough to stay fast. */
 const MAX_DEPTH = 3;
 
-export type Ecosystem = "node" | "python" | "rust" | "go" | "ruby" | "java";
+export type Ecosystem = "node" | "python" | "rust" | "go" | "ruby" | "java" | "ci";
 
 export interface TestStep {
   /** Short label shown in output — "install", "typecheck", "test", "build", "compile". */
@@ -53,6 +53,8 @@ export interface DetectedProject {
   dir: string;
   ecosystem: Ecosystem;
   steps: TestStep[];
+  /** Where the steps came from, shown to the user — e.g. `.github/workflows/ci.yml`. Only set for `ecosystem: "ci"`. */
+  source?: string;
 }
 
 function readJson(path: string): Record<string, unknown> | null {

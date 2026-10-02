@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { simpleGit } from "simple-git";
 import pc from "picocolors";
 import { detectProjects } from "../lib/testRunners";
+import { detectProjectsWithCi } from "../lib/ciConfig";
 import { runAllProjects, type StepResult } from "../lib/processRunner";
 
 export interface TestCommandOptions {
@@ -9,6 +10,8 @@ export interface TestCommandOptions {
   dir?: string;
   /** Skip the "pull the latest from upstream" step entirely. */
   skipUpdate?: boolean;
+  /** Commander turns `--no-ci` into `ci: false`; absent or true means "use the repo's CI workflows when there are any". */
+  ci?: boolean;
 }
 
 /**
@@ -44,7 +47,20 @@ export async function testCommand(options: TestCommandOptions): Promise<void> {
   }
 
   console.log(`${pc.cyan("→")} Looking for test/build targets in ${pc.bold(rootDir)}…`);
-  const projects = detectProjects(rootDir);
+  const useCi = options.ci !== false;
+  const { projects, usedCi } = useCi
+    ? detectProjectsWithCi(rootDir)
+    : { projects: detectProjects(rootDir), usedCi: false };
+
+  if (usedCi) {
+    console.log(`${pc.cyan("→")} Using the commands from this repo's GitHub Actions workflows ${pc.dim("(--no-ci to auto-detect instead)")}:`);
+    for (const p of projects.filter((p) => p.ecosystem === "ci")) {
+      console.log(`  ${pc.bold(p.name)} ${pc.dim(`(${p.source})`)}`);
+      for (const step of p.steps) {
+        console.log(`    ${pc.dim(step.label.padEnd(9))} ${step.args[step.args.length - 1]}`);
+      }
+    }
+  }
 
   if (projects.length === 0) {
     console.log(

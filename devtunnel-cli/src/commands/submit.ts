@@ -4,6 +4,7 @@ import prompts, { type PromptObject } from "prompts";
 import pc from "picocolors";
 import { readCredentials } from "../lib/credentials";
 import { apiPost, ApiError } from "../lib/api";
+import { parseTarget, repoFromRemoteUrl, issueFromBranch, type TargetRef } from "../lib/repoRef";
 
 const COMMIT_TYPES = ["feat", "fix", "docs", "chore"] as const;
 type CommitType = (typeof COMMIT_TYPES)[number];
@@ -23,10 +24,10 @@ export interface SubmitCommandOptions {
 
 interface SubmitTaskResponse {
   data: {
-    taskId: string;
+    taskId: string | null;
     status: "IN_PROGRESS" | "IN_REVIEW" | "DONE";
     pullRequest: {
-      id: string;
+      id: string | null;
       number: number | null;
       url: string;
       isNew: boolean;
@@ -61,15 +62,13 @@ interface SubmitTaskResponse {
  *    GitHub issue if it has one (project-level submissions have none),
  *    and marks the task/project `IN_REVIEW`.
  */
-export async function submitCommand(id: string, options: SubmitCommandOptions): Promise<void> {
+export async function submitCommand(idArg: string | undefined, options: SubmitCommandOptions): Promise<void> {
   const credentials = readCredentials();
   if (!credentials) {
     console.error(`${pc.red("✗")} Not signed in. Run ${pc.cyan("dev login")} first.`);
     process.exitCode = 1;
     return;
   }
-
-  const kind = options.project ? "project" : "task";
 
   const rootDir = resolve(process.cwd(), options.dir ?? ".");
   const git = simpleGit(rootDir);
@@ -90,6 +89,36 @@ export async function submitCommand(id: string, options: SubmitCommandOptions): 
     process.exitCode = 1;
     return;
   }
+
+  // Work out what we're submitting for. An explicit argument wins; with no
+  // argument, infer the GitHub repo from the `upstream` remote `dev start`
+  // added, and the issue from the branch name (`fix/123-title`).
+  let target: TargetRef | null = idArg ? parseTarget(idArg) : null;
+  if (idArg && !target) {
+    console.error(`${pc.red("✗")} Couldn't understand "${idArg}". Use a task id, or a GitHub repo like owner/repo#123.`);
+    process.exitCode = 1;
+    return;
+  }
+  if (!target) {
+    const remotes = await git.getRemotes(true).catch(() => []);
+    const upstreamUrl = remotes.find((r) => r.name === "upstream")?.refs.fetch;
+    const repo = upstreamUrl ? repoFromRemoteUrl(upstreamUrl) : null;
+    if (!repo) {
+      console.error(
+        `${pc.red("✗")} No target given and no ${pc.cyan("upstream")} remote found. Run ${pc.cyan("dev submit owner/repo#123")}.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    const issue = issueFromBranch(branch);
+    target = { kind: "github", repo, ...(issue ? { issue } : {}) };
+  }
+  // A bare `owner/repo` with no issue: still pick up the issue from the branch name.
+  if (target.kind === "github" && target.issue === undefined) {
+    const issue = issueFromBranch(branch);
+    if (issue) target = { ...target, issue };
+  }
+  const kind = target.kind === "github" ? "pull request" : options.project ? "project" : "task";
 
   if (!status.isClean()) {
     const committed = await commitEverything(git, options);
@@ -121,12 +150,18 @@ export async function submitCommand(id: string, options: SubmitCommandOptions): 
   }
 
   console.log(`${pc.cyan("→")} Opening the pull request…`);
-  const endpoint = options.project ? `/projects/${id}/submit` : `/tasks/${id}/submit`;
+  const endpoint =
+    target.kind === "github"
+      ? "/github/submit"
+      : options.project
+        ? `/projects/${target.id}/submit`
+        : `/tasks/${target.id}/submit`;
   let response: SubmitTaskResponse;
   try {
     response = await apiPost<SubmitTaskResponse>(
       endpoint,
       {
+        ...(target.kind === "github" ? { repo: target.repo, ...(target.issue ? { issue: target.issue } : {}) } : {}),
         branch,
         title,
         type,
