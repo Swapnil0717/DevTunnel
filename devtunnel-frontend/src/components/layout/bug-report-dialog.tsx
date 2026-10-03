@@ -289,9 +289,11 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
         }}
         noValidate
       >
-        <fieldset className="m-0 min-w-0 border-0 p-0">
-          <legend className={`mb-2 mt-5 block w-full p-0 ${LABEL}`}>Where did it happen</legend>
-          <div className="flex flex-wrap gap-2">
+        <div role="group" aria-labelledby="bug-area-label">
+          <p id="bug-area-label" className={`m-0 mb-2 mt-5 ${LABEL}`}>
+            Where did it happen
+          </p>
+          <div className="flex flex-wrap gap-1.5">
             {BUG_AREAS.map((item) => {
               const Icon = AREA_ICONS[item.value];
               const selected = item.value === area;
@@ -301,7 +303,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
                   type="button"
                   aria-pressed={selected}
                   onClick={() => setArea(item.value)}
-                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-[13px] transition-colors ${FOCUS} ${
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-[12.5px] transition-colors ${FOCUS} ${
                     selected
                       ? "border-accent bg-status-success-bg text-status-success-label"
                       : "border-border bg-surface-raised text-text-secondary hover:border-border hover:text-text"
@@ -313,10 +315,12 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
               );
             })}
           </div>
-        </fieldset>
+        </div>
 
-        <fieldset className="m-0 min-w-0 border-0 p-0">
-          <legend className={`mb-2 mt-5 block w-full p-0 ${LABEL}`}>How bad is it</legend>
+        <div role="group" aria-labelledby="bug-severity-label">
+          <p id="bug-severity-label" className={`m-0 mb-2 mt-5 ${LABEL}`}>
+            How bad is it
+          </p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {BUG_SEVERITIES.map((item) => {
               const selected = item.value === severity;
@@ -343,7 +347,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
               );
             })}
           </div>
-        </fieldset>
+        </div>
 
         <div className={LABEL_ROW}>
           <label htmlFor="bug-title" className={LABEL}>
