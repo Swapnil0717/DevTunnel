@@ -22,15 +22,14 @@ export const SITE_DESCRIPTION =
 
 
 /**
- * External Razorpay page (a payment link or payment page that asks the
- * sponsor for the amount) that the "Sponsor with Razorpay" button on
- * `/sponsors` opens in a new tab. The sidebar link and the post-PR prompt go
- * to `/sponsors`, never straight here. DevTunnel takes no payment itself and never learns
- * whether anyone paid.
+ * External payment page (a Razorpay payment link or payment page that asks the
+ * sponsor for the amount). Both "Sponsor us" in the app header and "Sponsor
+ * DevTunnel" on the post-PR prompt open it in a new tab. DevTunnel takes no
+ * payment itself and never learns whether anyone paid.
  *
  * `null` unless `NEXT_PUBLIC_SPONSOR_URL` is set to an `https://` URL, so an
- * unset (or mistyped) value hides the Razorpay button on `/sponsors` instead
- * of rendering a button that goes nowhere or to a non-HTTPS target. Read at build time
+ * unset (or mistyped) value hides both buttons instead of rendering a button
+ * that goes nowhere or to a non-HTTPS target. Read at build time
  * (`NEXT_PUBLIC_*`), so changing it needs a rebuild.
  */
 export const SPONSOR_URL: string | null = (() => {

@@ -391,9 +391,9 @@
  }
 
  /**
-  * Post-PR prompt on the task Contribute page — "Sponsor DevTunnel" option.
+  * "Sponsor us" in the app header and the "Sponsor DevTunnel" option on the post-PR prompt.
   * A plain outline heart, same stroke-only convention as every other icon
-  * here; always paired with the words "Sponsor DevTunnel" (rule 43).
+  * here; always paired with the words "Sponsor us" / "Sponsor DevTunnel" (rule 43).
   */
  export function HeartIcon({ className = "" }: IconProps) {
    return (
@@ -413,13 +413,46 @@
    );
  }
 
- /** Marks a link that leaves DevTunnel (the Razorpay sponsorship page). */
+ /** Marks a link that leaves DevTunnel (the external sponsorship payment page). */
  export function ExternalLinkIcon({ className = "" }: IconProps) {
    return (
      <svg {...base} className={className}>
        <path d="M14 5h5v5" />
        <path d="M19 5l-8 8" />
        <path d="M17.5 13.5V18a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7.5a1 1 0 0 1 1-1h4.5" />
+     </svg>
+   );
+ }
+
+ /** App header — "Found a bug". A beetle: body, head and legs. */
+ export function BugIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M9 7.5a3 3 0 0 1 6 0" />
+       <path d="M8 10.5h8v4a4 4 0 0 1-8 0Z" />
+       <path d="M12 10.5v8.2" />
+       <path d="M8 12.5H4.5M16 12.5h3.5M8.3 16.5 5.5 18.5M15.7 16.5l2.8 2" />
+       <path d="M9.5 5 8 3.5M14.5 5 16 3.5" />
+     </svg>
+   );
+ }
+
+ /** App header — "Guide". An open book. */
+ export function BookIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M12 6.5C10.5 5.4 8.4 5 5.5 5v12.5c2.9 0 5 .4 6.5 1.5" />
+       <path d="M12 6.5C13.5 5.4 15.6 5 18.5 5v12.5c-2.9 0-5 .4-6.5 1.5Z" />
+       <path d="M12 6.5V19" />
+     </svg>
+   );
+ }
+
+ /** Popups — the close (X) button. */
+ export function CloseIcon({ className = "" }: IconProps) {
+   return (
+     <svg {...base} className={className}>
+       <path d="M6 6l12 12M18 6 6 18" />
      </svg>
    );
  }

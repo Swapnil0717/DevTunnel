@@ -1,6 +1,7 @@
 // devtunnel-frontend/src/components/layout/app-shell.tsx
 import type { ReactNode } from "react";
 import { AppSidebar } from "./app-sidebar";
+import { AppHeader } from "./app-header";
 import { AppBottomNav } from "./app-bottom-nav";
 import { TrainFooter } from "./train-footer";
 
@@ -20,7 +21,10 @@ import { TrainFooter } from "./train-footer";
  *    spans the page area only — never the sidebar. `children` sit in a
  *    `flex-1` wrapper so the footer rests at the bottom of the viewport on
  *    short pages and follows the content on long ones.
- *  - `banner` (the guest notice) stays above the page content.
+ *  - `AppHeader` is the first child of the content column: a `sticky` top bar
+ *    with Guide, Found a bug and Sponsor us. It sits beside the sidebar, not
+ *    across it, so the sidebar keeps its full height.
+ *  - `banner` (the guest notice) sits under the header, above the page content.
  *  - `pb-16` on mobile keeps the footer clear of the fixed bottom nav.
  */
 export function AppShell({
@@ -35,6 +39,7 @@ export function AppShell({
       <div className="min-h-screen bg-bg">
         <AppSidebar />
         <div className="flex min-h-screen min-w-0 flex-col pb-16 sm:ml-[240px] sm:pb-0">
+          <AppHeader />
           {banner}
           <div className="flex min-w-0 flex-1 flex-col [&>main]:w-full">{children}</div>
           <TrainFooter />

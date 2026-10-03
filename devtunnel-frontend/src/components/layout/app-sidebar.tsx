@@ -15,7 +15,6 @@ import {
   ChecklistIcon,
   IssueIcon,
   UploadIcon,
-  HeartIcon,
   UserIcon,
   SettingsIcon,
 } from "./nav-icons";
@@ -35,8 +34,8 @@ import { useAuth } from "@/lib/auth/use-auth";
  * All Issues, then the two live GitHub-wide catalogs (Github Projects,
  * Github Open source tools — unfiltered GitHub search results,
  * src/routes/githubProjects.ts and githubOpenSourceTools.ts), then
- * Community, Sponsor (`/sponsors`, public — it explains what the money pays for
- * before anyone is asked to pay), Profile and Settings. Community (`/submissions`) stays
+ * Community, Profile and Settings. (Guide, Found a bug and Sponsor us live in the
+ * top `AppHeader`, not here.) Community (`/submissions`) stays
  * after every catalog on purpose: it's the one list contributors fill
  * themselves, and grouping it with the curated or GitHub-wide catalogs
  * would blur exactly the distinction that page exists to make (see
@@ -68,7 +67,6 @@ const NAV_LINKS = [
   { href: "/github-projects", label: "Github Projects", Icon: GitBranchIcon, requiresAccount: false },
   { href: "/github-open-source-tools", label: "Github Open source tools", Icon: GridIcon, requiresAccount: false },
   { href: "/submissions", label: "Community", Icon: UploadIcon, requiresAccount: false },
-  { href: "/sponsors", label: "Sponsor", Icon: HeartIcon, requiresAccount: false },
   { href: "/profile", label: "Profile", Icon: UserIcon, requiresAccount: true },
   { href: "/settings", label: "Settings", Icon: SettingsIcon, requiresAccount: true },
 ] as const;

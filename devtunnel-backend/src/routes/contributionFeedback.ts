@@ -17,7 +17,7 @@ import { saveContributionFeedback } from "../db/contributionFeedback";
  *    "Give feedback" option on the task Contribute page).
  *
  * "Sponsor DevTunnel" on that same prompt is a plain link to an external
- * Razorpay page; DevTunnel takes no payment and records nothing about it, so
+ * payment page; DevTunnel takes no payment and records nothing about it, so
  * there is no route for it here.
  *
  * Mounted on the app root in src/index.ts. Shares a prefix with

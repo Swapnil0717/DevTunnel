@@ -164,18 +164,6 @@
 
 /* Keyframes sit outside any @layer so Tailwind never tree-shakes them. */
 
-/* Sponsor goal bar fill (components/sponsors/sponsor-goal-bar.tsx). The
-   bar sits in a fixed-height track, so animating `width` can't move
-   anything else on the page. `--goal-pct` is set inline by the component. */
-@keyframes sponsor-goal-fill {
-  from {
-    width: 0%;
-  }
-  to {
-    width: var(--goal-pct, 0%);
-  }
-}
-
 /* Page-load reveal for skeleton blocks: each block rises into place while
    its clip opens from the bottom edge upward — the "portfolio page load"
    entrance from the recent.design reference, applied to every loading
@@ -325,18 +313,6 @@
 @layer components {
   .skeleton-block {
     animation: skeleton-reveal 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-
-  /* Fills from 0 to the real percentage once on load. Reduced motion: no
-     animation at all, so the bar simply renders at its final width (the
-     inline `width`), which is the right end state, not a frozen start. */
-  .sponsor-goal-fill {
-    animation: sponsor-goal-fill 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .sponsor-goal-fill {
-      animation: none;
-    }
   }
 
   /* Stagger siblings so a stack of placeholders builds top to bottom

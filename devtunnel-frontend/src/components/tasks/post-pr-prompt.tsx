@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { submitContributionFeedback } from "@/lib/tasks/client-api";
+import { SPONSOR_URL } from "@/lib/config";
 import {
   CheckCircleIcon,
   HeartIcon,
@@ -43,13 +43,12 @@ function markHandled(taskId: string) {
  *
  * Two ways to help, plus a way out:
  *
- *  - **Sponsor DevTunnel** — an internal link to `/sponsors`, which explains
- *    what sponsorship pays for and shows who already supports the project
- *    before offering the external Razorpay button. The card itself asks for
- *    nothing and collects nothing, and DevTunnel can't know whether anyone
- *    paid, so the card does *not* change after the click: there is no "thank
- *    you for sponsoring" state to show. The tile is always shown — the page
- *    it leads to handles a missing `NEXT_PUBLIC_SPONSOR_URL` itself.
+ *  - **Sponsor DevTunnel** — a plain link that opens the external payment page
+ *    (`SPONSOR_URL`, Razorpay) in a new tab; the sponsor enters the amount there.
+ *    The card itself asks for nothing and collects nothing, and DevTunnel can't
+ *    know whether anyone paid, so the card does *not* change after the click:
+ *    there is no "thank you for sponsoring" state to show. The tile is hidden
+ *    when `NEXT_PUBLIC_SPONSOR_URL` isn't set.
  *  - **Give feedback** — a 1–5 rating and an optional message, saved through
  *    `POST /tasks/:id/feedback`, then a thank-you state.
  *  - **Maybe later** — skips straight to the thank-you state.
@@ -208,18 +207,22 @@ export function PostPrPrompt({ taskId }: { taskId: string }) {
           </p>
 
           <div className="flex flex-wrap gap-2.5">
-            <Link
-              href="/sponsors"
-              className="min-w-[200px] flex-1 rounded-[10px] border border-border bg-surface p-3.5 text-left transition-colors hover:bg-surface-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            >
-              <HeartIcon className="h-5 w-5 text-accent" />
-              <span className="mt-1.5 block text-[13.5px] font-medium text-text">
-                Sponsor DevTunnel
-              </span>
-              <span className="mt-0.5 block text-[12px] text-text-secondary">
-                See who supports the project
-              </span>
-            </Link>
+            {SPONSOR_URL ? (
+              <a
+                href={SPONSOR_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="min-w-[200px] flex-1 rounded-[10px] border border-border bg-surface p-3.5 text-left transition-colors hover:bg-surface-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                <HeartIcon className="h-5 w-5 text-accent" />
+                <span className="mt-1.5 block text-[13.5px] font-medium text-text">
+                  Sponsor DevTunnel
+                </span>
+                <span className="mt-0.5 block text-[12px] text-text-secondary">
+                  Opens the payment page in a new tab
+                </span>
+              </a>
+            ) : null}
 
             <button
               type="button"

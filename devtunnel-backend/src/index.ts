@@ -23,8 +23,7 @@ import { settings } from "./routes/settings";
 import { userActivity } from "./routes/userActivity";
 import { profileActivity } from "./routes/profileActivity";
 import { contributionFeedback } from "./routes/contributionFeedback";
-import { razorpayWebhook } from "./routes/razorpayWebhook";
-import { sponsors } from "./routes/sponsors";
+import { bugReports } from "./routes/bugReports";
 import { githubCatalogContribute } from "./routes/githubCatalogContribute";
 import { aiSummary } from "./routes/aiSummary";
 import { aiIssueExplanation } from "./routes/aiIssueExplanation";
@@ -94,15 +93,9 @@ app.route("/", aiIssueExplanation);
 // only; stored-first, so a repository with fresh insights costs one Supabase
 // read and no GitHub or model call.
 app.route("/", aiIssueInsights);
-// Sponsors: `POST /webhooks/razorpay` (src/routes/razorpayWebhook.ts). Server-to-server
-// from Razorpay: no cookies, no session, authenticated by the HMAC signature
-// alone, so it needs no CORS/auth exemption (CORS only adds headers for
-// allow-listed browser origins; requireAuth is per-route, never global).
-// Writes Supabase only — no KV.
-app.route("/", razorpayWebhook);
-// Sponsors: public `GET /sponsors` (src/routes/sponsors.ts) — the wall + this month's goal.
-// Cache API + Cache-Control only; no KV.
-app.route("/", sponsors);
+// Header "Found a bug" popup: `POST /bug-reports` (src/routes/bugReports.ts).
+// Open to signed-out visitors too (rate-limited per IP); writes Supabase only — no KV.
+app.route("/", bugReports);
 app.route("/admin", admin);
 
 app.onError(handleError);

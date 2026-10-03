@@ -109,10 +109,6 @@
   /** "false" disables user-facing AI endpoints. */
   AI_FEATURES_ENABLED?: string;
 
-  // --- Sponsors (src/routes/razorpayWebhook.ts) — optional secret ---
-  /** Razorpay webhook secret. Empty/unset = webhook disabled (503). Set with `wrangler secret put`. */
-  RAZORPAY_WEBHOOK_SECRET?: string;
-
   /** Cloudflare Workers AI binding (wrangler.toml `[ai]`). */
   AI?: Ai;
 }

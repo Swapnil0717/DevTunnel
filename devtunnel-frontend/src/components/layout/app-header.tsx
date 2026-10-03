@@ -1,62 +1,87 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { Logo } from "./logo";
-import { LogoutButton } from "../auth/logout-button";
-import { useAuth } from "@/lib/auth/use-auth";
+import { BookIcon, BugIcon, ExternalLinkIcon, HeartIcon } from "./nav-icons";
+import { GuideDialog } from "./guide-dialog";
+import { BugReportDialog } from "./bug-report-dialog";
+import { SPONSOR_URL } from "@/lib/config";
 
-const NAV_LINKS = [
-  { href: "/home", label: "Home" },
-  { href: "/projects", label: "Projects" },
-  { href: "/profile", label: "Profile" },
-] as const;
+type OpenDialog = "guide" | "bug" | null;
 
+const BUTTON =
+  "inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[12.5px] text-text-secondary transition-colors hover:bg-surface hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+
+/**
+ * The top bar of the contributor app shell (`AppShell`): **Guide**, **Found a
+ * bug** and **Sponsor us**, on the right of the content column. The sidebar
+ * keeps all page navigation; this bar only holds these three actions.
+ *
+ *  - **Guide** and **Found a bug** open popups (`GuideDialog`,
+ *    `BugReportDialog`) instead of navigating, so the visitor keeps their place.
+ *  - **Sponsor us** is a plain link to the external payment page
+ *    (`SPONSOR_URL`), opened in a new tab. DevTunnel takes no payment itself and
+ *    never learns whether anyone paid. When `NEXT_PUBLIC_SPONSOR_URL` is unset
+ *    (or isn't https) the button is not rendered rather than pointing nowhere.
+ *
+ * Shown to signed-out visitors too — none of the three needs an account.
+ *
+ * Below `sm` the labels collapse to icons (each keeps an `aria-label`) and the
+ * logo appears at the left, because the sidebar that normally carries it is
+ * hidden there. The bar is `sticky` inside the content column, so it scrolls
+ * with the page area only and never overlaps the fixed sidebar (z-20 vs z-10).
+ */
 export function AppHeader() {
-  const pathname = usePathname();
-  const { user } = useAuth();
+  const [openDialog, setOpenDialog] = useState<OpenDialog>(null);
 
   return (
-    <header className="flex items-center justify-between border-b border-border-subtle bg-bg px-6 py-3">
-      <div className="flex items-center gap-8">
-        <Link href="/home" aria-label="DevTunnel home">
+    <>
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border-subtle bg-bg px-4 py-2.5 sm:justify-end sm:px-6">
+        <div className="sm:hidden">
           <Logo />
-        </Link>
-        <nav aria-label="Primary">
-          <ul className="flex items-center gap-1 list-none p-0 m-0">
-            {NAV_LINKS.map((link) => {
-              const isActive =
-                pathname === link.href || pathname?.startsWith(`${link.href}/`);
-              return (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    aria-current={isActive ? "page" : undefined}
-                    className={`inline-block rounded-md px-3 py-1.5 text-xs transition-colors ${
-                      isActive
-                        ? "bg-surface text-text"
-                        : "text-text-dim hover:text-text"
-                    }`}
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-      </div>
+        </div>
 
-      <div className="flex items-center gap-3">
-        {user?.avatarUrl ? (
-          <img
-            src={user.avatarUrl}
-            alt={`${user.name || user.username}'s avatar`}
-            className="h-7 w-7 rounded-full"
-          />
-        ) : null}
-        <LogoutButton />
-      </div>
-    </header>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setOpenDialog("guide")}
+            aria-haspopup="dialog"
+            aria-label="Guide"
+            className={BUTTON}
+          >
+            <BookIcon className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">Guide</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setOpenDialog("bug")}
+            aria-haspopup="dialog"
+            aria-label="Found a bug"
+            className={BUTTON}
+          >
+            <BugIcon className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">Found a bug</span>
+          </button>
+
+          {SPONSOR_URL ? (
+            <a
+              href={SPONSOR_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Sponsor us (opens in a new tab)"
+              className="inline-flex items-center gap-1.5 rounded-md border border-accent/40 bg-surface px-2.5 py-1.5 text-[12.5px] font-medium text-accent transition-colors hover:bg-surface-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              <HeartIcon className="h-4 w-4 shrink-0" />
+              <span className="hidden sm:inline">Sponsor us</span>
+              <ExternalLinkIcon className="hidden h-3 w-3 shrink-0 sm:block" />
+            </a>
+          ) : null}
+        </div>
+      </header>
+
+      {openDialog === "guide" ? <GuideDialog onClose={() => setOpenDialog(null)} /> : null}
+      {openDialog === "bug" ? <BugReportDialog onClose={() => setOpenDialog(null)} /> : null}
+    </>
   );
 }

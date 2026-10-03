@@ -83,7 +83,7 @@ export async function generateMetadata({ params }: TaskContributePageProps): Pro
  * Once the viewer's own pull request is open (`IN_REVIEW` and
  * `viewerIsAssignee`), a "Thanks for your contribution" card
  * (`PostPrPrompt`) sits under the tracker: **Sponsor DevTunnel** (a link out
- * to Razorpay), **Give feedback** (`POST /tasks/:id/feedback`) or **Maybe
+ * to the payment page), **Give feedback** (`POST /tasks/:id/feedback`) or **Maybe
  * later**. Optional, and it never touches how the PR is reviewed.
  *
  * When the task is still workable, an AI card (`TaskAiExplainCard`) sits
