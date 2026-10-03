@@ -50,6 +50,34 @@ async function hmacKey(secret: string): Promise<CryptoKey> {
   );
 }
 
+function hexToBytes(hex: string): Uint8Array | null {
+  if (hex.length === 0 || hex.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(hex)) return null;
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return bytes;
+}
+
+/**
+ * Verifies a hex-encoded HMAC-SHA256 signature over `message` (Razorpay's
+ * `X-Razorpay-Signature`). Uses `crypto.subtle.verify`, which compares the
+ * MAC in constant time, so there is no hand-rolled `===` on secret-derived
+ * bytes. Returns `false` (never throws) for a malformed signature.
+ *
+ * Pass the exact bytes received — verifying a re-serialised JSON body would
+ * never match.
+ */
+export async function verifyHmacSha256Hex(
+  secret: string,
+  message: string | Uint8Array,
+  signatureHex: string,
+): Promise<boolean> {
+  const signature = hexToBytes(signatureHex.trim());
+  if (!signature || signature.length !== 32) return false;
+  const data = typeof message === "string" ? new TextEncoder().encode(message) : message;
+  const key = await hmacKey(secret);
+  return crypto.subtle.verify("HMAC", key, signature, data);
+}
+
 /**
  * Signs `{ state, next }` into a single opaque, tamper-proof cookie value
  * for the OAuth `state` round trip (Backend_Development_Rules.txt rule 50).

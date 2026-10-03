@@ -1,20 +1,22 @@
 // devtunnel-frontend/src/components/sponsors/sponsor-tiers.tsx
-import { SPONSOR_TIERS, formatInr } from "@/lib/sponsors/sponsors";
+import { SPONSOR_TIERS, SPONSOR_TIERS_CAPTION } from "@/lib/sponsors/sponsors";
 
 /** The tier that gets the highlighted card. */
 const FEATURED_TIER = "backer";
 
 /**
- * Three suggested amounts. One Razorpay link can't know which tier someone
- * meant, so these are suggestions — the sponsor types the final amount on
- * Razorpay (any amount from the lowest tier up works). The highlighted card
- * says "Suggested" in words as well as with its border (rule 43).
+ * The three tiers and the amount range that earns each. The ranges come from
+ * `lib/sponsors/sponsors.ts`, which mirrors the backend's thresholds (the
+ * backend assigns the tier from the amount paid). One Razorpay link can't
+ * know which tier someone meant, so the sponsor just types an amount there
+ * and lands in the matching tier. The highlighted card says "Suggested" in
+ * words as well as with its border (rule 43).
  */
 export function SponsorTiers() {
   return (
     <section aria-labelledby="sponsor-tiers-heading" className="mb-4">
       <h2 id="sponsor-tiers-heading" className="m-0 mb-2 text-[11.5px] font-normal text-text-muted">
-        Suggested amounts. You enter the final amount on Razorpay.
+        {SPONSOR_TIERS_CAPTION}
       </h2>
       <ul className="m-0 grid list-none grid-cols-1 gap-2 p-0 sm:grid-cols-3">
         {SPONSOR_TIERS.map((tier) => {
@@ -36,7 +38,7 @@ export function SponsorTiers() {
                   </span>
                 ) : null}
               </p>
-              <p className="m-0 my-0.5 text-lg font-medium text-text">{formatInr(tier.amountInr)}</p>
+              <p className="m-0 my-0.5 text-[15px] font-medium text-text">{tier.range}</p>
               <p
                 className={`m-0 text-[11.5px] leading-[1.45] ${
                   featured ? "text-status-success-text" : "text-text-muted"

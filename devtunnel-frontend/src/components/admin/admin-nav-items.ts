@@ -9,6 +9,7 @@ import {
   SparkleIcon,
   CheckCircleIcon,
   ToolIcon,
+  HeartIcon,
 } from "@/components/layout/nav-icons";
 
 /** A single navigable admin route — the leaf nodes of `ADMIN_NAV_ITEMS`. */
@@ -83,6 +84,8 @@ export type AdminNavEntry = AdminNavLink | AdminNavGroup;
  * ├── Open Source Tools
  * │   ├── All Open Source Tools
  * │   └── Add Open Source Tool
+ * │
+ * ├── Sponsors
  * │
  * └── Activity
  * ```
@@ -224,6 +227,7 @@ export const ADMIN_NAV_ITEMS: AdminNavEntry[] = [
       },
     ],
   },
+  { type: "link", href: "/admin/sponsors", label: "Sponsors", Icon: HeartIcon, built: true },
   { type: "link", href: "/admin/activity", label: "Activity", Icon: ActivityIcon, built: true },
 ];
 

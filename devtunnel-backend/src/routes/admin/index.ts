@@ -7,6 +7,7 @@ import { adminTasks } from "./tasks";
 import { adminNewIssues } from "./newIssues";
 import { adminOpenSourceTools } from "./opensourceTools";
 import { adminAi } from "./ai";
+import { adminSponsors, adminSponsorGoal } from "./sponsors";
 import { adminProjectOnboarding } from "../projectOnboarding";
 import { adminTaskOnboarding } from "../taskOnboarding";
 import { adminOpenSourceToolOnboarding } from "../opensourceToolOnboarding";
@@ -56,6 +57,10 @@ import { adminOpenSourceToolOnboarding } from "../opensourceToolOnboarding";
  * `lib/admin/ai-discovery/api.ts`/`client-api.ts` contract. Future
  * admin modules (`/admin/github`, ...) get their own file in this
  * directory and are mounted here the same way.
+ * `/admin/sponsors` and `/admin/sponsor-goal` (src/routes/admin/sponsors.ts)
+ * are two plain top-level siblings exported from one file: the moderation
+ * list/edit/add/hide routes, and the monthly-goal route that lives at its own
+ * path. Neither has a literal sub-segment that could collide with `/:id`.
  */
 export const admin = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -69,3 +74,5 @@ admin.route("/opensource-tools/onboarding", adminOpenSourceToolOnboarding);
 admin.route("/opensource-tools", adminOpenSourceTools);
 admin.route("/new-issues", adminNewIssues);
 admin.route("/ai", adminAi);
+admin.route("/sponsors", adminSponsors);
+admin.route("/sponsor-goal", adminSponsorGoal);

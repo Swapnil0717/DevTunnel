@@ -90,6 +90,15 @@ const envSchema = z.object({
   // "false" switches every USER-facing AI endpoint off (the admin
   // discovery agent is unaffected). Anything else / unset = on.
   AI_FEATURES_ENABLED: z.string().optional(),
+  // --- Sponsors: Razorpay webhook (src/routes/razorpayWebhook.ts) — OPTIONAL ---
+  // The secret you typed into Razorpay Dashboard > Account & Settings >
+  // Webhooks. Deliberately z.string().optional() with no .min(1): empty or
+  // unset means "webhook disabled" (POST /webhooks/razorpay answers 503) and
+  // must never crash any other route. Set with
+  //   npx wrangler secret put RAZORPAY_WEBHOOK_SECRET
+  // Never logged, never returned to any client.
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+
   // Cloudflare Workers AI binding (wrangler.toml `[ai]`). Not a string, so
   // it needs an explicit passthrough — zod would otherwise strip it.
   AI: z.custom<Ai>().optional(),

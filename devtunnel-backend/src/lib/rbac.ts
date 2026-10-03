@@ -83,6 +83,12 @@ import type { UserRole } from "../types";
  *   POST   /admin/ai/tools/run            -> admin:ai:write
  *   POST   /admin/ai/tasks/run            -> admin:ai:write
  *
+ *   GET    /admin/sponsors                -> admin:sponsors:read
+ *   POST   /admin/sponsors                -> admin:sponsors:write
+ *   PATCH  /admin/sponsors/:id            -> admin:sponsors:write
+ *   DELETE /admin/sponsors/:id            -> admin:sponsors:write   (soft hide only)
+ *   PUT    /admin/sponsor-goal            -> admin:sponsors:write
+ *
  * `admin:tasks:read` / `admin:tasks:write` back admin_workflow.txt section
  * 10's Task Onboarding wizard (today: Step 1 — "Project Selection", Step 2
  * — "Select Existing Issue", Step 3 — "Issue Information", Step 4 —
@@ -164,6 +170,15 @@ import type { UserRole } from "../types";
  * an AI-authored candidate and triggering a live Groq/GitHub run
  * (`admin:ai:write`) is a materially different blast radius than editing
  * an already-onboarded project or task.
+ *
+ * `admin:sponsors:read` / `admin:sponsors:write` back Sponsors moderation
+ * (src/routes/admin/sponsors.ts): reviewing every `devtunnel.sponsorships`
+ * row (including the payment id and amount) and approving, editing, hiding
+ * or manually adding sponsors, plus setting the monthly goal. Its own pair
+ * rather than reuse of another module's, for the same reason each module
+ * above got one: the data (payments) and the public-facing effect (who shows
+ * on the sponsor wall) are unrelated to projects, tasks or tools. There is
+ * deliberately no `:delete` permission, because the module has no hard delete.
  */
 export const ADMIN_PERMISSIONS = [
   "admin:projects:read",
@@ -186,6 +201,8 @@ export const ADMIN_PERMISSIONS = [
   "admin:opensource-tools:delete",
   "admin:ai:read",
   "admin:ai:write",
+  "admin:sponsors:read",
+  "admin:sponsors:write",
 ] as const;
 
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
