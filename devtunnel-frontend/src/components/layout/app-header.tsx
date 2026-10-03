@@ -12,7 +12,7 @@ import { useAuth } from "@/lib/auth/use-auth";
 type OpenDialog = "guide" | "bug" | null;
 
 const BUTTON =
-  "inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-[13.5px] text-text-secondary transition-colors sm:px-4 sm:py-2.5 sm:text-[14.5px] hover:bg-surface hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+  "inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[12.5px] text-text-secondary transition-colors hover:bg-surface hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
 /** `YYYY-MM-DD` in the viewer's own time zone — what `<time datetime>` should say about "today". */
 function toLocalIsoDate(date: Date): string {
@@ -44,7 +44,7 @@ function HeaderDate() {
   }, []);
 
   return (
-    <p className="m-0 hidden min-h-[22px] whitespace-nowrap font-mono text-[14px] leading-[22px] text-text-dim sm:block">
+    <p className="m-0 hidden min-h-[22px] whitespace-nowrap font-mono text-[13px] leading-[22px] text-text-dim sm:block">
       {today ? (
         <time suppressHydrationWarning dateTime={toLocalIsoDate(today)}>
           {today.toLocaleDateString("en-US", {
@@ -72,7 +72,7 @@ function HeaderProfile() {
     return (
       <span
         aria-hidden="true"
-        className="ml-1 h-9 w-9 flex-none rounded-full bg-surface-raised motion-safe:animate-pulse sm:h-11 sm:w-11"
+        className="ml-1 h-9 w-9 flex-none rounded-full bg-surface-raised motion-safe:animate-pulse"
       />
     );
   }
@@ -87,23 +87,23 @@ function HeaderProfile() {
       className="ml-1 flex min-w-0 items-center gap-3 rounded-full transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
     >
       {displayName ? (
-        <span className="hidden max-w-[220px] truncate text-[15px] text-text-secondary sm:inline">
+        <span className="hidden max-w-[220px] truncate text-[13px] text-text-muted sm:inline">
           {displayName}
         </span>
       ) : null}
       {user.avatarUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- GitHub avatar, 36px / 44px
+        // eslint-disable-next-line @next/next/no-img-element -- GitHub avatar, 36px
         <img
           src={user.avatarUrl}
           alt=""
-          width={44}
-          height={44}
-          className="h-9 w-9 flex-none rounded-full border border-[#2A2A2A] bg-[#161616] object-cover sm:h-11 sm:w-11"
+          width={36}
+          height={36}
+          className="h-9 w-9 flex-none rounded-full border border-[#2A2A2A] bg-[#161616] object-cover"
         />
       ) : (
         <span
           aria-hidden="true"
-          className="flex h-9 w-9 flex-none items-center justify-center rounded-full border border-[#2A2A2A] bg-[#161616] text-sm text-[#C8C8C8] sm:h-11 sm:w-11 sm:text-base"
+          className="flex h-9 w-9 flex-none items-center justify-center rounded-full border border-[#2A2A2A] bg-[#161616] text-sm text-[#C8C8C8]"
         >
           {(displayName || "?").charAt(0).toUpperCase()}
         </span>
@@ -130,10 +130,10 @@ function HeaderProfile() {
  * (their tasks, profile and the CLI). **Found a bug** and **Sponsor us** need
  * no account, so signed-out visitors still get those two.
  *
- * The bar is 64px tall on a phone and 80px from `sm` up, with 14.5px labels,
- * 20px icons and a 44px avatar (36px on a phone) — it was 56px with 12.5px
- * labels and a 30px avatar. `min-h` rather than `h` so a larger system font
- * can still grow it.
+ * The bar is 64px tall on a phone and 80px from `sm` up (it was about 56px).
+ * The buttons stay compact — 12.5px labels, 16px icons — to match the
+ * sidebar's type scale, and the avatar is 36px. `min-h` rather than `h` so a
+ * larger system font can still grow the bar.
  *
  * Below `sm` the labels collapse to icons (each keeps an `aria-label`), the
  * date and the name are dropped (only the avatar stays), and the logo appears
@@ -155,7 +155,7 @@ export function AppHeader() {
           <HeaderDate />
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2">
           {user ? (
             <button
               type="button"
@@ -164,7 +164,7 @@ export function AppHeader() {
               aria-label="Guide"
               className={BUTTON}
             >
-              <BookIcon className="h-5 w-5 shrink-0" />
+              <BookIcon className="h-4 w-4 shrink-0" />
               <span className="hidden sm:inline">Guide</span>
             </button>
           ) : null}
@@ -176,7 +176,7 @@ export function AppHeader() {
             aria-label="Found a bug"
             className={BUTTON}
           >
-            <BugIcon className="h-5 w-5 shrink-0" />
+            <BugIcon className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">Found a bug</span>
           </button>
 
@@ -186,11 +186,11 @@ export function AppHeader() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Sponsor us (opens in a new tab)"
-              className="inline-flex items-center gap-2 rounded-lg border border-accent/40 bg-surface px-3 py-2 text-[13.5px] font-medium text-accent sm:px-4 sm:py-2.5 sm:text-[14.5px] transition-colors hover:bg-surface-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              className="inline-flex items-center gap-1.5 rounded-md border border-accent/40 bg-surface px-2.5 py-1.5 text-[12.5px] font-medium text-accent transition-colors hover:bg-surface-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
-              <HeartIcon className="h-5 w-5 shrink-0" />
+              <HeartIcon className="h-4 w-4 shrink-0" />
               <span className="hidden sm:inline">Sponsor us</span>
-              <ExternalLinkIcon className="hidden h-3.5 w-3.5 shrink-0 sm:block" />
+              <ExternalLinkIcon className="hidden h-3 w-3 shrink-0 sm:block" />
             </a>
           ) : null}
 

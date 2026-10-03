@@ -3,6 +3,12 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { CloseIcon } from "@/components/layout/nav-icons";
 
+const SIZE_CLASS = {
+  sm: "sm:max-w-[480px]",
+  md: "sm:max-w-[600px]",
+  lg: "sm:max-w-[940px]",
+} as const;
+
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -21,20 +27,24 @@ const FOCUSABLE =
  * anchored to the bottom that scrolls inside itself. The overlay uses
  * `z-[70]`, above the fixed sidebar (z-20), the bottom nav and its More sheet.
  *
- * `wide` swaps the 480px card for a 940px one — for content that needs room,
- * like the Guide's two-page book. Everything else about the dialog is the same.
+ * `size` sets the card's width from `sm` up: `sm` 480px (default), `md` 600px
+ * (forms with chips and a few fields, like the bug report) or `lg` 940px
+ * (content that needs room, like the Guide's two-page book). `icon` is an
+ * optional tile drawn to the left of the title. Everything else is the same.
  */
 export function Dialog({
   title,
   description,
   onRequestClose,
-  wide = false,
+  size = "sm",
+  icon,
   children,
 }: {
   title: string;
   description?: string;
   onRequestClose: () => void;
-  wide?: boolean;
+  size?: "sm" | "md" | "lg";
+  icon?: ReactNode;
   children: ReactNode;
 }) {
   const titleId = useId();
@@ -101,11 +111,12 @@ export function Dialog({
         aria-labelledby={titleId}
         tabIndex={-1}
         className={`max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl border border-border bg-surface p-5 pb-[calc(env(safe-area-inset-bottom)+20px)] focus:outline-none sm:max-h-[calc(100dvh-2rem)] sm:rounded-[12px] sm:pb-5 ${
-          wide ? "sm:max-w-[940px]" : "sm:max-w-[480px]"
+          SIZE_CLASS[size]
         }`}
       >
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+          {icon ? <div className="shrink-0">{icon}</div> : null}
+          <div className="min-w-0 flex-1">
             <h2 id={titleId} className="m-0 text-[15px] font-medium text-text">
               {title}
             </h2>

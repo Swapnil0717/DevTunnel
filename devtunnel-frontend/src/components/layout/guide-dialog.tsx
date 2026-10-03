@@ -383,7 +383,7 @@ export function GuideDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog
-      wide
+      size="lg"
       title="DevTunnel guide"
       description="How to do things as a signed-in contributor."
       onRequestClose={onClose}
