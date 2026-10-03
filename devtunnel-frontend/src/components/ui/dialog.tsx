@@ -20,16 +20,21 @@ const FOCUSABLE =
  * Layout: a centered card from `sm` up; on a phone it is a full-width sheet
  * anchored to the bottom that scrolls inside itself. The overlay uses
  * `z-[70]`, above the fixed sidebar (z-20), the bottom nav and its More sheet.
+ *
+ * `wide` swaps the 480px card for a 940px one — for content that needs room,
+ * like the Guide's two-page book. Everything else about the dialog is the same.
  */
 export function Dialog({
   title,
   description,
   onRequestClose,
+  wide = false,
   children,
 }: {
   title: string;
   description?: string;
   onRequestClose: () => void;
+  wide?: boolean;
   children: ReactNode;
 }) {
   const titleId = useId();
@@ -95,7 +100,9 @@ export function Dialog({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl border border-border bg-surface p-5 pb-[calc(env(safe-area-inset-bottom)+20px)] focus:outline-none sm:max-h-[calc(100dvh-2rem)] sm:max-w-[480px] sm:rounded-[12px] sm:pb-5"
+        className={`max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl border border-border bg-surface p-5 pb-[calc(env(safe-area-inset-bottom)+20px)] focus:outline-none sm:max-h-[calc(100dvh-2rem)] sm:rounded-[12px] sm:pb-5 ${
+          wide ? "sm:max-w-[940px]" : "sm:max-w-[480px]"
+        }`}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">

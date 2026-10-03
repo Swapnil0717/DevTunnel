@@ -104,9 +104,16 @@ const config: Config = {
           "0%": { transform: "translateX(-100%)" },
           "100%": { transform: "translateX(100%)" },
         },
+        // The Guide's page turn: the new spread slides in a few pixels and
+        // fades up. Only used under `motion-safe:`.
+        "page-in": {
+          "0%": { opacity: "0", transform: "translateX(10px)" },
+          "100%": { opacity: "1", transform: "translateX(0)" },
+        },
       },
       animation: {
         shimmer: "shimmer 1.6s ease-in-out infinite",
+        "page-in": "page-in 0.28s ease-out both",
       },
     },
   },
