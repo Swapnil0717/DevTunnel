@@ -9,8 +9,7 @@ import { HomePageSkeleton } from "@/components/home/home-page-skeleton";
  * page before wiping away.
  *
  * What it draws is `HomePageSkeleton` — the same layout `page.tsx` renders,
- * section for section (header row, "Welcome back" heading, journey card, stat
- * strip, recommended projects, recommended / your tasks, recently active),
+ * section for section ("Welcome back" heading, journey card, stat strip, recommended projects, recommended / your tasks, recently active),
  * built from the very components Home's in-page `<Suspense>` fallbacks use,
  * so the hatched blocks sit where the real content will land.
  *

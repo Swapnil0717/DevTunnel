@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { CheckCircleIcon } from "@/components/layout/nav-icons";
 import {
   BUG_AREAS,
@@ -24,6 +25,10 @@ const LABEL = "mb-1 mt-3 block text-[11.5px] text-text-muted";
  * header is shown to them), so nothing here needs an account. The page the
  * reporter is on is added automatically (path only — no query string, so a
  * token in a URL can never end up in a report); the Worker adds the browser.
+ *
+ * "Where did it happen" and "How bad is it" use `SelectMenu`, a themed
+ * dropdown, instead of native `<select>`s whose OS popup ignores the app's
+ * dark theme. Esc on an open menu closes just the menu, not the dialog.
  *
  * Closing (X, Esc, backdrop, Cancel) with anything typed asks first, inline,
  * instead of silently dropping the report. After a successful send the popup
@@ -132,35 +137,23 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
             <label htmlFor="bug-area" className={LABEL}>
               Where did it happen
             </label>
-            <select
+            <SelectMenu
               id="bug-area"
               value={area}
-              onChange={(event) => setArea(event.target.value as BugAreaValue)}
-              className={FIELD}
-            >
-              {BUG_AREAS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              options={BUG_AREAS}
+              onChange={setArea}
+            />
           </div>
           <div>
             <label htmlFor="bug-severity" className={LABEL}>
               How bad is it
             </label>
-            <select
+            <SelectMenu
               id="bug-severity"
               value={severity}
-              onChange={(event) => setSeverity(event.target.value as BugSeverityValue)}
-              className={FIELD}
-            >
-              {BUG_SEVERITIES.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              options={BUG_SEVERITIES}
+              onChange={setSeverity}
+            />
           </div>
         </div>
 

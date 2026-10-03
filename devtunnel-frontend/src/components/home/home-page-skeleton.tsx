@@ -16,41 +16,19 @@ import {
 } from "@/lib/home/limits";
 
 /**
- * The date + profile row and the "Welcome back" heading — `HomeHeader` and
- * `WelcomeBanner`.
- *
- *  - header: `mb-7`, 30px tall (the avatar sets it); the date is a 12px mono
- *    line (`min-h-[18px]`), the name a 12.5px line, the avatar 30px round;
- *  - heading: 26px with `leading-normal` → a 39px line, then `mb-5`.
+ * The "Welcome back" heading — `WelcomeBanner`: 26px with `leading-normal` → a
+ * 39px line, then `mb-5`. (The date and profile row that used to sit above it
+ * moved to the shell's `AppHeader`, so Home starts at the heading.)
  */
 function HomeIntroSkeleton({ tone = "page", baseDelay = 0 }: HomeSkeletonProps) {
   return (
-    <>
-      <div className="mb-7 flex items-center justify-between gap-4">
-        <SkeletonLine height={18} className="flex-none">
-          <HomeSkeletonBlock tone={tone} className="h-3 w-40" delayMs={baseDelay} />
-        </SkeletonLine>
-        <div className="flex items-center gap-2.5">
-          <SkeletonLine height={lineHeightPx(12.5)}>
-            <HomeSkeletonBlock tone={tone} className="h-3 w-24" delayMs={baseDelay + 30} />
-          </SkeletonLine>
-          <HomeSkeletonBlock
-            tone={tone}
-            className="h-[30px] w-[30px] flex-none"
-            rounded="rounded-full"
-            delayMs={baseDelay + 30}
-          />
-        </div>
-      </div>
-
-      <SkeletonLine height={lineHeightPx(26)} className="mb-5">
-        <HomeSkeletonBlock
-          tone={tone}
-          className="h-6 w-72 max-w-full"
-          delayMs={baseDelay + 70}
-        />
-      </SkeletonLine>
-    </>
+    <SkeletonLine height={lineHeightPx(26)} className="mb-5">
+      <HomeSkeletonBlock
+        tone={tone}
+        className="h-6 w-72 max-w-full"
+        delayMs={baseDelay}
+      />
+    </SkeletonLine>
   );
 }
 
@@ -73,7 +51,7 @@ function SectionHeadingSkeleton({
 
 /**
  * The whole of Home as a placeholder, in the order `home/page.tsx` renders it:
- * date + profile → "Welcome back" → journey card → stat strip → recommended
+ * "Welcome back" → journey card → stat strip → recommended
  * projects → recommended tasks | your tasks → recently active. Each section is
  * the same skeleton component its own `<Suspense>` fallback uses, so the
  * route-level sheet and the in-page fallbacks cannot disagree with each other
@@ -91,7 +69,7 @@ export function HomePageSkeleton({ tone = "page" }: Pick<HomeSkeletonProps, "ton
     <div aria-hidden="true" className="mx-auto w-full max-w-[1040px]">
       <HomeIntroSkeleton tone={tone} baseDelay={0} />
 
-      <JourneyCardSkeleton tone={tone} baseDelay={100} />
+      <JourneyCardSkeleton tone={tone} baseDelay={60} />
       <TaskStatsSkeleton tone={tone} baseDelay={260} />
 
       <section className="mb-9">

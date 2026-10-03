@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { HomeHeader } from "@/components/home/home-header";
 import { WelcomeBanner } from "@/components/home/welcome-banner";
 import { JourneyCard } from "@/components/home/journey-card";
 import { TaskStats } from "@/components/home/task-stats";
@@ -32,7 +31,11 @@ export const metadata: Metadata = {
  * wider than it was designed for, which reads as empty/unfinished rather than
  * intentional.
  *
- * Order: date + profile → "Welcome back" (the page's only `<h1>`) →
+ * The date and the signed-in person's name/avatar no longer live here: they
+ * are in the shell's top bar (`AppHeader`), on every page. Home starts at its
+ * heading.
+ *
+ * Order: "Welcome back" (the page's only `<h1>`) →
  * `JourneyCard` (what's my progress, what do I do next) → `TaskStats` →
  * recommended projects → recommended/your tasks → recent activity. The
  * journey card owns the "what should I do next" job with one state-aware CTA,
@@ -56,7 +59,6 @@ export default async function HomePage() {
           screen left off on — see blueprint-reveal.tsx. */}
       <BlueprintReveal inline skeleton={<HomeLoading />}>
         <div className="mx-auto w-full max-w-[1040px]">
-          <HomeHeader />
           <WelcomeBanner />
           <Suspense fallback={<JourneySkeleton />}>
             <JourneyCard />

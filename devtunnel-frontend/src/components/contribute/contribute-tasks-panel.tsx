@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { AdminTaskStatusBadge } from "@/components/admin/tasks/admin-task-status-badge";
 import { AiExplainButton } from "@/components/ai/ai-explain-button";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { GithubEmptyState } from "@/components/github-projects/github-empty-state";
 import { IssueIcon, ChevronRightIcon, SearchIcon } from "@/components/layout/nav-icons";
 import { getTechTagClasses } from "@/lib/home/tag-style";
@@ -197,39 +198,39 @@ export function ContributeTasksPanel({
         </label>
 
         {availableRoles.length > 0 ? (
-          <label className="flex items-center gap-1.5 text-[12px] text-text-faint">
-            <span className="sr-only">Filter tasks by role</span>
-            <select
-              value={roleFilter}
-              onChange={(event) => setRoleFilter(event.target.value as RoleFilter)}
-              className="rounded-[8px] border border-border-subtle bg-bg px-2.5 py-1.5 text-[12.5px] text-text outline-none"
-            >
-              <option value="ALL">Any role</option>
-              {availableRoles.map((role) => (
-                <option key={role} value={role}>
-                  {DEVELOPER_ROLE_LABEL[role]}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SelectMenu<RoleFilter>
+            id="task-role-filter"
+            ariaLabel="Filter tasks by role"
+            variant="filter"
+            className="min-w-[140px]"
+            value={roleFilter}
+            onChange={setRoleFilter}
+            options={[
+              { value: "ALL", label: "Any role" },
+              ...availableRoles.map((role) => ({
+                value: role as RoleFilter,
+                label: DEVELOPER_ROLE_LABEL[role],
+              })),
+            ]}
+          />
         ) : null}
 
         {availableDifficulties.length > 0 ? (
-          <label className="flex items-center gap-1.5 text-[12px] text-text-faint">
-            <span className="sr-only">Filter tasks by difficulty</span>
-            <select
-              value={difficultyFilter}
-              onChange={(event) => setDifficultyFilter(event.target.value as DifficultyFilter)}
-              className="rounded-[8px] border border-border-subtle bg-bg px-2.5 py-1.5 text-[12.5px] text-text outline-none"
-            >
-              <option value="ALL">Any difficulty</option>
-              {availableDifficulties.map((level) => (
-                <option key={level} value={level}>
-                  {EXPERIENCE_LEVEL_LABEL[level]}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SelectMenu<DifficultyFilter>
+            id="task-difficulty-filter"
+            ariaLabel="Filter tasks by difficulty"
+            variant="filter"
+            className="min-w-[150px]"
+            value={difficultyFilter}
+            onChange={setDifficultyFilter}
+            options={[
+              { value: "ALL", label: "Any difficulty" },
+              ...availableDifficulties.map((level) => ({
+                value: level as DifficultyFilter,
+                label: EXPERIENCE_LEVEL_LABEL[level],
+              })),
+            ]}
+          />
         ) : null}
       </div>
 
