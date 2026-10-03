@@ -54,7 +54,7 @@ export const SPONSORS_PAGE_TITLE = "Support DevTunnel";
 export const SPONSORS_PAGE_INTRO =
   "DevTunnel is free and open source. Sponsorships pay for hosting, AI costs, and the time spent keeping it running. Sponsoring never affects how your pull request is reviewed.";
 export const SPONSOR_BUTTON_NOTE =
-  "Opens Razorpay in a new tab. Add your GitHub username and choose whether your amount is shown.";
+  "Opens Razorpay in a new tab. Your payment is handled securely by Razorpay.";
 export const SPONSOR_TIERS_CAPTION = "Your tier follows the amount you enter on Razorpay.";
 export const SPONSOR_GOAL_HEADING = "Monthly goal: hosting and AI costs";
 
