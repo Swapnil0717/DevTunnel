@@ -6,14 +6,14 @@ import { CookieSettingsLink } from "@/components/consent/cookie-settings-link";
 import { CONTACT_EMAIL, GITHUB_REPO_URL, OPERATOR_NAME, SPONSOR_URL } from "@/lib/config";
 
 /**
- * Site footer = link columns on a dashed grid, with the existing
- * `TrainFooter` (unchanged) underneath as the closing moment of the page.
+ * Site footer = the existing `TrainFooter` (unchanged) on top, with the link
+ * columns on a dashed grid underneath it.
  *
  *  - `variant="full"`  — brand cell + four link columns on a dashed grid,
- *    then the train. Used on the landing page, the legal pages, and the
+ *    below the train. Used on the landing page, the legal pages, and the
  *    error / callback / onboarding screens.
  *  - `variant="slim"`  — one row (Privacy · Terms · Cookie settings · Contact)
- *    above the train.
+ *    below the train.
  *    Used inside the app shell (catalog, signed-in pages) and the login
  *    pages, so the legal links and cookie settings are reachable everywhere
  *    without adding height to long pages.
@@ -103,6 +103,8 @@ export function SiteFooter({ variant = "full" }: { variant?: "full" | "slim" }) 
 
   return (
     <footer className="w-full bg-bg">
+      {/* The train sits first; the link grid is the ground it stands on. */}
+      <TrainFooter />
       <div className="w-full">
         {/* Dashed grid, edge to edge: brand cell + four link columns. */}
         <div className="grid grid-cols-2 border-t border-dashed border-border sm:grid-cols-4 lg:grid-cols-5">
@@ -170,15 +172,15 @@ export function SiteFooter({ variant = "full" }: { variant?: "full" | "slim" }) 
           Not affiliated with or endorsed by GitHub.
         </p>
       </div>
-      <TrainFooter />
     </footer>
   );
 }
 
-/** One row of legal links, then the train. */
+/** The train, then one row of legal links. */
 function SlimFooter() {
   return (
     <footer className="w-full bg-bg">
+      <TrainFooter />
       <nav
         aria-label="Legal"
         className="flex w-full flex-wrap items-center justify-center gap-x-4 gap-y-1 border-t border-dashed border-border px-4 py-3 sm:px-6"
@@ -194,7 +196,6 @@ function SlimFooter() {
           Contact
         </Link>
       </nav>
-      <TrainFooter />
     </footer>
   );
 }
