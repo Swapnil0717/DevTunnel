@@ -31,6 +31,19 @@ interface BuildMetadataOptions {
 }
 
 /**
+ * Link-preview image (1200x630, `public/og-image.jpg`). It must be this file
+ * and NOT `/logo.png`: the logo is white text on a transparent background, so
+ * it renders as a blank white card in WhatsApp, Slack, LinkedIn, etc.
+ * Absolute URL on purpose — link-preview crawlers need one.
+ */
+const OG_IMAGE = {
+  url: `${SITE_URL}/og-image.jpg`,
+  width: 1200,
+  height: 630,
+  alt: "DevTunnel — Pick an issue. Ship the pull request.",
+};
+
+/**
  * Builds a Next.js `Metadata` object with a title, description, canonical
  * URL and Open Graph tags derived from a single set of inputs.
  *
@@ -59,13 +72,13 @@ export function buildMetadata({
       url,
       siteName: SITE_NAME,
       type: "website",
-      images: [{ url: `${SITE_URL}/logo.png` }],
+      images: [OG_IMAGE],
     },
     twitter: {
-      card: "summary",
+      card: "summary_large_image",
       title: `${title} | ${SITE_NAME}`,
       description,
-      images: [`${SITE_URL}/logo.png`],
+      images: [OG_IMAGE.url],
     },
     robots: {
       index: !noIndex,
