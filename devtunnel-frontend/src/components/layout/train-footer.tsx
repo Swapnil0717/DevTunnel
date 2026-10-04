@@ -21,11 +21,14 @@
  * black rectangle. Nothing here hardcodes a background colour — change
  * `bg` in tailwind.config.ts and the footer follows.
  *
- * Asset: `public/train-footer.gif` — 760x313, 52 frames, transparent
- * background, used unmodified. From `sm` up the height is pinned to the GIF's
- * native 313px while the width runs edge to edge (stretched horizontally). `width`/`height` are set so the browser reserves the space
- * before it downloads, and `loading="lazy"` keeps a multi-megabyte image
- * from competing with the page's real content: it sits below the fold.
+ * Asset: `public/train-footer-wide.gif` — 1920x313, transparent background.
+ * Built from the original `train-footer.gif` (760x313, kept untouched): same
+ * height, same artwork at 1:1 scale, but the viaduct is extended sideways by
+ * repeating its arch pattern and the train now runs the full width. Nothing is
+ * stretched. The image is pinned to 313px tall and fills the container width
+ * with `object-cover`, so wider screens show it slightly enlarged and narrower
+ * ones crop equally from both sides. `loading="lazy"` keeps the image from
+ * competing with the page's real content: it sits below the fold.
  *
  * Purely decorative: empty `alt` + `aria-hidden` keep it out of the
  * accessibility tree, `pointer-events-none` keeps it out of the way of
@@ -39,14 +42,14 @@
     >
       {/* eslint-disable-next-line @next/next/no-img-element -- animated GIF: next/image would need `unoptimized` anyway */}
       <img
-        src="/train-footer.gif"
+        src="/train-footer-wide.gif"
         alt=""
-        width={760}
+        width={1920}
         height={313}
         loading="lazy"
         decoding="async"
         draggable={false}
-        className="block h-auto w-full sm:h-[313px] sm:object-fill"
+        className="block h-[313px] w-full object-cover object-center"
       />
     </div>
   );
