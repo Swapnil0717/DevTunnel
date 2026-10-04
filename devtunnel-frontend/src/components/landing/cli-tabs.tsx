@@ -56,7 +56,7 @@ const SETS: ReadonlyArray<CommandSet> = [
 export function CliTabs() {
   const [active, setActive] = useState(0);
   const [copied, setCopied] = useState<string | null>(null);
-  const set = SETS[active];
+  const set = SETS[active] ?? SETS[0]!;
 
   function onKeyDown(e: React.KeyboardEvent, index: number) {
     const dir =
@@ -69,7 +69,8 @@ export function CliTabs() {
     e.preventDefault();
     const next = (index + dir + SETS.length) % SETS.length;
     setActive(next);
-    document.getElementById(`lp-tab-${SETS[next].id}`)?.focus();
+    const nextSet = SETS[next];
+    if (nextSet) document.getElementById(`lp-tab-${nextSet.id}`)?.focus();
   }
 
   async function copy(command: string) {
