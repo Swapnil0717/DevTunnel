@@ -34,8 +34,8 @@ function palette(u: number): [number, number, number] {
   const k = Math.max(0, Math.min(0.9999, u)) * (STOPS.length - 1);
   const i = Math.floor(k);
   const f = k - i;
-  const a = STOPS[i];
-  const b = STOPS[i + 1];
+  const a = STOPS[i] ?? STOPS[0]!;
+  const b = STOPS[i + 1] ?? a;
   return [
     a[0] + (b[0] - a[0]) * f,
     a[1] + (b[1] - a[1]) * f,
@@ -109,11 +109,11 @@ export function CurtainBackground() {
       for (let y = 0; y < h; y++) {
         const fy = y / h;
         for (let x = 0; x < w; x++, p += 4) {
-          let v = Math.max(0, 1 - fy / lens[x]);
-          v = v * v * cols[x * 4 + 3];
-          d[p] = cols[x * 4] * v;
-          d[p + 1] = cols[x * 4 + 1] * v;
-          d[p + 2] = cols[x * 4 + 2] * v;
+          let v = Math.max(0, 1 - fy / lens[x]!);
+          v = v * v * cols[x * 4 + 3]!;
+          d[p] = cols[x * 4]! * v;
+          d[p + 1] = cols[x * 4 + 1]! * v;
+          d[p + 2] = cols[x * 4 + 2]! * v;
           d[p + 3] = 255;
         }
       }

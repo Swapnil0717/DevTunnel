@@ -25,7 +25,7 @@ export function HeroStats() {
 
     refs.current.forEach((el, i) => {
       if (!el) return;
-      const target = STATS[i].value;
+      const target = STATS[i]?.value ?? 0;
       const duration = 1500 + i * 80;
       el.textContent = "0";
 
