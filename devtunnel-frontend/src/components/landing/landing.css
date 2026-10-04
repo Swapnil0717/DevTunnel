@@ -204,9 +204,8 @@ html:has(.lp-root) { scroll-behavior: smooth; }
 @media (max-width: 720px) {
   .lp-navpill, .lp-signin-desktop { display: none; }
   .lp-hdr { justify-content: space-between; }
-  .lp-burger { display: grid; place-content: center; gap: 5px; width: 48px; height: 48px; border: 0; border-radius: 50%; background: var(--lp-pill-dark); cursor: pointer; transition: background 0.2s; }
+  .lp-burger { display: grid; place-content: center; gap: 5px; width: 48px; height: 48px; border: 0; border-radius: 50%; background: transparent; cursor: pointer; }
   .lp-burger i { display: block; width: 18px; height: 1.5px; background: #fff; transition: transform 0.25s, background 0.2s; }
-  .lp-burger[aria-expanded="true"] { background: #fff; } .lp-burger[aria-expanded="true"] i { background: #000; }
   .lp-burger[aria-expanded="true"] i:nth-child(1) { transform: translateY(6.5px) rotate(45deg); }
   .lp-burger[aria-expanded="true"] i:nth-child(2) { opacity: 0; }
   .lp-burger[aria-expanded="true"] i:nth-child(3) { transform: translateY(-6.5px) rotate(-45deg); }

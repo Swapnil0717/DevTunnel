@@ -37,6 +37,29 @@
     scrollbar-gutter: stable;
   }
 
+  /* Mobile safeguard: if any element is ever wider than the screen, the page
+     must not become horizontally scrollable. When it does, phones zoom the
+     whole page out and every page looks stretched sideways. `clip` (unlike
+     `hidden`) does not create a scroll container, so the sticky header and
+     fixed navs keep working. */
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  img,
+  svg,
+  video,
+  canvas {
+    max-width: 100%;
+  }
+
+  pre {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
   body {
     background-color: #0a0a0a;
     color: #f2f2f2;

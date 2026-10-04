@@ -6,6 +6,7 @@ import { HeroStats } from "@/components/landing/hero-stats";
 import { LandingHeader } from "@/components/landing/landing-header";
 import { LandingShell } from "@/components/landing/landing-shell";
 import { JsonLd } from "@/components/seo/json-ld";
+import { redirectSignedInUser } from "@/lib/auth/redirect-signed-in";
 import { SITE_DESCRIPTION } from "@/lib/config";
 import { buildMetadata } from "@/lib/seo";
 import { organizationJsonLd, websiteJsonLd } from "@/lib/structured-data";
@@ -107,7 +108,10 @@ const FAQ = [
   },
 ] as const;
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Signed-in users never see the landing page: they go to their user home.
+  await redirectSignedInUser();
+
   return (
     <LandingShell>
       {/* This page owns the site-wide Organization + WebSite structured data
