@@ -17,8 +17,12 @@ type GtagFn = (...args: unknown[]) => void;
 type AnalyticsWindow = Window & {
   dataLayer?: unknown[];
   gtag?: GtagFn;
-  [key: `ga-disable-${string}`]: boolean | undefined;
 };
+
+/** Google's documented opt-out switch: `window['ga-disable-<ID>'] = true` stops all measurement. */
+function setAnalyticsDisabled(id: string, disabled: boolean): void {
+  (window as unknown as Record<string, unknown>)[`ga-disable-${id}`] = disabled;
+}
 
 /**
  * Cookie consent banner + the (consent-gated) Google Analytics 4 loader.
@@ -55,7 +59,7 @@ export function ConsentManager() {
 
   const loadAnalytics = useCallback(() => {
     if (!measurementId || !w) return;
-    w[`ga-disable-${measurementId}`] = false;
+    setAnalyticsDisabled(measurementId, false);
     if (scriptInjected.current) return;
     scriptInjected.current = true;
 
@@ -81,7 +85,7 @@ export function ConsentManager() {
     if (choice === "granted") {
       loadAnalytics();
     } else if (choice === "denied") {
-      w[`ga-disable-${measurementId}`] = true;
+      setAnalyticsDisabled(measurementId, true);
       clearAnalyticsCookies();
     }
   }, [choice, ready, measurementId, w, loadAnalytics]);
