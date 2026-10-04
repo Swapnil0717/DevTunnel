@@ -40,6 +40,8 @@ import { purgeExpiredCacheRows } from "./lib/cache";
 import { getEnv } from "./config/env";
 import { logger } from "./lib/logger";
 import { syncSubmittedPullRequests } from "./lib/prSync";
+import { purgeDeletedAccounts } from "./db/accountData";
+import { getSupabase } from "./lib/supabase";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
@@ -183,6 +185,20 @@ async function handleScheduled(event: ScheduledEvent, env: Env, ctx: ExecutionCo
       // (expired cache rows, used/expired CLI login codes, stale scan locks —
       // sql/043). Separate waitUntil so it can't be blocked by, or block, discovery.
       ctx.waitUntil(purgeExpiredCacheRows(env));
+      // Permanently erase / anonymise accounts deleted more than 30 days ago
+      // (sql/052_account_purge.sql). Best-effort: a failure is logged and the
+      // next daily run tries again.
+      ctx.waitUntil(
+        purgeDeletedAccounts(getSupabase(validatedEnv))
+          .then((count) => {
+            if (count > 0) logger.info("deleted_accounts_purged", { count });
+          })
+          .catch((err) => {
+            logger.error("deleted_accounts_purge_failed", {
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }),
+      );
       ctx.waitUntil(
         runDailyDiscovery(validatedEnv, env.RATE_LIMIT_KV)
           // Push the batched AI usage counters to Supabase before the isolate ends (src/lib/ai/usage.ts).

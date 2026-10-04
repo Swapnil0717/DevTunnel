@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/auth/auth-provider";
+import { ConsentManager } from "@/components/consent/consent-manager";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/config";
 import "./globals.css";
 
@@ -46,6 +47,9 @@ export default function RootLayout({
             still happens server-side — see (protected)/layout.tsx; the
             (public)/layout.tsx group deliberately doesn't redirect. */}
         <AuthProvider>{children}</AuthProvider>
+        {/* Cookie banner + consent-gated Google Analytics; renders nothing
+            until NEXT_PUBLIC_GA_MEASUREMENT_ID is set. */}
+        <ConsentManager />
         {/* The train footer is deliberately NOT mounted here any more: a
             root-level footer sits under the whole page, sidebar included,
             which is what used to shove the sidebar up the screen at the

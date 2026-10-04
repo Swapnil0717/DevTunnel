@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Logo } from "@/components/layout/logo";
-import { TrainFooter } from "@/components/layout/train-footer";
+import { SiteFooter } from "@/components/layout/site-footer";
 
 // Next.js automatically serves this with a real 404 HTTP status.
 export default function NotFound() {
@@ -21,7 +21,7 @@ export default function NotFound() {
           Back to DevTunnel
         </Link>
       </main>
-      <TrainFooter />
+      <SiteFooter />
     </>
   );
 }

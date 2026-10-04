@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Logo } from "@/components/layout/logo";
-import { TrainFooter } from "@/components/layout/train-footer";
+import { SiteFooter } from "@/components/layout/site-footer";
 import { OAuthCallbackView } from "@/components/auth/oauth-callback-view";
 import { buildMetadata } from "@/lib/seo";
 
@@ -28,7 +28,7 @@ export default function AuthCallbackPage() {
           <OAuthCallbackView />
         </Suspense>
       </main>
-      <TrainFooter />
+      <SiteFooter />
     </>
   );
 }

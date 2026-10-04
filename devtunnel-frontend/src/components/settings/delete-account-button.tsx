@@ -28,7 +28,7 @@ export function DeleteAccountButton() {
 
   async function handleDelete() {
     const confirmed = window.confirm(
-      "Delete your DevTunnel account? Your profile and contribution history will be removed. This can't be undone.",
+      "Delete your DevTunnel account? You'll be signed out everywhere now, and after 30 days your personal details are permanently erased. Download your data first if you want a copy. This can't be undone.",
     );
     if (!confirmed) return;
 
@@ -55,8 +55,8 @@ export function DeleteAccountButton() {
     <section className="rounded-[10px] border border-status-error-border bg-surface p-5">
       <h2 className="m-0 mb-1 text-sm font-medium text-text">Danger zone</h2>
       <p className="m-0 mb-3 text-[12.5px] text-text-muted">
-        Deleting your account removes your profile and contribution history. This can&apos;t be
-        undone.
+        Deleting your account signs you out everywhere and, after 30 days, permanently erases your
+        personal details. This can&apos;t be undone.
       </p>
 
       <button

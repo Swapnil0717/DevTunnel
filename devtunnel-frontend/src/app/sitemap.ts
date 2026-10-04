@@ -43,6 +43,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
+  // Legal / contact pages: static, public and meant to be found.
+  for (const path of ["/privacy", "/terms", "/cookies", "/refunds", "/contact"]) {
+    entries.push({ url: `${SITE_URL}${path}`, changeFrequency: "yearly", priority: 0.3 });
+  }
+
   const sections: Array<{ index: string; urls: string[] | null; priority: number }> = [
     { index: "/projects", urls: catalog.projects, priority: 0.8 },
     { index: "/opensource-tools", urls: catalog.tools, priority: 0.8 },

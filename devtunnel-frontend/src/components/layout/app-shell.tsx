@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { AppSidebar } from "./app-sidebar";
 import { AppHeader } from "./app-header";
 import { AppBottomNav } from "./app-bottom-nav";
-import { TrainFooter } from "./train-footer";
+import { SiteFooter } from "./site-footer";
 
 /**
  * The contributor app shell, shared by `(public)/layout.tsx` and
@@ -17,7 +17,7 @@ import { TrainFooter } from "./train-footer";
  *  - Because it's out of flow, the content column reserves its width
  *    itself with `sm:ml-[240px]`. Keep that in step with `AppSidebar`'s
  *    `w-[240px]`.
- *  - `TrainFooter` is the last child *inside* the content column, so it
+ *  - `SiteFooter` (slim: train + one row of legal links) is the last child *inside* the content column, so it
  *    spans the page area only — never the sidebar. `children` sit in a
  *    `flex-1` wrapper so the footer rests at the bottom of the viewport on
  *    short pages and follows the content on long ones.
@@ -42,7 +42,7 @@ export function AppShell({
           <AppHeader />
           {banner}
           <div className="flex min-w-0 flex-1 flex-col [&>main]:w-full">{children}</div>
-          <TrainFooter />
+          <SiteFooter variant="slim" />
         </div>
       </div>
       <AppBottomNav />

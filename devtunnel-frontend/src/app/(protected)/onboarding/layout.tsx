@@ -1,4 +1,4 @@
-import { TrainFooter } from "@/components/layout/train-footer";
+import { SiteFooter } from "@/components/layout/site-footer";
 
 /**
  * `/onboarding` is a full-bleed wizard (devtunnel_user_home_redesign.html),
@@ -24,7 +24,7 @@ export default function OnboardingLayout({
   return (
     <>
       {children}
-      <TrainFooter />
+      <SiteFooter />
     </>
   );
 }

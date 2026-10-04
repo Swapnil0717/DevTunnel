@@ -65,6 +65,10 @@ export async function upsertUserFromGitHub(
     github_username: identity.githubUsername,
     github_profile_url: identity.githubProfileUrl,
     last_login_at: new Date().toISOString(),
+    // Signing in again during the 30-day deletion grace period restores the
+    // account (and stops the purge, sql/052). After the purge the GitHub id no
+    // longer matches, so this upsert creates a fresh account instead.
+    deleted_at: null,
   };
 
   const attempt = async (username: string) => {

@@ -5,6 +5,7 @@ import { LogoutButton } from "@/components/auth/logout-button";
 import { ProfileSettingsForm } from "@/components/settings/profile-settings-form";
 import { SkillsBackgroundCard } from "@/components/settings/skills-background-card";
 import { ConnectedAccountCard } from "@/components/settings/connected-account-card";
+import { ExportDataCard } from "@/components/settings/export-data-card";
 import { DeleteAccountButton } from "@/components/settings/delete-account-button";
 import RouteLoading from "./loading";
 import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
@@ -59,6 +60,8 @@ export default async function SettingsPage() {
                   <LogoutButton />
                 </section>
               </div>
+
+              <ExportDataCard />
 
               <DeleteAccountButton />
             </div>

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { Logo } from "@/components/layout/logo";
-import { TrainFooter } from "@/components/layout/train-footer";
+import { SiteFooter } from "@/components/layout/site-footer";
 import { LoginCard } from "@/components/auth/login-card";
 import { PortalChoiceCard } from "@/components/auth/portal-choice-card";
 import {
@@ -85,7 +85,7 @@ export default async function LoginPage({
               />
             </main>
           </BlueprintReveal>
-          <TrainFooter />
+          <SiteFooter variant="slim" />
         </>
       );
     }
@@ -139,7 +139,7 @@ export default async function LoginPage({
           </div>
         </main>
       </BlueprintReveal>
-      <TrainFooter />
+      <SiteFooter variant="slim" />
     </>
   );
 }

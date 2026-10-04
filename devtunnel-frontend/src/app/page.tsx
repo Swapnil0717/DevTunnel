@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Logo } from "@/components/layout/logo";
-import { TrainFooter } from "@/components/layout/train-footer";
+import { SiteFooter } from "@/components/layout/site-footer";
 import { JsonLd } from "@/components/seo/json-ld";
 import { buildMetadata } from "@/lib/seo";
 import { organizationJsonLd, websiteJsonLd } from "@/lib/structured-data";
@@ -110,7 +110,7 @@ export default function HomePage() {
           </p>
         </nav>
       </main>
-      <TrainFooter />
+      <SiteFooter />
     </>
   );
 }

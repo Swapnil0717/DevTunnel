@@ -41,3 +41,43 @@ export const SPONSOR_URL: string | null = (() => {
     return null;
   }
 })();
+
+
+/** Public contact address shown in the footer and on the legal pages. */
+export const CONTACT_EMAIL = "contact@devtunnel.tech";
+
+/** Name of the person/entity that operates DevTunnel (shown in the footer and legal pages). */
+export const OPERATOR_NAME = "Pranav Kiran Pathare";
+
+/**
+ * Public GitHub repository URL (`https://github.com/<owner>/<repo>`), used for
+ * the footer's "GitHub repository", Contributing, Code of conduct, Security and
+ * Roadmap links. `null` unless `NEXT_PUBLIC_GITHUB_REPO_URL` is a valid
+ * `https://github.com/...` URL, so an unset value hides those links instead of
+ * rendering links that go nowhere. Read at build time.
+ */
+export const GITHUB_REPO_URL: string | null = (() => {
+  const raw = process.env.NEXT_PUBLIC_GITHUB_REPO_URL?.trim().replace(/\/$/, "");
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" && url.hostname === "github.com" ? raw : null;
+  } catch {
+    return null;
+  }
+})();
+
+/**
+ * Google Analytics 4 measurement ID (`G-XXXXXXXXXX`). `null` unless
+ * `NEXT_PUBLIC_GA_MEASUREMENT_ID` matches that shape. While it is `null`
+ * nothing analytics-related loads, no consent banner is shown and the
+ * "Cookie settings" links are hidden (there is nothing to consent to).
+ * Read at build time, so setting it needs a rebuild.
+ */
+export const GA_MEASUREMENT_ID: string | null = (() => {
+  const raw = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim();
+  return raw && /^G-[A-Z0-9]{4,20}$/.test(raw) ? raw : null;
+})();
+
+/** Date the legal pages were last revised. Update it whenever their text changes. */
+export const LEGAL_LAST_UPDATED = "4 October 2026";

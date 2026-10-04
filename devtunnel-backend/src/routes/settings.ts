@@ -9,6 +9,8 @@ import {
   upsertNotificationPreferences,
 } from "../db/notificationPreferences";
 import { revokeAllSessionsForUser } from "../db/sessions";
+import { findUserById } from "../db/users";
+import { exportUserData } from "../db/accountData";
 import { clearSessionCookies } from "../lib/cookies";
 import { requireAuth } from "../middleware/auth";
 import { checkRateLimit } from "../lib/rateLimit";
@@ -277,6 +279,47 @@ settings.delete("/settings/account", async (c) => {
       return errorResponse(c, status, err.code, err.message);
     }
     logger.error("account_delete_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      requestId: c.get("requestId"),
+    });
+    return errorResponse(c, 500, "internal_error", "Something went wrong");
+  }
+});
+
+/**
+ * `GET /settings/export` — "Download my data". Returns everything DevTunnel
+ * stores about the signed-in user as a JSON attachment (db/accountData.ts
+ * `exportUserData`): profile, skills, memberships, activity, submissions,
+ * feedback and bug reports. GitHub tokens, session secrets and token hashes
+ * are never included. Only ever reads the caller's own rows (`user.id` comes
+ * from the session, never from the request).
+ */
+settings.get("/settings/export", async (c) => {
+  const env = getEnv(c.env);
+
+  const withinLimit = await checkRateLimit(c, { bucket: "settings-export", limit: 5, windowSeconds: 60 });
+  if (!withinLimit) {
+    return errorResponse(c, 429, "rate_limited", "Too many requests. Try again shortly.");
+  }
+
+  const user = c.get("user");
+  if (!user) {
+    return errorResponse(c, 401, "unauthenticated", "Sign-in required");
+  }
+
+  try {
+    const supabase = getSupabase(env);
+    const row = await findUserById(supabase, user.id);
+    if (!row) {
+      return errorResponse(c, 404, "not_found", "Account not found");
+    }
+    const payload = await exportUserData(supabase, row);
+    c.header("Content-Type", "application/json; charset=utf-8");
+    c.header("Content-Disposition", 'attachment; filename="devtunnel-data.json"');
+    c.header("Cache-Control", "no-store");
+    return c.body(JSON.stringify(payload, null, 2), 200);
+  } catch (err) {
+    logger.error("account_export_failed", {
       error: err instanceof Error ? err.message : String(err),
       requestId: c.get("requestId"),
     });

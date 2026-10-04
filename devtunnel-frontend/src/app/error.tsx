@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/layout/logo";
-import { TrainFooter } from "@/components/layout/train-footer";
+import { SiteFooter } from "@/components/layout/site-footer";
 
 /**
  * Root error boundary — catches any uncaught render/runtime exception in
@@ -58,7 +58,7 @@ export default function RootError({
           </Link>
         </div>
       </main>
-      <TrainFooter />
+      <SiteFooter />
     </>
   );
 }

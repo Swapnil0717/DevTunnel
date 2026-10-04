@@ -112,3 +112,21 @@ export async function deleteAccount(): Promise<void> {
     throw new SettingsApiError(`Failed to delete account (${res.status})`, res.status);
   }
 }
+
+/**
+ * `GET /settings/export` — downloads everything DevTunnel holds about the
+ * signed-in user as a JSON file (the "Download my data" button). Returns the
+ * file's Blob; the caller triggers the browser download.
+ */
+export async function exportMyData(): Promise<Blob> {
+  const res = await fetch(`${API_BASE_URL}/settings/export`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new SettingsApiError(`Failed to export data (${res.status})`, res.status);
+  }
+
+  return res.blob();
+}
