@@ -119,7 +119,7 @@ export default async function LoginPage({
         <div className="flex w-full flex-col items-center">
           <LoginCard next={next} />
 
-          <p className="mt-[22px] text-xs text-[#8e8e8e]">
+          <p className="mt-[22px] font-sub text-xs text-[#8e8e8e]">
             No account? GitHub sign-in creates one automatically.
           </p>
         </div>

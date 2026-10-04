@@ -89,6 +89,9 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        // Descriptive text on the landing/login pages; --font-sub is set by
+        // LandingShell (Space Grotesk). Falls back to the sans stack elsewhere.
+        sub: ["var(--font-sub)", "var(--font-sans)", "system-ui", "sans-serif"],
         mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
       borderRadius: {

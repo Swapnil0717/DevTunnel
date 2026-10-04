@@ -11,7 +11,7 @@ export function LoginCard({ next }: LoginCardProps) {
         Sign in to DevTunnel
       </p>
 
-      <p className="m-0 mb-[22px] text-center text-[13px] leading-[1.5] text-text-muted">
+      <p className="m-0 mb-[22px] text-center font-sub text-[13px] leading-[1.5] text-text-muted">
         Connect your GitHub account to create and manage tunnels.
       </p>
 
@@ -27,7 +27,7 @@ export function LoginCard({ next }: LoginCardProps) {
         <div className="h-px flex-1 bg-white/10" />
       </div>
 
-      <p className="m-0 text-center text-[11.5px] leading-[1.6] text-text-faint">
+      <p className="m-0 text-center font-sub text-[11.5px] leading-[1.6] text-text-faint">
         By continuing you agree to the
         <br />
         <span className="text-text-muted">

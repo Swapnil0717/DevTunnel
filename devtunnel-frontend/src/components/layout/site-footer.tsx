@@ -105,7 +105,9 @@ export function SiteFooter({ variant = "full" }: { variant?: "full" | "slim" }) 
     <footer className="w-full bg-bg">
       {/* The train sits first; the link grid is the ground it stands on. */}
       <TrainFooter />
-      <div className="w-full">
+      {/* Phones: the train is the whole footer. The link grid, legal links
+          and disclaimer appear from `sm` up. */}
+      <div className="hidden w-full sm:block">
         {/* Dashed grid, edge to edge: brand cell + four link columns. */}
         <div className="grid grid-cols-2 border-t border-dashed border-border sm:grid-cols-4 lg:grid-cols-5">
           <div className="col-span-2 flex min-w-0 flex-col items-center gap-3 px-4 py-7 text-center sm:col-span-4 sm:py-8 lg:col-span-1">
@@ -181,14 +183,14 @@ export function SiteFooter({ variant = "full" }: { variant?: "full" | "slim" }) 
   );
 }
 
-/** The train, then one row of legal links. */
+/** The train, then (from `sm` up) one row of legal links; phones show the train only. */
 function SlimFooter() {
   return (
     <footer className="w-full bg-bg">
       <TrainFooter />
       <nav
         aria-label="Legal"
-        className="flex w-full flex-wrap items-center justify-center gap-x-5 gap-y-0 border-t border-dashed border-border px-4 py-2 sm:px-6 sm:py-3"
+        className="hidden w-full flex-wrap items-center justify-center gap-x-5 gap-y-0 border-t border-dashed border-border px-4 py-2 sm:flex sm:px-6 sm:py-3"
       >
         <Link href="/privacy" className="py-1.5 text-[12px] text-text-dim transition-colors hover:text-text">
           Privacy

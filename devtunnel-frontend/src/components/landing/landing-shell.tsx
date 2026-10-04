@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import "./landing.css";
 import { CurtainBackground } from "./curtain-background";
-import { displayFont } from "./display-font";
+import { displayFont, subFont } from "./display-font";
 import { LandingFooter } from "./landing-footer";
 
 /**
@@ -11,7 +11,7 @@ import { LandingFooter } from "./landing-footer";
  */
 export function LandingShell({ children }: { children: ReactNode }) {
   return (
-    <div id="top" className={`lp-root ${displayFont.variable}`}>
+    <div id="top" className={`lp-root ${displayFont.variable} ${subFont.variable}`}>
       <CurtainBackground />
       <div className="lp-content">{children}</div>
       <LandingFooter />

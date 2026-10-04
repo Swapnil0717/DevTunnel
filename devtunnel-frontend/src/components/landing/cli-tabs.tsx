@@ -5,6 +5,7 @@ import { useState } from "react";
 type CommandSet = {
   id: "issue" | "task" | "project";
   tab: string;
+  short: string;
   hint: string;
   title: string;
   rows: ReadonlyArray<readonly [command: string, description: string]>;
@@ -15,6 +16,7 @@ const SETS: ReadonlyArray<CommandSet> = [
   {
     id: "issue",
     tab: "A GitHub issue",
+    short: "Issue",
     hint: "Any public repository",
     title: "Start from any public GitHub issue",
     rows: [
@@ -28,6 +30,7 @@ const SETS: ReadonlyArray<CommandSet> = [
   {
     id: "task",
     tab: "A DevTunnel task",
+    short: "Task",
     hint: "Curated, with role and difficulty",
     title: "Start from a DevTunnel task",
     rows: [
@@ -41,6 +44,7 @@ const SETS: ReadonlyArray<CommandSet> = [
   {
     id: "project",
     tab: "A whole project",
+    short: "Project",
     hint: "Claim the project itself",
     title: "Claim a whole DevTunnel project",
     rows: [
@@ -99,7 +103,10 @@ export function CliTabs() {
             onClick={() => setActive(i)}
             onKeyDown={(e) => onKeyDown(e, i)}
           >
-            <strong>{s.tab}</strong>
+            <strong>
+              <b className="lp-t-full">{s.tab}</b>
+              <b className="lp-t-short">{s.short}</b>
+            </strong>
             <span>{s.hint}</span>
           </button>
         ))}
