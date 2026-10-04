@@ -21,10 +21,10 @@
  * black rectangle. Nothing here hardcodes a background colour — change
  * `bg` in tailwind.config.ts and the footer follows.
  *
- * Asset: `public/train-footer-wide-2.gif` — 1920x313, transparent background.
+ * Asset: `public/train-footer-wide-3.gif` — 1920x313, transparent background.
  * Built from the original `train-footer.gif` (760x313, kept untouched): same
  * height, same artwork at 1:1 scale, but the viaduct is extended sideways by
- * repeating its arch pattern and the train now crosses the full width at a constant speed (about 200px/s). Nothing is
+ * repeating its arch pattern and the train now crosses the full width at a constant speed (about 110px/s). Nothing is
  * stretched. The image is pinned to 313px tall and fills the container width
  * with `object-cover`, so wider screens show it slightly enlarged and narrower
  * ones crop equally from both sides. `loading="lazy"` keeps the image from
@@ -42,7 +42,7 @@
     >
       {/* eslint-disable-next-line @next/next/no-img-element -- animated GIF: next/image would need `unoptimized` anyway */}
       <img
-        src="/train-footer-wide-2.gif"
+        src="/train-footer-wide-3.gif"
         alt=""
         width={1920}
         height={313}
