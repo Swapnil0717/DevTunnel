@@ -1,6 +1,7 @@
 // devtunnel-frontend/src/components/layout/app-sidebar.tsx
 "use client";
 
+import { GithubIcon } from "@/components/auth/github-icon";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "./logo";
@@ -115,7 +116,7 @@ export function AppSidebar() {
 
       {isSignedOut ? (
         <div className="border-t border-border-subtle pt-4">
-          <SignInLink variant="solid" className="w-full justify-center">
+          <SignInLink variant="solid" icon={<GithubIcon />} className="w-full justify-center">
             Sign in with GitHub
           </SignInLink>
         </div>

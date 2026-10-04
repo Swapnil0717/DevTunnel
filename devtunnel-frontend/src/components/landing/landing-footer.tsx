@@ -1,8 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { GithubIcon } from "@/components/auth/github-icon";
+import { LinkedinIcon } from "@/components/auth/linkedin-icon";
 import { CookieSettingsLink } from "@/components/consent/cookie-settings-link";
-import { CONTACT_EMAIL, GITHUB_REPO_URL, OPERATOR_NAME } from "@/lib/config";
+import { CONTACT_EMAIL, LINKEDIN_URL, OPERATOR_NAME, PROJECT_GITHUB_URL } from "@/lib/config";
 
 /**
  * Footer for the landing page and the login page only. The rest of the app
@@ -11,8 +12,8 @@ import { CONTACT_EMAIL, GITHUB_REPO_URL, OPERATOR_NAME } from "@/lib/config";
  * It continues the curtain: the fixed curtain shows through an empty band at
  * the top, fades to black, and the footer proper sits on that black — social
  * buttons, the big logo, the main links and a "Back to top" tile, then the
- * legal row. Only links the site can back up are shown: the repository
- * button appears when `NEXT_PUBLIC_GITHUB_REPO_URL` is set, and the cookie
+ * legal row. Only links the site can back up are shown: the GitHub and
+ * LinkedIn buttons always appear (fixed links in `lib/config.ts`), and the cookie
  * link appears when analytics is configured.
  */
 
@@ -59,17 +60,24 @@ export function LandingFooter() {
       <div className="lp-footer-bar">
         <div className="lp-footer-inner">
           <div className="lp-socials">
-            {GITHUB_REPO_URL ? (
-              <a
-                href={GITHUB_REPO_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="DevTunnel on GitHub"
-                className="lp-social"
-              >
-                <GithubIcon className="lp-social-icon" />
-              </a>
-            ) : null}
+            <a
+              href={PROJECT_GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="DevTunnel on GitHub"
+              className="lp-social"
+            >
+              <GithubIcon className="lp-social-icon" />
+            </a>
+            <a
+              href={LINKEDIN_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Pranav Pathare on LinkedIn"
+              className="lp-social"
+            >
+              <LinkedinIcon className="lp-social-icon" />
+            </a>
             <a
               href={`mailto:${CONTACT_EMAIL}`}
               aria-label={`Email ${CONTACT_EMAIL}`}

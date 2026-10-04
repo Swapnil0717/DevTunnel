@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { GithubIcon } from "@/components/auth/github-icon";
 import { CliTabs } from "@/components/landing/cli-tabs";
 import { HeroStats } from "@/components/landing/hero-stats";
 import { LandingHeader } from "@/components/landing/landing-header";
@@ -153,6 +154,7 @@ export default function HomePage() {
           </h1>
           <p className="lp-sub lp-anim">{SITE_DESCRIPTION}</p>
           <Link href="/login" className="lp-cta">
+            <GithubIcon className="lp-cta-icon" />
             Sign in with GitHub
           </Link>
         </div>
@@ -339,7 +341,10 @@ export default function HomePage() {
             <code className="lp-code" style={{ color: "var(--lp-text-2)" }}>dev start</code>.
           </p>
           <div className="lp-final-actions">
-            <Link href="/login" className="lp-cta">Sign in with GitHub</Link>
+            <Link href="/login" className="lp-cta">
+              <GithubIcon className="lp-cta-icon" />
+              Sign in with GitHub
+            </Link>
             <Link href="/tasks" className="lp-ghost">Browse tasks</Link>
           </div>
         </div>

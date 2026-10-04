@@ -49,6 +49,10 @@ export const CONTACT_EMAIL = "contact@devtunnel.tech";
 /** Name of the person/entity that operates DevTunnel (shown in the footer and legal pages). */
 export const OPERATOR_NAME = "Pranav Kiran Pathare";
 
+/** Fixed links shown in the footers: the DevTunnel repository and the operator's LinkedIn profile. */
+export const PROJECT_GITHUB_URL = "https://github.com/Swapnil0717/DevTunnel";
+export const LINKEDIN_URL = "https://www.linkedin.com/in/pranav-pathare-4010653a2";
+
 /**
  * Public GitHub repository URL (`https://github.com/<owner>/<repo>`), used for
  * the footer's "GitHub repository", Contributing, Code of conduct, Security and

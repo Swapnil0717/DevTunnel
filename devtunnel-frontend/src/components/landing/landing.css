@@ -68,6 +68,8 @@ html:has(.lp-root) { scroll-behavior: smooth; }
 .lp-cta { display: inline-flex; margin-top: clamp(18px, 3vh, 30px); padding: clamp(11px, 1.6vh, 13px) clamp(22px, 3vw, 28px); border-radius: 999px; background: #fff; color: #000; font: 600 clamp(13.5px, 1.5vw, 14.5px) var(--font-sans), system-ui, sans-serif; text-decoration: none; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15), 0 0 22px rgba(255, 255, 255, 0.32), 0 0 44px rgba(255, 255, 255, 0.12); transition: transform 0.2s, box-shadow 0.2s; animation: lp-reveal-pulse 0.9s var(--lp-ease) 0.4s backwards; }
 .lp-cta:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25), 0 0 30px rgba(255, 255, 255, 0.5), 0 0 60px rgba(255, 255, 255, 0.22); }
 @keyframes lp-reveal-pulse { from { opacity: 0; transform: translateY(22px) scale(0.96); } 60% { transform: translateY(-2px) scale(1.03); } }
+.lp-cta { align-items: center; gap: 8px; }
+.lp-cta-icon { width: 18px; height: 18px; flex: none; }
 .lp-ghost { display: inline-flex; padding: clamp(11px, 1.6vh, 13px) clamp(22px, 3vw, 28px); border-radius: 999px; background: var(--lp-pill-dark); border: 1px solid var(--lp-pill-border); color: var(--lp-pill-text); font: 500 clamp(13.5px, 1.5vw, 14.5px) var(--font-sans), system-ui, sans-serif; text-decoration: none; transition: background 0.15s, color 0.15s, transform 0.15s; }
 .lp-ghost:hover { background: var(--lp-pill-hover); color: #fff; transform: translateY(-1px); }
 .lp-stats { flex-shrink: 0; width: 100%; max-width: 920px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 0; padding: 0; list-style: none; text-align: center; }

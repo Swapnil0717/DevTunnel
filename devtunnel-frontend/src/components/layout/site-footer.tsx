@@ -3,7 +3,14 @@ import Link from "next/link";
 import { TrainFooter } from "./train-footer";
 import { Logo } from "./logo";
 import { CookieSettingsLink } from "@/components/consent/cookie-settings-link";
-import { CONTACT_EMAIL, GITHUB_REPO_URL, OPERATOR_NAME, SPONSOR_URL } from "@/lib/config";
+import {
+  CONTACT_EMAIL,
+  GITHUB_REPO_URL,
+  LINKEDIN_URL,
+  OPERATOR_NAME,
+  PROJECT_GITHUB_URL,
+  SPONSOR_URL,
+} from "@/lib/config";
 
 /**
  * Site footer = the existing `TrainFooter` (unchanged) on top, with the link
@@ -121,30 +128,34 @@ export function SiteFooter({ variant = "full" }: { variant?: "full" | "slim" }) 
               <br />
               Operated by {OPERATOR_NAME}, India
             </p>
-            {GITHUB_REPO_URL || SPONSOR_URL ? (
-              <div className="flex flex-wrap justify-center gap-2">
-                {GITHUB_REPO_URL ? (
-                  <a
-                    href={GITHUB_REPO_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex min-h-9 items-center rounded-md border border-border px-3 py-1.5 text-[12px] text-text transition-colors hover:border-text-dim"
-                  >
-                    Star on GitHub
-                  </a>
-                ) : null}
-                {SPONSOR_URL ? (
-                  <a
-                    href={SPONSOR_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex min-h-9 items-center rounded-md border border-border px-3 py-1.5 text-[12px] text-text transition-colors hover:border-text-dim"
-                  >
-                    Sponsor
-                  </a>
-                ) : null}
-              </div>
-            ) : null}
+            <div className="flex flex-wrap justify-center gap-2">
+              <a
+                href={GITHUB_REPO_URL ?? PROJECT_GITHUB_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-9 items-center rounded-md border border-border px-3 py-1.5 text-[12px] text-text transition-colors hover:border-text-dim"
+              >
+                Star on GitHub
+              </a>
+              <a
+                href={LINKEDIN_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-9 items-center rounded-md border border-border px-3 py-1.5 text-[12px] text-text transition-colors hover:border-text-dim"
+              >
+                LinkedIn
+              </a>
+              {SPONSOR_URL ? (
+                <a
+                  href={SPONSOR_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-9 items-center rounded-md border border-border px-3 py-1.5 text-[12px] text-text transition-colors hover:border-text-dim"
+                >
+                  Sponsor
+                </a>
+              ) : null}
+            </div>
           </div>
 
           {columns.map((column, index) => (
