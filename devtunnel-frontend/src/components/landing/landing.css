@@ -210,7 +210,7 @@ html:has(.lp-root) { scroll-behavior: smooth; }
   .lp-burger[aria-expanded="true"] i:nth-child(2) { opacity: 0; }
   .lp-burger[aria-expanded="true"] i:nth-child(3) { transform: translateY(-6.5px) rotate(-45deg); }
   .lp-scrim { display: block; position: absolute; inset: 0; z-index: 5; background: rgba(0, 0, 0, 0.62); backdrop-filter: blur(6px); animation: lp-overlay-in 0.28s both; }
-  .lp-sheet { display: flex; position: absolute; z-index: 6; left: 14px; right: 14px; top: 78px; padding: 8px 18px 18px; background: #141414; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 24px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55); animation: lp-menu-in 0.38s var(--lp-ease) both; flex-direction: column; gap: 0; }
+  .lp-sheet { display: flex; position: absolute; z-index: 6; left: 14px; right: 14px; top: 78px; padding: 8px 18px 18px; background: transparent; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 24px; animation: lp-menu-in 0.38s var(--lp-ease) both; flex-direction: column; gap: 0; }
   .lp-sheet a { position: relative; display: flex; align-items: center; min-height: 52px; padding: 12px 4px 12px 22px; text-align: left; color: #8a8a8a; font: 500 16px var(--font-sans), system-ui, sans-serif; text-decoration: none; border-top: 1px solid rgba(255, 255, 255, 0.08); transition: color 0.15s; }
   .lp-sheet a:first-child { border-top: 0; }
 
