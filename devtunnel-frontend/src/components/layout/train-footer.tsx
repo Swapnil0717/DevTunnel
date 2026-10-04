@@ -22,7 +22,8 @@
  * `bg` in tailwind.config.ts and the footer follows.
  *
  * Asset: `public/train-footer.gif` — 760x313, 52 frames, transparent
- * background, used unmodified. `width`/`height` are set so the browser reserves the space
+ * background, used unmodified. From `sm` up the height is pinned to the GIF's
+ * native 313px while the width runs edge to edge (stretched horizontally). `width`/`height` are set so the browser reserves the space
  * before it downloads, and `loading="lazy"` keeps a multi-megabyte image
  * from competing with the page's real content: it sits below the fold.
  *
@@ -45,7 +46,7 @@
         loading="lazy"
         decoding="async"
         draggable={false}
-        className="block h-auto w-full"
+        className="block h-auto w-full sm:h-[313px] sm:object-fill"
       />
     </div>
   );
