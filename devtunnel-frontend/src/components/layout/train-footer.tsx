@@ -21,7 +21,7 @@
  * black rectangle. Nothing here hardcodes a background colour — change
  * `bg` in tailwind.config.ts and the footer follows.
  *
- * Asset: `public/train-footer.webp` (1520x626, 52 frames, transparent) with
+ * Asset: `public/train-footer.webp` (2280x621, 52 frames, transparent) with
  * `public/train-footer.gif` (760x313) as a fallback. `width`/`height` are set so the browser reserves the space
  * before it downloads, and `loading="lazy"` keeps a multi-megabyte image
  * from competing with the page's real content: it sits below the fold.
@@ -37,14 +37,14 @@
       className="pointer-events-none mt-6 w-full select-none overflow-hidden bg-bg sm:mt-10"
     >
       <picture>
-        {/* 2x-resolution animated WebP (1520x626, alpha). The original 760x313 GIF stays as a fallback. */}
+        {/* 3x-resolution animated WebP (2280x621, cropped to the train + viaduct top, alpha). The original 760x313 GIF stays as a fallback. */}
         <source srcSet="/train-footer.webp" type="image/webp" />
         {/* eslint-disable-next-line @next/next/no-img-element -- animated image: next/image would need `unoptimized` anyway */}
         <img
           src="/train-footer.gif"
           alt=""
-          width={1520}
-          height={626}
+          width={2280}
+          height={621}
           loading="lazy"
           decoding="async"
           draggable={false}
