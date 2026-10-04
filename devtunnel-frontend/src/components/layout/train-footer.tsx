@@ -21,8 +21,8 @@
  * black rectangle. Nothing here hardcodes a background colour — change
  * `bg` in tailwind.config.ts and the footer follows.
  *
- * Asset: `public/train-footer.gif` — 760x313, 52 frames, transparent
- * background. `width`/`height` are set so the browser reserves the space
+ * Asset: `public/train-footer.webp` (1520x626, 52 frames, transparent) with
+ * `public/train-footer.gif` (760x313) as a fallback. `width`/`height` are set so the browser reserves the space
  * before it downloads, and `loading="lazy"` keeps a multi-megabyte image
  * from competing with the page's real content: it sits below the fold.
  *
@@ -36,17 +36,21 @@
       aria-hidden="true"
       className="pointer-events-none mt-6 w-full select-none overflow-hidden bg-bg sm:mt-10"
     >
-      {/* eslint-disable-next-line @next/next/no-img-element -- animated GIF: next/image would need `unoptimized` anyway */}
-      <img
-        src="/train-footer.gif"
-        alt=""
-        width={760}
-        height={313}
-        loading="lazy"
-        decoding="async"
-        draggable={false}
-        className="block h-auto w-full"
-      />
+      <picture>
+        {/* 2x-resolution animated WebP (1520x626, alpha). The original 760x313 GIF stays as a fallback. */}
+        <source srcSet="/train-footer.webp" type="image/webp" />
+        {/* eslint-disable-next-line @next/next/no-img-element -- animated image: next/image would need `unoptimized` anyway */}
+        <img
+          src="/train-footer.gif"
+          alt=""
+          width={1520}
+          height={626}
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          className="block h-auto w-full"
+        />
+      </picture>
     </div>
   );
 }
