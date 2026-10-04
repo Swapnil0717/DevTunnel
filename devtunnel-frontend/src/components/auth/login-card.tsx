@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { GithubLoginButton } from "./github-login-button";
 
 interface LoginCardProps {
@@ -30,13 +32,19 @@ export function LoginCard({ next }: LoginCardProps) {
       <p className="m-0 text-center font-sub text-[11.5px] leading-[1.6] text-text-faint">
         By continuing you agree to the
         <br />
-        <span className="text-text-muted">
+        <Link
+          href="/terms"
+          className="text-text-muted underline-offset-2 transition-colors hover:text-text hover:underline focus-visible:text-text focus-visible:underline focus-visible:outline-none"
+        >
           Terms of Service
-        </span>{" "}
+        </Link>{" "}
         and{" "}
-        <span className="text-text-muted">
+        <Link
+          href="/privacy"
+          className="text-text-muted underline-offset-2 transition-colors hover:text-text hover:underline focus-visible:text-text focus-visible:underline focus-visible:outline-none"
+        >
           Privacy Policy
-        </span>
+        </Link>
       </p>
     </div>
   );
