@@ -220,12 +220,16 @@ GROQ_MODEL = "openai/gpt-oss-120b"
 # fill each in from that provider's dashboard when you add its key.
 # ---------------------------------------------------------------------------
 AI_FEATURES_ENABLED = "true"
-GROQ_SEARCH_MODEL = "llama-3.1-8b-instant"     # a small fast Groq model (its own per-model budget)
-GROQ_SECONDARY_MODEL = "openai/gpt-oss-20b"  # second Groq model, used as a backup for explain/insights
+# FIX: llama-3.1-8b-instant returned 404 model_not_found on Groq. Use a model
+# that is known to work on this account (it is already GROQ_SECONDARY_MODEL).
+GROQ_SEARCH_MODEL = "openai/gpt-oss-20b"       # Groq search-bar model
+GROQ_SECONDARY_MODEL = "openai/gpt-oss-20b"    # second Groq model, used as a backup for explain/insights
 CEREBRAS_MODEL = ""
 GEMINI_MODEL = "gemini-3.5-flash-lite"          # e.g. a Flash-Lite model, from aistudio.google.com
 MISTRAL_MODEL = ""
-OPENROUTER_MODEL = "openai/gpt-oss-20b:free"
+# FIX: OpenRouter removed the ":free" slug (404). Left empty = provider disabled.
+# Set to "openai/gpt-oss-20b" only if you want the paid slug (needs credit).
+OPENROUTER_MODEL = ""
 GITHUB_MODELS_MODEL = ""
 CF_AI_MODEL = "@cf/openai/gpt-oss-20b"           # Workers AI model id (needs the [ai] binding below)
 
@@ -295,12 +299,12 @@ GITHUB_CLIENT_ID = "Ov23ligxea5bIh7uUl8V" # same GitHub App as production for no
 SESSION_TTL_DAYS = "30"
 GROQ_MODEL = "openai/gpt-oss-120b"
 AI_FEATURES_ENABLED = "true"
-GROQ_SEARCH_MODEL = "llama-3.1-8b-instant"
+GROQ_SEARCH_MODEL = "openai/gpt-oss-20b"
 GROQ_SECONDARY_MODEL = "openai/gpt-oss-20b"
 CEREBRAS_MODEL = ""
 GEMINI_MODEL = "gemini-3.5-flash-lite"
 MISTRAL_MODEL = ""
-OPENROUTER_MODEL = "openai/gpt-oss-20b:free"
+OPENROUTER_MODEL = ""
 GITHUB_MODELS_MODEL = ""
 CF_AI_MODEL = "@cf/openai/gpt-oss-20b"
 # KV-migration flags (see the production [vars] block for what each does).
