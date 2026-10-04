@@ -34,7 +34,7 @@ export function AuthStatusPanel({ status, errorMessage }: AuthStatusPanelProps) 
       className={
         isError
           ? "rounded-lg border border-status-error-border bg-status-error-bg px-[14px] py-3"
-          : "rounded-lg border border-border bg-surface px-[14px] py-3"
+          : "rounded-2xl border border-white/10 bg-black/70 px-[14px] py-3 backdrop-blur-md"
       }
     >
       <div className="mb-1.5 flex items-center gap-1.5">

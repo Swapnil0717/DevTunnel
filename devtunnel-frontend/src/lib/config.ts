@@ -18,7 +18,7 @@ export const SITE_URL =
 export const SITE_NAME = "DevTunnel";
 
 export const SITE_DESCRIPTION =
-  "DevTunnel connects contributors with open source projects to build, and helps maintainers organize tasks, roles, and pull requests.";
+  "DevTunnel connects contributors with open source projects, with tasks matched to your role, level and tech stack, and a CLI that opens the pull request.";
 
 
 /**

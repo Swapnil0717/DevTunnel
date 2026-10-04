@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { Logo } from "@/components/layout/logo";
-import { SiteFooter } from "@/components/layout/site-footer";
+import { LandingShell } from "@/components/landing/landing-shell";
 import { LoginCard } from "@/components/auth/login-card";
 import { PortalChoiceCard } from "@/components/auth/portal-choice-card";
 import {
@@ -15,9 +15,6 @@ import { getServerUser } from "@/lib/auth/get-server-user";
 import { needsOnboarding } from "@/lib/onboarding/needs-onboarding";
 import { isAdmin } from "@/lib/auth/is-admin";
 import { getServerViewMode } from "@/lib/auth/view-mode.server";
-import RouteLoading from "./loading";
-import { LoginSkeleton } from "@/components/auth/login-skeleton";
-import { BlueprintReveal } from "@/components/ui/blueprint-reveal";
 
 export const metadata: Metadata = buildMetadata({
   title: "Sign in",
@@ -65,28 +62,25 @@ export default async function LoginPage({
       }
 
       return (
-        <>
-          <BlueprintReveal skeleton={<LoginSkeleton variant="portal" />}>
-            <main className="flex min-h-screen flex-col items-center justify-center gap-9 px-6 py-16">
-              <Logo />
+        <LandingShell>
+          <main className="flex min-h-screen flex-col items-center justify-center gap-9 px-6 py-16">
+            <Logo />
 
-              <h1 className="sr-only">
-                Choose how to sign in to DevTunnel
-              </h1>
+            <h1 className="sr-only">
+              Choose how to sign in to DevTunnel
+            </h1>
 
-              <PortalChoiceCard
-                name={user.name || user.username}
-                userDestination={
-                  resolvedSearchParams.next &&
-                  resolvedSearchParams.next.startsWith("/")
-                    ? resolvedSearchParams.next
-                    : "/home"
-                }
-              />
-            </main>
-          </BlueprintReveal>
-          <SiteFooter variant="slim" />
-        </>
+            <PortalChoiceCard
+              name={user.name || user.username}
+              userDestination={
+                resolvedSearchParams.next &&
+                resolvedSearchParams.next.startsWith("/")
+                  ? resolvedSearchParams.next
+                  : "/home"
+              }
+            />
+          </main>
+        </LandingShell>
       );
     }
 
@@ -114,32 +108,29 @@ export default async function LoginPage({
     : undefined;
 
   return (
-    <>
-      <BlueprintReveal skeleton={<RouteLoading />}>
-        <main className="flex min-h-screen flex-col items-center justify-center gap-9 px-6 py-16">
-          <Logo />
+    <LandingShell>
+      <main className="flex min-h-screen flex-col items-center justify-center gap-9 px-6 py-16">
+        <Logo />
 
-          <h1 className="sr-only">
-            Sign in to DevTunnel
-          </h1>
+        <h1 className="sr-only">
+          Sign in to DevTunnel
+        </h1>
 
-          <div className="flex w-full flex-col items-center">
-            <LoginCard next={next} />
+        <div className="flex w-full flex-col items-center">
+          <LoginCard next={next} />
 
-            <p className="mt-[22px] text-xs text-text-disabled">
-              No account? GitHub sign-in creates one automatically.
-            </p>
-          </div>
+          <p className="mt-[22px] text-xs text-[#8e8e8e]">
+            No account? GitHub sign-in creates one automatically.
+          </p>
+        </div>
 
-          <div className="w-full max-w-[340px]">
-            <AuthStatusPanel
-              status={status}
-              errorMessage={errorMessage}
-            />
-          </div>
-        </main>
-      </BlueprintReveal>
-      <SiteFooter variant="slim" />
-    </>
+        <div className="w-full max-w-[340px]">
+          <AuthStatusPanel
+            status={status}
+            errorMessage={errorMessage}
+          />
+        </div>
+      </main>
+    </LandingShell>
   );
 }

@@ -25,7 +25,7 @@ export function PortalChoiceCard({
   }
 
   return (
-    <div className="w-full max-w-[340px] rounded-[10px] border border-border bg-surface px-[26px] py-7">
+    <div className="w-full max-w-[340px] rounded-[24px] border border-white/10 bg-black/70 px-[26px] py-7 backdrop-blur-md">
       <p className="m-0 mb-1 text-center text-[15px] font-medium text-text">
         Welcome back, {name}
       </p>
@@ -50,7 +50,7 @@ export function PortalChoiceCard({
           type="button"
           onClick={() => choose("user")}
           disabled={pending !== null}
-          className="flex h-[38px] w-full items-center justify-center gap-2 rounded-md border border-border bg-surface text-[13px] font-medium text-text transition-colors hover:bg-surface-raised focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-70"
+          className="flex h-[38px] w-full items-center justify-center gap-2 rounded-md border border-white/15 bg-white/5 text-[13px] font-medium text-text transition-colors hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-70"
         >
           {pending === "user"
             ? "Opening DevTunnel…"
