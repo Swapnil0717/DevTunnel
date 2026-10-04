@@ -121,15 +121,17 @@ export function ConsentManager() {
       aria-modal="false"
       aria-labelledby="dt-consent-title"
       aria-describedby="dt-consent-desc"
-      className="fixed inset-x-3 bottom-[76px] z-[60] mx-auto max-w-[620px] rounded-[10px] border border-border bg-surface-raised p-4 shadow-[0_8px_30px_rgba(0,0,0,0.5)] sm:bottom-4"
+      // Phone: a bottom sheet, full width, above the bottom tab bar and clear of the
+      // home indicator. Laptop (sm+): a compact card in the bottom-right corner so it
+      // never covers the left sidebar or the page's main content.
+      className="fixed inset-x-0 bottom-0 z-[60] rounded-t-[14px] border-t border-border bg-surface-raised px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4 shadow-[0_-8px_30px_rgba(0,0,0,0.5)] sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[400px] sm:rounded-[12px] sm:border sm:p-4 sm:shadow-[0_8px_30px_rgba(0,0,0,0.5)]"
     >
-      <h2 id="dt-consent-title" className="m-0 mb-1 text-sm font-medium text-text">
+      <h2 id="dt-consent-title" className="m-0 mb-1 text-[14px] font-medium text-text">
         Cookies &amp; analytics
       </h2>
-      <p id="dt-consent-desc" className="m-0 mb-3 text-[12.5px] leading-[1.55] text-text-muted">
-        DevTunnel uses essential cookies to keep you signed in. With your OK we also use Google
-        Analytics to count visits and see which pages are useful. Nothing from Google loads until
-        you accept. See the{" "}
+      <p id="dt-consent-desc" className="m-0 mb-3.5 text-[12.5px] leading-[1.55] text-text-muted">
+        We use essential cookies to keep you signed in. With your OK we also use Google Analytics
+        to count visits. Nothing from Google loads until you accept. Read the{" "}
         <Link href="/cookies" className="text-text underline underline-offset-2 hover:text-accent">
           Cookie policy
         </Link>{" "}
@@ -139,18 +141,18 @@ export function ConsentManager() {
         </Link>
         .
       </p>
-      <div className="flex flex-wrap justify-end gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
           onClick={() => decide("denied")}
-          className="rounded-md border border-border bg-transparent px-3.5 py-1.5 text-[13px] font-medium text-text transition-colors hover:border-text-dim"
+          className="rounded-md border border-border bg-transparent px-3.5 py-2 text-[13px] font-medium text-text transition-colors hover:border-text-dim"
         >
           Decline
         </button>
         <button
           type="button"
           onClick={() => decide("granted")}
-          className="rounded-md border border-border bg-transparent px-3.5 py-1.5 text-[13px] font-medium text-text transition-colors hover:border-text-dim"
+          className="rounded-md border border-border bg-transparent px-3.5 py-2 text-[13px] font-medium text-text transition-colors hover:border-text-dim"
         >
           Accept analytics
         </button>
