@@ -24,7 +24,7 @@ import { CONTACT_EMAIL, GITHUB_REPO_URL, OPERATOR_NAME, SPONSOR_URL } from "@/li
 type FooterLink = { label: string; href: string; external?: boolean };
 
 const linkClass =
-  "text-[12.5px] text-text-muted underline-offset-2 transition-colors hover:text-text hover:underline";
+  "inline-block max-w-full py-1 text-[12.5px] text-text-muted underline-offset-2 [overflow-wrap:anywhere] transition-colors hover:text-text hover:underline";
 
 function repoLink(path: string): string | null {
   return GITHUB_REPO_URL ? `${GITHUB_REPO_URL}${path}` : null;
@@ -108,7 +108,7 @@ export function SiteFooter({ variant = "full" }: { variant?: "full" | "slim" }) 
       <div className="w-full">
         {/* Dashed grid, edge to edge: brand cell + four link columns. */}
         <div className="grid grid-cols-2 border-t border-dashed border-border sm:grid-cols-4 lg:grid-cols-5">
-          <div className="col-span-2 flex flex-col items-center gap-3 px-4 py-8 text-center sm:col-span-4 lg:col-span-1 lg:items-center">
+          <div className="col-span-2 flex min-w-0 flex-col items-center gap-3 px-4 py-7 text-center sm:col-span-4 sm:py-8 lg:col-span-1">
             <Logo />
             <p className="m-0 max-w-[220px] text-[12px] leading-[1.5] text-text-muted">
               Find open-source projects and tasks that fit your skills, and ship your first pull
@@ -126,7 +126,7 @@ export function SiteFooter({ variant = "full" }: { variant?: "full" | "slim" }) 
                     href={GITHUB_REPO_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-[12px] text-text transition-colors hover:border-text-dim"
+                    className="inline-flex min-h-9 items-center rounded-md border border-border px-3 py-1.5 text-[12px] text-text transition-colors hover:border-text-dim"
                   >
                     Star on GitHub
                   </a>
@@ -136,7 +136,7 @@ export function SiteFooter({ variant = "full" }: { variant?: "full" | "slim" }) 
                     href={SPONSOR_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-[12px] text-text transition-colors hover:border-text-dim"
+                    className="inline-flex min-h-9 items-center rounded-md border border-border px-3 py-1.5 text-[12px] text-text transition-colors hover:border-text-dim"
                   >
                     Sponsor
                   </a>
@@ -145,19 +145,24 @@ export function SiteFooter({ variant = "full" }: { variant?: "full" | "slim" }) 
             ) : null}
           </div>
 
-          {columns.map((column) => (
+          {columns.map((column, index) => (
             <nav
               key={column.title}
               aria-label={column.title}
-              className="flex flex-col items-center gap-2.5 border-t border-dashed border-border px-3 py-8 text-center sm:border-t-0 lg:border-l"
+              className={`flex min-w-0 flex-col items-center gap-1 border-t border-dashed border-border px-3 py-6 text-center sm:py-8 lg:border-t-0 lg:border-l ${
+                // Phones lay the four columns out 2-up, tablets 4-up, desktops
+                // beside the brand cell: put a divider only where a neighbour
+                // sits to the left.
+                index % 2 === 1 ? "border-l" : "border-l-0"
+              } ${index > 0 ? "sm:border-l" : "sm:border-l-0"}`}
             >
-              <h2 className="m-0 mb-1 text-[13px] font-medium text-text">{column.title}</h2>
+              <h2 className="m-0 mb-1 text-[13px] font-medium text-text sm:mb-2">{column.title}</h2>
               {column.links.map((link) => (
                 <FooterAnchor key={link.label} link={link} />
               ))}
               {column.title === "Legal" ? (
                 <CookieSettingsLink
-                  className={`${linkClass} w-fit bg-transparent p-0 text-accent hover:text-accent`}
+                  className={`${linkClass} w-fit bg-transparent text-accent hover:text-accent`}
                 />
               ) : null}
               {column.title === "Support" ? (
@@ -168,7 +173,7 @@ export function SiteFooter({ variant = "full" }: { variant?: "full" | "slim" }) 
             </nav>
           ))}
         </div>
-        <p className="m-0 border-t border-dashed border-border px-4 py-2 text-center text-[11px] text-text-dim">
+        <p className="m-0 border-t border-dashed border-border px-4 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] text-center text-[11px] text-text-dim sm:pb-2">
           Not affiliated with or endorsed by GitHub.
         </p>
       </div>
@@ -183,16 +188,16 @@ function SlimFooter() {
       <TrainFooter />
       <nav
         aria-label="Legal"
-        className="flex w-full flex-wrap items-center justify-center gap-x-4 gap-y-1 border-t border-dashed border-border px-4 py-3 sm:px-6"
+        className="flex w-full flex-wrap items-center justify-center gap-x-5 gap-y-0 border-t border-dashed border-border px-4 py-2 sm:px-6 sm:py-3"
       >
-        <Link href="/privacy" className="text-[12px] text-text-dim transition-colors hover:text-text">
+        <Link href="/privacy" className="py-1.5 text-[12px] text-text-dim transition-colors hover:text-text">
           Privacy
         </Link>
-        <Link href="/terms" className="text-[12px] text-text-dim transition-colors hover:text-text">
+        <Link href="/terms" className="py-1.5 text-[12px] text-text-dim transition-colors hover:text-text">
           Terms
         </Link>
-        <CookieSettingsLink className="bg-transparent p-0 text-[12px] text-text-dim transition-colors hover:text-text" />
-        <Link href="/contact" className="text-[12px] text-text-dim transition-colors hover:text-text">
+        <CookieSettingsLink className="bg-transparent py-1.5 text-[12px] text-text-dim transition-colors hover:text-text" />
+        <Link href="/contact" className="py-1.5 text-[12px] text-text-dim transition-colors hover:text-text">
           Contact
         </Link>
       </nav>

@@ -275,7 +275,7 @@ export default async function TaskContributePage({ params }: TaskContributePageP
                 </p>
               ) : null}
 
-              <dl className="m-0 mt-4 grid grid-cols-[92px_1fr] gap-x-4 gap-y-2.5 text-[12.5px]">
+              <dl className="m-0 mt-4 grid grid-cols-[92px_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-[12.5px]">
                 <dt className="text-text-faint">Role</dt>
                 <dd className="m-0 text-text-secondary">
                   {task.roles.length

@@ -2075,7 +2075,7 @@ export function BlueprintTaskSidebar() {
     <aside className="flex w-full flex-col gap-4 lg:w-[280px] lg:shrink-0" aria-hidden="true">
       <BlueprintTaskSection>
         <BlueprintTaskHeading text="Details" />
-        <div className="grid grid-cols-[92px_1fr] gap-x-4 gap-y-3 text-[12.5px]">
+        <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-x-4 gap-y-3 text-[12.5px]">
           {rows.map((row, index) => (
             <div key={row.label} className="contents">
               <BlueprintGhostText text={row.label} className="w-fit" />
@@ -2191,7 +2191,7 @@ export function BlueprintContributeTaskSummary() {
         text="From GitHub issue #1234 — Title of the original GitHub issue"
         className="mt-1 text-[12.5px]"
       />
-      <div className="mt-4 grid grid-cols-[92px_1fr] gap-x-4 gap-y-2.5 text-[12.5px]">
+      <div className="mt-4 grid grid-cols-[92px_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-[12.5px]">
         <BlueprintGhostText text="Role" className="w-fit" />
         <BlueprintGhostText text="Frontend, Backend" className="w-fit" />
         <BlueprintGhostText text="Difficulty" className="w-fit" />

@@ -227,3 +227,17 @@ html:has(.lp-root) { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) {
   .lp-root *, .lp-root *::before, .lp-root *::after { animation: none !important; transition: none !important; }
 }
+
+/* Footer, small screens: comfortable tap targets, no clipped logo, and clearance for the iPhone home indicator. */
+.lp-footer-legal { padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)); }
+.lp-footer-logo { max-width: 100%; }
+.lp-footer-logo img { max-width: 100%; }
+@media (max-width: 720px) {
+  .lp-footer-main { gap: 22px; padding: 32px 0; }
+  .lp-footer-links { gap: 2px; }
+  .lp-footer-links a { display: inline-block; padding-block: 8px; }
+  .lp-footer-legal { flex-direction: column; align-items: flex-start; gap: 14px; }
+  .lp-footer-legal nav { gap: 2px 20px; }
+  .lp-footer-legal nav a, .lp-cookie-btn { display: inline-block; padding-block: 8px; }
+  .lp-top { width: 100%; max-width: 100%; height: 56px; flex-direction: row; gap: 10px; }
+}

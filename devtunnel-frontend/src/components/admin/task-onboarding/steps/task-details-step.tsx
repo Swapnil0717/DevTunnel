@@ -139,7 +139,7 @@ export function TaskDetailsStep({
         <p className="m-0 mb-2 text-[11px] uppercase tracking-wide text-text-faint">
           Difficulty
         </p>
-        <div role="radiogroup" aria-label="Difficulty" className="grid grid-cols-3 gap-2">
+        <div role="radiogroup" aria-label="Difficulty" className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-3">
           {DIFFICULTIES.map((difficulty) => (
             <OptionCard
               key={difficulty}

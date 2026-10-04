@@ -469,3 +469,30 @@
     animation: blueprint-wipe 0.8s cubic-bezier(0.65, 0, 0.35, 1) both;
   }
 }
+
+/* ---- Responsive safety net -------------------------------------------- */
+
+/* Mobile browsers' 100vh includes the area behind the collapsing URL bar,
+   so full-height shells overflow by ~60px and jump while scrolling. Use the
+   dynamic viewport height wherever the app says min-h-screen (100vh stays
+   as the fallback for browsers without dvh). */
+.min-h-screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Long unbroken strings (repo URLs, branch names, error text) wrap instead
+   of pushing the page sideways. */
+body {
+  overflow-wrap: break-word;
+}
+
+/* iOS Safari zooms the page when a focused field's font-size is under 16px.
+   Most fields here are 12-13.5px, so on phones raise them to 16px. */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

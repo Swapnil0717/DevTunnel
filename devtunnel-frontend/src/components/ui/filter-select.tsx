@@ -95,7 +95,7 @@ export function FilterSelect({ id, value, options, onChange, className = "" }: F
         <ul
           role="listbox"
           aria-labelledby={id}
-          className="absolute left-0 top-[calc(100%+4px)] z-20 max-h-64 w-full min-w-[180px] overflow-auto rounded-[8px] border border-border bg-surface p-1 shadow-lg shadow-black/20"
+          className="absolute left-0 top-[calc(100%+4px)] z-20 max-h-64 w-full min-w-[180px] max-w-[calc(100vw-2rem)] overflow-auto rounded-[8px] border border-border bg-surface p-1 shadow-lg shadow-black/20"
         >
           {options.map((option) => {
             const isSelected = option.value === value;

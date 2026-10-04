@@ -220,7 +220,7 @@ export function SelectMenu<T extends string>({
           aria-labelledby={ariaLabel ? undefined : id}
           aria-activedescendant={`${id}-option-${activeIndex}`}
           onKeyDown={onListKeyDown}
-          className="absolute left-0 top-[calc(100%+4px)] z-30 m-0 max-h-64 w-full min-w-[170px] list-none overflow-auto rounded-md border border-border bg-surface p-1 shadow-lg shadow-black/30 focus:outline-none"
+          className="absolute left-0 top-[calc(100%+4px)] z-30 m-0 max-h-64 w-full min-w-[170px] max-w-[calc(100vw-2rem)] list-none overflow-auto rounded-md border border-border bg-surface p-1 shadow-lg shadow-black/30 focus:outline-none"
         >
           {options.map((option, index) => {
             const isSelected = option.value === value;

@@ -26,8 +26,11 @@
  * height, same artwork at 1:1 scale, but the viaduct is extended sideways by
  * repeating its arch pattern and the train now crosses the full width at a constant speed (about 110px/s). Nothing is
  * stretched. The image is pinned to 313px tall and fills the container width
- * with `object-cover`, so wider screens show it slightly enlarged and narrower
- * ones crop equally from both sides. `loading="lazy"` keeps the image from
+ * with `object-cover`. Responsive height: 170px on phones, 220px from 480px,
+ * 270px from md, the full 313px from lg. Because the artwork is 313px tall, a
+ * shorter box scales the whole scene down (nothing is cut off top or bottom)
+ * instead of cropping it, so a phone isn't left with a 313px band of mostly
+ * sky; if the box is wider than the scaled image, the sides crop equally. `loading="lazy"` keeps the image from
  * competing with the page's real content: it sits below the fold.
  *
  * Purely decorative: empty `alt` + `aria-hidden` keep it out of the
@@ -38,7 +41,7 @@
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none mt-6 w-full select-none overflow-hidden bg-bg sm:mt-10"
+      className="pointer-events-none mt-4 w-full select-none overflow-hidden bg-bg sm:mt-8 lg:mt-10"
     >
       {/* eslint-disable-next-line @next/next/no-img-element -- animated GIF: next/image would need `unoptimized` anyway */}
       <img
@@ -49,7 +52,7 @@
         loading="lazy"
         decoding="async"
         draggable={false}
-        className="block h-[313px] w-full object-cover object-center"
+        className="block h-[170px] w-full object-cover object-center min-[480px]:h-[220px] md:h-[270px] lg:h-[313px]"
       />
     </div>
   );

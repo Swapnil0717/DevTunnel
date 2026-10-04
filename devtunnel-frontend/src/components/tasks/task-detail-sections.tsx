@@ -254,7 +254,7 @@ export function TaskDetailSidebar({ task }: { task: TaskDetail }) {
         <h2 id="task-details-heading" className={`${HEADING_CLASS} mb-3`}>
           Details
         </h2>
-        <dl className="m-0 grid grid-cols-[92px_1fr] gap-x-4 gap-y-3 text-[12.5px]">
+        <dl className="m-0 grid grid-cols-[92px_minmax(0,1fr)] gap-x-4 gap-y-3 text-[12.5px]">
           <dt className="text-text-faint">Status</dt>
           <dd className="m-0">
             <AdminTaskStatusBadge status={task.status} />

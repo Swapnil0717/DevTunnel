@@ -234,7 +234,7 @@ export function EditTaskDetailsPanel({
           <h3 className="m-0 mb-2 font-mono text-[12px] uppercase tracking-wide text-text-muted">
             Difficulty
           </h3>
-          <div role="radiogroup" aria-label="Difficulty" className="grid grid-cols-3 gap-2">
+          <div role="radiogroup" aria-label="Difficulty" className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-3">
             {DIFFICULTIES.map((option) => (
               <OptionCard
                 key={option}
@@ -250,7 +250,7 @@ export function EditTaskDetailsPanel({
           <h3 className="m-0 mb-2 font-mono text-[12px] uppercase tracking-wide text-text-muted">
             Status
           </h3>
-          <div role="radiogroup" aria-label="Status" className="grid grid-cols-3 gap-2">
+          <div role="radiogroup" aria-label="Status" className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-3">
             {STATUSES.map((option) => (
               <OptionCard
                 key={option}
