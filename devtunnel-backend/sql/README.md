@@ -1,78 +1,48 @@
-# Adding the DevTunnel auth schema to your existing Supabase project
+# Database migrations
 
-Your Supabase project (`bdxnvouuyfjryuncxkfx`) already stores your wishlist
-app's data, almost certainly in the default `public` schema. Rather than
-mixing DevTunnel's `users` / `sessions` tables into `public` — where a
-table name collision or an accidental broad query could touch the wrong
-app's data — this backend uses its own **Postgres schema**, `devtunnel`,
-inside the *same* project. One project, two isolated namespaces, no shared
-tables, no risk to your wishlist data.
+DevTunnel stores everything in a dedicated Postgres schema, `devtunnel`, inside a Supabase project. Keeping its own schema means DevTunnel's tables never collide with anything in `public` (or another app sharing the project).
 
-## 1. Run the migration
+## 1. Apply the migrations
 
-Supabase Dashboard → your project → **SQL Editor** → paste the contents of
-`001_create_schema.sql` → **Run**.
+In the Supabase Dashboard → **SQL Editor**, run every file in this folder **in numeric order**, starting with `001_create_schema.sql` (which creates the `devtunnel` schema, the `user_role` enum, and the `users` and `sessions` tables) and ending with the highest-numbered file.
 
-This creates:
+Notes:
 
-- `devtunnel` schema
-- `devtunnel.user_role` enum
-- `devtunnel.users` table
-- `devtunnel.sessions` table
-- RLS enabled with no grants to `anon`/`authenticated` (defense in depth —
-  see below)
+- Each migration is written to be re-runnable (`if not exists`, `create or replace`) where practical, but run each file once, in order, on a fresh project.
+- **Two files share the number 012.** `012_add_task_onboarding_preview_validation.sql` is the original and `012 add task onboarding preview validation.sql` (with spaces) is a later fix that qualifies column names to avoid an "ambiguous column" error. Both use `create or replace function`, so apply the underscore file first and the spaced file second; the fixed version is the one that remains.
+- A few other files (`017`, `019`, `022`) have spaces in their names. The order is still by number.
+- Add new changes as a **new, higher-numbered file**. Do not edit a migration that has already been applied.
+- Two later migrations are worth knowing: `051_drop_sponsors.sql` removes the sponsorship tables added in `048`/`049`, and `052_account_purge.sql` adds the account-deletion purge used by the daily cron.
 
-It does **not** touch `public` or anything already in it. Your wishlist
-tables are unaffected.
+## 2. Expose the schema
 
-## 2. (Only if you also plan to query these tables via the Supabase JS/REST
-client from somewhere *other* than this backend)
+The backend talks to Postgres through Supabase's REST layer (PostgREST), which only serves explicitly exposed schemas.
 
-This backend talks to Postgres through `@supabase/supabase-js`, which goes
-over Supabase's PostgREST API. PostgREST only serves schemas that are
-explicitly exposed:
+Dashboard → **Project Settings → API → Exposed schemas** → add `devtunnel` (alongside `public`) → Save.
 
-Dashboard → **Project Settings** → **API** → **Exposed schemas** → add
-`devtunnel` alongside `public` → Save.
+## 3. Get the service role key
 
-If nothing outside this Worker will ever query `devtunnel.*` directly (the
-recommended setup — this backend is the only thing that talks to these
-tables), you can skip this step. The backend still works either way
-because it authenticates with the **service role key**, which PostgREST
-honors regardless of the exposed-schemas allowlist for direct
-`schema('devtunnel')` calls made server-side... but exposing it explicitly
-is required for the `db: { schema: 'devtunnel' }` option in
-`src/lib/supabase.ts` to resolve correctly, so **do this step** — it's not
-optional for this backend to function, only optional for outside
-consumers.
+Dashboard → **Project Settings → API → Project API keys** → `service_role`. Set it as the backend's `SUPABASE_SERVICE_ROLE_KEY` secret (see [`../README.md`](../README.md#secrets)).
 
-## 3. Get your service role key
+Never put this key in frontend code, a `NEXT_PUBLIC_*` variable, or anywhere except the backend's secrets.
 
-Dashboard → **Project Settings** → **API** → **Project API keys** →
-`service_role` (labelled "secret"). This is *not* the same as the
-`anon`/`public` key your wishlist frontend presumably already uses.
+## Why Row Level Security is on with no policies
 
-**Never** put this key in frontend code, a `NEXT_PUBLIC_*` env var, or
-anywhere in the `devtunnel-frontend` project — only this backend's secret
-bindings should ever hold it (see main README.md, "Secrets").
+Every table has RLS enabled, no policies, and all privileges revoked from `anon` and `authenticated`. The service role key (used only by the Worker) bypasses RLS, and the backend authorizes every request in code. Any other client, even if `devtunnel` is exposed in the API settings, gets no access to these tables.
 
-## 4. Why RLS is enabled with zero policies
+## What the migrations cover
 
-`devtunnel.users` and `devtunnel.sessions` have Row Level Security turned
-on, but no policies are defined, and `anon`/`authenticated` have had all
-privileges explicitly revoked. That means:
-
-- The service role key (used only by this Worker) bypasses RLS entirely,
-  as intended — this backend does its own authorization in code.
-- Any other client — including your wishlist app's Supabase client, if it
-  ever runs in the same browser session as DevTunnel — gets **zero**
-  access to these tables, even by accident, even if `devtunnel` ends up
-  exposed in the API settings.
-
-## 5. Future modules
-
-`devtunnel_schema.prisma` describes many more tables (`Project`, `Task`,
-`Contribution`, `PullRequest`, ...) for modules beyond authentication.
-Add those with a new `sql/002_*.sql` migration in the same `devtunnel`
-schema when you build those backend routes — this keeps every DevTunnel
-table together and still fully separate from your wishlist app's tables.
+| Range | Area |
+|---|---|
+| 001–003 | Schema, users and sessions, onboarding fields, encrypted GitHub tokens |
+| 004–005 | DevTunnel contributions, admin audit log |
+| 006–019 | Admin onboarding for projects, tasks and open source tools; soft delete; new issues; multi-select roles |
+| 020–024 | AI Discovery and GitHub nominations |
+| 025–028 | GitHub stars, catalog memberships, contribution progress, user submissions |
+| 029–036 | CLI tokens, start/submit tracking for tasks and projects, tool–project link, settings, profile activity |
+| 037–042 | AI discovered task titles, AI usage and settings, summaries, issue explanations, insights, provider status |
+| 043 | Tables that replaced Workers KV state (cache, locks, CLI login codes) |
+| 044–047 | PR-submitted activity, external contributions, contribution feedback |
+| 048–049, 051 | Sponsorships added, then dropped |
+| 050 | Bug reports |
+| 052 | Account purge |

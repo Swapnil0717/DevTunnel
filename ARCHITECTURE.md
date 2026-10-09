@@ -1,162 +1,128 @@
-# DevTunnel — System Architecture
+# DevTunnel — Architecture
 
-This document provides a high-level overview of DevTunnel's system architecture. For the full, detailed module-by-module breakdown (frontend screens, backend routes, and algorithm specs), see [`docs/devtunnel-workflow.md`](./docs/devtunnel-workflow.md).
+This document describes how DevTunnel is built today. For the original product vision and the long-form module specs, see [`docs/devtunnel-idea.md`](./docs/devtunnel-idea.md) and [`docs/devtunnel-workflow.md`](./docs/devtunnel-workflow.md). Those are design documents: they describe the planned scope, which is larger than what is built.
 
----
-
-## High-Level System Diagram
+## Overview
 
 ```
-                         ┌──────────────────────────┐
-                         │         GITHUB           │
-                         │                           │
-                         │ Repositories              │
-                         │ Issues                    │
-                         │ Pull Requests             │
-                         │ Actions / CI              │
-                         │ Releases                  │
-                         └────────────┬──────────────┘
-                                      │
-                         GitHub API / OAuth / Webhooks
-                                      │
-                 ┌────────────────────┴────────────────────┐
-                 ▼                                         ▼
-     ┌─────────────────────────┐             ┌─────────────────────────┐
-     │   DEVTUNNEL MAIN WEB    │             │    DEVTUNNEL ADMIN      │
-     │                         │             │                         │
-     │ Contributors            │             │ Private Admin Portal   │
-     │ Maintainers             │             │ Add GitHub Repository  │
-     │ Projects                │             │ Add Author             │
-     │ Tasks                   │             │ Add Project Details    │
-     │ PRs                     │             │ Add Tasks               │
-     │ Dashboard               │             │ Edit / Publish          │
-     │ Releases                │             │                         │
-     └────────────┬────────────┘             └────────────┬────────────┘
-                  │                                       │
-                  └────────────────┬──────────────────────┘
-                                   ▼
-                         ┌──────────────────────┐
-                         │  DEVTUNNEL BACKEND    │
-                         │                       │
-                         │ Authentication        │
-                         │ Project API           │
-                         │ Task API              │
-                         │ GitHub Integration    │
-                         │ Contributor API       │
-                         │ Maintainer API        │
-                         │ Admin API             │
-                         │ Validation            │
-                         │ PR Management         │
-                         │ Webhooks              │
-                         └──────────┬────────────┘
-                                    ▼
-                         ┌──────────────────────┐
-                         │       DATABASE        │
-                         │                       │
-                         │ Users                 │
-                         │ Projects              │
-                         │ Authors               │
-                         │ Tasks                 │
-                         │ Contributions         │
-                         │ PRs                   │
-                         │ Releases              │
-                         │ Admin Data            │
-                         └──────────────────────┘
+                              GITHUB
+                (repositories, issues, pull requests)
+                                │  sign-in, REST and GraphQL APIs
+                                ▼
+ ┌─────────────────────┐   HTTPS    ┌────────────────────────┐   service role   ┌──────────────────┐
+ │ devtunnel-frontend  │──────────▶│   devtunnel-backend    │────────────────▶│ Supabase Postgres│
+ │ Next.js on          │  cookies   │   Hono on Cloudflare   │                  │ schema:          │
+ │ Cloudflare Workers  │            │   Workers + cron       │                  │ `devtunnel`      │
+ │ public site + admin │            └───────────▲────────────┘                  └──────────────────┘
+ └─────────────────────┘                        │ bearer token
+                                       ┌────────┴────────┐
+                                       │  devtunnel-cli  │  (`dev` command, also talks to GitHub)
+                                       └─────────────────┘
 ```
 
----
+All state lives in Supabase. The backend holds no long-running process and no local disk; every request and cron run is a stateless Worker invocation.
 
-## Core Services
+## Components
 
-### 1. Main Website
-Where contributors and maintainers interact with DevTunnel — discovering projects, choosing roles, working on tasks, and tracking contributions.
+### Frontend (`devtunnel-frontend`)
 
-### 2. Admin Portal
-A private, internally-facing portal used to import GitHub repositories, curate project metadata, define tasks, and control what gets published to the main website.
+A single Next.js 15 App Router application, deployed to Cloudflare Workers through `@opennextjs/cloudflare`.
 
-**Important boundary:** The Admin can *load and curate* repository and task data, but has **no authority to merge pull requests into the original GitHub repository**. That authority remains exclusively with the original repository owner or their authorized maintainers.
+- **Public pages** (no sign-in): home, projects, tasks, open source tools, community submissions, GitHub catalogs, issues, and the legal pages. Page data is fetched from the backend.
+- **Signed-in pages**: home dashboard, profile, settings, onboarding, and creating or editing a submission.
+- **Contribute pages**: each project, task, tool and issue has a `/contribute` page that shows the exact CLI commands and tracks progress.
+- **Admin portal** under `/admin`: projects, tasks, open source tools, new issues, the AI Discovery queue, activity log and bug reports.
+- Edge `middleware.ts` redirects signed-out visitors away from signed-in routes using a non-sensitive `dt_auth` flag cookie. This is a convenience only; the real check is the backend, which verifies the session on every request.
+- Markdown from GitHub and from AI output is sanitized before rendering.
 
-### 3. Backend
-A shared API layer handling authentication, project/task/contributor/maintainer/admin operations, GitHub integration, validation, and webhook processing — backed by a single relational database.
+### Backend (`devtunnel-backend`)
 
----
-
-## Key Modules
-
-| Module | Purpose |
-|---|---|
-| **Authentication** | GitHub OAuth 2.0 login for contributors and maintainers |
-| **Project Discovery** | Search, filter, and rank projects by relevance to the contributor |
-| **Project Preview** | Repository stats, tech stack, tasks, and a Project Health Score |
-| **Project Workspace** | Overview, tasks, guidelines, roles, and contributor list for a given project |
-| **Role & Prerequisite Matching** | Compares contributor skills against role requirements |
-| **Task Management** | Contributor-facing task list + maintainer-facing kanban (Backlog → Ready → In Progress → Review → Testing → Completed) |
-| **Admin Project Import** | Load a GitHub repo, define project metadata, tasks, and author |
-| **Admin Publish Workflow** | Draft → Review → Published state machine gating what's public |
-| **GitHub Synchronization** | Incremental sync of repository metadata into DevTunnel's database |
-
-Full frontend screens, backend routes, and request/response flows for each module are documented in [`docs/devtunnel-workflow.md`](./docs/devtunnel-workflow.md).
-
----
-
-## Algorithm Layer
-
-DevTunnel's intelligence layer is organized into three functional groups:
+A Hono application on Cloudflare Workers.
 
 ```
-                         ALGORITHM ENGINE
-                                │
-       ┌────────────────────────┼────────────────────────┐
-       ▼                        ▼                        ▼
-   MATCHING                  ANALYSIS                 DETECTION
-       │                        │                        │
-       ├── Project Match        ├── Difficulty           ├── Duplicate Tasks
-       ├── Task Match           ├── Project Health        ├── Conflicts
-       ├── Role Match           ├── PR Risk               ├── Relevant Files
-       └── Recommendation       ├── Task Priority         └── Repository Changes
-                                └── Contribution Data
+src/
+  index.ts          Worker entry: middleware, route mounting, cron handler
+  config/env.ts     Zod validation of bindings; fails fast on missing config
+  routes/           HTTP routes (public, contributor, AI, auth, admin/)
+  db/               Supabase queries, one module per area
+  lib/              GitHub clients, AI chain, caching, rate limiting, crypto, cron jobs
+  middleware/       request id, CORS allowlist, auth, admin auth, error handler
+sql/                Numbered migrations for the `devtunnel` schema
 ```
 
-**Design principle:** Start with simple, deterministic, explainable rules — not machine learning — for the first version. As real contribution data accumulates, progressively layer in more sophisticated approaches:
+Key design points:
+
+- **Runtime-compatible data access.** Postgres is reached through Supabase's fetch-based client, not a TCP driver, because Workers do not hold database connections.
+- **Authorization lives in the backend.** `requireAuth` protects contributor routes. Admin routes go through `adminAuth` and a permission check (`src/lib/rbac.ts`), where each route declares the permission it needs.
+- **No Workers KV writes on hot paths.** Rate limiting uses Cloudflare Rate Limiting bindings. Caches use isolate memory, the Cache API and a Supabase `cache_entries` table. Scan locks and CLI login codes live in Supabase. The old KV namespace is kept read-only as a fallback, and feature flags in `wrangler.toml` allow each replacement to be rolled back.
+- **Stale-while-revalidate caches** keep GitHub-backed pages fast. Cron jobs warm them so a contributor's page load rarely waits on a live GitHub scan.
+- **Structured logging** with secret redaction, and a request id on every request.
+
+### CLI (`devtunnel-cli`)
+
+A Node.js program published as `@devtunnelcli/cli`, installed as `dev`.
+
+- `dev login` uses a loopback OAuth flow with a PKCE-style verifier and challenge, and stores a long-lived token in `~/.devtunnel/credentials.json` (mode `0600`).
+- `dev start` forks the repository and checks out a branch from the upstream default branch. `dev submit` commits, pushes and asks the backend to open the pull request with the contributor's own GitHub token.
+- `dev test` reads install, lint, typecheck, test and build commands from the repository's `.github/workflows`, skipping steps that publish, deploy, use secrets or use `sudo`.
+
+## Key flows
+
+### Web sign-in
+
+1. The browser submits a form to `POST /auth/github`; the backend redirects to GitHub.
+2. GitHub redirects to the backend's `GET /auth/callback`, which exchanges the code (the client secret never reaches the browser), upserts the user, encrypts and stores the GitHub token, and creates a session.
+3. The backend sets an `httpOnly` `dt_session` cookie and a readable `dt_auth` flag cookie, then redirects to the frontend.
+
+### CLI sign-in
+
+See [`devtunnel-cli/README.md`](./devtunnel-cli/README.md#how-dev-login-works) and [`devtunnel-backend/CLI_AUTH_SETUP.md`](./devtunnel-backend/CLI_AUTH_SETUP.md). The CLI flow uses a separate callback URL and never touches the web cookies.
+
+### Task lifecycle
 
 ```
-Phase 1 — Simple Rules
-Phase 2 — Weighted Scoring
-Phase 3 — Similarity + Repository Analysis
-Phase 4 — Historical Data
-Phase 5 — Machine Learning / Advanced AI
+OPEN ──dev start──▶ IN_PROGRESS ──dev submit──▶ IN_REVIEW ──▶ DONE
 ```
 
-Examples of algorithms used across modules include OAuth 2.0 (authentication), weighted scoring (recommendations, project health), hybrid search + ranking (project discovery), skill matching (role fit), state machines (publish workflow), and incremental sync (GitHub integration). See `docs/devtunnel-workflow.md` for the full algorithm-by-module breakdown.
+`dev start` claims the task and records the fork and branch. `dev submit` opens the pull request server-side and records it against the task. An hourly job syncs submitted pull requests with GitHub. Starting or submitting on an arbitrary public GitHub issue (`POST /github/start`, `POST /github/submit`) records an external contribution that counts toward the contributor's profile.
 
----
+### AI features
 
-## Access & Permission Boundaries
+All user-facing AI features are optional, signed-in only, and **stored-first**: if a summary, explanation or insight already exists and is fresh, it is returned from Supabase with no model call.
 
-A core architectural rule that spans multiple modules: **DevTunnel's Admin layer curates and publishes project data, but never gains write/merge access to a contributor's or repository owner's actual GitHub repository.**
+- **Provider chain** (`src/lib/ai/chain.ts`): each job tries its own key first, then shared backups, then other configured providers. A provider with no key or no model is skipped.
+- **Providers** all speak the OpenAI chat-completions dialect through one adapter. Cloudflare Workers AI is an optional last resort.
+- **Untrusted input**: repository text sent to a model is treated as untrusted, and model output is rendered as plain text and labeled AI-generated.
+- **Usage tracking** feeds the admin AI budget and provider-usage panels.
+- **AI Discovery agent** runs daily and on demand from the admin portal. It proposes projects, tasks and tools into an admin approval queue; nothing is published without approval.
+
+## Access and permission boundaries
+
+DevTunnel's admin layer curates and publishes data, but never gains write or merge access to a contributor's or repository owner's GitHub repository.
 
 ```
-DevTunnel Admin
-      ↓
-Load Repository + Tasks
-      ↓
-Curate / Publish on DevTunnel
-      ✗ Cannot Merge to Original Repository
+DevTunnel admin
+   ↓ load repository + tasks, curate, publish on DevTunnel
+   ✗ cannot merge into the original repository
 
-Original Repository Owner / Authorized Maintainer
-      ↓
-Reviews Contributor PRs
-      ↓
-Merges (on GitHub directly)
+Original repository owner
+   ↓ reviews contributor pull requests
+   ↓ merges on GitHub directly
 ```
 
-This keeps DevTunnel as a coordination and discovery layer on top of GitHub, not a replacement for repository ownership or GitHub's own permission model.
+Pull requests are opened with the contributor's own GitHub token, on their own fork.
 
----
+## Data
 
-## Related Documents
+Migrations in `devtunnel-backend/sql/` define everything under the `devtunnel` Postgres schema, including users, sessions, CLI tokens, projects, tasks, open source tools, onboarding drafts, contributions and progress, submissions, AI usage and summaries, the admin audit log and bug reports. Every table has Row Level Security enabled with no policies for `anon` or `authenticated`; only the backend's service role reads and writes.
 
-- [`docs/devtunnel-idea.md`](./docs/devtunnel-idea.md) — product vision, project types, monetization model, and phased roadmap
-- [`docs/devtunnel-workflow.md`](./docs/devtunnel-workflow.md) — full module-by-module architecture, API routes, and algorithm specs
-- [`ROADMAP.md`](./ROADMAP.md) — phased build plan
-- [`GLOSSARY.md`](./GLOSSARY.md) — definitions of DevTunnel-specific terms
+## Design principle for matching
+
+Matching, scoring and recommendations start as simple, deterministic and explainable rules, and are meant to become more data-driven as real contribution history accumulates. See [ROADMAP.md](./ROADMAP.md).
+
+## Related documents
+
+- [`docs/devtunnel-idea.md`](./docs/devtunnel-idea.md): product vision and phased plan
+- [`docs/devtunnel-workflow.md`](./docs/devtunnel-workflow.md): original module-by-module design spec
+- [`ROADMAP.md`](./ROADMAP.md): planned direction
+- [`GLOSSARY.md`](./GLOSSARY.md): DevTunnel terms

@@ -1,41 +1,124 @@
-# devtunnel-cli
+# @devtunnelcli/cli
 
-A CLI to automate the GitHub contribution workflow for DevTunnel
-(`CONTRIBUTING.md`) — fork, branch, test, submit — using as few and as
-simple commands as possible.
+The `dev` command: automates the GitHub contribution workflow for [DevTunnel](https://devtunnel.tech). Fork, branch, test and open a pull request with a few simple commands, on a DevTunnel task or on **any public GitHub issue**.
 
 ## Install
 
+Requires Node.js 18.18 or newer.
+
 ```bash
 npm install -g @devtunnelcli/cli
-```
-
-This installs the `dev` command globally. Verify it worked:
-
-```bash
 dev --version
 ```
 
-No account or repo checkout needed first — `dev login` (below) is what
-connects it to your GitHub account. The CLI talks to the hosted DevTunnel
-API (`https://api.devtunnel.tech`) by default, so nothing else needs to be
-running on your machine.
-
-Prefer not to install anything permanently? Run it via `npx` instead:
+Or run it without installing:
 
 ```bash
 npx @devtunnelcli/cli login
 ```
 
-### Building from source (contributing to the CLI itself)
+The CLI talks to the hosted DevTunnel API (`https://api.devtunnel.tech`) by default, so nothing else needs to be running on your machine.
 
-If you're working on the CLI's own code rather than just using it:
+## Quick start
+
+```bash
+dev login                      # sign in with GitHub (opens your browser)
+dev start owner/repo#123       # fork, clone, and check out a branch for this issue
+# ...make your changes...
+dev test                       # run the project's own checks
+dev submit                     # commit, push, and open the pull request
+```
+
+## Commands
+
+### `dev login`
+
+Opens your browser to sign in with GitHub, then stores a CLI token at `~/.devtunnel/credentials.json` (mode `0600`, owner read/write only).
+
+```
+$ dev login
+→ Opening your browser to sign in with GitHub…
+✓ Signed in as octocat.
+```
+
+If a browser cannot be opened automatically, the URL is printed. The browser must be on the same machine as the CLI, as with `gh auth login`.
+
+### `dev logout`
+
+Revokes the token on the server and deletes the local credentials file.
+
+### `dev start <id>`
+
+Forks a repository (or claims a DevTunnel task or project) and checks out a working branch.
+
+`<id>` can be:
+
+| Form | Meaning |
+|---|---|
+| `owner/repo#123` | A GitHub issue in any public repository |
+| `owner/repo` or a `github.com` URL | A repository, without an issue |
+| a task id | A DevTunnel task |
+| a project id, with `--project` | A whole DevTunnel project |
+
+| Option | Meaning |
+|---|---|
+| `--project` | Treat `<id>` as a project id instead of a task id |
+| `--zip` | Write a zip archive of the branch instead of a working clone |
+| `--dir <path>` | Directory to clone into (defaults to the repository name) |
+
+New branches start from the **upstream** repository's current default branch, not from your fork's possibly stale copy.
+
+### `dev test`
+
+Pulls the latest changes and runs the project's own checks. Install, lint, typecheck, test and build commands are read from `.github/workflows/*.yml`. Steps that publish, deploy, upload, use secrets or use `sudo` are skipped.
+
+| Option | Meaning |
+|---|---|
+| `--dir <path>` | Directory to run in (defaults to the current directory) |
+| `--skip-update` | Do not fetch and rebase onto upstream first |
+| `--no-ci` | Ignore `.github/workflows` and auto-detect what to run |
+
+### `dev submit [id]`
+
+Commits, pushes, and opens (or updates) the pull request. With no argument it infers the upstream repository and issue from the current checkout. If the repository has a pull request template, the PR body is a short summary followed by that template; otherwise a plain summary is used.
+
+| Option | Meaning |
+|---|---|
+| `--project` | Treat `<id>` as a project id |
+| `--dir <path>` | Directory to run in |
+| `-m, --message <text>` | Commit description (skips the prompt) |
+| `--type <type>` | Commit type: `feat`, `fix`, `docs` or `chore` (skips the prompt) |
+| `--tested <note>` | How you tested this, included in the PR body |
+
+A pull request opened with `dev submit` counts toward your DevTunnel contribution calendar and totals. `dev start` alone does not count.
+
+## How `dev login` works
+
+The CLI uses the same loopback pattern as `gh`, `vercel` and `netlify` (RFC 8252), with a PKCE-style verifier and challenge so a login code intercepted mid-flow cannot be redeemed by anything else.
+
+1. `dev login` starts a local HTTP server on an OS-assigned port, bound to `127.0.0.1` only, and generates a random verifier and its `sha256` challenge.
+2. It opens your browser to `GET /auth/cli/start?port=…&challenge=…` on the DevTunnel API.
+3. The backend runs the GitHub sign-in round trip against a dedicated CLI callback URL, then redirects your browser to `http://127.0.0.1:<port>/callback?code=<one-time code>`.
+4. The CLI reads the code and immediately exchanges it, with the original verifier, at `POST /auth/cli/token` for a long-lived bearer token.
+5. The token is written to `~/.devtunnel/credentials.json` and sent as `Authorization: Bearer <token>` on later calls.
+
+Server side: [`devtunnel-backend/src/routes/authCli.ts`](../devtunnel-backend/src/routes/authCli.ts) and [`CLI_AUTH_SETUP.md`](../devtunnel-backend/CLI_AUTH_SETUP.md).
+
+## Configuration
+
+| Env var | Default | Purpose |
+|---|---|---|
+| `DEVTUNNEL_API_URL` | `https://api.devtunnel.tech` | Point the CLI at a local or staging backend |
+
+Files on disk: only `~/.devtunnel/credentials.json` (`{ token, apiBaseUrl, user, createdAt }`). `dev logout` removes it.
+
+## Develop the CLI
 
 ```bash
 cd devtunnel-cli
 npm install
-npm run build
-npm link        # makes the `dev` command available globally, pointing at your local build
+npm run build        # tsup -> dist/
+npm link             # makes `dev` point at your local build
 ```
 
 Or run it straight from source without linking:
@@ -44,114 +127,19 @@ Or run it straight from source without linking:
 npm run dev -- login
 ```
 
-## Commands
+Other scripts: `npm run typecheck`.
 
-### `dev login`
+## Publishing a new version
 
-Opens your system browser to sign in with GitHub, then stores a CLI token
-at `~/.devtunnel/credentials.json` (permissions `0600` — owner read/write
-only).
-
-```
-$ dev login
-→ Opening your browser to sign in with GitHub…
-  https://api.devtunnel.tech/auth/cli/start?port=51234&challenge=…
-✓ Signed in as octocat.
-```
-
-If a browser can't be opened automatically (e.g. over SSH), the URL is
-printed so you can open it manually on any machine — as long as that
-machine can reach `http://127.0.0.1:<port>` back on the machine running
-`dev login` (so this only really works for a browser on the *same*
-machine, same as `gh auth login`'s default flow).
-
-### `dev logout`
-
-Revokes the token server-side and deletes the local credentials file.
-
-```
-$ dev logout
-✓ Signed out.
-```
-
-## How `dev login` works
-
-Same loopback pattern `gh`/`vercel`/`netlify` use for browser-based OAuth
-from a CLI (RFC 8252), with a PKCE-style verifier/challenge so a
-login code intercepted mid-flow can't be redeemed by anything else:
-
-1. `dev login` starts a local HTTP server on an OS-assigned port, bound to
-   `127.0.0.1` only, and generates a random `verifier` + `sha256(verifier)`
-   `challenge`.
-2. It opens your browser to `GET /auth/cli/start?port=…&challenge=…` on
-   the DevTunnel API.
-3. The backend runs the normal GitHub sign-in round trip against a
-   dedicated CLI callback URL, then redirects your browser to
-   `http://127.0.0.1:<port>/callback?code=<one-time code>` — back into the
-   local server from step 1.
-4. `dev login` reads that code and immediately exchanges it, along with
-   the original `verifier`, at `POST /auth/cli/token` for a real,
-   long-lived CLI bearer token.
-5. That token is written to `~/.devtunnel/credentials.json` and sent as
-   `Authorization: Bearer <token>` on every future authenticated CLI call.
-
-See `devtunnel-backend/src/routes/authCli.ts` for the server side of this
-flow, and `devtunnel-backend/CLI_AUTH_SETUP.md` for the one-time backend
-deployment steps (migration + registering the second GitHub App callback
-URL) this depends on.
-
-## Configuration
-
-| Env var | Default | Purpose |
-| --- | --- | --- |
-| `DEVTUNNEL_API_URL` | `https://api.devtunnel.tech` | Point the CLI at a local/staging backend instead of production. |
-
-## Files on disk
-
-```
-~/.devtunnel/credentials.json   # { token, apiBaseUrl, user, createdAt } — mode 0600
-```
-
-Nothing else is written anywhere. `dev logout` removes this file and asks
-the backend to revoke the token it contains.
-
-## Publishing a new version (maintainers)
-
-Editing this package's metadata doesn't put it on npm by itself — someone
-with publish rights has to actually run the release:
+Publishing is done by someone with publish rights on the `@devtunnelcli` npm organization (with 2FA enabled):
 
 ```bash
-npm login                # once per machine, needs an npm account that's a
-                          # member of the devtunnelcli org on npm, with
-                          # publish rights and 2FA enabled
+npm login
 cd devtunnel-cli
-npm version patch        # or minor/major — bumps the version and tags it
-npm publish              # builds via prepublishOnly, then uploads
+npm version patch      # or minor / major
+npm publish            # builds via prepublishOnly, then uploads
 ```
 
-After that succeeds, `npm install -g @devtunnelcli/cli` works for anyone,
-anywhere — publishing is what actually makes a version fetchable from the
-registry. Until the first `npm publish` runs, the install instructions
-above will 404.
+## License
 
-New members added to the `devtunnelcli` org's "Developers" team
-(npmjs.com → Organizations → devtunnelcli → Members) automatically get
-read/write access to packages under this scope, so anyone who needs to
-cut a release should be added there rather than sharing one person's
-login.
-## Working on any GitHub repository
-
-`dev start` and `dev submit` work on any public GitHub repo, not only
-DevTunnel tasks and projects:
-
-```
-dev start owner/repo#123      # fork, then a new branch from upstream's latest default branch
-dev start owner/repo          # same, no issue
-dev test                      # runs the repo's own .github/workflows commands (or auto-detects)
-dev submit                    # commits, pushes, opens the PR (repo + issue inferred from the checkout)
-```
-
-- **Branching:** new branches start from `upstream`'s current default branch, not from your fork's possibly stale copy.
-- **Pull requests:** if the repository has a pull request template, the PR body is a short summary followed by that template. Otherwise a plain summary is used.
-- **`dev test`:** install / lint / typecheck / test / build commands are read from `.github/workflows/*.yml`. Steps that publish, deploy, upload, use secrets or `sudo` are skipped. `dev test --no-ci` goes back to auto-detection.
-- **Contributions:** a PR opened with `dev submit` counts toward your DevTunnel contribution calendar and totals, and a merge adds another once DevTunnel sees it. `dev start` alone does not count.
+[MIT](../LICENSE)

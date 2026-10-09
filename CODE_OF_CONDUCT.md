@@ -2,7 +2,7 @@
 
 ## Our Pledge
 
-We as contributors and maintainers pledge to make participation in the DevTunnel project a harassment-free experience for everyone, regardless of age, body size, visible or invisible disability, ethnicity, sex characteristics, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, religion, or sexual identity and orientation.
+We pledge to make participation in the DevTunnel project a harassment-free experience for everyone, regardless of age, body size, visible or invisible disability, ethnicity, sex characteristics, gender identity and expression, level of experience, education, socio-economic status, nationality, personal appearance, race, religion, or sexual identity and orientation.
 
 We pledge to act and interact in ways that contribute to an open, welcoming, diverse, inclusive, and healthy community.
 
@@ -25,9 +25,9 @@ Examples of unacceptable behavior:
 
 ## Enforcement Responsibilities
 
-Project maintainers are responsible for clarifying and enforcing standards of acceptable behavior and will take appropriate, fair corrective action in response to any behavior deemed inappropriate, threatening, offensive, or harmful.
+The DevTunnel project team is responsible for clarifying and enforcing standards of acceptable behavior and will take appropriate, fair corrective action in response to any behavior deemed inappropriate, threatening, offensive, or harmful.
 
-Maintainers have the right to remove, edit, or reject comments, commits, code, issues, and other contributions that are not aligned with this Code of Conduct, and will communicate reasons for moderation decisions when appropriate.
+The project team has the right to remove, edit, or reject comments, commits, code, issues, and other contributions that are not aligned with this Code of Conduct, and will communicate reasons for moderation decisions when appropriate.
 
 ## Scope
 
@@ -35,13 +35,13 @@ This Code of Conduct applies within all project spaces (issues, pull requests, d
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the maintainers at **[your email/contact here]**. All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project team at **contact@devtunnel.tech**. All complaints will be reviewed and investigated promptly and fairly.
 
-Maintainers are obligated to respect the privacy and security of the reporter of any incident.
+The project team is obligated to respect the privacy and security of the reporter of any incident.
 
 ## Enforcement Guidelines
 
-Maintainers will follow these Community Impact Guidelines in determining consequences:
+The project team will follow these Community Impact Guidelines in determining consequences:
 
 1. **Correction** — Private warning, clarity around the violation.
 2. **Warning** — A warning with consequences for continued behavior.

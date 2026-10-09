@@ -1,97 +1,72 @@
 # DevTunnel Roadmap
 
-This roadmap reflects the current planned direction for DevTunnel. It will evolve as the project develops and as real user feedback comes in.
+This roadmap describes the planned direction for DevTunnel. It changes as the project develops and as feedback comes in. Items under "Planned" are **not available yet**.
 
----
+## Where things stand
 
-## Phase 1 — Build & Validate
+DevTunnel is live at [devtunnel.tech](https://devtunnel.tech). The core platform is free.
 
-**Goal:** Validate that users want to create projects, discover projects, collaborate, and use DevTunnel infrastructure.
+**Available today**
 
-**Focus:**
-- Project creation
-- Project discovery
-- Open collaboration
-- Basic tasks
-- Developer profiles
-- Basic project history
-- Core DevTunnel tunneling
-- Real users, real projects, real contributions
+- Curated projects, tasks and open source tools, filterable by tech stack, role and experience level
+- Live GitHub catalogs (projects, tools, issues) and community submissions
+- The `dev` CLI: `dev login`, `dev start`, `dev test`, `dev submit`, working on DevTunnel tasks and on any public GitHub issue
+- Contributor profiles with a contribution calendar, stats and milestones
+- AI search, summaries, issue explanations and issue insights, labeled AI-generated
+- A private admin portal with onboarding wizards and an AI Discovery agent
 
-**Pricing:** Core platform is free.
+## Planned
 
----
+### Phase 1 — Build and validate (current)
 
-## Late Phase 1 — Test First Revenue
+**Goal:** confirm that contributors want to find real work and ship pull requests through DevTunnel.
 
-**Goal:** Get the first paying customers and validate willingness to pay.
+- Grow the catalog of curated projects, tasks and tools
+- Improve matching of tasks to a contributor's role, level and stack
+- Deeper, more verifiable contribution history
+- Better onboarding, documentation and test coverage
 
-**Focus:**
-- DevTunnel Premium Infrastructure
-  - More tunnels
-  - Persistent URLs
-  - Higher usage limits
-  - Premium domains
-  - Advanced logs
+### Late Phase 1 — First revenue
 
----
+**Goal:** validate willingness to pay.
 
-## Phase 2 — Project Economy
+- Premium infrastructure: more tunnels, persistent URLs, higher usage limits, premium domains, advanced logs
 
-**Goal:** Enable real economic activity around projects.
+### Phase 2 — Project economy
 
-**Focus:**
-- Paid tasks
-- Bounties
-- Payment workflow
-- Platform fees
+**Goal:** enable real economic activity around projects.
+
+- Paid tasks and bounties
+- Payment workflow and platform fees
 - Expanded private project features
 
----
+### Phase 3 — Teams and startups
 
-## Phase 3 — Teams & Startups
+**Goal:** predictable recurring revenue.
 
-**Goal:** Build predictable recurring SaaS revenue.
-
-**Focus:**
-- Team plans
-- Advanced private projects
-- Shared infrastructure
-- Monitoring & logging
-- Custom domains
+- Team plans and advanced private projects
+- Shared infrastructure, monitoring and logging, custom domains
 - Advanced access controls
 
----
+### Phase 4 — Company validation
 
-## Phase 4 — Company Validation
+**Goal:** higher-value business use.
 
-**Goal:** Create higher-value B2B revenue.
+- Validation projects: short, real tasks companies use to evaluate developer skill through actual output
+- Company evaluation tools and private validation workflows
 
-**Focus:**
-- Validation projects
-- Developer project history (deeper, more verifiable)
-- Company evaluation tools
-- Private validation workflows
-- Advanced infrastructure
+## Algorithm progression (across phases)
 
----
-
-## Algorithm Progression (Cross-Phase)
-
-DevTunnel's matching, scoring, and recommendation systems are designed to evolve gradually rather than starting with heavy ML:
+Matching, scoring and recommendations start deterministic and explainable, and become more sophisticated only as real contribution data accumulates:
 
 ```
-PHASE 1: Simple Rules
-PHASE 2: Weighted Scoring
-PHASE 3: Similarity + Repository Analysis
-PHASE 4: Historical Data
-PHASE 5: Machine Learning / Advanced AI
+1. Simple rules
+2. Weighted scoring
+3. Similarity + repository analysis
+4. Historical data
+5. Machine learning / advanced AI
 ```
 
-The goal is to start with deterministic, explainable logic for things like project matching, role matching, and task assignment — then layer in smarter, data-driven approaches once there's enough real contribution history to learn from.
+## Following progress
 
----
-
-## Status
-
-DevTunnel is currently in **pre-development / planning**. This roadmap will be updated as milestones are reached and as scope is refined. See open [Issues](../../issues) and the [Project Board](../../projects) for active, granular work.
+See open [issues](../../issues) for granular work, and [CHANGELOG.md](./CHANGELOG.md) for what has changed.

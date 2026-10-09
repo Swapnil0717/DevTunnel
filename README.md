@@ -1,125 +1,286 @@
+<div align="center">
+
+<img src="./logo.png" alt="DevTunnel" width="96" />
+
 # DevTunnel
 
-**A Software Project Network + Developer Infrastructure Platform**
+**Pick an issue. Ship the pull request.**
 
-DevTunnel is a platform where developers, founders, startups, and companies create, discover, and collaborate on real software projects — backed by integrated developer infrastructure and a trusted history of real, verifiable contributions.
+DevTunnel connects contributors with open source projects. Tasks are matched to your role, level and tech stack, and a CLI opens the pull request for you.
+
+[Website](https://devtunnel.tech) · [Browse tasks](https://devtunnel.tech/tasks) · [Projects](https://devtunnel.tech/projects) · [CLI](./devtunnel-cli) · [Contributing](./CONTRIBUTING.md)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+
+</div>
 
 ---
 
-## Table of Contentsss
+## Table of contents
 
-- [Overview](#overview)
-- [Core Concept](#core-concept)
-- [Who DevTunnel Is For](#who-devtunnel-is-for)
-- [Project Types](#project-types)
-- [Platform Structure](#platform-structure)
-- [System Architecture](#system-architecture)
-- [Tech Stack](#tech-stack)
-- [Getting Started](#getting-started)
+- [What is DevTunnel?](#what-is-devtunnel)
+- [How it works](#how-it-works)
+- [Features](#features)
+- [The `dev` CLI](#the-dev-cli)
+- [Architecture](#architecture)
+- [Tech stack](#tech-stack)
+- [Repository layout](#repository-layout)
+- [Getting started](#getting-started)
+- [Configuration](#configuration)
+- [Scheduled jobs](#scheduled-jobs)
+- [Security](#security)
+- [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License](#license)
 - [Contact](#contact)
 
----
+## What is DevTunnel?
 
-## Overview
+DevTunnel is a platform that connects contributors with open source projects. Contributors find tasks that match their skills, then use the `dev` CLI to start the work and open the pull request. Everything on a contributor's profile comes from something that actually happened (a task started, a pull request opened), not from self-reported skills.
 
-DevTunnel combines two core pillars into a single ecosystem:
+You do not need a DevTunnel task to contribute. The CLI works on **any public GitHub issue**, and the work still counts as a DevTunnel contribution.
 
-1. **Software Project Network** — a place to create, publish, discover, and collaborate on real software projects.
-2. **Developer Infrastructure** — tunneling, custom domains, monitoring, and logging to build and test those projects.
+## How it works
 
-Through real project activity, developers build a track record of actual work — not self-reported skills — while founders, startups, and companies get a reliable way to find talent, grow projects, and validate contributors.
+Every task moves through four stages. Each stage is recorded from an action, never from a box someone ticked.
 
-## Core Concept
+| Stage | Status | Triggered by | Meaning |
+|---|---|---|---|
+| 1 | `OPEN` | — | A curated task nobody has claimed yet, with its role, difficulty and tech stack |
+| 2 | `IN_PROGRESS` | `dev start` | You started it; the branch is named for the task |
+| 3 | `IN_REVIEW` | `dev submit` | A pull request is open and linked to the task's issue |
+| 4 | `DONE` | — | The task is complete |
 
-At the center of DevTunnel is the **Software Project**. Project owners publish projects with defined requirements and access rules; relevant developers discover, apply to, and contribute to them; real software work happens, backed by DevTunnel's infrastructure — and the project grows.
+"PR submitted" means a pull request was **opened**, not merged. A scheduled job keeps submitted pull requests in sync with GitHub (see [Scheduled jobs](#scheduled-jobs)).
 
-```
-PROJECT CREATED → PUBLISHED → DISCOVERED → CONTRIBUTED TO → GROWN
-```
+There are three ways in, all using the same commands:
 
-## Who DevTunnel Is For
+- **A GitHub issue** — any public repository (`dev start owner/repo#123`)
+- **A DevTunnel task** — curated, with a role and difficulty (`dev start <task-id>`)
+- **A whole project** — claim the project itself (`dev start <project-id> --project`)
 
-| User | What they can do |
-|---|---|
-| **Individual Developers** | Find projects, build project history, earn through paid tasks and bounties |
-| **Developer Teams** | Collaborate on shared projects with defined roles and tasks |
-| **Open Source Project Owners** | Publish projects, organize tasks, find contributors, grow their community |
-| **Startup Founders** | Get help building an early-stage product before hiring a full team |
-| **Startups** | Scale from open collaboration to paid tasks and private team projects |
-| **Companies** | Evaluate developers through real project work instead of resumes alone |
+## Features
 
-## Project Types
+**For contributors**
 
-- **Open Source** — publicly discoverable projects open to community contribution
-- **Private** — restricted-access projects with defined requirements (skills, experience, prior activity)
-- **Paid / Bounty** — projects with funded tasks; contributors are paid for approved work
-- **Validation** — short, real-world tasks companies use to evaluate developer skill through actual output
+- **Projects** curated on DevTunnel, each with its description, tech stack, repository and tasks, filterable by tech.
+- **Tasks** with a role, level and stack. Six roles (Frontend, Backend, Full stack, Documentation, Testing, DevOps) and three experience levels (Beginner, Intermediate, Advanced), the same ones you pick in onboarding.
+- **Open source tools**, curated and filterable by language and label, each with a setup guide.
+- **Live GitHub catalogs** — GitHub Projects, GitHub Open Source Tools and an All Issues view, built from live GitHub data and cached.
+- **Community submissions** — projects and tools submitted by contributors, with upvotes.
+- **Profile** with a contribution calendar, stats and milestones, plus settings, notification preferences and data export.
+- **AI help, always labeled AI-generated** (sign-in required): AI search of the catalog in plain words, summaries of projects and tools, issue explanations (what needs doing, skills needed, difficulty, first steps) and an insights card for a repository's issues. AI output is rendered as plain text.
+- **Public browsing** — projects, tools, tasks and issues are visible without signing in.
 
-## Platform Structure
+**For the platform (private admin portal)**
 
-```
-                         DEVTUNNEL
-                             │
-            ┌────────────────┴────────────────┐
-            ▼                                 ▼
-      PROJECT NETWORK                  INFRASTRUCTURE
-            │                                 │
-     ┌──────┼───────────┐          ┌──────────┼───────────┐
-     ▼      ▼           ▼          ▼          ▼           ▼
-Projects  People      Work      Tunneling   Domains   Monitoring
-```
+- Import GitHub repositories and curate projects, tasks and open source tools through step-by-step onboarding wizards.
+- Review newly opened issues, sync GitHub data, and manage task status.
+- An **AI Discovery** agent that proposes projects, tasks and tools for admin approval, with a budget and provider-usage panel.
+- Activity audit log and bug-report inbox.
 
-## System Architecture
+> **Boundary:** the admin portal can load and curate repository and task data, but it **cannot merge into the original GitHub repository**. Merge authority always stays with the original repository owner. DevTunnel is a coordination and discovery layer on top of GitHub, not a replacement for GitHub's permission model.
 
-DevTunnel integrates directly with GitHub (repositories, issues, pull requests, Actions, releases) via OAuth and webhooks, and is split into three main services:
-
-```
-GITHUB  →  DEVTUNNEL MAIN WEB  ─┐
-        →  DEVTUNNEL ADMIN     ─┼─→  DEVTUNNEL BACKEND  →  DATABASE
-```
-
-- **Main Website** — where contributors and maintainers discover projects, pick roles, complete tasks, and submit work.
-- **Admin Portal** — a private portal for curating and publishing projects, importing repositories, and managing tasks. The Admin can load and curate repository/task data but **cannot merge into the original GitHub repository** — merge authority always remains with the original repository owner or their authorized maintainers.
-- **Backend** — handles authentication, project/task/contributor APIs, GitHub integration, validation, and webhooks.
-
-The platform is designed to start with deterministic, explainable algorithms (rule-based matching and scoring) for project discovery, skill/role matching, and task assignment — with room to evolve toward data-driven and ML-based approaches as real contribution data accumulates.
-
-## Tech Stack
-
-> _Add your finalized stack here, e.g.:_
-
-- **Frontend:** _TBD_
-- **Backend:** _TBD_
-- **Database:** _TBD_
-- **Auth:** GitHub OAuth 2.0
-- **Infrastructure:** Tunneling, custom domains, monitoring & logging
-
-## Getting Started
-
-> _Add setup instructions once the codebase is initialized, e.g.:_
+## The `dev` CLI
 
 ```bash
-git clone https://github.com/<org>/devtunnel.git
-cd devtunnel
-# install dependencies
-# configure environment variables
-# run locally
+npm install -g @devtunnelcli/cli      # Node.js 18.18+
+# or without installing:  npx @devtunnelcli/cli <command>
 ```
+
+| Command | What it does |
+|---|---|
+| `dev login` | Sign in with GitHub in your browser and store a CLI token locally |
+| `dev logout` | Revoke the token and delete the local credentials |
+| `dev start <id>` | Fork and clone, then check out a working branch from the latest upstream. `<id>` is `owner/repo#123`, `owner/repo`, a github.com URL, a task id, or a project id with `--project` |
+| `dev test` | Pull the latest changes and run the project's own tests (commands are read from `.github/workflows`) |
+| `dev submit` | Commit, push and open the pull request, using the repository's PR template if it has one |
+
+Typical flow:
+
+```bash
+dev login
+dev start owner/repo#123
+# ...make your changes...
+dev test
+dev submit
+```
+
+See [`devtunnel-cli/README.md`](./devtunnel-cli/README.md) for all options and how `dev login` works.
+
+## Architecture
+
+```
+                         GITHUB
+              (repos, issues, pull requests)
+                            │  OAuth + REST/GraphQL
+                            ▼
+ ┌──────────────┐     ┌───────────────────┐     ┌───────────────────┐
+ │  Frontend    │────▶│     Backend       │────▶│ Supabase Postgres │
+ │  Next.js     │ API │  Hono on          │     │ (`devtunnel`      │
+ │  (public +   │     │  Cloudflare       │     │  schema)          │
+ │  admin)      │     │  Workers          │     └───────────────────┘
+ └──────────────┘     └─────────▲─────────┘
+                                │ bearer token
+                         ┌──────┴──────┐
+                         │ dev CLI     │
+                         └─────────────┘
+```
+
+- **Frontend** (`devtunnel-frontend`) — the public site and the private admin portal in one Next.js app, deployed to Cloudflare Workers with OpenNext.
+- **Backend** (`devtunnel-backend`) — a Hono API on Cloudflare Workers. Handles authentication, the project/task/tool APIs, GitHub integration, AI features, the admin API and scheduled jobs. State lives in Supabase.
+- **CLI** (`devtunnel-cli`) — a Node.js command line tool that talks to the hosted API and to GitHub.
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the details.
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 15 (App Router), React 18, TypeScript, Tailwind CSS, `react-markdown` with sanitizing |
+| Frontend hosting | Cloudflare Workers via `@opennextjs/cloudflare` |
+| Backend | Hono, TypeScript, Zod, Cloudflare Workers |
+| Database | Supabase Postgres (`@supabase/supabase-js`), own `devtunnel` schema with RLS enabled |
+| Auth | GitHub sign-in (web session cookies, CLI bearer tokens) |
+| CLI | Node.js ≥ 18.18, Commander, simple-git, tsup |
+| AI | Pluggable OpenAI-compatible providers (Groq, Cerebras, Gemini, Mistral, OpenRouter, GitHub Models) with Cloudflare Workers AI as an optional last resort |
+| Rate limiting | Cloudflare Rate Limiting bindings |
+
+## Repository layout
+
+```
+.
+├── devtunnel-frontend/   Next.js app: public site, contributor pages, admin portal
+├── devtunnel-backend/    Hono API on Cloudflare Workers + Supabase SQL migrations (sql/)
+├── devtunnel-cli/        The `dev` command (@devtunnelcli/cli)
+├── docs/                 Product idea, detailed workflow spec, GitHub templates
+├── ARCHITECTURE.md       System overview
+├── ROADMAP.md            Where the project is going
+├── GLOSSARY.md           DevTunnel terms
+├── CONTRIBUTING.md       How to contribute
+├── CODE_OF_CONDUCT.md
+├── SECURITY.md           How to report a vulnerability
+├── CHANGELOG.md
+└── LICENSE               MIT
+```
+
+## Getting started
+
+### Prerequisites
+
+- Node.js 18.18 or newer and npm
+- A Supabase project
+- A Cloudflare account (for `wrangler`)
+- A GitHub App or OAuth app for sign-in
+
+### 1. Database
+
+Create the schema and apply the migrations in [`devtunnel-backend/sql`](./devtunnel-backend/sql) in numeric order, then expose the `devtunnel` schema under **Project Settings → API → Exposed schemas**. Details are in [`devtunnel-backend/sql/README.md`](./devtunnel-backend/sql/README.md).
+
+### 2. Backend
+
+```bash
+cd devtunnel-backend
+npm install
+cp .dev.vars.example .dev.vars   # fill in the secrets
+npm run dev                      # wrangler dev (default http://localhost:8787)
+```
+
+Full setup, including the GitHub app settings and secrets, is in [`devtunnel-backend/README.md`](./devtunnel-backend/README.md).
+
+### 3. Frontend
+
+```bash
+cd devtunnel-frontend
+npm install
+cp .env.example .env.local       # set NEXT_PUBLIC_API_URL to your backend
+npm run dev                      # http://localhost:3000
+```
+
+Useful scripts: `npm run typecheck`, `npm run lint`, `npm run build`, `npm run preview` (Cloudflare preview), `npm run deploy`.
+
+### 4. CLI (only if you are working on the CLI itself)
+
+```bash
+cd devtunnel-cli
+npm install
+npm run build
+npm link                         # makes `dev` point at your local build
+DEVTUNNEL_API_URL=http://localhost:8787 dev login
+```
+
+## Configuration
+
+Secrets are never committed. In production set them with `wrangler secret put <NAME>`; locally use `devtunnel-backend/.dev.vars` (gitignored).
+
+**Backend secrets (required)**
+
+| Name | Purpose |
+|---|---|
+| `GITHUB_CLIENT_SECRET` | GitHub app client secret |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (backend only, never in the frontend) |
+| `SESSION_HMAC_SECRET` | Signs the OAuth state cookie (16+ characters) |
+| `GITHUB_TOKEN_ENCRYPTION_KEY` | Base64 32-byte key that encrypts stored GitHub tokens at rest (`openssl rand -base64 32`) |
+| `GROQ_API_KEY` | AI Discovery agent |
+| `GITHUB_DISCOVERY_TOKEN` | GitHub token the AI Discovery agent uses to search GitHub |
+
+AI provider keys and model ids (Groq per-feature keys, Cerebras, Gemini, Mistral, OpenRouter, GitHub Models, Workers AI) are all optional. A provider is used only when both its key and its model are set. `AI_FEATURES_ENABLED="false"` switches every user-facing AI endpoint off.
+
+**Backend variables** live in the `[vars]` block of `wrangler.toml` (URLs, allowed origins, cookie domain, Supabase URL and schema, session lifetime, feature flags).
+
+**Frontend variables**
+
+| Name | Purpose |
+|---|---|
+| `NEXT_PUBLIC_API_URL` | Base URL of the backend API |
+| `NEXT_PUBLIC_SITE_URL` | Canonical public URL, used for canonical links, Open Graph and the sitemap |
+
+**CLI variable**
+
+| Name | Default | Purpose |
+|---|---|---|
+| `DEVTUNNEL_API_URL` | `https://api.devtunnel.tech` | Point the CLI at a local or staging backend |
+
+## Scheduled jobs
+
+The backend runs five Cloudflare cron triggers, all best-effort and independent of each other.
+
+| Schedule (UTC) | Job |
+|---|---|
+| `0 3 * * *` | AI Discovery agent, plus daily clean-up (expired cache rows, used CLI login codes, accounts deleted more than 30 days ago) |
+| `*/15 * * * *` | Re-warms the contributor issues scan cache |
+| `*/25 * * * *` | Re-warms the GitHub Projects and GitHub Open Source Tools catalogs |
+| `12 * * * *` | Re-warms one GitHub Projects star-range bucket per run |
+| `40 * * * *` | Syncs submitted pull requests with GitHub (task PRs and `dev submit` PRs on any repo) |
+
+Cloudflare's Free plan allows five cron triggers per account in total.
+
+## Security
+
+- Web sessions use an `httpOnly`, `Secure` cookie; only the backend reads it. CLI tokens are stored hashed and expire.
+- Each user's GitHub token is encrypted at rest.
+- Database tables have Row Level Security enabled with no public policies; only the backend's service role reads them.
+- Every admin request is authorized in the backend by an explicit permission check, not just by the frontend.
+- Endpoints are rate limited, and CORS uses an explicit allowlist.
+
+To report a vulnerability, follow [SECURITY.md](./SECURITY.md). Please do not open a public issue.
+
+## Roadmap
+
+The core platform is free. Paid tasks and premium infrastructure are planned and **not available yet**. The planned direction (project economy, teams, company validation, and a gradual move from rule-based matching toward data-driven approaches) is in [ROADMAP.md](./ROADMAP.md).
 
 ## Contributing
 
-DevTunnel welcomes contributions from the community. Before contributing, please review our [CONTRIBUTING.md](./CONTRIBUTING.md) and sign the required Contributor License Agreement (CLA).
-
-By contributing, you agree that your contributions are made under the terms described in the CLA and are subject to the project's [License](#license).
+Contributions are welcome. Read [CONTRIBUTING.md](./CONTRIBUTING.md) and the [Code of Conduct](./CODE_OF_CONDUCT.md) first. Contributions are accepted under the project's [MIT License](./LICENSE).
 
 ## License
 
-This project is **not open source**. All rights are reserved by the project owner. You are welcome to view the source code and submit contributions via pull request, but **no personal, commercial, or derivative use, copying, or redistribution is permitted** without explicit written permission.
+DevTunnel is open source under the [MIT License](./LICENSE). You may use, copy, modify, merge, publish, distribute, sublicense and sell copies of the software, provided the copyright and license notice are included.
 
-See [LICENSE](./LICENSE) for full terms.
+DevTunnel is not affiliated with or endorsed by GitHub.
 
 ## Contact
 
-For questions, partnership inquiries, or permission requests, reach out at: **_[your email/contact here]_**
+- Website: [devtunnel.tech](https://devtunnel.tech)
+- Email: [contact@devtunnel.tech](mailto:contact@devtunnel.tech)
+- Issues and discussions: on this repository

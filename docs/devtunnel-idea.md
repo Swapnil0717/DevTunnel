@@ -1,940 +1,210 @@
-```text
-DEVTUNNEL — COMPLETE STARTUP IDEA
+# DevTunnel — Product Idea and Vision
 
-==================================================
-1. WHAT IS DEVTUNNEL?
-==================================================
+This document explains the idea behind DevTunnel: what problem it solves, who it is for, where it is today, and where it is meant to go. It is a product document, not a technical one. For how the system is built, see [`ARCHITECTURE.md`](../ARCHITECTURE.md). For the phased plan, see [`ROADMAP.md`](../ROADMAP.md).
 
-DevTunnel is a platform where people can create, discover,
-collaborate on, and manage software projects.
+DevTunnel is open source under the [MIT License](../LICENSE).
 
-Users on DevTunnel can include:
+> **Reading this document:** each part is marked **Available today** or **Planned**. Anything marked Planned is part of the vision and is not available yet.
 
-- Individual Developers
-- Developer Teams
-- Open Source Project Owners
-- Startup Founders
-- Startups
-- Companies
+---
 
-DevTunnel combines two major things:
+## 1. The idea in one sentence
 
-1. A Software Project Network
-2. Developer Infrastructure
+DevTunnel connects contributors with open source projects: tasks are matched to your role, level and tech stack, and a CLI opens the pull request. Real project activity builds a trusted history of what a developer has actually worked on.
 
-The goal is to create an ecosystem where real software projects
-connect developers, collaboration, paid work, developer validation,
-and the infrastructure needed to build and test projects.
+The longer-term vision is a software project ecosystem, a **project network plus developer infrastructure**, where developers, founders, startups and companies create and collaborate on real software projects.
 
+## 2. The problem
 
-==================================================
-2. THE CORE DEVTUNNEL STRUCTURE
-==================================================
+- **Contributors** want real projects to work on, but finding a suitable issue, forking, branching, testing and opening a pull request is slow and full of friction, especially for a first contribution.
+- **Project owners** need help, but good first tasks are hard to find and describe, and contributors rarely arrive already matched to the work.
+- **Skills are self-reported.** Resumes and quizzes say little about what someone has really shipped.
 
+## 3. Two pillars
+
+DevTunnel combines two things:
+
+```
                          DEVTUNNEL
                              │
             ┌────────────────┴────────────────┐
-            │                                 │
             ▼                                 ▼
       PROJECT NETWORK                  INFRASTRUCTURE
-            │                                 │
-     ┌──────┼───────────┐          ┌──────────┼───────────┐
-     │      │           │          │          │           │
-     ▼      ▼           ▼          ▼          ▼           ▼
-Projects  People      Work      Tunneling   Domains   Monitoring
-     │      │           │          │          │           │
-     ▼      ▼           ▼          ▼          ▼           ▼
-Open      Developers   Tasks     Logging    Testing   Project
-Source    Founders     Bounties                      Management
-Private   Startups     Validation
-Paid      Companies    Projects
-
-
-==================================================
-3. PROJECTS ARE THE CENTER OF DEVTUNNEL
-==================================================
-
-The central entity of DevTunnel is the SOFTWARE PROJECT.
-
-A user can create a project and make it available to other users
-based on the project's requirements and access type.
-
-A project can contain:
-
-- Project Description
-- Technology Stack
-- Requirements
-- Repository
-- Tasks
-- Contributors
-- Project Owner
-- Project Type
-- Access Rules
-- Paid Bounties
-- Validation Tasks
-- DevTunnel Infrastructure
-
-Basic flow:
-
-PROJECT CREATED
-        ↓
-Made Available on DevTunnel
-        ↓
-Relevant Users Discover It
-        ↓
-Developers Apply / Join / Contribute
-        ↓
-Real Software Work Happens
-        ↓
-Project Uses DevTunnel Infrastructure
-        ↓
-Project Grows
-        ↓
-Developers Build Real Project History
-
-
-==================================================
-4. PROJECT TYPES
-==================================================
-
-DevTunnel supports different types of software projects.
-
-
---------------------------------------------------
-A. OPEN SOURCE PROJECTS
---------------------------------------------------
-
-Open source projects are available for public collaboration.
-
-Developers can discover the project and contribute according to the
-project's contribution rules.
-
-Use cases:
-
-- Grow an open source project
-- Find contributors
-- Find collaborators
-- Build a developer community
-- Get help with bugs and features
-- Allow developers to gain real experience
-
-Example:
-
-A developer creates an open source SaaS project.
-
-They need help with:
-
-- Frontend
-- Backend
-- Documentation
-- Testing
-
-Other developers discover the project and contribute.
-
-
---------------------------------------------------
-B. PRIVATE PROJECTS
---------------------------------------------------
-
-Private projects are available only to selected developers.
-
-The project owner can define requirements such as:
-
-- Required technologies
-- Required skills
-- Experience level
-- Previous project work
-- Previous DevTunnel activity
-
-Example:
-
-A startup needs a developer with:
-
-Node.js
-PostgreSQL
-React
-
-The startup creates a private project and selects developers who meet
-its requirements.
-
-Private projects can eventually include:
-
-- Restricted access
-- Private tasks
-- Team collaboration
-- Private development environments
-- Shared infrastructure
-
-
---------------------------------------------------
-C. PAID PROJECTS / PAID TASKS / BOUNTIES
---------------------------------------------------
-
-Projects can contain paid work.
-
-Example:
-
-PROJECT: SaaS Platform
-
-TASKS:
-
-- Fix authentication bug — Paid
-- Build payment integration — Paid
-- Add dashboard feature — Bounty
-- Improve API performance — Paid
-
-Flow:
-
-Project Owner Funds Task
-        ↓
-Developer Completes Work
-        ↓
-Project Owner Reviews Work
-        ↓
-Work Approved
-        ↓
-Developer Receives Payment
-
-DevTunnel can eventually earn a platform fee from successful paid work.
-
-
---------------------------------------------------
-D. VALIDATION PROJECTS
---------------------------------------------------
-
-Validation projects are created primarily to validate developers
-through actual software work.
-
-These can be used by companies and organizations.
-
-Instead of relying only on:
-
-Resume
-        ↓
-Interview
-        ↓
-Coding Test
-
-The company can use:
-
-Developer's DevTunnel Project History
-        +
-Validation Project
-        ↓
-Actual Software Work
-        ↓
-Review
-        ↓
-Developer Validation
-
-A validation project can include:
-
-- Short real-world project
-- Practical development task
-- Bug fixing task
-- Feature implementation
-- Existing codebase contribution
-
-The company can review the actual work completed by the developer.
-
-
-==================================================
-5. WHO DOES DEVTUNNEL HELP?
-==================================================
-
-
---------------------------------------------------
-A. DEVELOPERS WITH THEIR OWN PROJECTS
---------------------------------------------------
-
-A developer may have a project but need other people to work on it.
-
-They can:
-
-- Create a project
-- Publish it on DevTunnel
-- Find collaborators
-- Find contributors
-- Create tasks
-- Build a team around the project
-
-Example:
-
-"I built the backend but need someone interested in working on the
-frontend."
-
-The developer can create the project and make collaboration
-opportunities available.
-
-
---------------------------------------------------
-B. OPEN SOURCE PROJECT OWNERS
---------------------------------------------------
-
-Open source project owners can:
-
-- Publish their project
-- Show available work
-- Find contributors
-- Organize project tasks
-- Find collaborators
-- Grow the project
-- Add paid bounties in the future
-
-
---------------------------------------------------
-C. EARLY-STAGE STARTUP FOUNDERS
---------------------------------------------------
-
-An early-stage founder may have:
-
-A Good Idea
-+
-An Early Product
-+
-Limited Money
-+
-No Full Development Team
-
-They can make suitable parts of their project available for open
-collaboration.
-
-Developers may contribute because they want:
-
-- Real project experience
-- Collaboration experience
-- Experience with a real codebase
-- A stronger project history
-
-As the startup grows and gets money, it can introduce:
-
-- Paid tasks
-- Bounties
-- Private projects
-- Paid team collaboration
-
-
---------------------------------------------------
-D. COMPANIES
---------------------------------------------------
-
-Companies can use DevTunnel to evaluate developers through their
-actual project history and work.
-
-A developer's DevTunnel profile can show evidence such as:
-
-- Projects contributed to
-- Tasks completed
-- Technologies used
-- Type of contributions
-- Reviews and outcomes
-- Validation project results
-
-Companies can also create Validation Projects.
-
-This allows companies to evaluate actual software work instead of
-relying only on self-reported skills.
-
-
---------------------------------------------------
-E. DEVELOPERS LOOKING FOR PROJECTS
---------------------------------------------------
-
-Developers can discover:
-
-- Open source projects
-- Collaboration opportunities
-- Paid tasks
-- Bounties
-- Private opportunities
-- Validation projects
-- Short-term projects
-
-Different developers may have different goals:
-
-Need Experience
-        ↓
-Join an Open Source Project
-
-Need Collaborators
-        ↓
-Find a Project Team
-
-Need Income
-        ↓
-Complete Paid Tasks
-
-Need to Prove Skills
-        ↓
-Complete a Validation Project
-
-
-==================================================
-6. DEVELOPER PROJECT HISTORY
-==================================================
-
-Every developer builds a history through actual activity on DevTunnel.
-
-Example:
-
-DEVELOPER PROFILE
-
-Skills:
-Node.js
-React
-PostgreSQL
-
-PROJECT HISTORY:
-
-✓ Contributed to Project A
-  Built REST API
-
-✓ Contributed to Project B
-  Fixed Authentication System
-
-✓ Completed Paid Task
-  Built Payment Integration
-
-✓ Completed Validation Project
-  Backend Feature Implementation
-
-The important principle is:
-
-DEVELOPER HISTORY IS BUILT THROUGH REAL PROJECT ACTIVITY.
-
-This can help project owners and companies understand what a
-developer has actually worked on.
-
-The previous Verified Work concept remains part of DevTunnel, but it
-is an outcome of the project ecosystem rather than the entire product.
-
-
-==================================================
-7. DEVTUNNEL INFRASTRUCTURE
-==================================================
-
-DevTunnel also provides infrastructure that helps developers, teams,
-and founders build, test, share, and manage their projects.
-
-The initial infrastructure vision includes:
-
-
---------------------------------------------------
-A. TUNNELING
---------------------------------------------------
-
-Developers can expose locally running applications through a secure
-public URL.
-
-Example:
-
-Developer's Computer
-
-localhost:3000
-        ↓
-DevTunnel
-        ↓
-Secure Tunnel
-        ↓
-Public URL
-        ↓
-https://project.devtunnel...
-
-
-This allows a developer to share and test an application without
-deploying it.
-
-
---------------------------------------------------
-B. CUSTOM DOMAINS
---------------------------------------------------
-
-Projects can eventually use custom domains or custom URLs for their
-development and testing environments.
-
-
---------------------------------------------------
-C. MONITORING
---------------------------------------------------
-
-DevTunnel can provide monitoring capabilities for project
-environments.
-
-Possible uses:
-
-- Monitor application status
-- Check whether an environment is running
-- Track basic activity
-- Identify failures
-
-
---------------------------------------------------
-D. LOGGING
---------------------------------------------------
-
-Users can access logs related to their project infrastructure.
-
-Possible uses:
-
-- Request logs
-- Application/infrastructure logs
-- Debugging
-- Error investigation
-
-
---------------------------------------------------
-E. TESTING AND SHARING
---------------------------------------------------
-
-The infrastructure helps developers share applications during
-development.
-
-Example:
-
-Developer Builds Locally
-        ↓
-Runs Application
-        ↓
-Starts DevTunnel
-        ↓
-Gets Public URL
-        ↓
-Founder / Team / Tester Opens URL
-        ↓
-Tests Application
-        ↓
-Developer Makes Changes
-
-
-==================================================
-8. HOW THE TWO PARTS WORK TOGETHER
-==================================================
-
-The Project Network and Infrastructure are connected.
-
-Example:
-
-A startup creates a project.
-        ↓
-Developers discover the project.
-        ↓
-A developer joins the project.
-        ↓
-Developer completes a feature.
-        ↓
-Developer runs the application locally.
-        ↓
-Uses DevTunnel to expose the application.
-        ↓
-Gets a secure public URL.
-        ↓
-Startup founder tests the feature.
-        ↓
-Work is reviewed.
-        ↓
-Developer's project history is updated.
-
-Therefore:
-
-PROJECT
-        +
-COLLABORATION
-        +
-REAL WORK
-        +
-INFRASTRUCTURE
-        =
-THE DEVTUNNEL ECOSYSTEM
-
-
-==================================================
-9. THE MAIN DEVTUNNEL VALUE
-==================================================
-
-DevTunnel helps different users solve different problems.
-
-For a Project Owner:
-
-"I need people to help me build my project."
-
-For a Developer:
-
-"I need real projects where I can contribute and build experience."
-
-For a Startup Founder:
-
-"I need to grow my project before I can afford a full team."
-
-For a Company:
-
-"I want better evidence of what a developer can actually do."
-
-For a Development Team:
-
-"I need infrastructure to test, share, and manage development
-environments."
-
-DevTunnel brings these needs into one ecosystem.
-
-
-==================================================
-10. COMPLETE USER FLOW
-==================================================
-
-USER CREATES PROJECT
-        ↓
-Selects Project Type
-
-OPEN SOURCE
-PRIVATE
-PAID / BOUNTY
-VALIDATION
-
-        ↓
-Adds Requirements and Technology Stack
-        ↓
-Project Becomes Available
-        ↓
-Relevant Developers Discover Project
-        ↓
-Developers Join / Apply / Contribute
-        ↓
-Tasks and Software Work Happen
-        ↓
-DevTunnel Infrastructure Is Used
-        ↓
-Project Is Tested and Reviewed
-        ↓
-Work Outcomes Are Recorded
-        ↓
-Developers Build Project History
-        ↓
-Project Grows
-
-
-==================================================
-11. FUTURE MONETIZATION MODEL
-==================================================
-
-DevTunnel can have multiple revenue streams.
-
-
---------------------------------------------------
-REVENUE STREAM 1 — INFRASTRUCTURE
---------------------------------------------------
-
-Users can pay for premium infrastructure features.
-
-Possible free features:
-
-- Limited tunnels
-- Temporary URLs
-- Basic usage
-- Basic logs
-
-Possible premium features:
-
-- Multiple active tunnels
-- Persistent URLs
-- Custom domains
-- Custom subdomains
-- More bandwidth
-- Advanced monitoring
-- Advanced logging
-- Longer-running environments
-- Private environments
-
-Revenue model:
-
-MONTHLY SUBSCRIPTIONS
-
-Potential users:
-
-- Developers
-- Founders
-- Startups
-- Teams
-
-
---------------------------------------------------
-REVENUE STREAM 2 — PAID TASKS AND BOUNTIES
---------------------------------------------------
-
-Project owners post paid work.
-
-Developer completes work.
-        ↓
-Work is approved.
-        ↓
-Payment is completed.
-        ↓
-DevTunnel earns a platform fee.
-
-Revenue model:
-
-PLATFORM FEE ON SUCCESSFUL PAID WORK
-
-
---------------------------------------------------
-REVENUE STREAM 3 — PRIVATE PROJECTS AND TEAM PLANS
---------------------------------------------------
-
-Premium plans can provide:
-
-- Private projects
-- More projects
-- Team members
-- Advanced access controls
-- Shared infrastructure
-- Private environments
-- More monitoring and logging
-
-Revenue model:
-
-MONTHLY OR ANNUAL SUBSCRIPTIONS
-
-
---------------------------------------------------
-REVENUE STREAM 4 — COMPANY VALIDATION
---------------------------------------------------
-
-Companies can eventually pay for:
-
-- Validation projects
-- Developer evaluation workflows
-- Private validation environments
-- Advanced developer project history
-- Review tools
-- Candidate/project management
-
-Revenue model:
-
-COMPANY SUBSCRIPTION
-OR
-PAY PER VALIDATION PROJECT
-
-
-==================================================
-12. RECOMMENDED PHASES
-==================================================
-
-
-PHASE 1 — BUILD AND VALIDATE
-
-Focus:
-
-- Project creation
-- Project discovery
-- Open collaboration
-- Basic tasks
-- Developer profiles
-- Basic project history
-- Core DevTunnel tunneling
-- Real users
-- Real projects
-- Real contributions
-
-Main goal:
-
-Validate that users want to create projects, discover projects,
-collaborate, and use DevTunnel infrastructure.
-
-Initially:
-
-CORE PLATFORM = FREE
-
-
---------------------------------------------------
-LATE PHASE 1 — TEST FIRST REVENUE
---------------------------------------------------
-
-Once users are actively using the infrastructure, test:
-
-DEVTUNNEL PREMIUM INFRASTRUCTURE
-
-Examples:
-
-- More tunnels
-- Persistent URLs
-- Higher usage limits
-- Premium domains
-- Advanced logs
-
-Goal:
-
-Get the first paying customers and validate willingness to pay.
-
-
---------------------------------------------------
-PHASE 2 — PROJECT ECONOMY
---------------------------------------------------
-
-Add:
-
-- Paid tasks
-- Bounties
-- Payment workflow
-- Platform fees
-- More private project features
-
-Main goal:
-
-Enable real economic activity around projects.
-
-
---------------------------------------------------
-PHASE 3 — TEAMS AND STARTUPS
---------------------------------------------------
-
-Add:
-
-- Team plans
-- Advanced private projects
-- Shared infrastructure
-- Monitoring
-- Logging
-- Custom domains
-- Advanced access controls
-
-Main goal:
-
-Build predictable recurring SaaS revenue.
-
-
---------------------------------------------------
-PHASE 4 — COMPANY VALIDATION
---------------------------------------------------
-
-Expand:
-
-- Validation projects
-- Developer project history
-- Company evaluation tools
-- Private validation workflows
-- Advanced infrastructure
-
-Main goal:
-
-Create higher-value B2B revenue.
-
-
-==================================================
-13. DEVTUNNEL'S GROWTH FLYWHEEL
-==================================================
-
-More Projects
-        ↓
-More Opportunities
-        ↓
-More Developers Join
-        ↓
-More Contributors
-        ↓
-More Projects Grow
-        ↓
-More Real Project History
-        ↓
-Better Developer Discovery and Validation
-        ↓
-More Founders and Companies Join
-        ↓
-More Projects
-
-At the same time:
-
-More Projects
-        ↓
-More Development Activity
-        ↓
-More Need for Testing Infrastructure
-        ↓
-More DevTunnel Usage
-        ↓
-More Premium Infrastructure Customers
-        ↓
-More Revenue
-        ↓
-Better Infrastructure
-        ↓
-More Valuable Projects
-
-
-==================================================
-14. FINAL DEVTUNNEL VISION
-==================================================
-
-DevTunnel is a software project ecosystem where developers, founders,
-startups, companies, and teams can create, discover, and collaborate
-on real software projects.
-
-Projects can be:
-
-- Open Source
-- Private
-- Paid
-- Bounty-Based
-- Validation-Based
-
-Through real project activity, developers build a history of actual
-work and contributions.
-
-Alongside the project network, DevTunnel provides developer
-infrastructure such as:
-
-- Tunneling
-- Custom Domains
-- Monitoring
-- Logging
-- Development and Testing Environments
-
-This allows DevTunnel to connect:
-
-PEOPLE
-        +
-PROJECTS
-        +
-REAL SOFTWARE WORK
-        +
-DEVELOPER HISTORY
-        +
-VALIDATION
-        +
-DEVELOPER INFRASTRUCTURE
-
-INTO ONE PLATFORM.
-
-
-==================================================
-15. ONE-SENTENCE DESCRIPTION
-==================================================
-
-DevTunnel is a platform where developers, founders, startups, and
-companies create and collaborate on real software projects while using
-integrated infrastructure to build, test, share, monitor, and manage
-those projects, with real project activity creating a trusted history
-of what developers have actually worked on.
-
-
-==================================================
-16. THE SIMPLEST VERSION
-==================================================
-
-DevTunnel helps people find and build real software projects together.
-
-Developers can find projects to contribute to.
-
-Developers and founders can find collaborators.
-
-Startups can grow projects before building a full team.
-
-Projects can offer paid tasks and bounties.
-
-Companies can validate developers through actual work.
-
-And DevTunnel provides the infrastructure needed to test and manage
-projects during development.
-
-THE CORE IDEA:
-
-A PROJECT NETWORK + DEVELOPER INFRASTRUCTURE PLATFORM.
+   projects · people · work      tunneling · domains · monitoring
+       (Available today)                  (Planned)
 ```
+
+1. **A software project network** — a place to discover, contribute to and collaborate on real software projects. This is what DevTunnel is today.
+2. **Developer infrastructure** — tunneling, custom domains, monitoring and logging to build, test and share those projects. This is planned and **not built yet**.
+
+## 4. The project is the center
+
+The central entity of DevTunnel is the **software project**. A project can have a description, tech stack, requirements, a repository, tasks, contributors and access rules.
+
+```
+PROJECT CREATED → PUBLISHED → DISCOVERED → CONTRIBUTED TO → GROWN
+```
+
+## 5. Where DevTunnel is today
+
+**Available today**
+
+- Curated **projects**, **tasks** and **open source tools**, filterable by tech stack, role (Frontend, Backend, Full stack, Documentation, Testing, DevOps) and experience level (Beginner, Intermediate, Advanced).
+- Live **GitHub catalogs** (projects, tools, issues) and **community submissions**.
+- The **`dev` CLI**: `dev login`, `dev start`, `dev test`, `dev submit`. It works on DevTunnel tasks and on **any public GitHub issue**, and the work still counts as a DevTunnel contribution.
+- **Task progress recorded from real actions**: `OPEN` → `IN_PROGRESS` (`dev start`) → `IN_REVIEW` (`dev submit` opened a pull request) → `DONE`. "In review" means a pull request is open, not merged.
+- **Contributor profiles** with a contribution calendar, stats and milestones.
+- **AI help, always labeled AI-generated**: search the catalog in plain words, project and tool summaries, issue explanations, and issue insights.
+- A **private admin portal** for curating projects, tasks and tools, with an AI Discovery agent that proposes items for approval.
+- Free core platform.
+
+**A firm boundary:** DevTunnel is a coordination and discovery layer on top of GitHub. The admin side can load and curate data, but it **cannot merge** into the original repository. Merge authority always stays with the repository owner, and pull requests are opened with the contributor's own GitHub token.
+
+## 6. Project types
+
+| Type | What it is | Status |
+|---|---|---|
+| **Open source** | Publicly discoverable projects open to community contribution | **Available today** |
+| **Private** | Restricted-access projects with defined requirements (skills, experience, prior activity) | Planned |
+| **Paid / bounty** | Projects with funded tasks; contributors are paid for approved work | Planned |
+| **Validation** | Short, real tasks companies use to evaluate developer skill through actual output | Planned |
+
+### Open source projects (available today)
+
+Used to grow a project, find contributors, build a community, get help with bugs and features, and let developers gain real experience. Example: someone builds an open source SaaS project and needs help with frontend, backend, documentation and testing; other developers discover it and contribute.
+
+### Private projects (planned)
+
+Available only to selected developers. The owner defines requirements such as technologies, skills, experience level, previous project work and previous DevTunnel activity. Over time this could include restricted access, private tasks, team collaboration and shared infrastructure.
+
+### Paid projects, tasks and bounties (planned)
+
+```
+Owner funds task → Developer completes work → Owner reviews → Approved → Developer is paid
+```
+
+DevTunnel could eventually earn a platform fee on successful paid work.
+
+### Validation projects (planned)
+
+Instead of relying only on a resume, an interview and a coding test, a company could use a developer's DevTunnel history plus a short real-world task (a bug fix, a feature, a contribution to an existing codebase) and review the actual work.
+
+## 7. Who DevTunnel helps
+
+| Who | What they need | How DevTunnel helps |
+|---|---|---|
+| **Individual developers** | Real projects, experience, a track record | Find matched tasks, ship pull requests with the CLI, build a history from real work. Paid tasks and bounties are planned |
+| **Developer teams** | A shared project with defined roles and tasks | Collaborate on shared projects (planned for private and team features) |
+| **Open source project owners** | Contributors and a way to show available work | Publish the project, organize tasks, find contributors, grow the community |
+| **Startup founders** | Help building an early product before hiring a team | Open suitable parts of the project to collaboration; introduce paid tasks and private projects as the startup grows (planned) |
+| **Startups** | To scale from open collaboration to paid work | Paid tasks and private team projects (planned) |
+| **Companies** | Better evidence of what a developer can do | Evaluate developers through real project history and validation projects (planned) |
+
+Developers arrive with different goals, and DevTunnel is meant to serve each of them:
+
+```
+Need experience      → join an open source project        (today)
+Need collaborators   → find a project team                (partly today)
+Need income          → complete paid tasks                (planned)
+Need to prove skills → complete a validation project      (planned)
+```
+
+## 8. Developer project history
+
+The principle: **developer history is built through real project activity.**
+
+Everything on a profile should come from something that happened, such as a task started or a pull request opened, and never from a box someone ticked or a self-reported skill. Today a profile shows contributions, a calendar, stats and milestones. Over time this history can become deeper and more verifiable, so project owners and companies can see what a developer has actually worked on.
+
+## 9. Developer infrastructure (planned)
+
+The infrastructure vision is to help developers, teams and founders build, test, share and manage projects. **None of it is built yet.**
+
+| Capability | Idea |
+|---|---|
+| **Tunneling** | Expose a locally running app through a secure public URL, so it can be shared and tested without deploying |
+| **Custom domains** | Custom domains or URLs for development and testing environments |
+| **Monitoring** | Check whether an environment is running, track basic activity, identify failures |
+| **Logging** | Request and application logs for debugging and error investigation |
+| **Testing and sharing** | A founder, team or tester opens the public URL while the developer keeps changing the code |
+
+```
+Developer builds locally → runs the app → starts DevTunnel → gets a public URL
+→ founder or team opens it → tests → developer makes changes
+```
+
+## 10. How the two parts fit together
+
+```
+A project is created → developers discover it → a developer joins and builds a feature
+→ exposes it through DevTunnel → the founder tests it → work is reviewed
+→ the developer's project history is updated
+```
+
+```
+PROJECT + COLLABORATION + REAL WORK + INFRASTRUCTURE = THE DEVTUNNEL ECOSYSTEM
+```
+
+## 11. Value for each user
+
+- **Project owner:** "I need people to help me build my project."
+- **Developer:** "I need real projects where I can contribute and build experience."
+- **Startup founder:** "I need to grow my project before I can afford a full team."
+- **Company:** "I want better evidence of what a developer can actually do."
+- **Development team:** "I need infrastructure to test, share and manage development environments."
+
+## 12. Matching and intelligence
+
+Matching, scoring and recommendations start as **simple, deterministic and explainable rules**, not machine learning. As real contribution data accumulates, they are meant to evolve gradually:
+
+```
+1. Simple rules
+2. Weighted scoring
+3. Similarity + repository analysis
+4. Historical data
+5. Machine learning / advanced AI
+```
+
+AI features that exist today (search, summaries, explanations, insights) are optional, signed-in only, and always labeled AI-generated.
+
+## 13. Future monetization model
+
+**Today the core platform is free.** The ideas below are planned and not available yet. The software itself is open source (MIT); revenue is meant to come from hosted services, not from restricting the code.
+
+1. **Infrastructure.** Free: limited tunnels, temporary URLs, basic usage and logs. Premium: multiple active tunnels, persistent URLs, custom domains and subdomains, more bandwidth, advanced monitoring and logging, longer-running and private environments. *Monthly subscriptions* for developers, founders, startups and teams.
+2. **Paid tasks and bounties.** Owner posts paid work, the developer completes it, it is approved, payment is made, DevTunnel earns a *platform fee*.
+3. **Private projects and team plans.** Private projects, more projects and team members, advanced access controls, shared and private environments, more monitoring. *Monthly or annual subscriptions.*
+4. **Company validation.** Validation projects, evaluation workflows, private validation environments, advanced project history and review tools. *Company subscription or pay per validation project.*
+
+## 14. Phases
+
+| Phase | Goal | Focus |
+|---|---|---|
+| **1 — Build and validate** (current) | Confirm users want to find real work and ship pull requests | Project discovery, open collaboration, tasks, profiles, contribution history, real users and contributions. Core platform free |
+| **Late 1 — First revenue** | Get the first paying customers | Premium infrastructure: more tunnels, persistent URLs, higher limits, premium domains, advanced logs |
+| **2 — Project economy** | Real economic activity around projects | Paid tasks, bounties, payment workflow, platform fees, more private project features |
+| **3 — Teams and startups** | Predictable recurring revenue | Team plans, advanced private projects, shared infrastructure, monitoring, logging, custom domains, access controls |
+| **4 — Company validation** | Higher-value business use | Validation projects, deeper project history, company evaluation tools, private validation workflows |
+
+Details and status are in [`ROADMAP.md`](../ROADMAP.md).
+
+## 15. Growth flywheel
+
+```
+More projects → more opportunities → more developers join → more contributors
+→ more projects grow → more real project history → better discovery and validation
+→ more founders and companies join → more projects
+```
+
+and, once infrastructure exists:
+
+```
+More projects → more development activity → more need for testing infrastructure
+→ more DevTunnel usage → more premium customers → more revenue
+→ better infrastructure → more valuable projects
+```
+
+## 16. The simplest version
+
+DevTunnel helps people find and build real software projects together. Developers find projects to contribute to, and a CLI takes them from picking an issue to an open pull request. Founders and project owners find collaborators. Over time, projects can offer paid tasks and bounties, companies can validate developers through actual work, and DevTunnel can provide the infrastructure to test and manage projects during development.
+
+**The core idea: a project network plus developer infrastructure.**

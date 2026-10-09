@@ -1,85 +1,119 @@
 # Contributing to DevTunnel
 
-Thanks for your interest in contributing to DevTunnel. This document explains how contributions work, what's expected, and what rights are involved before you submit any code.
+Thanks for your interest in DevTunnel. This guide explains how to set up the project, what a good pull request looks like, and how contributions are licensed.
 
-> **Important:** DevTunnel is source-available, not open source. Please read the [LICENSE](./LICENSE) and [Contributor License Agreement](./CLA.md) before contributing. Contributing does **not** grant you rights to use, copy, or deploy the Software outside of this repository.
+DevTunnel is open source under the [MIT License](./LICENSE). By submitting a contribution you agree that it is licensed under the same terms. There is no separate contributor agreement to sign.
 
----
+## Before you start
 
-## Before You Start
+1. Read the [README](./README.md) to see what DevTunnel is and how the repository is laid out.
+2. Read [ARCHITECTURE.md](./ARCHITECTURE.md) for how the frontend, backend and CLI fit together.
+3. Check the [ROADMAP](./ROADMAP.md) to see what is in scope.
+4. Browse open [issues](../../issues) to find something to work on. Issues labeled `good first issue` or `help wanted` are good starting points.
 
-1. Read the [README.md](./README.md) to understand what DevTunnel is and how it's structured.
-2. Read the [ARCHITECTURE.md](./ARCHITECTURE.md) to understand the system design and modules.
-3. Check the [ROADMAP.md](./ROADMAP.md) to see what phase the project is in and what's currently in scope.
-4. Browse open [Issues](../../issues) and the [Project Board](../../projects) to find something to work on.
+You can also find tasks on [devtunnel.tech](https://devtunnel.tech/tasks), and use the DevTunnel CLI to do the fork, branch and pull request steps for you:
 
-## Contributor License Agreement (CLA)
-
-Before your first pull request can be merged, you must agree to the [CLA](./CLA.md). This confirms:
-
-- You have the right to submit the contribution.
-- Your contribution may be used, modified, and distributed by the project owner as part of DevTunnel.
-- You are not granted any ownership, license, or usage rights to the Software in return for contributing.
-
-A CLA bot will prompt you to sign when you open your first PR.
-
-## How to Contribute
-
-### 1. Find or Propose Work
-- Pick an existing issue labeled `good first issue`, `help wanted`, or a task tied to the current roadmap phase.
-- To propose new work, open an issue using the **Task Proposal** template first — don't submit unsolicited large PRs.
-
-### 2. Fork & Branch
 ```bash
-git clone https://github.com/<your-username>/devtunnel.git
-cd devtunnel
+npm install -g @devtunnelcli/cli
+dev login
+dev start owner/repo#123
+```
+
+## Ways to contribute
+
+- Fix a bug or build a feature
+- Improve documentation
+- Report a bug or propose a task (use the issue templates)
+- Review pull requests and help others in discussions
+
+For anything large, open an issue first so the approach can be agreed before you spend time on it.
+
+## Development setup
+
+DevTunnel is three packages. Each has its own `package.json`; there is no root workspace.
+
+| Package | Path | Run locally |
+|---|---|---|
+| Frontend | `devtunnel-frontend` | `npm install && npm run dev` |
+| Backend | `devtunnel-backend` | `npm install && npm run dev` |
+| CLI | `devtunnel-cli` | `npm install && npm run dev -- <command>` |
+
+Setup details, environment variables and database migrations are in the [README](./README.md#getting-started) and in each package's own README. Never commit secrets: use `.dev.vars` (backend) and `.env.local` (frontend), both gitignored.
+
+## Making a change
+
+```bash
+git clone https://github.com/<your-username>/DevTunnel.git
+cd DevTunnel
 git checkout -b feature/short-description
 ```
 
-Branch naming convention:
-- `feature/...` — new functionality
-- `fix/...` — bug fixes
-- `docs/...` — documentation-only changes
-- `chore/...` — tooling, config, cleanup
+Branch names:
 
-### 3. Make Your Changes
-- Keep pull requests focused — one feature or fix per PR.
-- Follow existing code style and naming conventions (style guide to be added once the codebase is initialized).
-- Include tests where applicable.
-- Update documentation if your change affects setup, APIs, or behavior.
+- `feature/...` new functionality
+- `fix/...` bug fixes
+- `docs/...` documentation only
+- `chore/...` tooling, config, cleanup
 
-### 4. Commit Messages
-Use clear, descriptive commit messages:
+Guidelines:
+
+- Keep each pull request focused on one feature or fix.
+- Follow the existing code style and naming in the package you are changing.
+- The backend runs on Cloudflare Workers: use `fetch`-based clients, not Node-only or TCP libraries.
+- Database changes are new, numbered files in `devtunnel-backend/sql/`. Do not edit an already-applied migration.
+- Update documentation when your change affects setup, APIs or behavior.
+
+### Checks to run before opening a pull request
+
+There is no automated test suite yet, so please run the type checks and linter for every package you touched:
+
+```bash
+# backend
+cd devtunnel-backend && npm run typecheck
+
+# frontend
+cd devtunnel-frontend && npm run typecheck && npm run lint
+
+# CLI
+cd devtunnel-cli && npm run typecheck && npm run build
+```
+
+If you add tests, include how to run them in your pull request.
+
+### Commit messages
+
+Use a short type prefix and a clear description (the same types `dev submit` offers: `feat`, `fix`, `docs`, `chore`):
+
 ```
 feat: add project discovery search filters
 fix: correct role match score calculation
 docs: update architecture diagram for admin sync
 ```
 
-### 5. Submit a Pull Request
-- Fill out the PR template completely.
-- Link the related issue (e.g. `Closes #12`).
-- Ensure your branch is up to date with `main` before requesting review.
-- A maintainer will review, request changes if needed, and merge once approved.
+### Opening the pull request
+
+- Fill in the pull request template.
+- Link the related issue (for example `Closes #12`).
+- Make sure your branch is up to date with `main`.
+- The project team will review your pull request, may ask for changes, and merges it once it is approved.
+
+Or let the CLI do it: `dev test` runs the project's checks and `dev submit` commits, pushes and opens the pull request.
 
 ## Code of Conduct
 
-All contributors are expected to follow the [Code of Conduct](./CODE_OF_CONDUCT.md). Be respectful, constructive, and collaborative.
+Everyone taking part is expected to follow the [Code of Conduct](./CODE_OF_CONDUCT.md).
 
-## Reporting Bugs
+## Reporting bugs
 
-Use the **Bug Report** issue template. Include:
-- Steps to reproduce
-- Expected vs. actual behavior
-- Environment details (browser, OS, version, etc.)
+Use the **Bug Report** issue template and include steps to reproduce, expected and actual behavior, and your environment (browser, OS, version). You can also use the "Found a bug" option in the DevTunnel site header.
 
-## Reporting Security Issues
+## Reporting security issues
 
-Do **not** open a public issue for security vulnerabilities. Follow the process in [SECURITY.md](./SECURITY.md).
+Do **not** open a public issue for a security vulnerability. Follow [SECURITY.md](./SECURITY.md).
 
 ## Questions
 
-Use [Discussions](../../discussions) for general questions, ideas, or feedback that isn't a bug or task.
+Use [Discussions](../../discussions) for questions, ideas and feedback that are not a bug or a task.
 
 ---
 

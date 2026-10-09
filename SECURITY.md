@@ -1,38 +1,45 @@
 # Security Policy
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
-The DevTunnel team takes security seriously. If you discover a security vulnerability, please **do not** open a public GitHub issue.
+If you discover a security vulnerability in DevTunnel, please **do not** open a public GitHub issue.
 
-Instead, report it privately by emailing: **[your security contact email here]**
+Report it privately by emailing **contact@devtunnel.tech** with the subject line `Security report`. If GitHub private vulnerability reporting is enabled on this repository, you can use that instead.
 
-Please include as much of the following as possible:
+Please include as much of the following as you can:
 
 - A description of the vulnerability and its potential impact
 - Steps to reproduce the issue
 - Any relevant logs, screenshots, or proof-of-concept code
-- Your assessment of severity (if known)
+- Your assessment of severity, if known
 
-## What to Expect
+## What to expect
 
-- **Acknowledgment:** We aim to acknowledge receipt of your report within **48 hours**.
-- **Investigation:** We will investigate and assess the issue, and may follow up with questions.
-- **Resolution:** Once confirmed, we will work on a fix and coordinate a disclosure timeline with you.
-- **Credit:** With your permission, we're happy to credit you for the discovery once the issue is resolved.
+- **Acknowledgment:** we aim to acknowledge your report within 48 hours.
+- **Investigation:** we will investigate and assess the issue, and may follow up with questions.
+- **Resolution:** once confirmed, we will work on a fix and agree a disclosure timeline with you.
+- **Credit:** with your permission, we will credit you for the discovery once the issue is resolved.
 
-## Supported Versions
+## Supported versions
 
-As DevTunnel is in early development, security fixes will currently be applied only to the latest version on the `main` branch. A formal version support policy will be published once the project reaches a stable release.
+Security fixes are applied to the latest code on the `main` branch and to the latest published release of the `@devtunnelcli/cli` package. Older versions are not supported.
 
 ## Scope
 
-This policy covers the DevTunnel codebase, backend APIs, and admin portal. It does **not** cover:
+This policy covers the code in this repository: the frontend (including the admin portal), the backend API, and the CLI, as well as the hosted service at devtunnel.tech.
 
-- Third-party services DevTunnel integrates with (e.g., GitHub) — please report those directly to the relevant provider.
+It does **not** cover:
+
+- Third-party services DevTunnel integrates with (for example GitHub, Supabase, Cloudflare). Please report those to the relevant provider.
 - Social engineering or physical security issues.
+- Findings from automated scanners with no demonstrated impact.
 
-## Responsible Disclosure
+## Handling secrets
 
-We ask that you give us reasonable time to investigate and address a vulnerability before disclosing it publicly. We are committed to working with security researchers in good faith.
+If you find a leaked credential (for example in the git history), report it privately in the same way. Do not use it.
+
+## Responsible disclosure
+
+Please give us reasonable time to investigate and fix a vulnerability before disclosing it publicly. We will work with security researchers in good faith.
 
 Thank you for helping keep DevTunnel and its users safe.

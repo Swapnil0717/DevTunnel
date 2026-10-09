@@ -29,7 +29,6 @@ Closes #
 ## Checklist
 
 - [ ] I have read the [CONTRIBUTING.md](../CONTRIBUTING.md) guide
-- [ ] I have signed the [CLA](../CLA.md)
 - [ ] My code follows the project's style guidelines
 - [ ] I have updated documentation where relevant
 - [ ] I have added tests where applicable
