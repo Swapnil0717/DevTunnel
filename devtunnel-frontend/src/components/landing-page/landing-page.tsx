@@ -14,6 +14,7 @@ import { Ic } from "./icon";
 import { IconSprite } from "./icon-sprite";
 import { ProblemSolution } from "./problem-solution";
 import "./home.css";
+import "./mobile.css";
 
 /**
  * The public landing page: header, hero with the animated demo, then the

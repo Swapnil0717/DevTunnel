@@ -1,0 +1,127 @@
+/*
+ * Phone layout for the landing page.
+ *
+ * Every rule lives inside the media query below, so the desktop and tablet
+ * landing page (home.css) is untouched above 640px. This file is imported
+ * after home.css and only re-positions and re-spaces existing components:
+ * same colors, fonts, buttons, chips, copy and links.
+ */
+@media (max-width: 640px) {
+  /* ---------- Hero: left-aligned stack, full-width buttons ---------- */
+  .dtl .h-wrap { padding: 28px 16px 48px; }
+  .dtl .h-in { text-align: left; }
+  .dtl .h-h1 { margin-top: 18px; }
+  .dtl .h-sub { margin-left: 0; margin-right: 0; max-width: none; }
+  .dtl .h-actions { margin-top: 24px; gap: 8px; }
+  .dtl .h-cta, .dtl .h-ghost { height: 48px; }
+  .dtl .h-note { margin-left: 0; margin-right: 0; max-width: none; }
+  .dtl .demo { margin-top: 28px; }
+
+  /* ---------- Demo: stepper strip instead of four tabs ---------- */
+  .dtl .d-tabs { padding: 0 8px; gap: 0; align-items: center; }
+  .dtl .d-tab { flex: 0 0 auto; padding: 0 6px; gap: 6px; justify-content: flex-start; }
+  .dtl .d-tab b { display: grid; }
+  .dtl .d-tab .lf, .dtl .d-tab .ls { display: none; }
+  .dtl .d-tab.on { flex: 1 1 auto; }
+  .dtl .d-tab.on .ls { display: inline; }
+  .dtl .d-tab + .d-tab::before {
+    content: ""; position: absolute; left: -10px; top: 50%; width: 14px; height: 1px; background: #2c2c2c;
+  }
+  .dtl .d-tab.on::after { left: 6px; right: 6px; }
+  .dtl .sc { padding: 16px 14px; gap: 12px; }
+
+  /* ---------- Problem -> solution: dimmed problem card, arrow, solution card ---------- */
+  .dtl .ps { padding: 8px 16px 56px; }
+  .dtl .ps-head h2 { font-size: 26px; }
+  .dtl .ps-head p { font-size: 15px; }
+  .dtl .ps-panel { margin-top: 28px; border: 0; background: none; box-shadow: none; overflow: visible; }
+  .dtl .ps-panel::before { display: none; }
+  .dtl .ps-row, .dtl .ps-cols + .ps-row { display: flex; flex-direction: column; gap: 18px; border-top: 0; margin-top: 14px; }
+  .dtl .ps-l, .dtl .ps-r { padding: 18px 16px; border: 1px solid var(--l1); border-radius: 14px; }
+  .dtl .ps-l { background: #0e0e0e; }
+  .dtl .ps-r { background: #121212; border-left: 1px solid var(--l1); border-top: 1px solid var(--l1); }
+  .dtl .ps-l h3, .dtl .ps-r h3 { font-size: 16.5px; }
+  .dtl .ps-l p, .dtl .ps-r p { font-size: 14px; }
+  .dtl .ps-dot { left: 50%; top: -24px; transform: translateX(-50%) rotate(90deg); width: 28px; height: 28px; }
+
+  /* ---------- Features: compact single-column cards ---------- */
+  .dtl .fs { padding: 0 16px 56px; }
+  .dtl .fs-grid { gap: 10px; margin-top: 28px; }
+  .dtl .fs-c { padding: 18px; border-radius: 14px; }
+  .dtl .fs-ic { margin-bottom: 14px; }
+  .dtl .fs-c h3 { font-size: 17px; }
+  .dtl .fs-c > p { font-size: 14px; }
+  .dtl .fs-vis { margin-top: 16px; }
+  .dtl .fs-links { margin-top: 14px; flex-direction: column; gap: 10px; }
+
+  /* ---------- How it works: pill tabs, numbered steps, vertical stage rail ---------- */
+  .dtl .hw { padding: 0 16px 56px; }
+  .dtl .hw-block { margin-top: 28px; }
+  .dtl .hw-tabs { display: flex; gap: 8px; padding: 12px; overflow-x: auto; scrollbar-width: none; }
+  .dtl .hw-tabs::-webkit-scrollbar { display: none; }
+  .dtl .hw-tab { flex: none; height: 36px; padding: 0 14px; justify-content: center; border: 1px solid #2c2c2c; border-radius: 999px; }
+  .dtl .hw-tab + .hw-tab { border-left: 1px solid #2c2c2c; border-top: 1px solid #2c2c2c; }
+  .dtl .hw-tab span { display: none; }
+  .dtl .hw-tab strong { font-size: 12.5px; white-space: nowrap; color: var(--mu); }
+  .dtl .hw-tab::after { display: none; }
+  .dtl #hw1:checked ~ .hw-tabs label[for=hw1],
+  .dtl #hw2:checked ~ .hw-tabs label[for=hw2],
+  .dtl #hw3:checked ~ .hw-tabs label[for=hw3] { background: #fff; border-color: #fff; }
+  .dtl #hw1:checked ~ .hw-tabs label[for=hw1] strong,
+  .dtl #hw2:checked ~ .hw-tabs label[for=hw2] strong,
+  .dtl #hw3:checked ~ .hw-tabs label[for=hw3] strong { color: #000; }
+  .dtl .hw-life { margin-top: 48px; }
+  .dtl .hw-lh h3 { font-size: 21px; }
+  .dtl .hw-lh p { font-size: 14.5px; }
+  .dtl .hw-stages { display: block; margin-top: 24px; position: relative; }
+  .dtl .hw-stages::before {
+    display: block; left: 19px; right: auto; top: 20px; bottom: 28px; width: 0; height: auto;
+    background: none; border-left: 1px dashed #333;
+  }
+  .dtl .hw-st { border: 0; background: none; padding: 0 0 22px 52px; min-height: 40px; }
+  .dtl .hw-n { position: absolute; left: 0; top: 0; }
+  .dtl .hw-code { margin-top: 2px; }
+  .dtl .hw-st h4 { margin-top: 2px; font-size: 16px; }
+  .dtl .hw-st p { font-size: 13.5px; }
+
+  /* ---------- Control: icon tile beside each fact ---------- */
+  .dtl .ct { padding: 0 16px 56px; }
+  .dtl .ct-lead { padding: 22px 16px; }
+  .dtl .ct-lead h2 { font-size: 22px; }
+  .dtl .ct-lead p { font-size: 14.5px; }
+  .dtl .ct-f { display: grid; grid-template-columns: 36px minmax(0, 1fr); column-gap: 12px; padding: 18px 16px; }
+  .dtl .ct-i { grid-row: 1 / span 3; width: 36px; height: 36px; margin: 0; padding: 8px; border: 1px solid #2a2a2a; border-radius: 9px; background: #161616; }
+  .dtl .ct-f h3, .dtl .ct-f p, .dtl .ct-f .ct-link { grid-column: 2; }
+  .dtl .ct-link { padding-top: 10px; }
+  .dtl .ct-strip { padding: 14px 16px; gap: 10px 20px; }
+
+  /* ---------- Roadmap: Available vs Planned lists ---------- */
+  .dtl .bo { padding: 0 16px 56px; }
+  .dtl .bo-grid { margin-top: 28px; }
+  .dtl .bo-col { padding: 20px 16px; }
+  .dtl .bo-col li { font-size: 14px; }
+  .dtl .bo-track { margin-top: 28px; gap: 16px; }
+  .dtl .bo-links { margin-top: 24px; flex-direction: column; gap: 12px; }
+
+  /* ---------- FAQ: full-width rows, large touch targets ---------- */
+  .dtl .fq { padding: 0 16px 56px; }
+  .dtl .fq-in { gap: 20px; }
+  .dtl .fq-lead h2 { font-size: 26px; }
+  .dtl .fq-list summary { min-height: 56px; font-size: 15px; gap: 12px; }
+  .dtl .fq-list p { padding: 0 4px 20px; font-size: 14.5px; }
+
+  /* ---------- Final call to action ---------- */
+  .dtl .fc { padding: 0 16px 48px; }
+  .dtl .fc-box { padding: 40px 18px 36px; }
+  .dtl .fc-box p { font-size: 16px; }
+  .dtl .fc-act { margin-top: 24px; gap: 8px; }
+  .dtl .fc-btn, .dtl .fc-ghost { height: 48px; }
+
+  /* ---------- Footer: brand on top, link columns in a 2-up grid ---------- */
+  .dtl .ft { padding: 36px 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
+  .dtl .ft-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px 16px; }
+  .dtl .ft-brand { grid-column: 1 / -1; }
+  .dtl .ft-col:last-of-type { grid-column: 1 / -1; }
+  .dtl .ft-col ul { margin-top: 8px; }
+  .dtl .ft-bot { margin-top: 32px; padding-top: 20px; }
+}
