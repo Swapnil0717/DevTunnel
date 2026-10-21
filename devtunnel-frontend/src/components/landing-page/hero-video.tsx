@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 /**
  * Looping, muted background video for the hero. It plays only while it is on
  * screen, and stays on the poster frame for visitors who prefer reduced
- * motion. Files: `public/hero-bg-bw.webm` and `public/hero-poster.jpg`.
+ * motion. Files: `public/hero-bg-bw.mp4` and `public/hero-poster.jpg`.
  */
 export function HeroVideo() {
   const ref = useRef<HTMLVideoElement>(null);
@@ -28,9 +28,8 @@ export function HeroVideo() {
       });
     };
 
-    // Native `loop` can silently stop at the end of the file (WebM files
-    // without a seek index can't jump back to 0, and some browsers drop out of
-    // playback when they stall). Restart by hand whenever that happens.
+    // Native `loop` can silently stop at the end of the file (some browsers
+    // drop out of playback when they stall). Restart by hand whenever that happens.
     let visible = true;
     const restart = () => {
       if (reduce) return;
@@ -92,7 +91,7 @@ export function HeroVideo() {
       disablePictureInPicture
       tabIndex={-1}
     >
-      <source src="/hero-bg-bw.webm" type="video/webm" />
+      <source src="/hero-bg-bw.mp4" type="video/mp4" />
     </video>
   );
 }

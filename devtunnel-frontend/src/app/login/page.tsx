@@ -1,14 +1,11 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { Logo } from "@/components/layout/logo";
-import { LandingShell } from "@/components/landing/landing-shell";
-import { LoginCard } from "@/components/auth/login-card";
-import { PortalChoiceCard } from "@/components/auth/portal-choice-card";
-import {
-  AuthStatusPanel,
-  type LoginStatus,
-} from "@/components/auth/auth-status-panel";
+import { AuthShell } from "@/components/landing-page/auth-shell";
+import { AuthCard } from "@/components/landing-page/auth-card";
+import { AuthStatus } from "@/components/landing-page/auth-status";
+import { AuthPortalChoice } from "@/components/landing-page/auth-portal-choice";
+import type { LoginStatus } from "@/components/auth/auth-status-panel";
 
 import { buildMetadata } from "@/lib/seo";
 import { getServerUser } from "@/lib/auth/get-server-user";
@@ -62,25 +59,21 @@ export default async function LoginPage({
       }
 
       return (
-        <LandingShell>
-          <main className="flex min-h-screen flex-col items-center justify-center gap-9 px-6 py-16">
-            <Logo />
+        <AuthShell>
+          <h1 className="h-h1">
+            <span>Welcome back</span>
+          </h1>
 
-            <h1 className="sr-only">
-              Choose how to sign in to DevTunnel
-            </h1>
-
-            <PortalChoiceCard
-              name={user.name || user.username}
-              userDestination={
-                resolvedSearchParams.next &&
-                resolvedSearchParams.next.startsWith("/")
-                  ? resolvedSearchParams.next
-                  : "/home"
-              }
-            />
-          </main>
-        </LandingShell>
+          <AuthPortalChoice
+            name={user.name || user.username}
+            userDestination={
+              resolvedSearchParams.next &&
+              resolvedSearchParams.next.startsWith("/")
+                ? resolvedSearchParams.next
+                : "/home"
+            }
+          />
+        </AuthShell>
       );
     }
 
@@ -108,29 +101,24 @@ export default async function LoginPage({
     : undefined;
 
   return (
-    <LandingShell>
-      <main className="flex min-h-screen flex-col items-center justify-center gap-9 px-6 py-16">
-        <Logo />
+    <AuthShell>
+      <h1 className="h-h1">
+        <span>Sign in to</span>
+        <span>DevTunnel.</span>
+      </h1>
 
-        <h1 className="sr-only">
-          Sign in to DevTunnel
-        </h1>
+      <p className="h-sub">
+        Connect your GitHub account to get matched with open source tasks you
+        can finish, and to send your first pull request.
+      </p>
 
-        <div className="flex w-full flex-col items-center">
-          <LoginCard next={next} />
+      <AuthCard next={next} />
 
-          <p className="mt-[22px] font-sub text-xs text-[#8e8e8e]">
-            No account? GitHub sign-in creates one automatically.
-          </p>
-        </div>
+      <p className="au-note">
+        No account? GitHub sign-in creates one automatically.
+      </p>
 
-        <div className="w-full max-w-[340px]">
-          <AuthStatusPanel
-            status={status}
-            errorMessage={errorMessage}
-          />
-        </div>
-      </main>
-    </LandingShell>
+      <AuthStatus status={status} errorMessage={errorMessage} />
+    </AuthShell>
   );
 }

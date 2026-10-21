@@ -3,6 +3,7 @@ import Link from "next/link";
 import { GithubIcon } from "@/components/auth/github-icon";
 import { LinkedinIcon } from "@/components/auth/linkedin-icon";
 import { CookieSettingsLink } from "@/components/consent/cookie-settings-link";
+import "./landing-footer.css";
 import { CONTACT_EMAIL, LINKEDIN_URL, OPERATOR_NAME, PROJECT_GITHUB_URL } from "@/lib/config";
 
 /**

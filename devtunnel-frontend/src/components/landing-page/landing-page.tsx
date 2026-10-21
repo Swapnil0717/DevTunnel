@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LandingFooter } from "@/components/landing/landing-footer";
 import { BuiltInOpen } from "./built-in-the-open";
 import { Control } from "./control";
 import { Faq } from "./faq";
@@ -6,7 +7,6 @@ import { Features } from "./features";
 import { FinalCta } from "./final-cta";
 import { HeroDemo } from "./hero-demo";
 import { HeroVideo } from "./hero-video";
-import { HomeFooter } from "./home-footer";
 import { homeDisplayFont } from "./home-font";
 import { HomeHeader } from "./home-header";
 import { HowItWorks } from "./how-it-works";
@@ -19,7 +19,8 @@ import "./mobile.css";
 /**
  * The public landing page: header, hero with the animated demo, then the
  * Problem -> Solution, features, how-it-works, control, roadmap and FAQ
- * sections, the closing call to action and the footer.
+ * sections, the closing call to action and the shared footer (the same `LandingFooter`
+ * the sign-in page uses).
  *
  * Everything is scoped under `.dtl` (see `home.css`) so none of its short
  * class names can reach the rest of the app. `id="top"` is the target of the
@@ -84,7 +85,7 @@ export function LandingPage() {
         <FinalCta />
       </main>
 
-      <HomeFooter />
+      <LandingFooter />
     </div>
   );
 }
