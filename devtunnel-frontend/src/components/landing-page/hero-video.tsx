@@ -7,7 +7,7 @@ import { useEffect, useRef } from "react";
  * screen, and stays on the poster frame for visitors who prefer reduced
  * motion. Files: `public/hero-bg-bw.mp4` and `public/hero-poster.jpg`.
  */
-export function HeroVideo() {
+export function HeroVideo({ className = "h-vid" }: { className?: string }) {
   const ref = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -81,7 +81,7 @@ export function HeroVideo() {
   return (
     <video
       ref={ref}
-      className="h-vid"
+      className={className}
       poster="/hero-poster.jpg"
       autoPlay
       muted
