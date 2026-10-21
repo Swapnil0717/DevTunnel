@@ -59,7 +59,7 @@ export function LandingPage() {
             </p>
 
             <div className="h-actions">
-              <Link className="h-cta" href="/signup">
+              <Link className="h-cta" href="/login">
                 <Ic id="gh" size={19} />
                 Sign up with GitHub
               </Link>

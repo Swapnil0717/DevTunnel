@@ -12,10 +12,10 @@ import "./signup.css";
 const PERKS = [
   "No password to set up",
   "Ready in a few seconds",
-  "Use the same button to sign in later",
+  "One button to sign in or sign up",
 ];
 
-/** Split-screen sign-up page: GitHub sign-up on the left, looping video on the right. */
+/** Split-screen combined sign-in / sign-up page: GitHub sign-up on the left, looping video on the right. */
 export function SignupView({
   next,
   errorMessage,
@@ -31,17 +31,14 @@ export function SignupView({
             <Link href="/" aria-label="DevTunnel home">
               <Image src="/logo.png" alt="DevTunnel" width={1643} height={262} priority />
             </Link>
-            <Link className="sg-si" href={next ? `/login?next=${encodeURIComponent(next)}` : "/login"}>
-              Sign in
-            </Link>
           </div>
 
           <div className="sg-center">
             <main className="sg-card" id="main">
               <p className="sg-eyebrow">Welcome</p>
-              <h1>Join DevTunnel.</h1>
+              <h1>Welcome to DevTunnel.</h1>
               <p className="sg-sub">
-                Create your account with GitHub. It only takes a few seconds.
+                Sign in or create your account with GitHub. New here? We\u2019ll set you up automatically in a few seconds.
               </p>
 
               <SignupGithubButton next={next} />
@@ -69,8 +66,7 @@ export function SignupView({
 
               <p className="sg-legal">
                 By continuing you agree to the <Link href="/terms">Terms of Service</Link> and{" "}
-                <Link href="/privacy">Privacy Policy</Link>. Already have an account?{" "}
-                <Link href={next ? `/login?next=${encodeURIComponent(next)}` : "/login"}>Sign in</Link>
+                <Link href="/privacy">Privacy Policy</Link>.
               </p>
             </main>
           </div>

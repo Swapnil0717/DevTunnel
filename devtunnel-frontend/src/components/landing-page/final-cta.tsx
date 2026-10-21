@@ -13,7 +13,7 @@ export function FinalCta() {
             .
           </p>
           <div className="fc-act">
-            <Link href="/signup" className="fc-btn">
+            <Link href="/login" className="fc-btn">
               <Ic id="gh" size={19} />
               Sign up with GitHub
             </Link>

@@ -252,7 +252,7 @@ export function HeroDemo() {
           </div>
           <div className="pf-cta rv" style={{ "--d": "2.8s" } as CSSProperties}>
             <span>Your first one is waiting.</span>
-            <Link href="/signup">
+            <Link href="/login">
               <svg className="ic" aria-hidden="true">
                 <use href="#dti-gh"></use>
               </svg>

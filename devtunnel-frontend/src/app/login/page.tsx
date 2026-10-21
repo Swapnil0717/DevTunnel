@@ -2,10 +2,8 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { AuthShell } from "@/components/landing-page/auth-shell";
-import { AuthCard } from "@/components/landing-page/auth-card";
-import { AuthStatus } from "@/components/landing-page/auth-status";
+import { SignupView } from "@/components/signup/signup-view";
 import { AuthPortalChoice } from "@/components/landing-page/auth-portal-choice";
-import type { LoginStatus } from "@/components/auth/auth-status-panel";
 
 import { buildMetadata } from "@/lib/seo";
 import { getServerUser } from "@/lib/auth/get-server-user";
@@ -14,9 +12,9 @@ import { isAdmin } from "@/lib/auth/is-admin";
 import { getServerViewMode } from "@/lib/auth/view-mode.server";
 
 export const metadata: Metadata = buildMetadata({
-  title: "Sign in",
+  title: "Sign in or sign up",
   description:
-    "Sign in to DevTunnel with your GitHub account to create and manage tunnels.",
+    "Sign in or create your DevTunnel account with GitHub. No password to set up.",
   path: "/login",
   noIndex: true,
 });
@@ -34,6 +32,13 @@ const ERROR_MESSAGES: Record<string, string> = {
   server_error:
     "Something went wrong finishing sign-in. Please try again.",
 };
+
+/** Only same-site paths; blocks `//evil.com` and `/\\evil.com` open redirects. */
+function safeNext(next: string | undefined): string | undefined {
+  if (!next || !next.startsWith("/")) return undefined;
+  if (next.startsWith("//") || next.startsWith("/\\")) return undefined;
+  return next;
+}
 
 export default async function LoginPage({
   searchParams,
@@ -89,36 +94,12 @@ export default async function LoginPage({
     );
   }
 
-  const next = resolvedSearchParams.next;
+  const next = safeNext(resolvedSearchParams.next);
   const errorCode = resolvedSearchParams.error;
-
-  const status: LoginStatus = errorCode
-    ? "error"
-    : "idle";
 
   const errorMessage = errorCode
     ? ERROR_MESSAGES[errorCode] ?? "Access was denied."
     : undefined;
 
-  return (
-    <AuthShell>
-      <h1 className="h-h1">
-        <span>Sign in to</span>
-        <span>DevTunnel.</span>
-      </h1>
-
-      <p className="h-sub">
-        Connect your GitHub account to get matched with open source tasks you
-        can finish, and to send your first pull request.
-      </p>
-
-      <AuthCard next={next} />
-
-      <p className="au-note">
-        No account? GitHub sign-in creates one automatically.
-      </p>
-
-      <AuthStatus status={status} errorMessage={errorMessage} />
-    </AuthShell>
-  );
+  return <SignupView next={next} errorMessage={errorMessage} />;
 }
