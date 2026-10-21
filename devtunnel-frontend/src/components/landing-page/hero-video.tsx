@@ -28,14 +28,38 @@ export function HeroVideo() {
       });
     };
 
+    // Native `loop` can silently stop at the end of the file (WebM files
+    // without a seek index can't jump back to 0, and some browsers drop out of
+    // playback when they stall). Restart by hand whenever that happens.
+    let visible = true;
+    const restart = () => {
+      if (reduce) return;
+      video.currentTime = 0;
+      video.play().catch(() => {});
+    };
+    const resumeIfStopped = () => {
+      // Only resume when something other than us paused it while it is on
+      // screen and the tab is in front (the browser pauses hidden tabs itself).
+      if (!reduce && visible && !document.hidden && !video.ended) start();
+    };
+    const onVisibility = () => {
+      if (!document.hidden) resumeIfStopped();
+    };
+
     video.addEventListener("loadeddata", start);
     video.addEventListener("canplay", start);
+    video.addEventListener("ended", restart);
+    video.addEventListener("pause", resumeIfStopped);
+    video.addEventListener("stalled", resumeIfStopped);
+    video.addEventListener("waiting", resumeIfStopped);
+    document.addEventListener("visibilitychange", onVisibility);
 
     let observer: IntersectionObserver | undefined;
     if (!reduce && "IntersectionObserver" in window) {
       observer = new IntersectionObserver(
         (entries) => {
-          if (entries[0]?.isIntersecting) start();
+          visible = Boolean(entries[0]?.isIntersecting);
+          if (visible) start();
           else video.pause();
         },
         { threshold: 0 },
@@ -46,6 +70,11 @@ export function HeroVideo() {
     return () => {
       video.removeEventListener("loadeddata", start);
       video.removeEventListener("canplay", start);
+      video.removeEventListener("ended", restart);
+      video.removeEventListener("pause", resumeIfStopped);
+      video.removeEventListener("stalled", resumeIfStopped);
+      video.removeEventListener("waiting", resumeIfStopped);
+      document.removeEventListener("visibilitychange", onVisibility);
       observer?.disconnect();
     };
   }, []);
@@ -59,7 +88,7 @@ export function HeroVideo() {
       muted
       loop
       playsInline
-      preload="metadata"
+      preload="auto"
       disablePictureInPicture
       tabIndex={-1}
     >
