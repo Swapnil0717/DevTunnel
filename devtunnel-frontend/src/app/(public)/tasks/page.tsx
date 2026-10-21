@@ -19,9 +19,10 @@ export async function generateMetadata(): Promise<Metadata> {
   const result = await getTasks();
 
   return buildMetadata({
-    title: "Tasks",
+    title: "Open Source Tasks and Good First Issues",
     description:
-      "Every task DevTunnel currently provides to contributors, searchable and filterable by role, difficulty, tech stack, and project.",
+      "Find open source tasks to work on. Filter by role, difficulty (beginner to advanced), tech stack and project, then start with the dev CLI and open a pull request.",
+    keywords: ["open source tasks", "good first issues", "beginner open source issues"],
     path: "/tasks",
     noIndex: result.status !== "ok",
   });

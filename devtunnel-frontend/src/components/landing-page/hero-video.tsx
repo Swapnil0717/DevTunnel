@@ -59,7 +59,7 @@ export function HeroVideo() {
       muted
       loop
       playsInline
-      preload="auto"
+      preload="metadata"
       disablePictureInPicture
       tabIndex={-1}
     >

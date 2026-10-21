@@ -11,7 +11,7 @@ export const revalidate = 3600;
  * 8, 24).
  *
  * Included:
- *  - the homepage;
+ *  - the homepage and the About / Guides pages;
  *  - each DevTunnel catalog index (`/projects`, `/opensource-tools`,
  *    `/tasks`) and every project, tool and task page — but only when the
  *    backend actually serves that list to an anonymous request (see
@@ -42,6 +42,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 1,
     },
   ];
+
+  // Explainer pages: static, public and written to answer common questions.
+  for (const path of ["/about", "/guides/first-open-source-contribution", "/guides/find-good-first-issues"]) {
+    entries.push({ url: `${SITE_URL}${path}`, changeFrequency: "monthly", priority: 0.6 });
+  }
 
   // Legal / contact pages: static, public and meant to be found.
   for (const path of ["/privacy", "/terms", "/cookies", "/refunds", "/contact"]) {

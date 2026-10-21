@@ -69,6 +69,15 @@ export function HomeFooter() {
                 <Link href="/#faq">FAQ</Link>
               </li>
               <li>
+                <Link href="/about">About DevTunnel</Link>
+              </li>
+              <li>
+                <Link href="/guides/first-open-source-contribution">First contribution guide</Link>
+              </li>
+              <li>
+                <Link href="/guides/find-good-first-issues">Find good first issues</Link>
+              </li>
+              <li>
                 <a href={`${PROJECT_GITHUB_URL}/blob/main/ROADMAP.md`} target="_blank" rel="noopener noreferrer">Roadmap</a>
               </li>
               <li>

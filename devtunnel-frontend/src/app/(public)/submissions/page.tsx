@@ -19,9 +19,9 @@ export async function generateMetadata(): Promise<Metadata> {
   const result = await getSubmissions(DEFAULT_SUBMISSION_FILTERS);
 
   return buildMetadata({
-    title: "Community",
+    title: "Community Open Source Projects and Tools",
     description:
-      "Projects and tools submitted by DevTunnel contributors — sortable by new, trending and popular, filterable by tech stack and by what they replace.",
+      "Open source projects and tools submitted by DevTunnel contributors. Sort by new, trending and popular, and filter by tech stack or by what they replace.",
     path: "/submissions",
     noIndex: result.status !== "ok",
   });

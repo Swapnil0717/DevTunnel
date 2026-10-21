@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { buildMetadata } from "@/lib/seo";
+import { buildMetadata, clipDescription } from "@/lib/seo";
+import { EXPERIENCE_LEVEL_LABEL } from "@/lib/onboarding/types";
 import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbJsonLd } from "@/lib/structured-data";
 import { getTaskDetail } from "@/lib/tasks/api";
@@ -44,12 +45,19 @@ export async function generateMetadata({
   const result = await getTaskDetail(projectSlug, taskId);
   const title = result.status === "ok" ? result.data.title : "Task";
 
+  let description = "View this open source task on DevTunnel.";
+  if (result.status === "ok") {
+    const { difficulty, techStack, project } = result.data;
+    const level = difficulty ? `${EXPERIENCE_LEVEL_LABEL[difficulty].toLowerCase()} ` : "";
+    const stack = techStack.slice(0, 4).join(", ");
+    description = clipDescription(
+      `${title}: a ${level}open source task on ${project.name}${stack ? ` (${stack})` : ""}. Read the brief and the GitHub issue, then contribute with the dev CLI.`,
+    );
+  }
+
   return buildMetadata({
-    title,
-    description:
-      result.status === "ok"
-        ? `"${title}" — a DevTunnel task on ${result.data.project.name}: project background, task brief, GitHub issue and how to contribute.`
-        : "View this DevTunnel task.",
+    title: `${title} | ${result.status === "ok" ? result.data.project.name : "Open source task"}`,
+    description,
     path: `/projects/${projectSlug}/tasks/${taskId}`,
     noIndex: result.status !== "ok",
   });

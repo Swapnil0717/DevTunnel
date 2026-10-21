@@ -47,13 +47,13 @@ export function LandingPage() {
             </Link>
 
             <h1 className="h-h1">
-              <span>Find open source work</span>
+              <span>Find open source issues</span>
               <span>you can actually do.</span>
             </h1>
 
             <p className="h-sub">
-              Tell DevTunnel your role and level. It finds tasks you can finish, explains each one in
-              plain words, and helps you send the pull request.
+              Tell DevTunnel your role, level and tech stack. It matches you with open source tasks you
+              can finish, explains each one in plain words, and helps you send your first pull request.
             </p>
 
             <div className="h-actions">

@@ -19,9 +19,10 @@ export async function generateMetadata(): Promise<Metadata> {
   const result = await getOpenSourceTools();
 
   return buildMetadata({
-    title: "Open Source Tools",
+    title: "Open Source Tools for Developers",
     description:
-      "Browse open source tools curated on DevTunnel, searchable and filterable by language and label.",
+      "Browse open source developer tools curated on DevTunnel. Filter by language and label, read how to set each one up, and find where you can help.",
+    keywords: ["open source developer tools", "open source tools"],
     path: "/opensource-tools",
     noIndex: result.status !== "ok",
   });

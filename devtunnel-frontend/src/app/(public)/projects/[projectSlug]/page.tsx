@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { buildMetadata } from "@/lib/seo";
+import { buildMetadata, clipDescription } from "@/lib/seo";
 import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbJsonLd } from "@/lib/structured-data";
 import { SITE_URL } from "@/lib/config";
@@ -38,12 +38,19 @@ export async function generateMetadata({
   const result = await getDevtunnelProjectBySlug(projectSlug);
   const title = result.status === "ok" ? result.data.name : "Project";
 
+  let description = "View this open source project on DevTunnel.";
+  if (result.status === "ok") {
+    const { name, description: about, techStack } = result.data;
+    const intro = about ? `${name}: ${about}` : `${name} is an open source project on DevTunnel.`;
+    const stack = techStack.slice(0, 4).join(", ");
+    description = clipDescription(
+      `${intro.replace(/[.\s]+$/, "")}.${stack ? ` Tech: ${stack}.` : ""} See open tasks and issues to contribute to.`,
+    );
+  }
+
   return buildMetadata({
-    title,
-    description:
-      result.status === "ok"
-        ? `${result.data.name} on DevTunnel — project info, README, open tasks and issues.`
-        : "View this DevTunnel project.",
+    title: `${title} (open source project)`,
+    description,
     path: `/projects/${projectSlug}`,
     noIndex: result.status !== "ok",
   });

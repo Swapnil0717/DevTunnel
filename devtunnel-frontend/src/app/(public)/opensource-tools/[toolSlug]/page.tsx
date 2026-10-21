@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { buildMetadata } from "@/lib/seo";
+import { buildMetadata, clipDescription } from "@/lib/seo";
 import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbJsonLd } from "@/lib/structured-data";
 import { SITE_URL } from "@/lib/config";
@@ -40,12 +40,18 @@ export async function generateMetadata({ params }: ToolDetailPageProps): Promise
   const result = await getOpenSourceToolBySlug(toolSlug);
   const title = result.status === "ok" ? result.data.name : "Tool";
 
+  let description = "View this open source tool on DevTunnel.";
+  if (result.status === "ok") {
+    const { name, description: about, primaryLanguage } = result.data;
+    const intro = about ? `${name}: ${about}` : `${name} is an open source tool on DevTunnel.`;
+    description = clipDescription(
+      `${intro.replace(/[.\s]+$/, "")}.${primaryLanguage ? ` Written in ${primaryLanguage}.` : ""} Setup guide and ways to help.`,
+    );
+  }
+
   return buildMetadata({
-    title,
-    description:
-      result.status === "ok"
-        ? `${result.data.name} on DevTunnel — what it does, how to set it up, and where to help.`
-        : "View this open source tool on DevTunnel.",
+    title: `${title} (open source tool)`,
+    description,
     path: `/opensource-tools/${toolSlug}`,
     noIndex: result.status !== "ok",
   });

@@ -19,9 +19,10 @@ export async function generateMetadata(): Promise<Metadata> {
   const result = await getRecommendedProjects();
 
   return buildMetadata({
-    title: "Projects",
+    title: "Open Source Projects to Contribute To",
     description:
-      "Browse projects curated on DevTunnel, searchable and filterable by tech stack, and sortable by how well they match your profile.",
+      "Browse open source projects curated on DevTunnel. Filter by tech stack, sort by how well they match your profile, and find one with tasks you can pick up.",
+    keywords: ["open source projects to contribute to", "beginner friendly open source projects"],
     path: "/projects",
     noIndex: result.status !== "ok",
   });

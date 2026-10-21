@@ -13,12 +13,47 @@ export const API_BASE_URL =
 
 /** Canonical public URL of this frontend deployment. */
 export const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? "https://devtunnel.dev";
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? "https://devtunnel.tech";
 
 export const SITE_NAME = "DevTunnel";
 
+/**
+ * Default <title> for the whole site and the homepage (kept near 60 characters
+ * so search results don't cut it off). Leads with the brand, then the phrases
+ * people actually search for: "open source issues" and "first PR".
+ */
+export const SITE_TITLE = "DevTunnel: Find Open Source Issues & Make Your First PR";
+
+/** Short line used in link previews and structured data. */
+export const SITE_TAGLINE = "Find open source issues you can actually do.";
+
+/**
+ * Default meta description (aim for 150-160 characters). Every page that has
+ * its own description overrides this; it is the fallback and the homepage text.
+ */
 export const SITE_DESCRIPTION =
-  "DevTunnel connects contributors with open source projects, with tasks matched to your role, level and tech stack, and a CLI that opens the pull request.";
+  "Find open source issues matched to your role, level and tech stack. DevTunnel explains each task and its CLI opens your first pull request. Free, MIT licensed.";
+
+/**
+ * Topics the site is genuinely about. Google ignores the keywords meta tag, but
+ * Bing and some other crawlers still read it, and it keeps the vocabulary used
+ * across the site in one place. Only terms the pages really cover belong here.
+ */
+export const SITE_KEYWORDS = [
+  "open source",
+  "open source issues",
+  "good first issues",
+  "beginner friendly open source",
+  "contribute to open source",
+  "first pull request",
+  "first open source contribution",
+  "GitHub issues",
+  "open source tasks",
+  "open source projects",
+  "open source tools",
+  "developer CLI",
+  "DevTunnel",
+];
 
 
 /**

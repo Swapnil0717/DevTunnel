@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/config";
+import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_URL } from "@/lib/config";
 
 interface BuildMetadataOptions {
   /** Page-specific title. Rendered through the root title template. */
@@ -28,6 +28,30 @@ interface BuildMetadataOptions {
    * that *should* be discovered, so pass `true` there.
    */
   followLinks?: boolean;
+  /**
+   * Use `title` exactly as given instead of adding the " | DevTunnel" suffix
+   * from the root title template. For the homepage, whose title already
+   * carries the brand.
+   */
+  absoluteTitle?: boolean;
+  /** Extra search terms for this page (merged into the keywords meta tag). */
+  keywords?: string[];
+}
+
+/**
+ * Trims text to a search-result-friendly length (about 160 characters) at a
+ * word boundary, collapsing whitespace and adding an ellipsis only when it
+ * actually cut something. Use it for descriptions built from API data.
+ */
+export function clipDescription(text: string, max = 158): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+
+  const cut = clean.slice(0, max - 1);
+  const lastSpace = cut.lastIndexOf(" ");
+  const base = lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut;
+
+  return `${base.replace(/[\s,;:.\u2014-]+$/, "")}\u2026`;
 }
 
 /**
@@ -57,26 +81,33 @@ export function buildMetadata({
   path,
   noIndex = false,
   followLinks,
+  absoluteTitle = false,
+  keywords,
 }: BuildMetadataOptions): Metadata {
   const url = `${SITE_URL}${path}`;
+  // Don't print the brand twice in link previews ("DevTunnel: ... | DevTunnel").
+  const socialTitle =
+    absoluteTitle || title.includes(SITE_NAME) ? title : `${title} | ${SITE_NAME}`;
 
   return {
-    title,
+    title: absoluteTitle ? { absolute: title } : title,
     description,
+    ...(keywords && keywords.length > 0 ? { keywords: [...keywords, ...SITE_KEYWORDS] } : {}),
     alternates: {
       canonical: url,
     },
     openGraph: {
-      title: `${title} | ${SITE_NAME}`,
+      title: socialTitle,
       description,
       url,
       siteName: SITE_NAME,
+      locale: "en_US",
       type: "website",
       images: [OG_IMAGE],
     },
     twitter: {
       card: "summary_large_image",
-      title: `${title} | ${SITE_NAME}`,
+      title: socialTitle,
       description,
       images: [OG_IMAGE.url],
     },

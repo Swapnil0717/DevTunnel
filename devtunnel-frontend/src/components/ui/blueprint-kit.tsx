@@ -1202,7 +1202,7 @@ export function BlueprintProjectSidebar() {
 
       <BlueprintRailCard>
         <BlueprintRailHeading text="SHARE" icon />
-        <BlueprintCopyBox text="https://devtunnel.dev/projects/project-name" />
+        <BlueprintCopyBox text="https://devtunnel.tech/projects/project-name" />
       </BlueprintRailCard>
     </aside>
   );
@@ -1263,7 +1263,7 @@ export function BlueprintToolSidebar() {
 
       <BlueprintRailCard>
         <BlueprintRailHeading text="SHARE" icon />
-        <BlueprintCopyBox text="https://devtunnel.dev/opensource-tools/tool-name" />
+        <BlueprintCopyBox text="https://devtunnel.tech/opensource-tools/tool-name" />
       </BlueprintRailCard>
     </aside>
   );
@@ -2377,7 +2377,7 @@ export function BlueprintGithubSidebar() {
 
       <BlueprintRailCard>
         <BlueprintRailHeading text="SHARE" icon />
-        <BlueprintCopyBox text="https://devtunnel.dev/github-projects/project-name" />
+        <BlueprintCopyBox text="https://devtunnel.tech/github-projects/project-name" />
       </BlueprintRailCard>
     </aside>
   );
@@ -2451,7 +2451,7 @@ export function BlueprintSubmissionSidebar() {
 
       <BlueprintRailCard>
         <BlueprintRailHeading text="SHARE" />
-        <BlueprintCopyBox text="https://devtunnel.dev/submissions/submission-name" />
+        <BlueprintCopyBox text="https://devtunnel.tech/submissions/submission-name" />
       </BlueprintRailCard>
     </aside>
   );
