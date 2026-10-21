@@ -551,3 +551,48 @@
 .dtl .h-vid{background:#0a0a0a}
 .dtl .bo-ph-box.real{border-style:solid;border-color:#2a2a2a}
 .dtl .mono-flag{font-family:var(--font-jetbrains-mono),'JetBrains Mono',monospace;font-size:12px;color:#d9d9d9}
+/* ---- mobile polish ---- */
+@container dtl (max-width:520px){
+.dtl .h-wrap{padding-top:36px}
+.dtl .h-h1{margin-top:22px;font-size:clamp(28px,9cqw,40px);line-height:1.12;letter-spacing:-.045em}
+.dtl .h-h1 span{text-wrap:balance}
+.dtl .h-sub{font-size:16px;line-height:1.55;max-width:34ch}
+.dtl .h-note{max-width:30ch;margin-left:auto;margin-right:auto}
+.dtl .demo{margin-top:36px;border-radius:14px}
+.dtl .d-tab{flex:1;justify-content:center;min-width:0}
+.dtl .d-tabs{gap:2px}
+.dtl .d-ctl{margin-left:6px;flex:none}
+}
+@container demo (max-width:700px){
+.dtl .sc-h{gap:6px}
+.dtl .sc-h .k{width:100%;margin:0 0 2px}
+.dtl .mcs{gap:8px}
+.dtl .mc{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:start;padding:14px}
+.dtl .mc .m{display:contents}
+.dtl .mc h3{grid-column:1;grid-row:1;margin:0;font-size:14.5px}
+.dtl .mc .pc{grid-column:2;grid-row:1;font-size:12px;padding-top:2px}
+.dtl .mc .r{grid-column:1/-1;grid-row:2;margin:0 0 4px}
+.dtl .mc .chips{grid-column:1/-1;grid-row:3}
+.dtl .mc .go{grid-column:1/-1;grid-row:4;justify-self:start;margin:6px 0 0;height:32px}
+.dtl .bx{padding:16px}
+.dtl .term{min-height:0}
+.dtl .d-meta{display:none}
+}
+@media (max-width:860px){
+.dtl .c6{align-items:stretch}
+.dtl .ps-vis code,.dtl .hw-line code{font-size:12px}
+.dtl .hw-line{padding:0 6px 0 12px;gap:8px}
+.dtl .hw-line code{white-space:pre-wrap;overflow-wrap:anywhere;padding:10px 0;line-height:1.5}
+.dtl .hw-copy{height:36px;padding:0 12px}
+.dtl .hw-note{overflow-wrap:anywhere}
+.dtl .fq-list summary{min-height:56px;font-size:16px}
+}
+@media (max-width:380px){
+.dtl .bar{padding:0 16px}
+.dtl .fc-box{padding:44px 16px 36px}
+.dtl .ct-strip{gap:8px 18px}
+.dtl .pf-cta a{width:100%;justify-content:center}
+}
+@media (hover:none){
+.dtl .d-ctl{width:40px;height:40px}
+}
