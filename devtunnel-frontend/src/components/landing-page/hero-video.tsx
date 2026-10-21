@@ -91,6 +91,7 @@ export function HeroVideo({ className = "h-vid" }: { className?: string }) {
       disablePictureInPicture
       tabIndex={-1}
     >
+      <source src="/hero-bg-bw.webm" type="video/webm" />
       <source src="/hero-bg-bw.mp4" type="video/mp4" />
     </video>
   );

@@ -3,7 +3,8 @@ import Link from "next/link";
 
 import { HeroVideo } from "@/components/landing-page/hero-video";
 import { homeDisplayFont } from "@/components/landing-page/home-font";
-import { PROJECT_GITHUB_URL } from "@/lib/config";
+import { LinkedinIcon } from "@/components/auth/linkedin-icon";
+import { LINKEDIN_URL, PROJECT_GITHUB_URL } from "@/lib/config";
 
 import { GithubMark, SignupGithubButton } from "./signup-github-button";
 import "./signup.css";
@@ -79,6 +80,9 @@ export function SignupView({
             <span className="sg-sp" />
             <a href={PROJECT_GITHUB_URL} target="_blank" rel="noopener noreferrer" aria-label="DevTunnel on GitHub">
               <GithubMark />
+            </a>
+            <a href={LINKEDIN_URL} target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+              <LinkedinIcon />
             </a>
           </div>
         </section>
