@@ -172,7 +172,7 @@ const PROJECT: MenuItem[] = [
 ];
 
 const MOBILE_RESOURCES: MenuItem[] = [
-  LEARN[0],
+  LEARN[0]!,
   {
     href: repoFile("ROADMAP.md"),
     icon: "map",
@@ -180,7 +180,7 @@ const MOBILE_RESOURCES: MenuItem[] = [
     desc: "",
     short: "Phase 1: build and validate",
   },
-  PROJECT[1],
+  PROJECT[1]!,
 ];
 
 const isExternal = (href: string) => href.startsWith("http");

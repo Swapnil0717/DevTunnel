@@ -15,7 +15,7 @@ export function Faq() {
           </p>
         </div>
         <div className="fq-list">
-          <details open="">
+          <details open>
             <summary>
               <span>What is DevTunnel?</span>
               <Ic id="chev" className="fq-ch" />

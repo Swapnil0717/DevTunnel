@@ -203,6 +203,7 @@ export function startDemo(root: HTMLElement): () => void {
     resetTerm();
     for (let k = 0; k < TERM.length; k++) {
       const ev = TERM[k];
+      if (!ev) continue;
       if (ev.c || ev.t) {
         const text = ev.c ?? ev.type ?? "";
         const n = ev.c ? commandLine("") : promptLine(ev.t ?? "", "");
@@ -244,7 +245,7 @@ export function startDemo(root: HTMLElement): () => void {
         await delay(1400, my);
         if (my !== run) return;
       } else {
-        await delay(WAIT[s], my, (p) => {
+        await delay(WAIT[s] ?? 0, my, (p) => {
           if (my === run) setTabs(s, p);
         });
         if (my !== run) return;
@@ -322,7 +323,10 @@ export function startDemo(root: HTMLElement): () => void {
     window.clearTimeout(timer);
     window.clearTimeout(resizeTimer);
     window.removeEventListener("resize", onResize);
-    tabs.forEach((t, i) => t.removeEventListener("click", tabHandlers[i]));
+    tabs.forEach((t, i) => {
+      const h = tabHandlers[i];
+      if (h) t.removeEventListener("click", h);
+    });
     ctl.removeEventListener("click", onCtl);
     observer?.disconnect();
   };
